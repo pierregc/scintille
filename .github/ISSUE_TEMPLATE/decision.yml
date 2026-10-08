@@ -1,0 +1,31 @@
+name: Decision
+description: A choice to make, recorded as an ADR.
+labels: [decision]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: The decision to make and why it matters now.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: The options considered, with their trade-offs.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: The preferred option and why.
+  - type: input
+    id: adr
+    attributes:
+      label: ADR to write
+      description: File name in docs/adr/.
+      placeholder: docs/adr/0000-short-title.md
+    validations:
+      required: true
