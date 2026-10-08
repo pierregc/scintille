@@ -1,0 +1,57 @@
+---
+interface Props {
+	title: string;
+	description: string;
+	/** Path or absolute URL; defaults to the current page. */
+	canonical?: string;
+	image?: string;
+	imageAlt?: string;
+	type?: 'website' | 'article';
+}
+
+const {
+	title,
+	description,
+	canonical,
+	image = '/og-default.png',
+	imageAlt = 'Scintille',
+	type = 'website',
+} = Astro.props;
+
+const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.site).href;
+const imageUrl = new URL(image, Astro.site).href;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonicalUrl} />
+
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<meta name="theme-color" content="#0A0E1A" />
+
+		<meta property="og:type" content={type} />
+		<meta property="og:site_name" content="Scintille" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={imageUrl} />
+		<meta property="og:image:alt" content={imageAlt} />
+		<meta property="og:locale" content="en_US" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={imageUrl} />
+		<meta name="twitter:image:alt" content={imageAlt} />
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>
