@@ -23,6 +23,7 @@ pnpm -C web dev      # dev server
 pnpm -C web check    # type check
 pnpm -C web lint     # lint
 pnpm -C web build    # production build
+pnpm -C web test     # unit tests (Vitest)
 ```
 
 Data (uv, Python 3.13 is installed automatically by uv):
