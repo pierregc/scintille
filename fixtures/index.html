@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scintille fixtures</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #05070d; color: #cfd6e4; font: 14px/1.5 system-ui, sans-serif; }
+      canvas { width: 100%; max-width: 1440px; aspect-ratio: 2 / 1; display: block; background: #0a0f1c; }
+      table { border-collapse: collapse; margin-top: 12px; }
+      td, th { padding: 2px 12px 2px 0; text-align: left; }
+      .error { color: #ff7b7b; }
+    </style>
+  </head>
+  <body>
+    <h1>Scintille live feed fixtures</h1>
+    <p id="status">Loading manifest…</p>
+    <canvas id="map" width="1440" height="720"></canvas>
+    <table id="stats"></table>
+    <script type="module">
+      // Reference decoder for live/chunks/*.bin.gz; layout from web/src/contract/types.ts.
+      const LAYOUT = [
+        ["event_offset_ms", Int32Array, 1],
+        ["lat", Int16Array, 0.0027466658528397473],
+        ["lon", Int16Array, 0.005493331705679495],
+        ["area_km2", Uint16Array, 1],
+        ["duration_ms", Uint16Array, 1],
+        ["intensity", Uint8Array, 0.00392156862745098],
+        ["source", Uint8Array, 1],
+        ["quality", Uint8Array, 1],
+      ];
+      const SOURCES = ["glm-east", "glm-west", "mtg-li"];
+      const COLORS = ["#5ad1ff", "#b48cff", "#ffc35a"];
+
+      async function loadChunk(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+        const buffer = await new Response(
+          response.body.pipeThrough(new DecompressionStream("gzip")),
+        ).arrayBuffer();
+        const view = new DataView(buffer);
+        const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
+        if (magic !== "SCNT" || view.getUint8(4) !== 1) throw new Error(`${url}: bad header`);
+        const count = view.getUint32(12, true);
+        const columns = {};
+        let offset = 16;
+        for (const [name, ArrayType, scale] of LAYOUT) {
+          const raw = new ArrayType(buffer, offset, count);
+          offset += raw.byteLength;
+          columns[name] = scale === 1 ? raw : Float32Array.from(raw, (v) => v * scale);
+        }
+        return { start: view.getUint32(8, true), count, columns };
+      }
+
+      function draw(ctx, chunks) {
+        const { width, height } = ctx.canvas;
+        ctx.strokeStyle = "#1c2640";
+        for (let lon = -180; lon <= 180; lon += 30) {
+          const x = ((lon + 180) / 360) * width;
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+        }
+        for (let lat = -90; lat <= 90; lat += 30) {
+          const y = ((90 - lat) / 180) * height;
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+        }
+        for (const { count, columns: c } of chunks) {
+          for (let i = 0; i < count; i++) {
+            ctx.globalAlpha = 0.1 + 0.6 * c.intensity[i];
+            ctx.fillStyle = COLORS[c.source[i]];
+            ctx.fillRect(((c.lon[i] + 180) / 360) * width, ((90 - c.lat[i]) / 180) * height, 1.5, 1.5);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      const status = document.getElementById("status");
+      try {
+        const manifest = await (await fetch("live/manifest.json")).json();
+        const started = performance.now();
+        const chunks = await Promise.all(manifest.chunks.map((ref) => loadChunk(`live/${ref.path}`)));
+        const elapsed = performance.now() - started;
+        draw(document.getElementById("map").getContext("2d"), chunks);
+
+        const flashes = chunks.reduce((sum, c) => sum + c.count, 0);
+        const bytes = manifest.chunks.reduce((sum, ref) => sum + ref.size_bytes, 0);
+        const perSource = SOURCES.map(() => 0);
+        for (const { count, columns } of chunks) {
+          for (let i = 0; i < count; i++) perSource[columns.source[i]]++;
+        }
+        const mismatched = manifest.chunks.filter((ref, i) => ref.flash_count !== chunks[i].count);
+        status.textContent = `schema ${manifest.schema_version}, generated ${manifest.generated_at}: ` +
+          `${chunks.length} chunks, ${flashes} flashes, ${(bytes / 1000).toFixed(0)} KB, ` +
+          `fetched and decoded in ${elapsed.toFixed(0)} ms` +
+          (mismatched.length ? `, ${mismatched.length} count mismatches` : ", counts match the manifest");
+        document.getElementById("stats").innerHTML =
+          "<tr><th>Source</th><th>State</th><th>Last event</th><th>Flashes</th></tr>" +
+          manifest.sources.map((s, i) =>
+            `<tr><td style="color:${COLORS[i]}">${s.source}</td><td>${s.state}</td>` +
+            `<td>${s.last_event_time ?? "never"}</td><td>${perSource[i]}</td></tr>`).join("");
+      } catch (error) {
+        status.textContent = String(error);
+        status.className = "error";
+      }
+    </script>
+  </body>
+</html>

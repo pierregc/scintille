@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:common",
+  "title": "Common",
+  "description": "Shared definitions used by the other schemas.",
+  "$defs": {
+    "SchemaVersion": {
+      "description": "Contract version (SemVer). Any change that breaks existing readers needs a major bump.",
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "UtcTimestamp": {
+      "description": "UTC instant, RFC 3339 with a Z suffix, up to microsecond precision.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "Source": {
+      "description": "Instrument that observed the flash. The order is the index used in binary chunks.",
+      "type": "string",
+      "enum": ["glm-east", "glm-west", "mtg-li"]
+    },
+    "QualityFlag": {
+      "description": "Quality caveat on a flash. The order is the bit index used in binary chunks.",
+      "type": "string",
+      "enum": ["degraded", "coverage-edge", "overlap"]
+    },
+    "EnergyUnit": {
+      "description": "Unit of energy_raw: J for GLM flash_energy, mW m-2 sr-1 for MTG LI flash radiance.",
+      "type": "string",
+      "enum": ["J", "mW m-2 sr-1"]
+    },
+    "SourceState": {
+      "description": "Health of a source in the live feed.",
+      "type": "string",
+      "enum": ["live", "delayed", "offline"]
+    }
+  }
+}
