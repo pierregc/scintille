@@ -7,4 +7,10 @@ export default [
 	js.configs.recommended,
 	...tseslint.configs.strict,
 	...astro.configs.recommended,
+	{
+		files: ['scripts/**/*.mjs'],
+		languageOptions: {
+			globals: { Buffer: 'readonly', console: 'readonly', fetch: 'readonly', process: 'readonly' },
+		},
+	},
 ];
