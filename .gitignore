@@ -1,0 +1,28 @@
+# OS and editors
+.DS_Store
+.idea/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node / Astro
+node_modules/
+dist/
+.astro/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Data files: never committed, except small fixtures
+*.nc
+*.parquet
+*.ktx2
+!**/fixtures/**

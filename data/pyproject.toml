@@ -1,0 +1,26 @@
+# Virtual uv workspace: no package lives at this level, only shared tooling.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "ruff>=0.14",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+files = ["packages/*/src", "packages/*/tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/*/tests"]
+addopts = ["--import-mode=importlib"]
