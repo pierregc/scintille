@@ -26,3 +26,7 @@ __pycache__/
 *.parquet
 *.ktx2
 !**/fixtures/**
+
+# Generated textures (uploaded to R2, never committed)
+web/scripts/textures/.cache/
+web/scripts/textures/out/
