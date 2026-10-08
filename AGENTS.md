@@ -41,6 +41,7 @@ pnpm -C web install
 pnpm -C web check    # type check (astro check)
 pnpm -C web lint     # ESLint
 pnpm -C web build    # production build
+pnpm -C web test     # unit tests (Vitest)
 pnpm -C web dev      # dev server
 ```
 
