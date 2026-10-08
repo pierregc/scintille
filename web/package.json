@@ -13,7 +13,8 @@
     "preview": "astro preview",
     "check": "astro check",
     "astro": "astro",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:seo": "node scripts/check-seo.mjs"
   },
   "dependencies": {
     "astro": "^7.3.7",
