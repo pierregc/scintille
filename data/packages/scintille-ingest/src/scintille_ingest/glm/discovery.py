@@ -1,9 +1,4 @@
-"""Find product files by listing the hour prefixes of the public NOAA buckets.
-
-Listing rather than NOAA's SNS new-object topics: SNS needs an AWS account with an SQS queue
-or a public HTTPS endpoint, while listing is anonymous, stateless and replayable. One LIST of
-the current hour (at most 180 keys) every 20 s per satellite is cheap and free for open data.
-"""
+"""Find new GLM files by listing the hour prefixes of the public NOAA buckets."""
 
 from collections.abc import Set
 from datetime import datetime, timedelta
