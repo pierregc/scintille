@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:manifest",
+  "title": "LiveManifest",
+  "description": "live/manifest.json: the chunks of the last 60 minutes and the state of each source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "chunk_seconds", "window_seconds", "chunks", "sources"],
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/SchemaVersion" },
+    "generated_at": {
+      "description": "When this manifest was written.",
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "chunk_seconds": {
+      "description": "Length of the ingest window covered by one chunk, seconds.",
+      "type": "integer",
+      "const": 30
+    },
+    "window_seconds": {
+      "description": "How far back the manifest lists chunks, seconds.",
+      "type": "integer",
+      "const": 3600
+    },
+    "chunks": {
+      "description": "Published chunks, oldest first.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/ChunkRef" }
+    },
+    "sources": {
+      "description": "One entry per source, in Source order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/SourceStatus" }
+    }
+  },
+  "$defs": {
+    "ChunkRef": {
+      "description": "One immutable chunk: the flashes ingested during [start, start + chunk_seconds).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "path", "flash_count", "size_bytes", "event_min", "event_max"],
+      "properties": {
+        "start": {
+          "description": "Start of the ingest window, aligned on chunk_seconds.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "path": {
+          "description": "Path relative to the manifest: chunks/<start in ISO 8601 basic format>.bin.gz.",
+          "type": "string",
+          "pattern": "^chunks/[0-9]{8}T[0-9]{6}Z\\.bin\\.gz$"
+        },
+        "flash_count": {
+          "description": "Number of flashes in the chunk.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "size_bytes": {
+          "description": "Size of the chunk file as stored (gzip), bytes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_min": {
+          "description": "Earliest event_time in the chunk; null when empty.",
+          "anyOf": [{ "$ref": "common.schema.json#/$defs/UtcTimestamp" }, { "type": "null" }]
+        },
+        "event_max": {
+          "description": "Latest event_time in the chunk; null when empty.",
+          "anyOf": [{ "$ref": "common.schema.json#/$defs/UtcTimestamp" }, { "type": "null" }]
+        }
+      }
+    },
+    "SourceStatus": {
+      "description": "Freshness of one source.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "state", "last_event_time", "last_ingest_time"],
+      "properties": {
+        "source": { "$ref": "common.schema.json#/$defs/Source" },
+        "state": { "$ref": "common.schema.json#/$defs/SourceState" },
+        "last_event_time": {
+          "description": "Latest event_time received from this source; null if never seen.",
+          "anyOf": [{ "$ref": "common.schema.json#/$defs/UtcTimestamp" }, { "type": "null" }]
+        },
+        "last_ingest_time": {
+          "description": "When the latest product file of this source was ingested; null if never seen.",
+          "anyOf": [{ "$ref": "common.schema.json#/$defs/UtcTimestamp" }, { "type": "null" }]
+        }
+      }
+    }
+  }
+}
