@@ -1,5 +1,6 @@
-// Checks every built page has a unique title, description and canonical URL.
-import { readdir, readFile } from 'node:fs/promises';
+// Checks every built page has a unique title, description and canonical URL,
+// and that robots.txt, llms.txt and the sitemap are built.
+import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 
@@ -52,6 +53,16 @@ for (const file of files) {
 		if (other) errors.push(`${page}: ${field} "${value}" duplicates ${other}`);
 		else seen[field].set(value, page);
 	}
+}
+
+const SITEMAP = 'sitemap-index.xml';
+for (const name of [SITEMAP, 'sitemap-0.xml', 'llms.txt']) {
+	await access(join(DIST, name)).catch(() => errors.push(`${name} is missing`));
+}
+const robots = await readFile(join(DIST, 'robots.txt'), 'utf8').catch(() => null);
+if (robots === null) errors.push('robots.txt is missing');
+else if (!robots.split('\n').some((l) => l.trim() === `Sitemap: ${SITE}${SITEMAP}`)) {
+	errors.push(`robots.txt does not reference ${SITE}${SITEMAP}`);
 }
 
 if (errors.length > 0) {
