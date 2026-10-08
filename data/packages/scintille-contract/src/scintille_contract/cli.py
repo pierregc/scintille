@@ -33,7 +33,9 @@ def expected_outputs(root: Path) -> dict[Path, str]:
 
 
 def base_schemas(ref: str) -> SchemaSet | None:
-    listing = _git("ls-tree", "--name-only", f"{ref}:{CONTRACT_DIR}") if _has(ref) else ""
+    listing = (
+        _git("ls-tree", "--full-tree", "--name-only", f"{ref}:{CONTRACT_DIR}") if _has(ref) else ""
+    )
     names = [name for name in listing.split() if name.endswith(".schema.json")]
     if not names:
         return None
