@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:flash",
+  "title": "FlashRecord",
+  "description": "One lightning flash, normalized across sources. Written by ingestion, stored by the pipelines.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "flash_id",
+    "source",
+    "product_file",
+    "native_flash_id",
+    "event_time",
+    "ingest_time",
+    "lat",
+    "lon",
+    "energy_raw",
+    "energy_unit",
+    "intensity",
+    "area_km2",
+    "duration_ms",
+    "quality"
+  ],
+  "properties": {
+    "flash_id": {
+      "description": "Deterministic id: first 128 bits of sha256(\"source|product_file|native_flash_id\"), hex.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "source": { "$ref": "common.schema.json#/$defs/Source" },
+    "product_file": {
+      "description": "Base name of the L2 product file the flash was read from.",
+      "type": "string",
+      "minLength": 1
+    },
+    "native_flash_id": {
+      "description": "Flash id as written in the product file.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_time": {
+      "description": "Flash start time as measured by the satellite (UTC, microseconds).",
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "ingest_time": {
+      "description": "When ingestion received the product file (UTC, microseconds).",
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "lat": {
+      "description": "Latitude of the flash centroid, degrees north.",
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "lon": {
+      "description": "Longitude of the flash centroid, degrees east.",
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "energy_raw": {
+      "description": "Optical energy as reported by the source, in energy_unit.",
+      "type": "number",
+      "minimum": 0
+    },
+    "energy_unit": { "$ref": "common.schema.json#/$defs/EnergyUnit" },
+    "intensity": {
+      "description": "Normalized optical intensity derived from energy_raw (mapping defined in #33).",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "area_km2": {
+      "description": "Area covered by the flash, square kilometres.",
+      "type": "number",
+      "minimum": 0
+    },
+    "duration_ms": {
+      "description": "Flash duration, milliseconds.",
+      "type": "number",
+      "minimum": 0
+    },
+    "quality": {
+      "description": "Quality caveats; empty when the flash is nominal.",
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/QualityFlag" },
+      "uniqueItems": true
+    }
+  }
+}
