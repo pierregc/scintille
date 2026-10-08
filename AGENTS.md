@@ -39,6 +39,7 @@ Web (Node ≥ 22.12, pnpm 12), run from the repository root:
 ```sh
 pnpm -C web install
 pnpm -C web check    # type check (astro check)
+pnpm -C web lint     # ESLint
 pnpm -C web build    # production build
 pnpm -C web dev      # dev server
 ```
