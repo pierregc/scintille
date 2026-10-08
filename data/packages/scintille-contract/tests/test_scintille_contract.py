@@ -27,6 +27,13 @@ def test_generated_code_is_up_to_date() -> None:
     assert cli.check(ROOT, base=None) == 0
 
 
+def test_base_schemas_are_read_from_git() -> None:
+    base = cli.base_schemas("HEAD")
+    assert base is not None
+    assert set(base.files) == {path.name for path in (ROOT / "data/contract").glob("*.json")}
+    assert cli.base_schemas("HEAD:does-not-exist") is None
+
+
 def test_flash_id_is_deterministic() -> None:
     product = "OR_GLM-L2-LCFA_G19_s20261961800000_e20261961800200_c20261961800222.nc"
     first = flash_id("glm-east", product, 42)
