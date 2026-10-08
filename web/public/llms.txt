@@ -1,0 +1,27 @@
+# Scintille
+
+> Scintille is a cinematic 3D globe showing lightning across the planet in near real time, built on open satellite data. Flash brightness reflects the optical energy measured by the satellite, coverage gaps are shown rather than hidden, and every data source is attributed.
+
+Scintille is under construction and not live yet. This file describes what the site is and what it will contain.
+
+Lightning data comes from geostationary lightning imagers, which detect the optical pulses of lightning flashes from orbit, day and night:
+
+- NOAA GOES Geostationary Lightning Mapper (GLM), on the GOES-East and GOES-West satellites, covering the Americas and the surrounding oceans.
+- EUMETSAT Meteosat Third Generation (MTG) Lightning Imager, covering Europe, Africa and most of the Atlantic Ocean.
+
+Regions outside the field of view of these instruments have no data. They are shown as coverage gaps, not as regions without lightning.
+
+Update cadence: the live globe is fed continuously from the satellite data streams, in near real time. Static pages are rebuilt when the site is deployed.
+
+## Pages
+
+- [Home](https://scintille.app/): the live lightning globe.
+
+## Data sources
+
+- [NOAA GOES-R Geostationary Lightning Mapper](https://www.goes-r.gov/spacesegment/glm.html): lightning mapper on the GOES-East and GOES-West satellites.
+- [EUMETSAT Meteosat Third Generation](https://www.eumetsat.int/meteosat-third-generation): satellite programme carrying the MTG Lightning Imager.
+
+## Optional
+
+- [Sitemap](https://scintille.app/sitemap-index.xml): list of all indexable pages.
