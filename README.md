@@ -21,6 +21,7 @@ Web (Node ≥ 22.12, pnpm):
 pnpm -C web install
 pnpm -C web dev      # dev server
 pnpm -C web check    # type check
+pnpm -C web lint     # lint
 pnpm -C web build    # production build
 ```
 
