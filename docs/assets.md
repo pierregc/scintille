@@ -31,6 +31,8 @@ ln -s ../scripts/textures/out web/public/textures
 | `night` | [NASA Black Marble 2016](https://science.nasa.gov/earth/earth-observatory/), color map, Suomi NPP VIIRS (`BlackMarble_2016_3km.jpg`) | 13500 × 6750 | Public domain (NASA imagery). Credit: NASA Earth Observatory |
 | `mask` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:10m ocean and lakes polygons (`ne_10m_ocean`, `ne_10m_lakes`) | vector, rasterized per tier | Public domain |
 
+The starfield is procedural (`web/src/globe/starfield.ts`): no star catalogue or texture is used.
+
 NASA imagery is not copyrighted; NASA asks for credit when it is used. Natural Earth requires no
 permission or credit. The site's attribution must credit NASA.
 

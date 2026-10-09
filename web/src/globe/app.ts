@@ -1,8 +1,10 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { createGlobeControls } from './controls';
 import { createEarth } from './earth';
 import { startLiveFeed } from './live';
+import { createStarfield } from './starfield';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -22,6 +24,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const clock = new SceneClock();
 	const earth = createEarth(renderer, RADIUS);
 	scene.add(earth.mesh);
+	const atmosphere = createAtmosphere(RADIUS);
+	earth.mesh.add(atmosphere.mesh);
+	const stars = createStarfield();
+	scene.add(stars.points);
 
 	const live = startLiveFeed();
 	let dprQuery: MediaQueryList | undefined;
@@ -53,7 +59,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 
 	renderer.setAnimationLoop((time) => {
 		controls.update(time);
-		earth.setTime(clock.time());
+		const now = clock.time();
+		earth.setTime(now);
+		atmosphere.setTime(now);
+		stars.setTime(now);
 		renderer.render(scene, camera);
 	});
 
@@ -65,6 +74,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();
+			atmosphere.dispose();
+			stars.dispose();
 			renderer.dispose();
 		},
 	};
