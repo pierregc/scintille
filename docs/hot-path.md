@@ -29,6 +29,19 @@ without delaying the others. SIGTERM lets files in progress finish (30 s).
 - Logs: one JSON object per line.
 - Disk: warnings at 50 % and 80 %; past 90 %, raw cache uploads pause first.
 
+## Live feed
+
+When `SCINTILLE_LIVE_BUCKET` is set, `ingest-live` publishes the live feed of the
+[data contract](data-contract.md#live-feed-on-r2): every 30 s (on whole multiples of 30 s) the flashes
+received since the previous chunk become one gzip chunk under `live/chunks/`, then
+`live/manifest.json` is rewritten, then chunks older than 60 minutes are deleted. A chunk that fails
+to upload keeps its flashes for the next one, and the manifest only lists chunks already stored.
+Flashes are deduplicated by `flash_id` over the hour, so a file published again after a crash adds
+nothing. Source state: `live` if a file arrived in the last 2 minutes, `delayed` up to 10, then
+`offline`. `live_latency_seconds` (event time → manifest) is logged and exported per source.
+Intensity uses a provisional log-energy mapping until #33. On restart, the chunk list of the
+published manifest is continued.
+
 ## `lake-writer` (`scintille-ingest lake-writer`)
 
 Drains the spool every 5 minutes, up to 200 batches per commit:
