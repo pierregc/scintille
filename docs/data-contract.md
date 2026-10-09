@@ -63,17 +63,21 @@ live/chunks/20260715T183030Z.bin.gz
 ...
 ```
 
-- A **chunk** holds the flashes **ingested** during a 30-second window `[start, start + 30 s)`.
+- A **chunk** holds the flashes **ingested** during a window `[start, end)`, 30 s today.
   Chunks are keyed by ingest time, not event time, so a chunk is complete when its window ends and
   never changes afterwards: late data lands in a later chunk instead of rewriting an old one. Event
   times inside a chunk are therefore usually 20 to 60 s before its `start` (`event_offset_ms < 0`).
-- File names use ISO 8601 basic format (`YYYYMMDDTHHMMSSZ`) so they contain no `:`, which is unsafe in
-  URLs and on some file systems.
-- The **manifest** lists the chunks of the last 60 minutes (oldest first, with flash count, size
-  and event time span) and, per source, its state (`live`, `delayed`, `offline`) and last event and
-  ingest times. It is small and short-lived; chunks are immutable and cached for a year.
-- A client polls the manifest every 10 to 30 s and downloads only the chunks it does not have yet.
-  A first visit downloads the whole hour; afterwards it is one chunk per poll.
+- Chunk durations may vary (for example one chunk per source file, to cut latency). `start` and
+  `end` are whole seconds. `chunk_seconds` in the manifest is only the typical duration.
+- Chunk names are opaque and unique under `chunks/`. Today they are the start in ISO 8601 basic
+  format (`YYYYMMDDTHHMMSSZ`, no `:`, which is unsafe in URLs and on some file systems); a publisher
+  may add a suffix.
+- The **manifest** lists the chunks of the last 60 minutes (oldest first, with window, flash count,
+  size and event time span) and, per source, its state (`live`, `delayed`, `offline`) and last event
+  and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
+- Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
+  never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
+  and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
 
 ## Chunk encoding
 
@@ -156,7 +160,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **1.0.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.0.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -164,7 +168,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `1.0.0`.
+Value: `2.0.0`.
 
 ### UtcTimestamp
 
@@ -248,12 +252,13 @@ One lightning flash, normalized across sources. Written by ingestion, stored by 
 
 Defined in `data/contract/manifest.schema.json`.
 
-One immutable chunk: the flashes ingested during [start, start + chunk_seconds).
+One immutable chunk: the flashes ingested during [start, end).
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
-| `start` | [UtcTimestamp](#utctimestamp) | yes |  | Start of the ingest window, aligned on chunk_seconds. |
-| `path` | string | yes | pattern `^chunks/[0-9]{8}T[0-9]{6}Z\.bin\.gz$` | Path relative to the manifest: chunks/<start in ISO 8601 basic format>.bin.gz. |
+| `start` | [UtcTimestamp](#utctimestamp) | yes |  | Start of the ingest window, whole seconds; equals the previous chunk's end when no window is missing. |
+| `end` | [UtcTimestamp](#utctimestamp) | yes |  | End of the ingest window (exclusive), whole seconds, after start. |
+| `path` | string | yes | pattern `^chunks/[0-9A-Za-z_-]+\.bin\.gz$` | Path relative to the manifest, unique and opaque: never derive it from start. |
 | `flash_count` | integer | yes | minimum `0` | Number of flashes in the chunk. |
 | `size_bytes` | integer | yes | minimum `0` | Size of the chunk file as stored (gzip), bytes. |
 | `event_min` | [UtcTimestamp](#utctimestamp) or null | yes |  | Earliest event_time in the chunk; null when empty. |
@@ -282,7 +287,7 @@ live/manifest.json: the chunks of the last 60 minutes and the state of each sour
 |---|---|---|---|---|
 | `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
 | `generated_at` | [UtcTimestamp](#utctimestamp) | yes |  | When this manifest was written. |
-| `chunk_seconds` | `30` | yes |  | Length of the ingest window covered by one chunk, seconds. |
+| `chunk_seconds` | integer | yes | minimum `1` | Typical length of a chunk's ingest window, seconds. A hint only: chunk durations may vary, the chunk list is authoritative. |
 | `window_seconds` | `3600` | yes |  | How far back the manifest lists chunks, seconds. |
 | `chunks` | array of [ChunkRef](#chunkref) | yes |  | Published chunks, oldest first. |
 | `sources` | array of [SourceStatus](#sourcestatus) | yes |  | One entry per source, in Source order. |

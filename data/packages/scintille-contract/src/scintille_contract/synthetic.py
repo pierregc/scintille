@@ -21,6 +21,7 @@ from scintille_contract.models import (
 
 WINDOW_START = datetime(2026, 7, 15, 18, 0, tzinfo=UTC)
 WINDOW_SECONDS = 3600
+CHUNK_SECONDS = 30
 SEED = 29
 TARGET_RATE = 45.0
 EARTH_RADIUS_KM = 6371.0
@@ -178,11 +179,11 @@ def generate(seed: int = SEED) -> Flashes:
 
 def chunks(flashes: Flashes) -> list[chunk.Chunk]:
     """Split flashes by 30-second ingest window, each sorted by event time."""
-    index = np.floor(flashes.ingest / chunk.CHUNK_SECONDS).astype(np.int64)
+    index = np.floor(flashes.ingest / CHUNK_SECONDS).astype(np.int64)
     result = []
-    for i in range(WINDOW_SECONDS // chunk.CHUNK_SECONDS):
+    for i in range(WINDOW_SECONDS // CHUNK_SECONDS):
         sel = index == i
-        start = i * chunk.CHUNK_SECONDS
+        start = i * CHUNK_SECONDS
         columns = {
             "event_offset_ms": np.rint((flashes.event[sel] - start) * 1000),
             "lat": flashes.lat[sel],
@@ -217,7 +218,7 @@ def manifest(flashes: Flashes, refs: list[ChunkRef]) -> LiveManifest:
     return LiveManifest(
         schema_version=SCHEMA_VERSION,
         generated_at=WINDOW_START + timedelta(seconds=WINDOW_SECONDS),
-        chunk_seconds=30,
+        chunk_seconds=CHUNK_SECONDS,
         window_seconds=3600,
         chunks=refs,
         sources=statuses,
@@ -240,6 +241,7 @@ def write_feed(out: Path) -> None:
         refs.append(
             ChunkRef(
                 start=item.start,
+                end=item.start + timedelta(seconds=CHUNK_SECONDS),
                 path=path,
                 flash_count=item.count,
                 size_bytes=len(data),

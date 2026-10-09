@@ -20,7 +20,6 @@ from scintille_contract.models import (
 
 MAGIC = b"SCNT"
 HEADER = struct.Struct("<4sBBHII")
-CHUNK_SECONDS = 30
 COLUMN_NAMES = tuple(column.name for column in CHUNK_COLUMNS_BINARY_LAYOUT)
 
 type Columns = Mapping[str, NDArray[Any]]
@@ -41,10 +40,10 @@ class Chunk:
 def encode(chunk: Chunk) -> bytes:
     """Raw (uncompressed) binary chunk: 16-byte header then one array per column."""
     major, minor, _ = parse_version(SCHEMA_VERSION)
-    start = int(chunk.start.timestamp())
-    if start % CHUNK_SECONDS:
-        raise ValueError("chunk start must be aligned on 30 seconds")
-    parts = [HEADER.pack(MAGIC, major, minor, 0, start, chunk.count)]
+    start = chunk.start.timestamp()
+    if not start.is_integer():
+        raise ValueError("chunk start must be a whole second")
+    parts = [HEADER.pack(MAGIC, major, minor, 0, int(start), chunk.count)]
     offset = HEADER.size
     for column in CHUNK_COLUMNS_BINARY_LAYOUT:
         dtype = np.dtype(column.dtype).newbyteorder("<")
