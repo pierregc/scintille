@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["1.0.0"]
-SCHEMA_VERSION: Final = "1.0.0"
+SchemaVersion = Literal["2.0.0"]
+SCHEMA_VERSION: Final = "2.0.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -105,15 +105,23 @@ class FlashRecord(BaseModel):
 
 
 class ChunkRef(BaseModel):
-    """One immutable chunk: the flashes ingested during [start, start + chunk_seconds)."""
+    """One immutable chunk: the flashes ingested during [start, end)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    start: UtcTimestamp = Field(description="Start of the ingest window, aligned on chunk_seconds.")
-    path: str = Field(
-        pattern="^chunks/[0-9]{8}T[0-9]{6}Z\\.bin\\.gz$",
+    start: UtcTimestamp = Field(
         description=(
-            "Path relative to the manifest: chunks/<start in ISO 8601 basic format>.bin.gz."
+            "Start of the ingest window, whole seconds; equals the previous chunk's end "
+            "when no window is missing."
+        )
+    )
+    end: UtcTimestamp = Field(
+        description="End of the ingest window (exclusive), whole seconds, after start."
+    )
+    path: str = Field(
+        pattern="^chunks/[0-9A-Za-z_-]+\\.bin\\.gz$",
+        description=(
+            "Path relative to the manifest, unique and opaque: never derive it from start."
         ),
     )
     flash_count: int = Field(ge=0, description="Number of flashes in the chunk.")
@@ -150,8 +158,12 @@ class LiveManifest(BaseModel):
 
     schema_version: SchemaVersion
     generated_at: UtcTimestamp = Field(description="When this manifest was written.")
-    chunk_seconds: Literal[30] = Field(
-        description="Length of the ingest window covered by one chunk, seconds."
+    chunk_seconds: int = Field(
+        ge=1,
+        description=(
+            "Typical length of a chunk's ingest window, seconds. A hint only: chunk "
+            "durations may vary, the chunk list is authoritative."
+        ),
     )
     window_seconds: Literal[3600] = Field(
         description="How far back the manifest lists chunks, seconds."
