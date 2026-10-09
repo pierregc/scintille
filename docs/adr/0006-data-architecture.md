@@ -1,133 +1,147 @@
 # 0006 · Data architecture: hot path, Iceberg lakehouse on R2, Dagster batch
 
 - Status: proposed
-- Date: 2026-10-08
+- Date: 2026-10-09
 
 ## Context
 
-- **Volume.** About 45 flashes/s fall within GOES GLM and MTG LI coverage: 3.9 M flashes/day,
-  1.4 G/year. The live feed (ADR 0004) is about 300 KB per 10 minutes. Full-precision silver rows
-  (`FlashRecord`, 128-bit ids, Parquet zstd) measure 45 to 70 bytes per flash on synthetic data,
-  so **150 to 250 MB/day, 50 to 100 GB/year**. This is more than the "few GB/year" first assumed,
-  but still small for a single node.
+- **Volume (estimate, to be measured).** We assume about 45 flashes/s within GOES GLM and MTG LI
+  coverage: 3.9 M flashes/day, 1.4 G/year. This is a planning figure, not a measurement: the often
+  quoted ~44 flashes/s is a global estimate from older instruments, and our real rate depends on
+  coverage and on what GLM and LI detect. Silver rows measured 45 to 70 bytes per flash on
+  synthetic data (Parquet zstd), so about **65 to 100 GB/year**, plus the 30-day raw cache and
+  Iceberg metadata. All figures are re-checked on real files during the first weeks of ingestion.
 - **Two latencies.** The globe needs flashes seconds after the product file lands. Storms,
   aggregates, replays, video and backfills can wait minutes to hours.
 - **Infrastructure.** One Hetzner VPS (Docker) and Cloudflare R2. One maintainer: every moving part
   must earn its place.
-- **History matters from M1.** A day not archived can never be replayed (#39). Raw archives stay
-  with NOAA and EUMETSAT; we keep what we derive.
+- **Replay.** NOAA keeps the GLM archive and EUMETSAT keeps an LI archive (depth and access to be
+  confirmed), so a missed day can be re-ingested, at a cost. Archiving from M1 avoids depending on
+  that.
 
 ## Options
 
-**Paths.** A single batch pipeline for everything cannot meet the live latency. A streaming
-platform for everything (Kafka + Flink) meets it but is out of proportion at 45 events/s. Two
-paths, a small always-on service and an orchestrated batch layer, split along the latency line.
+**Paths.** A single batch pipeline cannot meet the live latency. A streaming platform for everything
+(Kafka + Flink) meets it but is out of proportion at tens of events per second. Two paths, a small
+always-on service and an orchestrated batch layer, split along the latency line.
 
 **Table format and catalog.**
-- *Plain Parquet files on R2*: simplest, but no atomic commits, no schema evolution, and every
-  reader must know the layout.
-- *Apache Iceberg on R2 Data Catalog* (now branded **Basin Catalog**): managed Iceberg REST catalog
-  next to the data, with managed compaction and snapshot expiration. The issue flagged it as beta;
-  **it became generally available on 2026-10-01** and is billed since 2026-08-03 ($9 per million
-  catalog operations, $0.005/GB compacted, monthly free tier of 1 M operations and 10 GB
-  compacted). Limits found in the docs: compaction target 64 to 512 MB, Parquet only; snapshot
-  expiration defaults to 30 days / last 5 snapshots; **orphan files are not cleaned up**.
-- *Self-hosted REST catalog (Lakekeeper, Postgres-backed) on the VPS*: same tables and code, one
-  more service to run and back up, maintenance is ours.
-- *Delta Lake or DuckLake*: fine formats, but no managed catalog on R2; Iceberg has the widest
-  engine support.
+- *Plain Parquet on R2*: simplest; no atomic multi-file commits, and schema versions, compaction and
+  publication rules would all be ours to define.
+- *Apache Iceberg on R2 Data Catalog (Basin Catalog)*: managed Iceberg REST catalog next to the data,
+  generally available since 2026-10-01, with managed compaction (target 64 to 512 MB) and snapshot
+  expiration. Billed per catalog operation, per GB compacted and per object processed by compaction,
+  each with a monthly free tier. Orphan files are not cleaned up.
+- *Self-hosted REST catalog (Lakekeeper)*: used for local development. It is a portability option,
+  not an automatic failover: moving would mean registering tables from their current metadata,
+  switching every writer, and never letting two catalogs write the same tables.
+- *DuckLake*: attractive in a DuckDB-centred stack, but it needs a catalog database we would run
+  ourselves, and fewer engines read it. *Delta Lake*: no managed catalog on R2.
 
-**Engines.**
-- *DuckDB Iceberg extension*: attaches a REST catalog and supports CREATE TABLE, INSERT, UPDATE,
-  DELETE, MERGE INTO. Limits: UPDATE and DELETE only on **unsorted** tables, positional deletes
-  only (merge-on-read), and Cloudflare's guide notes no DELETE on partitioned tables through its
-  catalog. `silver.flashes` is partitioned and sorted (#23), so **DuckDB `MERGE` cannot be the
-  silver write path** that #39 assumes.
-- *PyIceberg*: Arrow-native writes, `upsert` keyed on an identifier field, partition overwrite,
-  schema evolution, snapshot expiration; no compaction yet (the catalog does it).
-- *Polars/Arrow*: parsing and normalization in the hot path, zero-copy to PyIceberg.
+**Engines.** Polars/Arrow for parsing and normalization; NetCDF decoding with `netCDF4` (#30).
+PyIceberg for table definitions and silver writes (append with snapshot properties, partition
+overwrite). DuckDB to read silver and write gold through the REST catalog; its Iceberg writes are
+merge-on-read and restricted on sorted tables, and the Cloudflare guide and DuckDB docs disagree on
+deletes for partitioned tables, so any DuckDB write path is tested on our pinned versions first.
 
-**Orchestration.** Dagster (software-defined assets, partitions, backfills, asset checks, lineage)
-against Airflow (task-centric, weaker partition and lineage model) or cron (no backfills, no
-checks, no UI).
+**Orchestration.** Dagster: assets, partitions, backfills, asset checks and lineage are first-class.
+Airflow 3 now has assets and partitions too; Dagster is preferred for its asset-first model and
+checks, not because Airflow cannot do it. Cron alone has no backfills, checks or UI.
 
-**Transformations.** The issue asks for dbt-core with dbt-duckdb. Since then **dbt v2** (Rust
-engine, GA 2026-09-14) ships a built-in DuckDB adapter, and **Iceberg REST catalogs in dbt
-(`catalogs.yml`) are only supported in v2**, not in the Python `dbt-duckdb` adapter for dbt v1.
-`dagster-dbt` supports the v2 engine (marked beta on the Dagster side). Plain Python assets for
-gold would avoid dbt but lose its tests, docs and model lineage.
+**Transformations.** dbt's native Iceberg catalog support for DuckDB exists only in dbt v2, and
+Dagster's integration with it is a preview. Gold models start as versioned SQL files run by Dagster
+assets on DuckDB, with asset checks as tests. dbt is reconsidered once that integration is stable,
+after a prototype covering incremental models, tests, failures and backfills; the SQL files are
+written so that the move is mechanical.
 
-**Not used: Kafka, Spark, Flink.** 45 events/s, 4 M rows/day and under 100 GB/year fit one process
-and one DuckDB on one machine. Distributed systems would add servers, cost and failure modes for
-no gain. We reconsider when one of these holds:
+**Not used: Kafka, Spark, Flink.** One process and one DuckDB on one machine fit this volume.
+These are triggers to re-evaluate, not hard limits:
 
-| Tool | Reconsider when |
+| Tool | Re-evaluate when |
 |---|---|
-| Kafka (or a managed log) | sustained > 5,000 events/s, or more than one independent real-time consumer that needs replay, or ingestion split across hosts or regions |
-| Spark | silver > 1 TB queried regularly, or a daily gold build on DuckDB no longer fits in 1 hour on a 32 GB node |
-| Flink | stateful event-time processing (e.g. live storm tracking) needed in seconds at > 5,000 events/s, or state no longer fits in one process's memory |
+| Kafka (or a managed log) | sustained thousands of events/s, several independent real-time consumers needing replay, or ingestion split across hosts |
+| Spark | silver near 1 TB queried regularly, or the daily gold build no longer fits in an hour on one large node |
+| Flink | live stateful event-time processing (e.g. storm tracking in seconds) at a rate one process cannot hold |
 
-Cloudflare Basin Pipelines (managed stream to Iceberg) was also set aside: append-only, no dedup,
-and NetCDF parsing does not fit a Worker.
+Cloudflare Basin Pipelines was set aside: append-only, so producer-side idempotence would remain
+ours, for one more moving part.
 
 ## Decision
 
-**Hot path** (`scintille-ingest`, one asyncio process, #35): polls sources, keeps per-file state in
-Postgres (exactly once per file), parses with Polars, publishes 30-second live chunks and the
-manifest to R2 (ADR 0004), caches raw files in R2 for 30 days, and every 1 to 5 minutes commits
-buffered flashes to `silver.flashes` and file rows to `bronze.ingest_log` **with PyIceberg**
-(insert-only upsert on `flash_id`: ids are deterministic, so a known id is skipped, never
-updated). The buffer is persisted locally until the commit succeeds.
+**Hot path, two processes** (#35):
+- `ingest-live` polls sources, parses, publishes 30-second live chunks and the manifest (ADR 0004),
+  caches raw files in R2 for 30 days, and writes each normalized micro-batch to a **local durable
+  spool** (one Parquet file per batch, fsynced, named by a deterministic `batch_id`). It never calls
+  the catalog.
+- `lake-writer` drains the spool every 5 minutes: it appends each batch to `silver.flashes` and
+  `bronze.ingest_log` with PyIceberg, storing the `batch_id` in the snapshot properties, then
+  deletes the spool file. Bounded memory and retries; it can be stopped without affecting the live
+  feed.
 
-**Lakehouse**: Apache Iceberg tables on R2 through **R2 Data Catalog (Basin Catalog)** with managed
-compaction and snapshot expiration enabled. **Lakekeeper** is the fallback and the local
-development catalog (#23), so the same code runs against both.
+**Delivery guarantee: at least once, with idempotent effects.**
+- File identity is the full object key plus its checksum, so a revised product is a new file.
+- Postgres tracks each file through `downloaded`, `published_live` and `spooled`; each step is
+  idempotent and re-runnable.
+- `batch_id` is derived from the batch's file identities. If a commit outcome is unknown,
+  `lake-writer` looks for that `batch_id` in recent snapshot properties before retrying, so a batch
+  is never appended twice.
+- No upsert against history: deduplication by lookup on a hash id would scan ever more data as the
+  table grows. A daily asset check verifies `flash_id` uniqueness on closed partitions only, and a
+  violation triggers a rebuild of that partition.
+- A daily reconciliation compares Postgres, `bronze.ingest_log` and silver counts per source and
+  hour (#25).
+
+**Reprocessing and corrections** (#40): backfills rebuild **whole partitions** (`day × source`) from
+every source file of that day, check completeness against the expected file count, then overwrite.
+Never a partial overwrite. One writer per partition at a time (Postgres advisory lock shared by
+`lake-writer` and backfills). Rows carry `parser_version` and `calibration_version`, so a correction
+is a traceable rebuild, not an in-place update.
+
+**Lakehouse**: Iceberg on R2 Data Catalog with managed compaction. Snapshot expiration: 3 days
+(about 860 snapshots per table at one commit every 5 minutes), a deliberate trade-off between
+metadata size and rollback window; bad rewrites are caught by the daily checks well within it.
+Orphan files: weekly **inventory only** (no deletion) until a proven procedure exists, tested with
+concurrent compaction and old snapshots, with a safety delay longer than any write or retry.
 
 | Layer | Tables | Notes |
 |---|---|---|
-| Bronze | `bronze.ingest_log` (one row per source file: checksum, sizes, timings, counts); raw files under `raw/` with a 30-day R2 lifecycle rule | Postgres stays the operational state; the log is its analytical copy |
-| Silver | `silver.flashes` (partitioned by `day(event_time)` and `source`, sorted by `event_time`), `silver.flashes_quarantine` | about 30 to 100 MB per partition and day: one or two files after compaction (target 64 MB and up) |
-| Gold | storm cells, storms, tracks, aggregates, SLA metrics | small, rebuilt or incrementally appended by dbt |
+| Bronze | `bronze.ingest_log`; raw files under `raw/` with a 30-day lifecycle rule | Postgres is the operational state; the log is its analytical copy |
+| Silver | `silver.flashes` (partitioned by `day(event_time)` and `source`, sorted by `event_time`), `silver.flashes_quarantine` | append by `lake-writer`, rebuild by backfills |
+| Gold | storm cells, storms, tracks, aggregates, SLA metrics | DuckDB SQL run by Dagster; tables set to merge-on-read |
 
-**Batch** (`scintille-pipelines`): Dagster assets for gold, checks, backfills (#40, same parsing
-code, PyIceberg partition overwrite for reprocessing), published JSON and Parquet exports.
-**dbt v2 with its built-in DuckDB adapter** (Iceberg catalog via `catalogs.yml`), run through
-`dagster-dbt`. **DuckDB** reads silver through the REST catalog and writes gold tables (no sort
-order on gold, so DuckDB updates and deletes work). **PyIceberg** owns table definitions,
-migrations and the silver writes.
+**Batch** (`scintille-pipelines`): Dagster assets for gold, checks, backfills and published JSON.
 
 ## Consequences
 
-- One always-on process and one Dagster deployment on one VPS; storage and catalog are managed.
-- Live latency does not depend on the lakehouse: a catalog outage delays silver, never the globe.
-- Two writers commit to silver (hot path and backfills), plus the catalog's compaction: commits
-  must retry on optimistic-concurrency conflicts, and backfills should not target today's
-  partitions.
-- One commit per minute is about 45,000 commits/month: inside the free tier but worth tracking
-  (catalog operations per day as a metric). Snapshot expiration must be set much shorter than
-  the 30-day default (proposal: 3 days) or metadata grows with every micro-batch.
-- Orphan files from failed commits are not cleaned by the catalog: a weekly Dagster check compares
-  stored objects with referenced files and deletes the difference past a safety delay.
-- Deviations from #22 that other tickets must absorb: #39 writes with PyIceberg, not DuckDB
-  `MERGE`; #26 uses dbt v2, not dbt-core 1.x with `dbt-duckdb`; #27 sets snapshot expiration and
-  adds orphan cleanup; volumes in docs are 50 to 100 GB/year. If `dagster-dbt` support for dbt v2
-  proves unstable, the fallback is dbt-core 1.x with `dbt-duckdb` writing gold as Parquet, not
-  Iceberg.
-- Thresholds above are tracked as metrics (events/s, silver size, gold build time) so that
-  outgrowing this design is visible before it hurts.
+- **Spool sizing.** About 1 MB per 5 minutes, 300 MB/day: days of catalog outage fit on the VPS
+  disk. Alerts at 50% and 80% disk use; past 90%, the raw cache upload is paused before anything
+  else. Losing the VPS loses the spool: recovery is a backfill from upstream archives.
+- **Freshness is visible per layer.** `metrics.json` exposes the live feed age, silver lag and gold
+  age separately, so storm pages can say how fresh they are while the globe stays live.
+- **Live latency.** Publishing at chunk close adds up to 30 s to the ~30 s measured on GLM (#30);
+  ADR 0004's chunk size is revisited if that matters.
+- **Catalog operations.** One commit every 5 minutes on two tables is about 17,000 commits per
+  month, each several catalog operations: tracked as a metric against the free tier.
+- **Proofs live in the implementation tickets**, as acceptance criteria: crash after commit but
+  before acknowledgement (#35, #39), replay without duplicates (#39), partial backfill without loss
+  (#40), catalog outage without live impact (#35), orphan inventory preserving retained snapshots
+  (#27), uniqueness check cost on a large partition (#25).
+- Tickets to update after acceptance: #23, #24, #25, #26, #27, #35, #39, #40.
 
 ## Sources
 
-- R2 Data Catalog (Basin Catalog) overview: https://developers.cloudflare.com/r2/data-catalog/
+- R2 Data Catalog: https://developers.cloudflare.com/r2/data-catalog/
 - Table maintenance: https://developers.cloudflare.com/r2/data-catalog/table-maintenance/
+- Pricing and GA: https://developers.cloudflare.com/changelog/product/basin/
 - DuckDB with R2 Data Catalog: https://developers.cloudflare.com/r2/data-catalog/config-examples/duckdb/
-- Basin GA and billing changelog: https://developers.cloudflare.com/changelog/product/basin/
-- Pricing: https://developers.cloudflare.com/changelog/post/2026-05-11-r2-data-catalog-pricing-announced/
-- DuckDB Iceberg extension: https://duckdb.org/docs/current/core_extensions/iceberg/overview.html
-- DuckDB writing to Iceberg: https://duckdb.org/docs/current/core_extensions/iceberg/writing_to_iceberg.html
-- PyIceberg API: https://py.iceberg.apache.org/api/
+- DuckDB Iceberg writes: https://duckdb.org/docs/current/core_extensions/iceberg/writing_to_iceberg.html
+- Iceberg spec (row identity not enforced): https://iceberg.apache.org/spec/
+- Iceberg maintenance (orphan files): https://iceberg.apache.org/docs/latest/maintenance/
+- Iceberg write properties: https://iceberg.apache.org/docs/latest/configuration/
+- PyIceberg API (append, snapshot properties, overwrite, upsert): https://py.iceberg.apache.org/api/
 - dbt Iceberg support for DuckDB: https://docs.getdbt.com/docs/build/iceberg/adapters/duckdb-iceberg-support
-- dbt v2 DuckDB adapter: https://docs.getdbt.com/docs/local/connect-data-platform/duckdb-setup
-- DuckDB in dbt v2: https://duckdb.org/2026/09/22/dbt-fusion
-- dbt engine v2 in Dagster: https://dagster.io/blog/dbt-fusion-support-comes-to-dagster
+- dbt v2 in Dagster (preview): https://dagster.io/blog/dbt-fusion-support-comes-to-dagster
+- Airflow assets: https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/assets.html
+- DuckLake: https://ducklake.select/docs/
 - Lakekeeper: https://docs.lakekeeper.io/
+- NOAA GLM archive: https://www.ncei.noaa.gov/
