@@ -6,14 +6,14 @@
 ## Context
 
 ADR 0006 runs the pipeline (`ingest-live`, `lake-writer`, Postgres, Dagster, DuckDB) on one Hetzner
-VPS of about 4 vCPU and 8 GB. In October 2026 Hetzner had no capacity for that size, and OVH had
-none left in Europe. Visitors never reach the VPS: the site and the live feed are served by
+VPS of about 4 vCPU and 8 GB. In October 2026 Hetzner had no capacity for that size, neither in its
+performance nor in its cost-optimized (ARM) plans, and OVH had none left in Europe. Visitors never reach the VPS: the site and the live feed are served by
 Cloudflare (ADR 0005), and the VPS only ingests, computes and publishes to R2.
 
 ## Options
 
-- **Hetzner ARM (CAX21, 4 vCPU, 8 GB)**: available and cheap; every dependency has arm64 builds, but
-  images would have to be built for ARM.
+- **Hetzner cost-optimized ARM (CAX21, 4 vCPU, 8 GB)**: would have fit, every dependency has arm64
+  builds, but no capacity either.
 - **OVH VPS-2 (4 vCores, 8 GB, 75 GB NVMe) in North America**: same size, x86, about 7 EUR/month,
   in place upgrade to larger plans.
 - **OVH in Asia-Oceania**: far from both data sources, no benefit.
