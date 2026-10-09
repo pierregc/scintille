@@ -17,11 +17,14 @@ Both folders are git-ignored.
 ## Loading in the globe
 
 The Earth shader loads `<PUBLIC_TEXTURES_URL>/4k/{day,night,mask}.webp`. `PUBLIC_TEXTURES_URL` defaults to
-`/textures`; for local development, link the generated folder into `public/` (ignored by Git):
+`/textures` in dev and to `https://data.scintille.app/textures/v1` in production builds. For local
+development, link the generated folder into `public/` (ignored by Git):
 
 ```sh
 ln -s ../scripts/textures/out web/public/textures
 ```
+
+For production, upload them to R2 with `pnpm -C web r2:upload textures` ([deploy](deploy.md#textures)).
 
 ## Sources and licenses
 
