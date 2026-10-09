@@ -134,3 +134,13 @@ curl https://scintille.app/robots.txt                  # our robots.txt
 curl -A GPTBot -sI https://scintille.app/ | head -n 1  # HTTP/2 200
 curl -sI https://pr-<number>-scintille.<account-subdomain>.workers.dev/ | grep -i x-robots-tag  # noindex
 ```
+
+## Sources
+
+- https://developers.cloudflare.com/workers/previews/ and its Configuration, Resources and Custom
+  domains pages: the `previews` block (top-level bindings not inherited), R2 isolation by binding
+  another bucket, `X-Robots-Tag: noindex` on `workers.dev` Preview URLs. `wrangler preview` needs
+  Wrangler 4.135+ and is in open beta.
+- https://developers.cloudflare.com/workers/wrangler/commands/workers/: `wrangler preview`, `preview delete`.
+- https://developers.cloudflare.com/workers/configuration/routing/custom-domains/: Custom Domains.
+- https://docs.astro.build/en/guides/integrations-guide/cloudflare/: adapter, dev on `workerd`.
