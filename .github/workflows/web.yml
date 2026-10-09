@@ -100,7 +100,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Mark the Preview noindex
-        run: printf '\n/*\n  X-Robots-Tag: noindex\n' >> dist/client/_headers
+        run: |
+          printf '\n/*\n  X-Robots-Tag: noindex\n' >> dist/client/_headers
       - name: Deploy the Preview
         run: |
           export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/wrangler-output.ndjson"
@@ -114,13 +115,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Check the noindex header
-        run: curl -fsSI --retry 5 --retry-all-errors "$URL" | grep -i '^x-robots-tag: noindex'
+        run: |
+          curl -fsSI --retry 5 --retry-all-errors "$URL" | grep -i '^x-robots-tag: noindex'
         env:
           URL: ${{ steps.preview.outputs.url }}
       - name: Post the Preview URL
         run: |
           marker='<!-- web-preview -->'
-          body=$(printf '%s\nPreview: %s (commit %s, R2 `scintille-live-preview`, `noindex`)' "$marker" "$URL" "$SHA")
+          body=$(printf '%s\nPreview: %s (commit %s, bound to scintille-live-preview, noindex)' "$marker" "$URL" "$SHA")
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
           if [ -n "$id" ]; then
