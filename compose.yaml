@@ -1,5 +1,6 @@
 # Local lakehouse for development and tests only: Lakekeeper (Iceberg REST catalog) on Postgres,
-# with Silo as the S3-compatible store. Never pointed at production.
+# with Silo as the S3-compatible store. Never pointed at production. Docker Hub images come through
+# mirror.gcr.io to avoid its pull rate limit.
 # Lakekeeper shares Silo's network namespace so that http://localhost:9000 means the same store
 # for the catalog and for clients on the host.
 name: scintille
@@ -12,7 +13,7 @@ x-lakekeeper-env: &lakekeeper-env
 
 services:
   lake-db:
-    image: postgres:17
+    image: mirror.gcr.io/library/postgres:17
     environment:
       POSTGRES_PASSWORD: postgres
     healthcheck:
@@ -21,7 +22,7 @@ services:
       retries: 15
 
   lake-s3:
-    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    image: mirror.gcr.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     command: server /data
     environment:
       MINIO_ROOT_USER: scintille-local
@@ -35,7 +36,7 @@ services:
       retries: 15
 
   lake-bucket:
-    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    image: mirror.gcr.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       lake-s3:
         condition: service_healthy
@@ -68,7 +69,7 @@ services:
         condition: service_completed_successfully
 
   lake-init:
-    image: curlimages/curl:8.22.0
+    image: mirror.gcr.io/curlimages/curl:8.22.0
     depends_on:
       lakekeeper:
         condition: service_healthy
