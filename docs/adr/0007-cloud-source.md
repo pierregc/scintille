@@ -1,6 +1,6 @@
 # 0007 · Cloud source: NOAA GMGSI infrared mosaic first, home-made composite later
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 
 ## Context
@@ -71,12 +71,15 @@ on S3 about 40 minutes after the nominal hour. We trust the files and keep check
 
 ## Decision
 
-Proposed: use **NOAA GMGSI longwave IR (d)** as the first cloud source for #61: hourly, observed,
+Use **NOAA GMGSI longwave IR (d)** as the first cloud source for #61: hourly, observed,
 global between ±72.7°, one 7.4 MB file per hour, open licence and an archive back to 2021 for any
 replay. Convert counts to opacity against the GFS skin temperature. Keep the **home-made composite
-(c)** as the upgrade path once the layer ships, starting with GOES and Himawari every 10 minutes
+(c)** as the upgrade path once the layer ships (#131), starting with GOES and Himawari every 10 minutes
 from AWS and MTG FCI hourly (Core, CC BY 4.0), then sub-hourly FCI if the EUMETSAT licence allows
 it for the site. GFS cloud cover (a) and GIBS (b) are rejected as primary sources.
+
+Clouds lag lightning by 40 to 100 minutes: the HUD shows the cloud frame time. Beyond ±72.7° the
+layer fades out rather than being filled with GFS, so observed and modelled clouds are never mixed.
 
 This follows the recommendation of #60 ("the quickest observed IR option that covers the globe"),
 except that GIBS turned out not to cover the globe.
