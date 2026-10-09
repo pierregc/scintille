@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
+from obstore.store import S3Store
 from scintille_lake.config import LakeConfig
 from scintille_lake.connect import pyiceberg_catalog
 from scintille_lake.locks import partition_locks
@@ -23,6 +24,7 @@ from scintille_ingest.glm.products import Satellite, satellites_from_env
 from scintille_ingest.runtime import health
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
+from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
 from scintille_ingest.runtime.service import IngestLive
@@ -75,14 +77,44 @@ async def run_live(spool_dir: Path, port: int) -> int:
     if not dsn:
         log.error("SCINTILLE_POSTGRES_DSN is not set")
         return 2
+    metrics = Metrics()
+    feed = live_feed_from_env(metrics)
     service = IngestLive(
-        [GlmSource(s) for s in satellites_from_env()], PostgresState(dsn), Spool(spool_dir)
+        [GlmSource(s) for s in satellites_from_env()],
+        PostgresState(dsn),
+        Spool(spool_dir),
+        publisher=feed,
+        metrics=metrics,
     )
-    server = await health.serve(port, service.healthy, service.metrics.render)
-    _stop_on_signals(service.stop)
+    server = await health.serve(port, service.healthy, metrics.render)
+
+    def stop() -> None:
+        service.stop()
+        if feed:
+            feed.stop()
+
+    _stop_on_signals(stop)
     async with server:
-        await service.run()
+        await asyncio.gather(service.run(), *([feed.run()] if feed else []))
     return 0
+
+
+def live_feed_from_env(metrics: Metrics) -> LiveFeed | None:
+    """Publishes to `SCINTILLE_LIVE_BUCKET`, with the R2 credentials used elsewhere, when set."""
+    bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+    if not bucket:
+        log.warning("SCINTILLE_LIVE_BUCKET is not set: no live feed, spool only")
+        return None
+    endpoint = os.environ["SCINTILLE_R2_ENDPOINT"]
+    store = S3Store(
+        bucket,
+        endpoint=endpoint,
+        access_key_id=os.environ["SCINTILLE_R2_ACCESS_KEY_ID"],
+        secret_access_key=os.environ["SCINTILLE_R2_SECRET_ACCESS_KEY"],
+        region="auto",
+        client_options={"allow_http": endpoint.startswith("http://")},
+    )
+    return LiveFeed(ObjectLiveStore(store), metrics=metrics)
 
 
 async def run_lake_writer(spool_dir: Path, interval: float) -> int:
