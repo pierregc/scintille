@@ -12,7 +12,7 @@ flowchart LR
         archives[("Upstream archives<br/>NOAA, EUMETSAT")]
     end
 
-    subgraph vps["Hetzner VPS"]
+    subgraph vps["OVH VPS"]
         live_proc["ingest-live<br/>poll, parse, publish"]
         spool[("Durable spool<br/>one file per batch")]
         writer["lake-writer<br/>PyIceberg, every 5 min"]
