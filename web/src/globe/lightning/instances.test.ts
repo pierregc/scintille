@@ -22,7 +22,7 @@ function setup(ringCapacity: number, capacity: number) {
 }
 
 describe('FlashInstances', () => {
-	it('stores direction, relative time, intensity and radius', () => {
+	it('stores direction, relative time, intensity, radius and duration', () => {
 		const { ring, instances } = setup(8, 4);
 		push(ring, 100, 1, 30, -60);
 		instances.sync(100_000);
@@ -34,6 +34,7 @@ describe('FlashInstances', () => {
 		expect(d[3]).toBe(0);
 		expect(d[4]).toBeCloseTo(1);
 		expect(d[5]).toBeCloseTo(Math.sqrt(100 / Math.PI));
+		expect(d[6]).toBe(250);
 		expect(instances.origin).toBe(100_000);
 	});
 

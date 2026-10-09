@@ -1,7 +1,7 @@
 import type { FlashRing } from '../live';
 
-/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km). */
-export const FLASH_STRIDE = 6;
+/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km), duration (ms). */
+export const FLASH_STRIDE = 7;
 
 /** Beyond this distance between scene time and origin, times are rebased to keep float32 precision. */
 export const REBASE_MS = 6 * 3_600_000;
@@ -73,6 +73,7 @@ export class FlashInstances {
 			data[o + 3] = (ring.time[s] - this.origin) / 1000;
 			data[o + 4] = ring.intensity[s];
 			data[o + 5] = Math.max(MIN_RADIUS_KM, Math.sqrt(ring.areaKm2[s] / Math.PI));
+			data[o + 6] = ring.durationMs[s];
 			this.#cursor = (this.#cursor + 1) % this.capacity;
 		}
 		this.#read = ring.written;
