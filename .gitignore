@@ -32,3 +32,10 @@ __pycache__/
 web/scripts/textures/.cache/
 web/scripts/textures/out/
 web/public/textures
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
