@@ -13,4 +13,21 @@ export default [
 			globals: { Buffer: 'readonly', console: 'readonly', fetch: 'readonly', process: 'readonly' },
 		},
 	},
+	{
+		files: ['src/globe/**/*.{ts,astro}'],
+		ignores: ['src/globe/clock.ts', 'src/globe/**/*.test.ts'],
+		rules: {
+			'no-restricted-properties': [
+				'error',
+				{ object: 'Date', property: 'now', message: 'Read time from SceneClock.' },
+			],
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+					message: 'Read time from SceneClock.',
+				},
+			],
+		},
+	},
 ];
