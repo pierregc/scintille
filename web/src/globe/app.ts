@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
-import { createClouds } from './clouds';
+import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
 import { createGlobeControls } from './controls';
 import { applyDevReplay } from './dev-replay';
@@ -13,6 +13,8 @@ import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
 export interface GlobeApp {
+	readonly clock: SceneClock;
+	readonly clouds: Clouds;
 	dispose(): void;
 }
 
@@ -79,6 +81,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	});
 
 	return {
+		clock,
+		clouds,
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
