@@ -36,6 +36,16 @@ The starfield is procedural (`web/src/globe/starfield.ts`): no star catalogue or
 NASA imagery is not copyrighted; NASA asks for credit when it is used. Natural Earth requires no
 permission or credit. The site's attribution must credit NASA.
 
+## Cloud fixture
+
+Until ingestion (#61) publishes live frames, the dev server shows one cloud frame from
+`fixtures/clouds/gmgsi_20260715T180000Z.webp` (327 KB), served by `python3 fixtures/serve.py` under the
+live feed root (`PUBLIC_LIVE_BASE_URL`, default `http://localhost:8787/`). It is never loaded in production.
+
+| Texture | Source | Resolution | License |
+|---|---|---|---|
+| `clouds/gmgsi_20260715T180000Z.webp` | [NOAA NESDIS GMGSI](https://registry.opendata.aws/noaa-gmgsi/) longwave IR, 2026-07-15 18:00 UTC, converted to opacity against the GFS skin temperature ([ADR 0007](adr/0007-cloud-source.md)) | 2048 × 1024, grayscale WebP q70, 0 = clear, 255 = opaque; no data beyond ±72.7° | NOAA open data. Credit: "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)" |
+
 ## Formats
 
 Every tier has three equirectangular textures, each as KTX2 (Basis Universal ETC1S with a full mipmap
