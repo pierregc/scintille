@@ -3,6 +3,7 @@ import '@fontsource/ibm-plex-sans/latin-200.css';
 import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-200.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
+import Timeline from './Timeline.astro';
 ---
 
 <main class="hud" data-hud data-mode="live">
@@ -68,6 +69,8 @@ import '@fontsource/ibm-plex-mono/latin-300.css';
 	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
 		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
 	</div>
+
+	<Timeline />
 </main>
 
 <style>
