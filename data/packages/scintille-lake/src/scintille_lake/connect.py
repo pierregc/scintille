@@ -18,9 +18,8 @@ def duckdb_attach(
     config = config or LakeConfig.from_env()
     connection.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs")
     if config.token:
-        connection.execute(
-            f"CREATE OR REPLACE SECRET {alias}_secret (TYPE iceberg, TOKEN {_literal(config.token)})"
-        )
+        token = _literal(config.token)
+        connection.execute(f"CREATE OR REPLACE SECRET {alias}_secret (TYPE iceberg, TOKEN {token})")
         auth = f"SECRET {alias}_secret"
     else:
         auth = "AUTHORIZATION_TYPE 'none'"
