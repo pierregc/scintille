@@ -22,11 +22,16 @@ export interface Earth {
 	dispose(): void;
 }
 
-const TEXTURES_URL: string = import.meta.env.PUBLIC_TEXTURES_URL ?? '/textures';
 const TEXTURE_TIER = '4k';
 
-export function texturesUrl(name: 'day' | 'night' | 'mask'): string {
-	return `${TEXTURES_URL.replace(/\/$/, '')}/${TEXTURE_TIER}/${name}.webp`;
+/** Textures root: `PUBLIC_TEXTURES_URL`, else `public/textures` in dev and R2 in production. */
+export function texturesRoot(configured: unknown = import.meta.env.PUBLIC_TEXTURES_URL, dev = import.meta.env.DEV): string {
+	if (typeof configured === 'string' && configured !== '') return configured.replace(/\/$/, '');
+	return dev ? '/textures' : 'https://data.scintille.app/textures/v1';
+}
+
+export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot()): string {
+	return `${root}/${TEXTURE_TIER}/${name}.webp`;
 }
 
 export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {

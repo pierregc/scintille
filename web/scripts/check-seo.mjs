@@ -4,7 +4,7 @@ import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 
-const DIST = join(import.meta.dirname, '..', 'dist');
+const DIST = join(import.meta.dirname, '..', 'dist', 'client');
 const SITE = 'https://scintille.app/';
 
 async function htmlFiles(dir) {

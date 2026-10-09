@@ -1,0 +1,19 @@
+// Deployment: docs/deploy.md. Hosting decision: docs/adr/0005-hosting-and-dynamic-pages.md.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "scintille",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"binding": "ASSETS",
+		"run_worker_first": false
+	},
+	"routes": [{ "pattern": "scintille.app", "custom_domain": true }],
+	"workers_dev": false,
+	"preview_urls": true,
+	"cache": { "enabled": false },
+	"r2_buckets": [{ "binding": "LIVE", "bucket_name": "scintille-live" }],
+	"previews": {
+		"r2_buckets": [{ "binding": "LIVE", "bucket_name": "scintille-live-preview" }]
+	}
+}
