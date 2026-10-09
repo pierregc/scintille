@@ -44,6 +44,8 @@ export interface LiveClientOptions {
 	random?: () => number;
 	onManifest?: (manifest: LiveManifest) => void;
 	onError?: (error: unknown) => void;
+	/** Wall clock, UTC ms; when unset, the client does not record when manifests arrive. */
+	now?: () => number;
 }
 
 /** Polls the live manifest and pushes every chunk it has not seen yet into the ring, once. */
@@ -59,6 +61,9 @@ export class LiveClient {
 	readonly #onManifest?: (manifest: LiveManifest) => void;
 	readonly #onError: (error: unknown) => void;
 	readonly #seen = new Set<string>();
+	readonly #now: () => number;
+	#manifest: LiveManifest | null = null;
+	#manifestAt: number | null = null;
 	#failures = 0;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#polling = false;
@@ -79,6 +84,17 @@ export class LiveClient {
 		this.#random = options.random ?? Math.random;
 		this.#onManifest = options.onManifest;
 		this.#onError = options.onError ?? (() => {});
+		this.#now = options.now ?? (() => Number.NaN);
+	}
+
+	/** Latest manifest received, or null. */
+	get manifest(): LiveManifest | null {
+		return this.#manifest;
+	}
+
+	/** When the latest manifest was received (UTC ms), or null. */
+	get manifestAt(): number | null {
+		return this.#manifestAt;
 	}
 
 	/** Consecutive failed polls. */
@@ -121,6 +137,9 @@ export class LiveClient {
 		const signal = this.#abort?.signal;
 		try {
 			const manifest = await this.#fetchManifest(signal);
+			this.#manifest = manifest;
+			const at = this.#now();
+			this.#manifestAt = Number.isNaN(at) ? null : at;
 			this.#onManifest?.(manifest);
 			await this.#fetchMissing(manifest, signal);
 			this.#failures = 0;

@@ -64,7 +64,10 @@ import Timeline from './Timeline.astro';
 			<span class="cap" data-state role="status">Live</span>
 			<button class="golive" type="button" data-live>Back to live</button>
 		</div>
+		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
 	</section>
+
+	<p class="stale cap" role="status" data-stale hidden></p>
 
 	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
 		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
@@ -230,6 +233,35 @@ import Timeline from './Timeline.astro';
 		50% {
 			opacity: 0.25;
 		}
+	}
+	.hud[data-late] .pulse {
+		opacity: 0.4;
+		box-shadow: none;
+		animation: none;
+	}
+	.sources {
+		display: grid;
+		gap: 6px;
+		margin: 12px 0 0;
+		padding: 0;
+		list-style: none;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	.sources :global(li[data-state='delayed']),
+	.sources :global(li[data-state='offline']) {
+		color: var(--soft);
+	}
+	.stale {
+		position: fixed;
+		top: var(--gut);
+		left: 50%;
+		max-width: calc(100vw - 2 * var(--gut) - 360px);
+		color: var(--soft);
+		text-align: center;
+		transform: translateX(-50%);
 	}
 	.golive {
 		margin-left: 6px;
@@ -429,6 +461,14 @@ import Timeline from './Timeline.astro';
 		.layers {
 			top: calc(var(--gut) + 112px);
 		}
+		.sources {
+			display: none;
+		}
+		.stale {
+			top: auto;
+			bottom: calc(var(--gut) + 96px);
+			max-width: calc(100vw - 2 * var(--gut));
+		}
 		.info {
 			top: calc(var(--gut) + 30px);
 		}
@@ -471,6 +511,7 @@ import Timeline from './Timeline.astro';
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { formatAge } from '../globe/live/freshness';
 	import { formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
@@ -482,7 +523,35 @@ import Timeline from './Timeline.astro';
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
 		const info = $<HTMLDetailsElement>('[data-info]');
+		const sources = $('[data-sources]');
+		const staleBanner = $('[data-stale]');
 		let app: GlobeApp | undefined;
+
+		const showFreshness = (live: boolean) => {
+			const status = live && app ? app.feedStatus() : undefined;
+			root.toggleAttribute('data-late', Boolean(status?.stale));
+			if (state) state.textContent = !live ? 'Replay' : status?.stale ? 'Delayed' : 'Live';
+			if (staleBanner) {
+				const text = status?.stale
+					? status.ageMs === null
+						? 'Waiting for live data'
+						: `Live data is late · last update ${formatAge(status.ageMs)} ago`
+					: '';
+				staleBanner.hidden = !text;
+				if (staleBanner.textContent !== text) staleBanner.textContent = text;
+			}
+			if (sources) {
+				const lines = (status?.sources ?? []).map((s) => ({
+					state: s.state,
+					text: [s.label, s.state === 'live' ? null : s.state, s.ageMs === null ? null : formatAge(s.ageMs)]
+						.filter(Boolean)
+						.join(' · '),
+				}));
+				sources.hidden = lines.length === 0;
+				const html = lines.map((l) => `<li data-state="${l.state}">${l.text}</li>`).join('');
+				if (sources.innerHTML !== html) sources.innerHTML = html;
+			}
+		};
 
 		const tick = () => {
 			const now = app?.clock.time() ?? Date.now();
@@ -494,10 +563,8 @@ import Timeline from './Timeline.astro';
 			const day = formatUtcDate(now);
 			if (date && date.textContent !== day) date.textContent = day;
 			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
-			if (root.dataset.mode !== mode) {
-				root.dataset.mode = mode;
-				if (state) state.textContent = mode === 'live' ? 'Live' : 'Replay';
-			}
+			if (root.dataset.mode !== mode) root.dataset.mode = mode;
+			showFreshness(mode === 'live');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 		};
 		tick();

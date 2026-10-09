@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChunkFormatError } from './decode';
 import { LiveClient, backoffDelay, type LiveClientOptions } from './client';
+import { feedStatus, STALE_AFTER_MS } from './freshness';
 import { FlashRing } from './ring';
 import { FakeFeed, FakeVisibility } from './testing';
 
@@ -160,6 +161,23 @@ describe('LiveClient', () => {
 		live.start();
 		await tick(5 * POLL);
 		expect(feed.requests).toEqual([]);
+		live.stop();
+	});
+
+	it('remembers when the latest manifest arrived, so a stalled feed shows as stale', async () => {
+		let wall = Date.UTC(2026, 6, 15, 19);
+		await feed.publish(T0, 30, 1);
+		const live = client({ now: () => wall });
+		live.start();
+		await settle();
+		expect(live.manifest?.chunks).toHaveLength(1);
+		expect(live.manifestAt).toBe(wall);
+
+		feed.failing = true;
+		wall += STALE_AFTER_MS + 1;
+		await tick(POLL);
+		expect(live.manifestAt).toBe(wall - STALE_AFTER_MS - 1);
+		expect(feedStatus(live.manifest, live.manifestAt, wall).stale).toBe(true);
 		live.stop();
 	});
 
