@@ -19,11 +19,17 @@ def duckdb_attach(
     connection.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs")
     if config.token:
         connection.execute(
-            f"CREATE OR REPLACE SECRET {alias}_secret (TYPE iceberg, TOKEN ?)", [config.token]
+            f"CREATE OR REPLACE SECRET {alias}_secret (TYPE iceberg, TOKEN {_literal(config.token)})"
         )
         auth = f"SECRET {alias}_secret"
     else:
         auth = "AUTHORIZATION_TYPE 'none'"
     connection.execute(
-        f"ATTACH ? AS {alias} (TYPE iceberg, ENDPOINT ?, {auth})", [config.warehouse, config.uri]
+        f"ATTACH {_literal(config.warehouse)} AS {alias} "
+        f"(TYPE iceberg, ENDPOINT {_literal(config.uri)}, {auth})"
     )
+
+
+def _literal(value: str) -> str:
+    """SQL string literal; ATTACH and CREATE SECRET take no bound parameters."""
+    return "'" + value.replace("'", "''") + "'"

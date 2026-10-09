@@ -9,7 +9,6 @@ from pyiceberg.table.sorting import SortOrder
 
 from .tables import NAMESPACES, TABLES, TableDef
 
-
 # Set at creation only; catalogs reject them as property updates.
 CREATE_ONLY = frozenset({"format-version"})
 
