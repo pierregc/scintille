@@ -1,6 +1,6 @@
 # 0006 · Data architecture: hot path, Iceberg lakehouse on R2, Dagster batch
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 
 ## Context
