@@ -27,6 +27,7 @@ uniform float twilightSoftness;
 uniform float twilightFloor;
 uniform float nightLights;
 uniform float specular;
+uniform float seaRoughness;
 uniform float terminatorTint;
 
 varying vec2 vUv;
@@ -38,6 +39,16 @@ varying vec3 vWorldPosition;
 float twilight(float sinElevation) {
 	vec4 steps = smoothstep(twilightEdges - twilightSoftness, twilightEdges + twilightSoftness, vec4(sinElevation));
 	return dot(steps, twilightWeights);
+}
+
+// Sun glint on a rough sea: Beckmann slope distribution with Schlick Fresnel, elongated toward the limb.
+float glint(vec3 n, vec3 sun, vec3 view) {
+	vec3 h = normalize(sun + view);
+	float nh = max(dot(n, h), 1e-3);
+	float nh2 = nh * nh;
+	float slopes = exp((nh2 - 1.0) / (nh2 * seaRoughness)) / (3.14159 * seaRoughness * nh2 * nh2);
+	float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(h, view), 0.0), 5.0);
+	return min(slopes * fresnel / (4.0 * max(dot(n, view), 0.1)), 1.0);
 }
 
 void main() {
@@ -59,8 +70,7 @@ void main() {
 	color += night * nightLights * (1.0 - level);
 
 	vec3 view = normalize(cameraPosition - vWorldPosition);
-	float glint = pow(max(dot(n, normalize(sun + view)), 0.0), 150.0);
-	color += vec3(1.0, 0.95, 0.85) * specular * water * glint * smoothstep(0.0, 0.2, s);
+	color += vec3(0.92, 0.95, 1.0) * specular * water * glint(n, sun, view) * smoothstep(0.0, 0.2, s);
 
 	gl_FragColor = vec4(color, 1.0);
 	#include <tonemapping_fragment>
