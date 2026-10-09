@@ -1,14 +1,7 @@
-import {
-	AmbientLight,
-	DirectionalLight,
-	Mesh,
-	MeshLambertMaterial,
-	PerspectiveCamera,
-	Scene,
-	SphereGeometry,
-	WebGLRenderer,
-} from 'three';
+import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { SceneClock } from './clock';
 import { createGlobeControls } from './controls';
+import { createEarth } from './earth';
 import { startLiveFeed } from './live';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
@@ -26,14 +19,9 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
 	const controls = createGlobeControls(camera, canvas, RADIUS);
 
-	const geometry = new SphereGeometry(RADIUS, 64, 32);
-	const material = new MeshLambertMaterial({ color: 0x2b4a7a });
-	const sphere = new Mesh(geometry, material);
-	scene.add(sphere);
-
-	const light = new DirectionalLight(0xffffff, 2.5);
-	light.position.set(-3, 2, 4);
-	scene.add(light, new AmbientLight(0xffffff, 0.15));
+	const clock = new SceneClock();
+	const earth = createEarth(renderer, RADIUS);
+	scene.add(earth.mesh);
 
 	const live = startLiveFeed();
 	let dprQuery: MediaQueryList | undefined;
@@ -65,6 +53,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 
 	renderer.setAnimationLoop((time) => {
 		controls.update(time);
+		earth.setTime(clock.time());
 		renderer.render(scene, camera);
 	});
 
@@ -75,8 +64,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			live.stop();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
-			geometry.dispose();
-			material.dispose();
+			earth.dispose();
 			renderer.dispose();
 		},
 	};
