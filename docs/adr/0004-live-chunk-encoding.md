@@ -1,6 +1,6 @@
 # 0004 · Live feed as gzip binary chunks keyed by ingest time
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-08
 
 ## Context

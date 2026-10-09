@@ -1,6 +1,6 @@
 # 0005 · Cloudflare Workers with prerendered pages and on-demand storm and region pages
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-09
 
 ## Context
