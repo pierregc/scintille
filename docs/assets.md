@@ -14,6 +14,15 @@ Sources are downloaded once to `web/scripts/textures/.cache/` and verified again
 SHA-256. Outputs go to `web/scripts/textures/out/<tier>/` with a `manifest.json` listing every file size.
 Both folders are git-ignored.
 
+## Loading in the globe
+
+The Earth shader loads `<PUBLIC_TEXTURES_URL>/4k/{day,night,mask}.webp`. `PUBLIC_TEXTURES_URL` defaults to
+`/textures`; for local development, link the generated folder into `public/` (ignored by Git):
+
+```sh
+ln -s ../scripts/textures/out web/public/textures
+```
+
 ## Sources and licenses
 
 | Texture | Source | Resolution | License |

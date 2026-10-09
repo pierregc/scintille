@@ -30,3 +30,4 @@ __pycache__/
 # Generated textures (uploaded to R2, never committed)
 web/scripts/textures/.cache/
 web/scripts/textures/out/
+web/public/textures
