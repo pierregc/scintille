@@ -1,6 +1,8 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
+import { createClouds } from './clouds';
+import { attachDevClouds } from './clouds/dev';
 import { createGlobeControls } from './controls';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
@@ -29,6 +31,9 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	scene.add(earth.mesh);
 	const atmosphere = createAtmosphere(RADIUS);
 	earth.mesh.add(atmosphere.mesh);
+	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), { radius: RADIUS });
+	earth.mesh.add(clouds.mesh);
+	const detachDevClouds = import.meta.env.DEV ? attachDevClouds(clouds, window) : undefined;
 	const stars = createStarfield();
 	scene.add(stars.points);
 
@@ -67,6 +72,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
+		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
 		renderer.render(scene, camera);
@@ -81,6 +87,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();
 			atmosphere.dispose();
+			detachDevClouds?.();
+			clouds.dispose();
 			stars.dispose();
 			lightning.dispose();
 			renderer.dispose();

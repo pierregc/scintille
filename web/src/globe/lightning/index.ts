@@ -20,7 +20,7 @@ export { DEFAULT_LIGHTNING_CAPACITY, FlashInstances } from './instances';
 export const DEFAULT_DISPLAY_MS = 1500;
 
 const EARTH_RADIUS_KM = 6371;
-const CLOUD_TOP_KM = 12;
+export const CLOUD_TOP_KM = 12;
 
 export interface LightningOptions {
 	radius?: number;
