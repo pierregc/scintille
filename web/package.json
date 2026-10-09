@@ -19,6 +19,7 @@
     "textures": "node scripts/textures/build.mjs"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
     "astro": "^7.3.7",
     "three": "^0.186.1"
   },
