@@ -40,6 +40,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const live = startLiveFeed();
 	const lightning = createLightning(live.ring, { radius: RADIUS });
 	scene.add(lightning.mesh);
+	clouds.setFlashLight(lightning.lightMap);
 	let dprQuery: MediaQueryList | undefined;
 
 	const resize = () => {
@@ -75,6 +76,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
+		if (clouds.mesh.visible) lightning.renderLightMap(renderer);
 		renderer.render(scene, camera);
 	});
 

@@ -34,6 +34,9 @@ uniform float terminatorTint;
 uniform float maxOpacity;
 uniform float limbThickening;
 uniform vec2 fadeLatitudes;
+uniform sampler2D flashLight;
+uniform vec3 flashColor;
+uniform float flashGain;
 
 varying vec2 vUv;
 varying vec3 vLocalNormal;
@@ -89,6 +92,8 @@ void main() {
 	float edge = exp(-(s - 0.03) * (s - 0.03) / 0.004);
 	color *= mix(vec3(1.0), warmTint, terminatorTint * edge);
 	color += nightColor * (1.0 - level);
+	// Flashes light the cloud from inside; clear sky has no alpha, so it never glows.
+	color += flashColor * flashGain * texture2D(flashLight, vUv).r;
 
 	float opacity = sampleOpacity(vUv) * maxOpacity;
 	float mu = max(dot(n, view), 0.05);
