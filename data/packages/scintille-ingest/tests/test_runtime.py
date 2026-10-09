@@ -5,6 +5,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from scintille_ingest.glm.ingest import IngestedFile
+from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.runtime import health
 from scintille_ingest.runtime.identity import FileIdentity, batch_id
 from scintille_ingest.runtime.lake_writer import LakeWriter
@@ -18,6 +20,26 @@ NOW = datetime(2026, 7, 15, 18, 30, tzinfo=UTC)
 STEPS = ("downloaded", "published_live", "spool_written", "spooled")
 
 
+def ingested(
+    product: Product, source: str, flashes: int = 4, error: str | None = None
+) -> IngestedFile:
+    ids = [hashlib.sha256(f"{product.key}|{i}".encode()).hexdigest()[:32] for i in range(flashes)]
+    log = IngestLogRecord(
+        key=product.key,
+        source=source,  # type: ignore[arg-type]
+        satellite="G19",
+        product_start=product.start,
+        product_end=product.start + timedelta(seconds=20),
+        received_at=NOW,
+        row_count=flashes,
+        checksum="sha256:x",
+        status="ok" if error is None else "failed",
+        parse_duration_ms=1.0,
+        error=error,
+    )
+    return IngestedFile(pl.DataFrame({"flash_id": ids, "source": [source] * flashes}), log)
+
+
 class FakeSource:
     def __init__(self, name: str, files: int = 3, failing: bool = False, cadence: float = 0.01):
         self.name = name
@@ -28,6 +50,7 @@ class FakeSource:
             for i in range(files)
         ]
         self.fetches = 0
+        self.corrupt: set[str] = set()
 
     async def list_recent(self, now: datetime) -> list[Product]:
         if self.failing:
@@ -38,9 +61,10 @@ class FakeSource:
         self.fetches += 1
         return product.key.encode()
 
-    def parse(self, product: Product, data: bytes, received_at: datetime) -> pl.DataFrame:
-        ids = [hashlib.sha256(f"{product.key}|{i}".encode()).hexdigest()[:32] for i in range(4)]
-        return pl.DataFrame({"flash_id": ids, "source": [self.name] * 4})
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        if product.key in self.corrupt:
+            return ingested(product, self.name, flashes=0, error="OSError: truncated")
+        return ingested(product, self.name)
 
 
 class CountingPublisher:
@@ -115,6 +139,17 @@ def test_spool_rows_carry_versions_and_source_file(tmp_path: Path) -> None:
     assert rows["parser_version"].unique().to_list() == ["glm-1"]
     assert rows["calibration_version"].unique().to_list() == ["cal-0"]
     assert rows["source_key"].unique().to_list() == [source.products[0].key]
+
+
+def test_an_unreadable_file_is_logged_as_failed_and_does_not_block(tmp_path: Path) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path), FakeSource("glm-east")
+    source.corrupt = {source.products[0].key}
+    live = service(state, spool, source)
+    asyncio.run(live.poll(source))
+    assert len(spool.pending()) == 3
+    logs = pl.concat([spool.read_log(b) for b in spool.pending()])
+    assert sorted(logs["status"].to_list()) == ["failed", "ok", "ok"]
+    assert asyncio.run(live.poll(source)) == 0
 
 
 def test_catalog_outage_keeps_ingesting_and_loses_nothing(tmp_path: Path) -> None:

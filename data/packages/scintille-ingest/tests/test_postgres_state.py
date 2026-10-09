@@ -7,6 +7,8 @@ from uuid import uuid4
 
 import polars as pl
 import pytest
+from scintille_ingest.glm.ingest import IngestedFile
+from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.runtime.identity import FileIdentity
 from scintille_ingest.runtime.service import Crash, IngestLive
 from scintille_ingest.runtime.sources import Product
@@ -40,14 +42,26 @@ def test_restart_after_a_crash_spools_once(tmp_path: Path) -> None:
         name = "glm-east"
         cadence = 1.0
 
-        async def list_recent(self, now: object) -> list[Product]:
+        async def list_recent(self, now: datetime) -> list[Product]:
             return products
 
         async def fetch(self, product: Product) -> bytes:
             return product.key.encode()
 
-        def parse(self, product: Product, data: bytes, received_at: object) -> pl.DataFrame:
-            return pl.DataFrame({"flash_id": [product.key]})
+        def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+            log = IngestLogRecord(
+                product.key,
+                "glm-east",
+                "G19",
+                product.start,
+                product.start,
+                received_at,
+                1,
+                "sha256:x",
+                "ok",
+                1.0,
+            )
+            return IngestedFile(pl.DataFrame({"flash_id": [product.key]}), log)
 
     def crash(step: str, identity: FileIdentity) -> None:
         if step == "spool_written" and identity.key.endswith("f1.nc"):
