@@ -61,7 +61,7 @@ fails. Deploys pass `--x-auto-create=false` so Wrangler never tries to create a 
 
 ## One-time setup
 
-1. **Create the two buckets** in the dashboard (Terraform will import them in #18):
+1. **Create the two buckets** in the dashboard (or let Terraform create them, [infra/terraform](../infra/terraform/README.md)):
    Storage & databases > R2 > Overview > Create bucket.
    - Name `scintille-live`, Location: Automatic, with the location hint "Eastern North America
      (ENAM)", default storage class Standard. Create.
@@ -97,14 +97,9 @@ pnpm -C web r2:upload textures
 The files are immutable: after regenerating them with different content, bump `v1` in
 `web/scripts/r2-upload.mjs` and in the default of `texturesRoot` (`web/src/globe/earth.ts`).
 
-`data.scintille.app` (public custom domain on `scintille-live`, CORS) belongs to #18. Until it is
-attached, the production globe has neither textures nor live data. To get them earlier, connect it
-by hand (R2 > `scintille-live` > Settings > Custom Domains > Add `data.scintille.app`) and add this
-CORS policy (Settings > CORS policy), then let Terraform import both:
-
-```json
-[{ "AllowedOrigins": ["https://scintille.app"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600 }]
-```
+`data.scintille.app` (public custom domain on `scintille-live`) and its CORS policy are declared in
+[infra/terraform](../infra/terraform/README.md). Until they are applied, the production globe has
+neither textures nor live data.
 
 ## Local development
 

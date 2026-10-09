@@ -1,0 +1,84 @@
+locals {
+  buckets = toset(["scintille-live", "scintille-live-preview", "scintille-lake"])
+
+  cors_origins = [
+    "https://${var.domain}",
+    "https://*.${var.workers_subdomain}.workers.dev",
+  ]
+}
+
+resource "cloudflare_r2_bucket" "this" {
+  for_each = local.buckets
+
+  account_id    = var.account_id
+  name          = each.key
+  location      = "enam"
+  storage_class = "Standard"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# No public r2.dev URL on any bucket.
+resource "cloudflare_r2_managed_domain" "off" {
+  for_each = cloudflare_r2_bucket.this
+
+  account_id  = var.account_id
+  bucket_name = each.value.name
+  enabled     = false
+}
+
+resource "cloudflare_r2_custom_domain" "data" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.this["scintille-live"].name
+  zone_id     = var.zone_id
+  domain      = "data.${var.domain}"
+  enabled     = true
+  min_tls     = "1.2"
+}
+
+resource "cloudflare_r2_bucket_cors" "live" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.this["scintille-live"].name
+
+  rules = [{
+    id = "site-and-previews"
+    allowed = {
+      origins = local.cors_origins
+      methods = ["GET", "HEAD"]
+      headers = ["*"]
+    }
+    max_age_seconds = 3600
+  }]
+}
+
+resource "cloudflare_r2_bucket_lifecycle" "lake" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.this["scintille-lake"].name
+
+  rules = [
+    {
+      id         = "raw-30-days"
+      enabled    = true
+      conditions = { prefix = "raw/" }
+      delete_objects_transition = {
+        condition = { type = "Age", max_age = 30 * 86400 }
+      }
+    },
+    {
+      # Replaces the default rule R2 adds to new buckets.
+      id         = "abort-multipart-7-days"
+      enabled    = true
+      conditions = { prefix = "" }
+      abort_multipart_uploads_transition = {
+        condition = { type = "Age", max_age = 7 * 86400 }
+      }
+    },
+  ]
+}
+
+resource "cloudflare_r2_data_catalog" "lake" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.this["scintille-lake"].name
+}
