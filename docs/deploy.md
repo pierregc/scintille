@@ -28,7 +28,8 @@ config there; `wrangler deploy` and `wrangler preview` pick it up through
 
 On every push to `main` that touches `web/`, the `web` workflow runs the checks (`check`, `lint`,
 `test`, `build`, `test:seo`, `wrangler deploy --dry-run`), then the `deploy` job runs
-`wrangler deploy`. Deploys never run in parallel.
+`wrangler deploy`. Deploys never run in parallel. To redeploy without a change, run the workflow by
+hand: Actions > web > Run workflow on `main` (`gh workflow run web.yml --ref main`).
 
 ## Previews
 
