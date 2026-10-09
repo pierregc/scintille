@@ -24,4 +24,5 @@ files = ["packages/*/src", "packages/*/tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages/*/tests"]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-m", "not network"]
+markers = ["network: needs internet access to the NOAA buckets (run with -m network)"]
