@@ -86,8 +86,8 @@ fails. Deploys pass `--x-auto-create=false` so Wrangler never tries to create a 
 ## Textures
 
 Globe textures are generated locally and never committed ([assets](assets.md)). Production loads
-them from `https://data.scintille.app/textures/v1/<tier>/<name>.webp`, stored in `scintille-live`
-under `textures/v1/` with `Cache-Control: public, max-age=31536000, immutable`:
+them from `https://data.scintille.app/textures/v2/<tier>/<name>.webp`, stored in `scintille-live`
+under `textures/v2/` with `Cache-Control: public, max-age=31536000, immutable`:
 
 ```sh
 brew install basis_universal
@@ -95,7 +95,7 @@ pnpm -C web textures
 pnpm -C web r2:upload textures
 ```
 
-The files are immutable: after regenerating them with different content, bump `v1` in
+The files are immutable: after regenerating them with different content, bump the version in
 `web/scripts/r2-upload.mjs` and in the default of `texturesRoot` (`web/src/globe/earth.ts`).
 
 `data.scintille.app` (public custom domain on `scintille-live`) and its CORS policy are declared in

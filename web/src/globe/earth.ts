@@ -27,7 +27,7 @@ const TEXTURE_TIER = '4k';
 /** Textures root: `PUBLIC_TEXTURES_URL`, else `public/textures` in dev and R2 in production. */
 export function texturesRoot(configured: unknown = import.meta.env.PUBLIC_TEXTURES_URL, dev = import.meta.env.DEV): string {
 	if (typeof configured === 'string' && configured !== '') return configured.replace(/\/$/, '');
-	return dev ? '/textures' : 'https://data.scintille.app/textures/v1';
+	return dev ? '/textures' : 'https://data.scintille.app/textures/v2';
 }
 
 export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot()): string {
@@ -50,7 +50,8 @@ export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {
 			twilightSoftness: { value: twilight.softness },
 			twilightFloor: { value: 0.12 },
 			nightLights: { value: 1.2 },
-			specular: { value: 0.25 },
+			specular: { value: 1 },
+			seaRoughness: { value: 0.02 },
 			terminatorTint: { value: 0.5 },
 		},
 	});

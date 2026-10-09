@@ -23,9 +23,9 @@ const NATURAL_EARTH =
 /** Pinned sources: a cached file is reused only if its size and SHA-256 match. */
 const SOURCES = {
 	day: {
-		url: `${NASA_EO}/bmng/bmng-topography-bathymetry/august/world.topo.bathy.200408.3x21600x10800.jpg`,
-		bytes: 27216225,
-		sha256: '05d984f723776f3d44fc473cc3d9eb67a48c425e82a56d7133e3761b2e231e86',
+		url: `${NASA_EO}/bmng/bmng-topography/august/world.topo.200408.3x21600x10800.jpg`,
+		bytes: 21792417,
+		sha256: 'b60fc9d1d87337a3ee1ef48bad5c85b076ed4f7ed0045a7f33505784d3af6fd9',
 	},
 	night: {
 		url: `${NASA_EO}/imagerecords/144000/144898/BlackMarble_2016_3km.jpg`,
