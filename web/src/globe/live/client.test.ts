@@ -11,9 +11,10 @@ let feed: FakeFeed;
 let visibility: FakeVisibility;
 let ring: FlashRing;
 let errors: unknown[];
+let current: LiveClient | undefined;
 
 function client(options: Partial<LiveClientOptions> = {}): LiveClient {
-	return new LiveClient({
+	current = new LiveClient({
 		baseUrl: 'https://data.example/',
 		ring,
 		fetch: feed.fetch,
@@ -23,11 +24,18 @@ function client(options: Partial<LiveClientOptions> = {}): LiveClient {
 		pollIntervalMs: POLL,
 		...options,
 	});
+	return current;
 }
 
-/** Lets pending fetches and decompression settle. */
-async function settle(): Promise<void> {
+async function flush(): Promise<void> {
 	for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Lets the running poll, including decompression, finish. */
+async function settle(): Promise<void> {
+	await flush();
+	await current?.idle();
+	await flush();
 }
 
 async function tick(ms: number): Promise<void> {
@@ -45,6 +53,7 @@ beforeEach(() => {
 	visibility = new FakeVisibility();
 	ring = new FlashRing(10_000);
 	errors = [];
+	current = undefined;
 });
 
 afterEach(() => {
