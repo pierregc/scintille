@@ -10,7 +10,7 @@ tier there.
 | Flashes on the GPU | 65,536 | whole live window | whole live window |
 | Clouds lit by flashes (#64) | off | on | on |
 | Bicubic cloud filtering | off | on | on |
-| Post-processing (#58) | off | off | on |
+| Bloom on flashes (#58) | off | off | on (about 0.5 ms GPU per frame) |
 
 - **Initial tier**: phones (coarse pointer, small screen), weak GPUs (Mali, older Adreno, PowerVR,
   Intel HD/UHD, software renderers) and devices with 2 GB of memory or less start `low`; known strong

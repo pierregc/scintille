@@ -8,6 +8,7 @@ import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning } from './lightning';
 import { startLiveFeed } from './live';
+import { createPostProcessing, type PostProcessing } from './post';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
 import { cappedPixelRatio } from './viewport';
@@ -62,6 +63,9 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.lightMap);
+	let post: PostProcessing | undefined = preset.postProcessing
+		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
+		: undefined;
 	let dprQuery: MediaQueryList | undefined;
 
 	/** Applies what can change at runtime; textures and flash capacity stay as loaded. */
@@ -71,6 +75,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		tier = next;
 		canvas.dataset.quality = tier;
 		if (!PRESETS[tier].cloudLight) clouds.setFlashLight(null);
+		if (!PRESETS[tier].postProcessing) {
+			post?.dispose();
+			post = undefined;
+		}
 		resize();
 	};
 
@@ -79,6 +87,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		const height = window.innerHeight;
 		renderer.setPixelRatio(cappedPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio));
 		renderer.setSize(width, height, false);
+		post?.setSize(width, height, renderer.getPixelRatio());
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 		controls.resize();
@@ -109,7 +118,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		lightning.setTime(now);
 		if (fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer);
-		renderer.render(scene, camera);
+		if (post) post.render();
+		else renderer.render(scene, camera);
 	});
 
 	return {
@@ -124,6 +134,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			detachDevClouds?.();
 			clouds.dispose();
 			stars.dispose();
+			post?.dispose();
 			lightning.dispose();
 			renderer.dispose();
 		},
