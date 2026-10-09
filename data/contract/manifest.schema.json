@@ -13,9 +13,9 @@
       "$ref": "common.schema.json#/$defs/UtcTimestamp"
     },
     "chunk_seconds": {
-      "description": "Length of the ingest window covered by one chunk, seconds.",
+      "description": "Typical length of a chunk's ingest window, seconds. A hint only: chunk durations may vary, the chunk list is authoritative.",
       "type": "integer",
-      "const": 30
+      "minimum": 1
     },
     "window_seconds": {
       "description": "How far back the manifest lists chunks, seconds.",
@@ -35,19 +35,23 @@
   },
   "$defs": {
     "ChunkRef": {
-      "description": "One immutable chunk: the flashes ingested during [start, start + chunk_seconds).",
+      "description": "One immutable chunk: the flashes ingested during [start, end).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["start", "path", "flash_count", "size_bytes", "event_min", "event_max"],
+      "required": ["start", "end", "path", "flash_count", "size_bytes", "event_min", "event_max"],
       "properties": {
         "start": {
-          "description": "Start of the ingest window, aligned on chunk_seconds.",
+          "description": "Start of the ingest window, whole seconds; equals the previous chunk's end when no window is missing.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "end": {
+          "description": "End of the ingest window (exclusive), whole seconds, after start.",
           "$ref": "common.schema.json#/$defs/UtcTimestamp"
         },
         "path": {
-          "description": "Path relative to the manifest: chunks/<start in ISO 8601 basic format>.bin.gz.",
+          "description": "Path relative to the manifest, unique and opaque: never derive it from start.",
           "type": "string",
-          "pattern": "^chunks/[0-9]{8}T[0-9]{6}Z\\.bin\\.gz$"
+          "pattern": "^chunks/[0-9A-Za-z_-]+\\.bin\\.gz$"
         },
         "flash_count": {
           "description": "Number of flashes in the chunk.",
