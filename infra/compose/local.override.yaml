@@ -1,0 +1,7 @@
+# Services that read the lake share the store's network, so that localhost:8181 (catalog) and
+# localhost:9000 (S3, as vended by the catalog) resolve as they do on the host.
+services:
+  dagster-daemon:
+    network_mode: service:lake-s3
+  ingest:
+    network_mode: service:lake-s3
