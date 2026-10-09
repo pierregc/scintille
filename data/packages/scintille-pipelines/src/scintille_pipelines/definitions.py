@@ -5,6 +5,7 @@ from dagster import AssetSelection, Definitions, ScheduleDefinition, define_asse
 from .alerts import alert_on_failure
 from .assets import daily_flash_counts
 from .automation import daily_gold, daily_gold_schedule, silver_changed
+from .backfill import silver_flashes_backfill
 from .checks import DAILY, HOURLY, SILVER
 from .resources import resources
 
@@ -12,7 +13,7 @@ hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelectio
 daily_checks = define_asset_job("silver_daily_checks", selection=AssetSelection.checks(*DAILY))
 
 defs = Definitions(
-    assets=[daily_flash_counts, SILVER],
+    assets=[daily_flash_counts, SILVER, silver_flashes_backfill],
     asset_checks=[*HOURLY, *DAILY],
     jobs=[daily_gold, hourly_checks, daily_checks],
     schedules=[
