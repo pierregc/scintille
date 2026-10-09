@@ -8,6 +8,7 @@ from uuid import uuid4
 import polars as pl
 import pytest
 from scintille_ingest.glm.ingest import IngestedFile
+from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.runtime.identity import FileIdentity
 from scintille_ingest.runtime.service import Crash, IngestLive
@@ -61,7 +62,7 @@ def test_restart_after_a_crash_spools_once(tmp_path: Path) -> None:
                 "ok",
                 1.0,
             )
-            return IngestedFile(pl.DataFrame({"flash_id": [product.key]}), log)
+            return IngestedFile(pl.DataFrame(schema=FLASH_SCHEMA), log)
 
     def crash(step: str, identity: FileIdentity) -> None:
         if step == "spool_written" and identity.key.endswith("f1.nc"):

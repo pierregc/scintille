@@ -17,14 +17,25 @@ class Spool:
     def log_path(self, batch_id: str) -> Path:
         return self.directory / f"{batch_id}.log.parquet"
 
-    def write(self, batch_id: str, flashes: pl.DataFrame, log: pl.DataFrame) -> Path:
+    def quarantine_path(self, batch_id: str) -> Path:
+        return self.directory / f"{batch_id}.quarantine.parquet"
+
+    def write(
+        self,
+        batch_id: str,
+        flashes: pl.DataFrame,
+        log: pl.DataFrame,
+        quarantine: pl.DataFrame | None = None,
+    ) -> Path:
         """Idempotent; the flashes file goes last, so its presence means the batch is complete."""
         self._write(self.log_path(batch_id), log)
+        if quarantine is not None and quarantine.height:
+            self._write(self.quarantine_path(batch_id), quarantine)
         return self._write(self.path(batch_id), flashes)
 
     def pending(self) -> list[str]:
         """Complete batches waiting for lake-writer, oldest first."""
-        files = [p for p in self.directory.glob("*.parquet") if not p.name.endswith(".log.parquet")]
+        files = [p for p in self.directory.glob("*.parquet") if p.name.count(".") == 1]
         return [p.stem for p in sorted(files, key=lambda p: (p.stat().st_mtime, p.name))]
 
     def read(self, batch_id: str) -> pl.DataFrame:
@@ -33,9 +44,14 @@ class Spool:
     def read_log(self, batch_id: str) -> pl.DataFrame:
         return pl.read_parquet(self.log_path(batch_id))
 
+    def read_quarantine(self, batch_id: str) -> pl.DataFrame | None:
+        path = self.quarantine_path(batch_id)
+        return pl.read_parquet(path) if path.exists() else None
+
     def delete(self, batch_id: str) -> None:
         self.path(batch_id).unlink(missing_ok=True)
         self.log_path(batch_id).unlink(missing_ok=True)
+        self.quarantine_path(batch_id).unlink(missing_ok=True)
         self._fsync_directory()
 
     def _write(self, final: Path, frame: pl.DataFrame) -> Path:
