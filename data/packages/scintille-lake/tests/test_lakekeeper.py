@@ -71,5 +71,5 @@ def test_one_hour_reads_one_hour_of_files() -> None:
     duckdb_attach(con, LakeConfig())
     t0 = day + timedelta(hours=6)
     assert files_read(con, t0, t0 + timedelta(hours=1)) == 1
-    rows = flashes(con, t0, t0 + timedelta(hours=1), columns=("native_flash_id",))
-    assert rows["native_flash_id"].to_pylist() == [6]
+    found = flashes(con, t0, t0 + timedelta(hours=1), columns=("native_flash_id",))
+    assert found["native_flash_id"].to_pylist() == [6]
