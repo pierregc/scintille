@@ -9,6 +9,10 @@ run_coordinator:
   class: QueuedRunCoordinator
   config:
     max_concurrent_runs: 2
+    # Backfills download from NOAA: one partition at a time.
+    tag_concurrency_limits:
+      - key: scintille/backfill
+        limit: 1
 
 telemetry:
   enabled: false
