@@ -5,7 +5,3 @@ output "data_domain" {
 output "cors_origins" {
   value = local.cors_origins
 }
-
-output "lake_catalog_name" {
-  value = cloudflare_r2_data_catalog.lake.name
-}

@@ -5,7 +5,7 @@ The VPS is not here: it is ordered by hand and configured by [`infra/vps/bootstr
 
 | File | Resources |
 |---|---|
-| `r2.tf` | Buckets `scintille-live`, `scintille-live-preview`, `scintille-lake` (ENAM, Standard, `prevent_destroy`); `r2.dev` URL off on all three; `data.scintille.app` custom domain on `scintille-live`; CORS on `scintille-live`; lifecycle and R2 Data Catalog on `scintille-lake` |
+| `r2.tf` | Buckets `scintille-live`, `scintille-live-preview`, `scintille-lake` (ENAM, Standard, `prevent_destroy`); `r2.dev` URL off on all three; `data.scintille.app` custom domain on `scintille-live`; CORS on `scintille-live`; lifecycle on `scintille-lake` |
 | `zone.tf` | Proxied `www` record, `www` → apex 301 redirect rule, Always Use HTTPS, HSTS |
 
 Ownership:
@@ -24,8 +24,8 @@ Choices:
   `data.scintille.app`, read-only ([deploy](../../docs/deploy.md#previews)).
 - `scintille-lake` is private. Objects under `raw/` are deleted after 30 days; incomplete multipart
   uploads are aborted after 7 days (the rule R2 adds by default, kept because the lifecycle resource
-  replaces all rules). R2 Data Catalog is enabled by `cloudflare_r2_data_catalog`. Compaction and
-  snapshot expiration settings are not managed here.
+  replaces all rules). R2 Data Catalog is enabled once by hand (the token has no catalog
+  permission), see below; compaction and snapshot expiration are not managed here.
 - HSTS: 6 months, `includeSubDomains`, no preload, `nosniff`. Every subdomain must stay HTTPS-only.
 
 ## Inputs
@@ -94,9 +94,8 @@ terraform -chdir=infra/terraform apply
 terraform -chdir=infra/terraform plan    # "No changes."
 ```
 
-If the data catalog cannot be created by Terraform (token scope), the fallback is
-`pnpm -C web exec wrangler basin catalog enable scintille-lake`, then
-`terraform -chdir=infra/terraform import cloudflare_r2_data_catalog.lake "$TF_VAR_account_id/scintille-lake"`.
+Then enable R2 Data Catalog on the lake once, with your own `wrangler login` session:
+`pnpm -C web exec wrangler basin catalog enable scintille-lake`.
 
 ## Checks after apply
 
@@ -151,7 +150,7 @@ an approval. Run it with `gh workflow run terraform --ref main`.
 ## Sources
 
 - Provider v5 resources (`cloudflare_r2_bucket`, `_r2_bucket_cors`, `_r2_bucket_lifecycle`,
-  `_r2_custom_domain`, `_r2_managed_domain`, `_r2_data_catalog`, `_dns_record`, `_ruleset`,
+  `_r2_custom_domain`, `_r2_managed_domain`, `_dns_record`, `_ruleset`,
   `_zone_setting`): https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs
 - R2 as a Terraform backend: https://developers.cloudflare.com/terraform/advanced-topics/remote-backend/
 - S3 backend, `use_lockfile`, `AWS_ENDPOINT_URL_S3`: https://developer.hashicorp.com/terraform/language/backend/s3

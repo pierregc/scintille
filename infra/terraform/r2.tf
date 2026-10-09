@@ -77,8 +77,3 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
     },
   ]
 }
-
-resource "cloudflare_r2_data_catalog" "lake" {
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.this["scintille-lake"].name
-}
