@@ -62,6 +62,7 @@ export class LiveClient {
 	#failures = 0;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#polling = false;
+	#inFlight: Promise<void> | undefined;
 	#running = false;
 	#abort: AbortController | undefined;
 	#unsubscribe: (() => void) | undefined;
@@ -101,9 +102,19 @@ export class LiveClient {
 		this.#timer = undefined;
 	}
 
+	/** Resolves once the current poll, if any, has finished. */
+	idle(): Promise<void> {
+		return this.#inFlight ?? Promise.resolve();
+	}
+
 	/** Fetches the manifest and every missing chunk. Concurrent calls are ignored. */
-	async poll(): Promise<void> {
-		if (this.#polling || !this.#running) return;
+	poll(): Promise<void> {
+		if (this.#polling || !this.#running) return Promise.resolve();
+		this.#inFlight = this.#poll();
+		return this.#inFlight;
+	}
+
+	async #poll(): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
 		this.#polling = true;
