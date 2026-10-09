@@ -18,6 +18,6 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app
 COPY --from=build /app/.venv /app/.venv
 COPY packages/scintille-pipelines/dagster_home/dagster.yaml /app/dagster_home/dagster.yaml
 ENV PATH=/app/.venv/bin:$PATH DAGSTER_HOME=/app/dagster_home PYTHONUNBUFFERED=1
-RUN chown app /app/dagster_home
+RUN mkdir -p /var/lib/scintille/spool && chown app /app/dagster_home /var/lib/scintille/spool
 WORKDIR /app
 USER app

@@ -5,3 +5,5 @@ services:
     network_mode: service:lake-s3
   ingest:
     network_mode: service:lake-s3
+  lake-writer:
+    network_mode: service:lake-s3
