@@ -3,7 +3,8 @@ import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
-import { createGlobeControls } from './controls';
+import { createGlobeControls, type GlobeControls } from './controls';
+import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning } from './lightning';
@@ -13,6 +14,7 @@ import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
 export interface GlobeApp {
+	readonly flyTo: GlobeControls['flyTo'];
 	dispose(): void;
 }
 
@@ -78,7 +80,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		renderer.render(scene, camera);
 	});
 
+	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+
 	return {
+		flyTo: controls.flyTo,
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
