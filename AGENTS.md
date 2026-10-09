@@ -19,7 +19,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 |---|---|
 | Site and globe | Astro (static pages for SEO), raw Three.js with custom shaders, TypeScript strict |
 | Data | Python 3.13, uv workspace, Polars/Arrow, DuckDB, Apache Iceberg on Cloudflare R2, Dagster, dbt |
-| Hosting | Cloudflare (site, R2 storage), Hetzner VPS (ingestion and pipelines in Docker), Terraform |
+| Hosting | Cloudflare (site, R2 storage), OVH VPS (ingestion and pipelines in Docker), Terraform for Cloudflare |
 
 ## Repository layout
 
