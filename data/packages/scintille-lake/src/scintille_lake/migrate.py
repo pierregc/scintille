@@ -10,6 +10,10 @@ from pyiceberg.table.sorting import SortOrder
 from .tables import NAMESPACES, TABLES, TableDef
 
 
+# Set at creation only; catalogs reject them as property updates.
+CREATE_ONLY = frozenset({"format-version"})
+
+
 class IncompatibleChange(Exception):
     """A change the policy forbids without a new table version."""
 
@@ -53,7 +57,11 @@ def sync_table(catalog: Catalog, table: TableDef) -> list[str]:
             for column in added:
                 field = table.schema.find_field(column)
                 update.add_column(column, field.field_type, doc=field.doc)
-    stale = {k: v for k, v in table.properties.items() if current.properties.get(k) != v}
+    stale = {
+        k: v
+        for k, v in table.properties.items()
+        if k not in CREATE_ONLY and current.properties.get(k) != v
+    }
     if stale:
         with current.transaction() as tx:
             tx.set_properties(stale)
