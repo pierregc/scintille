@@ -16,9 +16,11 @@
     "lint": "eslint .",
     "test:seo": "node scripts/check-seo.mjs",
     "test": "vitest run",
-    "textures": "node scripts/textures/build.mjs"
+    "textures": "node scripts/textures/build.mjs",
+    "r2:upload": "node scripts/r2-upload.mjs"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.3.4",
     "@astrojs/sitemap": "^3.7.4",
     "astro": "^7.3.7",
     "three": "^0.186.1"
@@ -32,6 +34,7 @@
     "sharp": "^0.35.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.149.0"
   }
 }
