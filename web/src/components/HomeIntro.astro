@@ -43,13 +43,17 @@
 </main>
 
 <style>
+	/* Out of flow, so only the panel itself covers the globe canvas. */
 	.intro {
+		position: fixed;
+		top: 1.5rem;
+		left: 1.5rem;
 		box-sizing: border-box;
-		max-width: 26rem;
-		max-height: calc(100vh - 3rem);
-		margin: 1.5rem;
+		width: min(26rem, calc(100vw - 3rem));
+		max-height: calc(100svh - 3rem);
 		padding: 1.25rem 1.5rem;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		color-scheme: dark;
 		color: #d8dce6;
 		background: rgb(10 14 26 / 0.8);
@@ -108,12 +112,20 @@
 		display: inline-block;
 		padding: 0.25rem 0;
 	}
-	/* On phones the globe comes first; the text scrolls up over it. */
+	/* No WebGL: back in flow, above the fallback image. */
+	:global(body:has([data-globe-fallback]:not([hidden]))) .intro {
+		position: static;
+		max-height: none;
+		margin: 1.5rem;
+	}
 	@media (max-width: 40rem) {
 		.intro {
-			max-width: none;
-			max-height: none;
-			margin: 62svh 1rem 1rem;
+			top: auto;
+			right: 1rem;
+			bottom: 1rem;
+			left: 1rem;
+			width: auto;
+			max-height: 40svh;
 			padding: 1rem 1.125rem;
 		}
 		h1 {
