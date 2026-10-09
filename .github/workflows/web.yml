@@ -7,6 +7,7 @@ on:
   push:
     branches: [main]
     paths: ["web/**", ".github/workflows/web.yml"]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,7 +48,7 @@ jobs:
   # Production: scintille.app, bound to scintille-live.
   deploy:
     needs: web
-    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
