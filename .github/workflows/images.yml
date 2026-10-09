@@ -61,6 +61,20 @@ jobs:
           docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon dagster-daemon liveness-check
           test "$(docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon id -u)" = 10001
           docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())"
+      - name: Live manifest lists chunks with flashes
+        run: |
+          for i in $(seq 1 24); do
+            if docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "
+          import json, obstore
+          from obstore.store import S3Store
+          s = S3Store('scintille-lake', endpoint='http://localhost:9000', access_key_id='scintille-local', secret_access_key='scintille-local-secret', region='auto', client_options={'allow_http': True})
+          m = json.loads(obstore.get(s, 'live/manifest.json').bytes().to_bytes())
+          print(len(m['chunks']), 'chunks,', sum(c['flash_count'] for c in m['chunks']), 'flashes,', [(x['source'], x['state']) for x in m['sources']])
+          assert sum(c['flash_count'] for c in m['chunks']) > 0
+          "; then exit 0; fi
+            sleep 5
+          done
+          exit 1
       - if: failure()
         run: docker compose -f infra/compose/compose.local.yaml logs
 
