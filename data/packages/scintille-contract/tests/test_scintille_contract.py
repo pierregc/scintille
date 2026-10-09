@@ -92,10 +92,12 @@ def test_chunk_columns_are_aligned() -> None:
         offset += itemsize
 
 
-def test_chunk_rejects_unaligned_start() -> None:
+def test_chunk_start_needs_no_alignment_but_whole_seconds() -> None:
     item = _sample()
+    shifted = chunk.Chunk(item.start + timedelta(seconds=7), item.columns)
+    assert chunk.decode(chunk.encode(shifted)).start == shifted.start
     with pytest.raises(ValueError):
-        chunk.encode(chunk.Chunk(item.start + timedelta(seconds=1), item.columns))
+        chunk.encode(chunk.Chunk(item.start + timedelta(milliseconds=500), item.columns))
 
 
 def test_chunk_json_matches_schema() -> None:
@@ -105,7 +107,11 @@ def test_chunk_json_matches_schema() -> None:
 
 def test_fixture_manifest_and_chunks_agree() -> None:
     manifest = LiveManifest.model_validate_json((FEED / "manifest.json").read_text())
-    assert len(manifest.chunks) == manifest.window_seconds // manifest.chunk_seconds
+    assert manifest.chunks[-1].end - manifest.chunks[0].start == timedelta(
+        seconds=manifest.window_seconds
+    )
+    for previous, ref in zip(manifest.chunks, manifest.chunks[1:], strict=False):
+        assert ref.start == previous.end
     for ref in manifest.chunks:
         data = (FEED / ref.path).read_bytes()
         assert len(data) == ref.size_bytes
@@ -113,6 +119,35 @@ def test_fixture_manifest_and_chunks_agree() -> None:
         assert decoded.start == ref.start
         assert decoded.count == ref.flash_count
     assert {status.source for status in manifest.sources} == {"glm-east", "glm-west", "mtg-li"}
+
+
+def test_manifest_accepts_chunks_of_varying_duration() -> None:
+    fixture = json.loads((FEED / "manifest.json").read_text())
+    start = datetime(2026, 7, 15, 19, 0, tzinfo=UTC)
+    refs = []
+    for i, seconds in enumerate((30, 20, 20, 30)):
+        end = start + timedelta(seconds=seconds)
+        refs.append(
+            {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "path": f"chunks/{start:%Y%m%dT%H%M%SZ}-{i:02d}.bin.gz",
+                "flash_count": 0,
+                "size_bytes": 20,
+                "event_min": None,
+                "event_max": None,
+            }
+        )
+        start = end
+    manifest = LiveManifest.model_validate({**fixture, "chunks": refs})
+    durations = [(ref.end - ref.start).total_seconds() for ref in manifest.chunks]
+    assert durations == [30, 20, 20, 30]
+    with pytest.raises(ValueError):
+        LiveManifest.model_validate(
+            {**fixture, "chunks": [{**refs[0], "path": "chunks/../x.bin.gz"}]}
+        )
+    with pytest.raises(ValueError):
+        LiveManifest.model_validate({**fixture, "chunk_seconds": 0})
 
 
 def test_fixtures_have_realistic_density_and_fit_budget() -> None:

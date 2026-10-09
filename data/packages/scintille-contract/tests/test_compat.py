@@ -16,6 +16,15 @@ def _base() -> SchemaSet:
     return load_dir(CONTRACT_DIR)
 
 
+def _bump(level: compat.Level) -> str:
+    major, minor, patch = compat.parse_version(_base().version)
+    if level == compat.Level.MAJOR:
+        return f"{major + 1}.0.0"
+    if level == compat.Level.MINOR:
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch + 1}"
+
+
 def _edit(edit: Callable[[Files], None], version: str | None = None) -> SchemaSet:
     files = copy.deepcopy(dict(_base().files))
     edit(files)
@@ -90,18 +99,18 @@ def test_changes_are_classified(edit: Callable[[Files], None], level: compat.Lev
 @pytest.mark.parametrize("edit", [_drop_lat, _retype, _reorder_sources, _change_scale])
 def test_breaking_change_needs_major_bump(edit: Callable[[Files], None]) -> None:
     assert compat.check(_base(), _edit(edit)) != []
-    assert compat.check(_base(), _edit(edit, "1.1.0")) != []
-    assert compat.check(_base(), _edit(edit, "2.0.0")) == []
+    assert compat.check(_base(), _edit(edit, _bump(compat.Level.MINOR))) != []
+    assert compat.check(_base(), _edit(edit, _bump(compat.Level.MAJOR))) == []
 
 
 def test_additive_change_needs_minor_bump() -> None:
-    assert compat.check(_base(), _edit(_add_field, "1.0.1")) != []
-    assert compat.check(_base(), _edit(_add_field, "1.1.0")) == []
+    assert compat.check(_base(), _edit(_add_field, _bump(compat.Level.PATCH))) != []
+    assert compat.check(_base(), _edit(_add_field, _bump(compat.Level.MINOR))) == []
 
 
 def test_doc_change_needs_a_bump() -> None:
     assert compat.check(_base(), _edit(_reword)) != []
-    assert compat.check(_base(), _edit(_reword, "1.0.1")) == []
+    assert compat.check(_base(), _edit(_reword, _bump(compat.Level.PATCH))) == []
 
 
 def test_version_cannot_go_down() -> None:

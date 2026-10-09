@@ -29,6 +29,7 @@
         ["source", Uint8Array, 1],
         ["quality", Uint8Array, 1],
       ];
+      const MAJOR = 2;
       const SOURCES = ["glm-east", "glm-west", "mtg-li"];
       const COLORS = ["#5ad1ff", "#b48cff", "#ffc35a"];
 
@@ -40,7 +41,7 @@
         ).arrayBuffer();
         const view = new DataView(buffer);
         const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
-        if (magic !== "SCNT" || view.getUint8(4) !== 1) throw new Error(`${url}: bad header`);
+        if (magic !== "SCNT" || view.getUint8(4) !== MAJOR) throw new Error(`${url}: bad header`);
         const count = view.getUint32(12, true);
         const columns = {};
         let offset = 16;
