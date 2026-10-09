@@ -44,8 +44,8 @@ export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {
 			twilightWeights: { value: new Vector4(...twilight.weights) },
 			twilightSoftness: { value: twilight.softness },
 			twilightFloor: { value: 0.12 },
-			nightLights: { value: 1.4 },
-			specular: { value: 0.6 },
+			nightLights: { value: 1.2 },
+			specular: { value: 0.25 },
 			terminatorTint: { value: 0.5 },
 		},
 	});

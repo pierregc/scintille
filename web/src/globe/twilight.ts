@@ -5,7 +5,7 @@ export const TWILIGHT_ELEVATIONS = [0, -6, -12, -18] as const;
 export const TWILIGHT_WEIGHTS = [0.5, 0.25, 0.15, 0.1] as const;
 
 /** Half-width (degrees) of the smooth transition around each band edge. */
-export const TWILIGHT_SOFTNESS_DEG = 1;
+export const TWILIGHT_SOFTNESS_DEG = 2;
 
 const DEG = Math.PI / 180;
 

@@ -15,9 +15,9 @@ describe('twilightUniforms', () => {
 
 describe('twilightLevel', () => {
 	it('is full day above the horizon band and full night below astronomical twilight', () => {
-		expect(twilightLevel(2)).toBe(1);
+		expect(twilightLevel(3)).toBe(1);
 		expect(twilightLevel(45)).toBe(1);
-		expect(twilightLevel(-20)).toBe(0);
+		expect(twilightLevel(-21)).toBe(0);
 		expect(twilightLevel(-90)).toBe(0);
 	});
 
