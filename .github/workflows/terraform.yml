@@ -1,0 +1,76 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/terraform/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  CLOUDFLARE_API_TOKEN: ${{ secrets.TF_CLOUDFLARE_API_TOKEN }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+  AWS_ENDPOINT_URL_S3: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+  TF_VAR_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  TF_VAR_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+  TF_VAR_workers_subdomain: ${{ vars.WORKERS_SUBDOMAIN }}
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: terraform-plan-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive -diff
+      - run: terraform init -backend=false
+      - run: terraform validate
+      - name: Check credentials
+        id: creds
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] \
+            && [ -n "$TF_VAR_account_id" ] && [ -n "$TF_VAR_zone_id" ] && [ -n "$TF_VAR_workers_subdomain" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Plan skipped: Terraform secrets or variables are not configured (see infra/terraform/README.md)."
+          fi
+      - name: Plan
+        if: steps.creds.outputs.ok == 'true'
+        run: |
+          terraform init -reconfigure
+          terraform plan -lock-timeout=2m -no-color | tee plan.txt
+          { echo '```'; cat plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  # Manual only; the `terraform` environment can require an approval.
+  apply:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: terraform
+    concurrency:
+      group: terraform-apply
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+      - run: terraform init
+      - run: terraform plan -lock-timeout=2m -out=apply.tfplan
+      - run: terraform apply -lock-timeout=2m apply.tfplan
