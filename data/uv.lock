@@ -2134,6 +2134,7 @@ dependencies = [
     { name = "polars" },
     { name = "psycopg", extra = ["binary"] },
     { name = "scintille-contract" },
+    { name = "scintille-lake" },
 ]
 
 [package.metadata]
@@ -2143,6 +2144,7 @@ requires-dist = [
     { name = "polars", specifier = ">=2.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "scintille-contract", editable = "packages/scintille-contract" },
+    { name = "scintille-lake", editable = "packages/scintille-lake" },
 ]
 
 [[package]]
@@ -2151,6 +2153,7 @@ version = "0.1.0"
 source = { editable = "packages/scintille-lake" }
 dependencies = [
     { name = "duckdb" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "pyarrow" },
     { name = "pyiceberg", extra = ["pyarrow", "pyiceberg-core"] },
 ]
@@ -2158,6 +2161,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.5.6" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pyarrow", specifier = ">=26" },
     { name = "pyiceberg", extras = ["pyarrow", "pyiceberg-core"], specifier = ">=0.12" },
 ]

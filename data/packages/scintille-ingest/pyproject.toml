@@ -9,6 +9,7 @@ dependencies = [
     "polars>=2.0.0",
     "psycopg[binary]>=3.2",
     "scintille-contract",
+    "scintille-lake",
 ]
 
 [project.scripts]
@@ -23,3 +24,4 @@ module-name = "scintille_ingest"
 
 [tool.uv.sources]
 scintille-contract = { workspace = true }
+scintille-lake = { workspace = true }

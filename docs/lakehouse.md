@@ -8,7 +8,7 @@ production, Lakekeeper locally. Definitions live in code, in `data/packages/scin
 | Table | Partitioning | Notes |
 |---|---|---|
 | `bronze.ingest_log` | `day(product_start)` | One row per product file |
-| `silver.flashes` | `day(event_time)`, `source`; sorted by `event_time` | Rows carry `parser_version` and `calibration_version` |
+| `silver.flashes` | `day(event_time)`, `source`; sorted by `event_time` | Rows carry `parser_version` and `calibration_version`; `intensity` null until #33 |
 | `silver.flashes_quarantine` | `day(ingest_time)` | Rejected rows as JSON, with the reason |
 | `gold.*` | per table | Created through `gold_table()`, which sets merge-on-read |
 
