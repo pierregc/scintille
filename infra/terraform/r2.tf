@@ -58,14 +58,7 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
   bucket_name = cloudflare_r2_bucket.this["scintille-lake"].name
 
   rules = [
-    {
-      id         = "raw-30-days"
-      enabled    = true
-      conditions = { prefix = "raw/" }
-      delete_objects_transition = {
-        condition = { type = "Age", max_age = 30 * 86400 }
-      }
-    },
+    # Sorted by id, as the API returns them.
     {
       # Replaces the default rule R2 adds to new buckets.
       id         = "abort-multipart-7-days"
@@ -73,6 +66,14 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
       conditions = { prefix = "" }
       abort_multipart_uploads_transition = {
         condition = { type = "Age", max_age = 7 * 86400 }
+      }
+    },
+    {
+      id         = "raw-30-days"
+      enabled    = true
+      conditions = { prefix = "raw/" }
+      delete_objects_transition = {
+        condition = { type = "Age", max_age = 30 * 86400 }
       }
     },
   ]
