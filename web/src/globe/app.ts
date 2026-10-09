@@ -2,7 +2,9 @@ import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { createGlobeControls } from './controls';
+import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
+import { createLightning } from './lightning';
 import { startLiveFeed } from './live';
 import { createStarfield } from './starfield';
 import { cappedPixelRatio } from './viewport';
@@ -22,6 +24,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const controls = createGlobeControls(camera, canvas, RADIUS);
 
 	const clock = new SceneClock();
+	if (import.meta.env.DEV) applyDevReplay(clock, location.search);
 	const earth = createEarth(renderer, RADIUS);
 	scene.add(earth.mesh);
 	const atmosphere = createAtmosphere(RADIUS);
@@ -30,6 +33,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	scene.add(stars.points);
 
 	const live = startLiveFeed();
+	const lightning = createLightning(live.ring, { radius: RADIUS });
+	scene.add(lightning.mesh);
 	let dprQuery: MediaQueryList | undefined;
 
 	const resize = () => {
@@ -63,6 +68,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		earth.setTime(now);
 		atmosphere.setTime(now);
 		stars.setTime(now);
+		lightning.setTime(now);
 		renderer.render(scene, camera);
 	});
 
@@ -76,6 +82,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			earth.dispose();
 			atmosphere.dispose();
 			stars.dispose();
+			lightning.dispose();
 			renderer.dispose();
 		},
 	};
