@@ -49,7 +49,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: data/uv.lock
       - name: Local lakehouse
-        run: docker compose up -d --wait lakekeeper && docker compose run --rm lake-init
+        run: docker compose up -d --wait lakekeeper lake-db && docker compose run --rm lake-init
       - run: uv sync --frozen
         working-directory: data
       - name: Migrate twice
