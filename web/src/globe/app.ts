@@ -8,7 +8,8 @@ import {
 	SphereGeometry,
 	WebGLRenderer,
 } from 'three';
-import { cappedPixelRatio, fitDistance } from './viewport';
+import { createGlobeControls } from './controls';
+import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
 export interface GlobeApp {
@@ -22,6 +23,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const renderer = new WebGLRenderer({ canvas, context, ...CONTEXT_ATTRIBUTES });
 	const scene = new Scene();
 	const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
+	const controls = createGlobeControls(camera, canvas, RADIUS);
 
 	const geometry = new SphereGeometry(RADIUS, 64, 32);
 	const material = new MeshLambertMaterial({ color: 0x2b4a7a });
@@ -40,8 +42,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		renderer.setPixelRatio(cappedPixelRatio(window.devicePixelRatio));
 		renderer.setSize(width, height, false);
 		camera.aspect = width / height;
-		camera.position.set(0, 0, fitDistance(RADIUS, FOV, camera.aspect));
 		camera.updateProjectionMatrix();
+		controls.resize();
 	};
 
 	const watchPixelRatio = () => {
@@ -60,13 +62,14 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	window.addEventListener('resize', resize);
 
 	renderer.setAnimationLoop((time) => {
-		sphere.rotation.y = time * 0.0001;
+		controls.update(time);
 		renderer.render(scene, camera);
 	});
 
 	return {
 		dispose() {
 			renderer.setAnimationLoop(null);
+			controls.dispose();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			geometry.dispose();
