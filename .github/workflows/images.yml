@@ -53,13 +53,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Local stack from the VPS compose file
         run: |
-          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon lakekeeper
+          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer lakekeeper
           docker compose -f infra/compose/compose.local.yaml run --rm lake-init
       - name: Webserver answers, daemon is alive, images run as non-root
         run: |
           curl -sf http://127.0.0.1:3000/server_info
           docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon dagster-daemon liveness-check
           test "$(docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon id -u)" = 10001
+          docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())"
       - if: failure()
         run: docker compose -f infra/compose/compose.local.yaml logs
 
