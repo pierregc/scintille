@@ -77,4 +77,9 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
       }
     },
   ]
+
+  # The API echoes empty transitions on every rule, so the plan never settles; remove to edit rules.
+  lifecycle {
+    ignore_changes = [rules]
+  }
 }
