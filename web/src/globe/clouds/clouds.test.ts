@@ -60,6 +60,18 @@ describe('createClouds', () => {
 		expect(clouds.frameTime).toBe(CLOUD_FIXTURE.time);
 	});
 
+	it('glows from the flash light map only while one is set', () => {
+		const clouds = createClouds(16, { storage: memoryStorage() });
+		const { uniforms } = clouds.mesh.material as unknown as { uniforms: Record<string, { value: unknown }> };
+		expect(uniforms.flashGain.value).toBe(0);
+		const map = new Texture();
+		clouds.setFlashLight(map);
+		expect(uniforms.flashLight.value).toBe(map);
+		expect(uniforms.flashGain.value).toBeGreaterThan(0);
+		clouds.setFlashLight(null);
+		expect(uniforms.flashGain.value).toBe(0);
+	});
+
 	it('toggles and remembers the choice', () => {
 		const storage = memoryStorage();
 		const clouds = createClouds(16, { storage });
