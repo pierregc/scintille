@@ -12,9 +12,13 @@ cadence and takes every file not spooled yet through:
    upload (paused past 90 % spool disk); state `downloaded`;
 2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`;
    state `published_live`;
-3. **spool**: one Parquet file per batch, written to a temporary name, fsynced, then renamed;
-   `batch_id` = hash of the batch's file identities (one file per batch today), so a re-run writes
-   the same batch again; state `spooled`.
+3. **spool**: per batch, its flashes and its `bronze.ingest_log` rows as Parquet, each written to a
+   temporary name, fsynced, then renamed (flashes last, so they mark a complete batch); `batch_id` =
+   hash of the batch's file identities (one file per batch today), so a re-run writes the same batch
+   again; state `spooled`.
+
+An unreadable file is not retried forever: it gets a `failed` log row, no flashes, and is spooled
+like any other, so the failure shows in `bronze.ingest_log`.
 
 States live in Postgres (`ingest_files`) and only move forward, so a step replayed after a crash
 changes nothing. It never calls the catalog. A failing source backs off exponentially (5 s to 5 min)

@@ -6,7 +6,7 @@ import logging
 import random
 import shutil
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NamedTuple, Protocol
@@ -115,8 +115,17 @@ class IngestLive:
         self.state.advance(identity, source.name, "downloaded")
         self._after_step("downloaded", identity)
 
-        flashes = source.parse(product, data, received_at)
-        if record is None or ORDER[record.state] < ORDER["published_live"]:
+        parsed = source.parse(product, data, received_at)
+        flashes = parsed.flashes
+        if parsed.log.status != "ok":
+            self.metrics.inc("ingest_unreadable_files_total", source=source.name)
+            log.warning(
+                "unreadable file",
+                extra={
+                    "fields": {"source": source.name, "key": product.key, "error": parsed.log.error}
+                },
+            )
+        if flashes.height and (record is None or ORDER[record.state] < ORDER["published_live"]):
             await self.publisher.publish(source.name, flashes)
         self.state.advance(identity, source.name, "published_live")
         self._after_step("published_live", identity)
@@ -130,6 +139,7 @@ class IngestLive:
                 pl.lit(product.key).alias("source_key"),
                 pl.lit(identity.checksum).alias("source_checksum"),
             ),
+            pl.DataFrame([asdict(parsed.log)]),
         )
         self._after_step("spool_written", identity)
         self.state.advance(identity, source.name, "spooled", batch)

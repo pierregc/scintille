@@ -5,11 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 
-import polars as pl
 from obstore.store import ObjectStore
 
 from scintille_ingest.glm.discovery import fetch, list_products, public_store
-from scintille_ingest.glm.ingest import ingest_glm_file
+from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite
 
 
@@ -28,8 +27,9 @@ class Source(Protocol):
 
     async def fetch(self, product: Product) -> bytes: ...
 
-    def parse(self, product: Product, data: bytes, received_at: datetime) -> pl.DataFrame:
-        """Normalized flashes; raises on a file that cannot be read."""
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        """Normalized flashes and the `bronze.ingest_log` row; an unreadable file gives no
+        flashes and a failed status instead of raising."""
         ...
 
 
@@ -53,8 +53,5 @@ class GlmSource:
     async def fetch(self, product: Product) -> bytes:
         return await asyncio.to_thread(fetch, self._store, product.key)
 
-    def parse(self, product: Product, data: bytes, received_at: datetime) -> pl.DataFrame:
-        ingested = ingest_glm_file(data, product.key, self._source, received_at)
-        if ingested.log.status != "ok":
-            raise ValueError(ingested.log.error or "unreadable file")
-        return ingested.flashes
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        return ingest_glm_file(data, product.key, self._source, received_at)
