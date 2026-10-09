@@ -9,6 +9,7 @@ import {
 	WebGLRenderer,
 } from 'three';
 import { createGlobeControls } from './controls';
+import { startLiveFeed } from './live';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -34,6 +35,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	light.position.set(-3, 2, 4);
 	scene.add(light, new AmbientLight(0xffffff, 0.15));
 
+	const live = startLiveFeed();
 	let dprQuery: MediaQueryList | undefined;
 
 	const resize = () => {
@@ -70,6 +72,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
+			live.stop();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			geometry.dispose();
