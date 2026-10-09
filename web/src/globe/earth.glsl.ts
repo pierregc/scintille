@@ -50,7 +50,7 @@ void main() {
 	vec3 night = texture2D(nightMap, vUv).rgb;
 	float water = texture2D(oceanMask, vUv).r;
 
-	float direct = sqrt(max(s, 0.0));
+	float direct = sqrt(max(s, 0.0)) * smoothstep(-0.02, 0.15, s);
 	vec3 color = day * mix(twilightFloor * level, 1.0, direct);
 
 	float edge = exp(-s * s / 0.006);
@@ -59,7 +59,7 @@ void main() {
 	color += night * nightLights * (1.0 - level);
 
 	vec3 view = normalize(cameraPosition - vWorldPosition);
-	float glint = pow(max(dot(n, normalize(sun + view)), 0.0), 60.0);
+	float glint = pow(max(dot(n, normalize(sun + view)), 0.0), 150.0);
 	color += vec3(1.0, 0.95, 0.85) * specular * water * glint * smoothstep(0.0, 0.2, s);
 
 	gl_FragColor = vec4(color, 1.0);
