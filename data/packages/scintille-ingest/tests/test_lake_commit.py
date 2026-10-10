@@ -20,7 +20,7 @@ from scintille_ingest.runtime.sources import Product
 from scintille_ingest.runtime.spool import Spool
 from scintille_ingest.runtime.state import MemoryState
 from scintille_lake.migrate import migrate
-from scintille_lake.tables import FLASHES, INGEST_LOG
+from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 
 HOUR = datetime(2026, 7, 15, 18, tzinfo=UTC)
 
@@ -37,6 +37,7 @@ class Source:
             for i in range(12)
         ]
         self.revised: set[str] = set()
+        self.bad_first_flash: set[str] = set()
 
     async def list_recent(self, now: datetime) -> list[Product]:
         return self.products
@@ -54,7 +55,7 @@ class Source:
                 "native_flash_id": i,
                 "event_time": product.start + timedelta(seconds=i),
                 "ingest_time": received_at,
-                "lat": 1.0,
+                "lat": 95.0 if i == 0 and product.key in self.bad_first_flash else 1.0,
                 "lon": 2.0,
                 "energy_raw": 1e-14,
                 "energy_unit": "J",
@@ -223,6 +224,24 @@ def test_a_revised_file_replaces_its_previous_rows(tmp_path: Path, catalog: Cata
     assert isinstance(bronze, pl.DataFrame)
     assert bronze.height == 12
     assert bronze.filter(pl.col("key") == revised.key)["row_count"].to_list() == [3]
+
+
+def test_a_revised_file_replaces_its_quarantined_rows(tmp_path: Path, catalog: Catalog) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path / "spool"), Source()
+    source.bad_first_flash.add(source.products[2].key)
+    service = IngestLive([source], state, spool, clock=lambda: HOUR)
+    asyncio.run(service.poll(source))
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+    quarantine = catalog.load_table(FLASHES_QUARANTINE.identifier)
+    assert quarantine.scan().to_arrow().num_rows == 1
+
+    revised = source.products[2]
+    source.bad_first_flash.clear()
+    source.revised.add(revised.key)
+    source.products[2] = Product(revised.key, revised.start, etag="v2")
+    asyncio.run(service.poll(source))
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+    assert quarantine.refresh().scan().to_arrow().num_rows == 0
 
 
 def test_two_revisions_in_one_commit_keep_the_latest(tmp_path: Path, catalog: Catalog) -> None:
