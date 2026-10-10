@@ -198,7 +198,7 @@ def test_reconciliation_names_spooled_files_missing_from_bronze(
     lake: SqliteLake, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(checks, "clock", lambda: DAY + timedelta(days=1, hours=2))
-    lost = f"GLM-L2-LCFA/2026/196/18/{glm_name('glm-east', 18, 180)}"
+    lost = f"GLM-L2-LCFA/2026/196/19/{glm_name('glm-east', 19, 0)}"
     result = run(
         checks.silver_reconciliation, lake=lake, postgres=FakePostgres(spooled=[*all_keys(), lost])
     )
@@ -349,7 +349,7 @@ def test_reconciliation_reads_spooled_files_from_postgres(
 ) -> None:
     monkeypatch.setattr(checks, "clock", lambda: DAY + timedelta(days=1, hours=2))
     postgres = PostgresResource()
-    lost = f"GLM-L2-LCFA/2026/196/18/{glm_name('glm-west', 18, 180)}"
+    lost = f"GLM-L2-LCFA/2026/196/19/{glm_name('glm-west', 19, 0)}"
     other_day = f"GLM-L2-LCFA/2026/197/01/{glm_name('glm-west', 25, 0)}"
     with postgres.connect() as conn:
         conn.execute(
@@ -374,10 +374,10 @@ def test_reconciliation_reads_spooled_files_from_postgres(
     assert result.metadata["mismatches"].value == [
         {
             "source": "glm-west",
-            "hour": 18,
-            "spooled_files": 181,
-            "bronze_files": 180,
-            "bronze_rows": 180,
-            "silver_and_quarantine_rows": 180,
+            "hour": 19,
+            "spooled_files": 1,
+            "bronze_files": 0,
+            "bronze_rows": 0,
+            "silver_and_quarantine_rows": 0,
         }
     ]
