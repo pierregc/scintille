@@ -4,15 +4,13 @@ storage:
     postgres_url:
       env: SCINTILLE_POSTGRES_DSN
 
-run_coordinator:
-  module: dagster.core.run_coordinator
-  class: QueuedRunCoordinator
-  config:
+concurrency:
+  runs:
     max_concurrent_runs: 2
-    # Backfills download from NOAA: one partition at a time.
-    tag_concurrency_limits:
-      - key: scintille/backfill
-        limit: 1
+  # Backfills download from NOAA: the queue starts one run of the `noaa` pool at a time.
+  pools:
+    granularity: run
+    default_limit: 1
 
 telemetry:
   enabled: false

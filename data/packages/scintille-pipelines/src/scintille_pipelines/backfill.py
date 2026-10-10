@@ -4,6 +4,7 @@ from datetime import date
 
 from dagster import (
     AssetExecutionContext,
+    Config,
     DailyPartitionsDefinition,
     MaterializeResult,
     MultiPartitionKey,
@@ -38,15 +39,34 @@ def bucket_for(source: str, day: date) -> str:
     return next(bucket for since, bucket in OPERATIONAL[source] if day >= since)
 
 
+class BackfillConfig(Config):
+    # Only once the hot path spool is known to be empty or lost.
+    ignore_pending: bool = False
+
+
+def spooled_keys(postgres: PostgresResource, day: date, source: str) -> set[str]:
+    """Keys the hot path has spooled for `day` (GOES start time in the file name) and `source`."""
+    with postgres.connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT key FROM ingest_files"
+            " WHERE state = 'spooled' AND source = %s AND key LIKE %s",
+            [source, f"%\\_s{day:%Y%j}%"],
+        ).fetchall()
+    return {row[0] for row in rows}
+
+
 @asset(
     key=["silver", "flashes_backfill"],
     partitions_def=partitions,
     group_name="silver",
-    op_tags={"scintille/backfill": "noaa"},
+    pool="noaa",
     description="Rebuilds one day of one source from every upstream file, only if complete.",
 )
 def silver_flashes_backfill(
-    context: AssetExecutionContext, lake: LakeResource, postgres: PostgresResource
+    context: AssetExecutionContext,
+    config: BackfillConfig,
+    lake: LakeResource,
+    postgres: PostgresResource,
 ) -> MaterializeResult:  # type: ignore[type-arg]
     key = context.partition_key
     assert isinstance(key, MultiPartitionKey)
@@ -62,6 +82,8 @@ def silver_flashes_backfill(
         catalog=lake.catalog(),
         parser_version=Settings().parser_version,
         locker=lambda keys: partition_locks(postgres.dsn, keys),
+        spooled=lambda d, s: spooled_keys(postgres, d, s),
+        ignore_pending=config.ignore_pending,
     )
     return MaterializeResult(
         metadata={
