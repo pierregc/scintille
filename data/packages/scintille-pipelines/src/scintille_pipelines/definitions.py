@@ -7,6 +7,7 @@ from .assets import daily_flash_counts
 from .automation import daily_gold, daily_gold_schedule, silver_changed
 from .backfill import silver_flashes_backfill
 from .checks import DAILY, HOURLY, SILVER
+from .ops_status import ops_status
 from .resources import resources
 
 hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelection.checks(*HOURLY))
@@ -21,6 +22,6 @@ defs = Definitions(
         ScheduleDefinition(job=hourly_checks, cron_schedule="10 * * * *", execution_timezone="UTC"),
         ScheduleDefinition(job=daily_checks, cron_schedule="0 2 * * *", execution_timezone="UTC"),
     ],
-    sensors=[silver_changed, alert_on_failure],
+    sensors=[silver_changed, alert_on_failure, ops_status],
     resources=resources(),
 )
