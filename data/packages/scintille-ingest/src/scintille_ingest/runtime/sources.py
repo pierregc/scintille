@@ -16,6 +16,8 @@ from scintille_ingest.glm.products import Satellite
 class Product:
     key: str
     start: datetime
+    """Upstream object version; a new ETag under a known key is fetched again."""
+    etag: str | None = None
 
 
 class Source(Protocol):
@@ -48,7 +50,7 @@ class GlmSource:
         listed = await asyncio.gather(
             *(asyncio.to_thread(list_products, self._store, h) for h in hours)
         )
-        return [Product(p.key, p.start) for batch in listed for p in batch]
+        return [Product(p.key, p.start, p.etag) for batch in listed for p in batch]
 
     async def fetch(self, product: Product) -> bytes:
         return await asyncio.to_thread(fetch, self._store, product.key)
