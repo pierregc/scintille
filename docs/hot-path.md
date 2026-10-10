@@ -37,8 +37,10 @@ Drains the spool every 5 minutes, up to 200 batches per commit:
 
 1. takes the Postgres advisory lock of every partition it writes (`silver.flashes/<day>/<source>`,
    shared with backfills, #40), in sorted order;
-2. appends to `silver.flashes`, then `bronze.ingest_log`, only the batches each table does not hold
-   yet; the batch ids go into the snapshot property `scintille.batch_ids`;
+2. writes to `silver.flashes`, then `bronze.ingest_log`, only the batches each table does not hold
+   yet; the batch ids go into the snapshot property `scintille.batch_ids`. Each write is one Iceberg
+   overwrite filtered on the batches' product files, so an upstream revision of a file (same key,
+   new ETag) replaces the rows of the previous one instead of adding to them;
 3. deletes the spool files.
 
 A crash anywhere replays the drain: batches found in a table's snapshots are skipped, so nothing is
