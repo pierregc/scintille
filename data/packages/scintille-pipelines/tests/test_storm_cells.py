@@ -238,3 +238,12 @@ def test_config_changes_the_params(lake: SqliteLake) -> None:
 def test_registered_in_the_code_location() -> None:
     node = defs.resolve_asset_graph().get(AssetKey(["gold", "storm_cells"]))
     assert node.pools == {"storm-cells"}
+
+
+def test_skips_a_fixed_pixel_seen_over_the_lookback(lake: SqliteLake) -> None:
+    pixel = cell(2400 * 6, 21.3, -28.7, start=T0 - timedelta(hours=23), minutes=24 * 60, sigma_km=1)
+    table = lake.catalog().load_table(FLASHES.identifier)
+    table.append(silver_rows(pixel, table.schema().as_arrow()))
+    result = materialize([storm_cells], partition_key="2026-07-15-18:00", resources={"lake": lake})
+    assert result.success
+    assert stored(lake)["lat"].round(0).to_list() == [0.0, 20.0]
