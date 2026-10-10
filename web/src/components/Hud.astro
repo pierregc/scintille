@@ -1,0 +1,599 @@
+---
+import '@fontsource/ibm-plex-sans/latin-200.css';
+import '@fontsource/ibm-plex-sans/latin-300.css';
+import '@fontsource/ibm-plex-mono/latin-200.css';
+import '@fontsource/ibm-plex-mono/latin-300.css';
+import Timeline from './Timeline.astro';
+---
+
+<main class="hud" data-hud data-mode="live">
+	<div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+	<header class="id">
+		<h1>Scintille</h1>
+		<p class="tag cap">Lightning · seen from orbit</p>
+	</header>
+
+	<details class="info" data-info>
+		<summary><span class="o" aria-hidden="true">i</span><span class="label cap">About this globe</span></summary>
+		<div class="sheet">
+			<p class="lead">
+				Lightning across the planet, in near real time. Satellites watching the Earth from orbit record the
+				light of each flash they detect, day and night, and every one of them lands here shortly after, on a
+				globe lit by the Sun as it is right now.
+			</p>
+
+			<h2>What the dots mean</h2>
+			<p>
+				One dot is one lightning flash, detected from orbit by its optical pulse. That includes flashes
+				inside and between clouds, not only those that reach the ground.
+			</p>
+			<p>
+				Brightness follows the optical energy the satellite measured for that flash. The instruments do not
+				measure exactly the same quantity, so their values are brought to a common scale.
+			</p>
+			<p>
+				Coverage has gaps. The satellites see only part of the planet, and detection weakens near the edge of
+				their view. Where there is no data, the globe says so: an empty region is not a region without
+				lightning.
+			</p>
+
+			<h2>Sources</h2>
+			<ul>
+				<li>
+					<a href="https://www.goes-r.gov/spacesegment/glm.html">NOAA GOES Geostationary Lightning Mapper</a> (GLM), on GOES-East and GOES-West, over the Americas and the surrounding oceans.
+				</li>
+				<li>
+					<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
+				</li>
+			</ul>
+			<p class="attribution">GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.</p>
+
+			<nav aria-label="More about Scintille">
+				<a href="/methodology">Methodology and sources</a>
+				<a href="/how-its-built">How it’s built</a>
+			</nav>
+		</div>
+	</details>
+
+	<section class="clock" aria-label="Time">
+		<p class="t"><time data-time>--:--:--</time><small>UTC</small></p>
+		<p class="d" data-date></p>
+		<div class="state">
+			<span class="pulse" aria-hidden="true"></span>
+			<span class="cap" data-state role="status">Live</span>
+			<button class="golive" type="button" data-live>Back to live</button>
+		</div>
+		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
+	</section>
+
+	<p class="stale cap" role="status" data-stale hidden></p>
+
+	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
+		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+	</div>
+
+	<Timeline />
+</main>
+
+<style>
+	.hud {
+		--ink: rgb(238 242 247 / 0.9);
+		--soft: rgb(238 242 247 / 0.62);
+		--dim: rgb(238 242 247 / 0.4);
+		--hair: rgb(238 242 247 / 0.14);
+		--glow: #f3e7cc;
+		--shade: rgb(0 0 0 / 0.55);
+		--mono: 'IBM Plex Mono', ui-monospace, monospace;
+		--sans: 'IBM Plex Sans', system-ui, sans-serif;
+		--gut: clamp(18px, 2.6vw, 40px);
+		color: var(--ink);
+		font: 300 14px/1.6 var(--sans);
+		-webkit-font-smoothing: antialiased;
+		text-shadow: 0 0 14px var(--shade);
+	}
+	.hud p {
+		margin: 0;
+	}
+	button,
+	summary {
+		font: inherit;
+		color: inherit;
+		text-shadow: inherit;
+	}
+	button {
+		padding: 0;
+		background: none;
+		border: 0;
+		cursor: pointer;
+	}
+	a,
+	button,
+	summary {
+		transition:
+			color 0.6s ease,
+			opacity 0.6s ease;
+	}
+	:focus-visible {
+		outline: 1px solid var(--soft);
+		outline-offset: 5px;
+	}
+	.cap {
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+	}
+	[hidden] {
+		display: none !important;
+	}
+	.hud[data-mode='live'] .golive {
+		display: none;
+	}
+
+	.frame {
+		position: fixed;
+		inset: 12px;
+		pointer-events: none;
+	}
+	.frame i {
+		position: absolute;
+		width: 34px;
+		height: 34px;
+		border: 0 solid var(--hair);
+	}
+	.frame i:nth-child(1) {
+		top: 0;
+		left: 0;
+		border-width: 1px 0 0 1px;
+	}
+	.frame i:nth-child(2) {
+		top: 0;
+		right: 0;
+		border-width: 1px 1px 0 0;
+	}
+	.frame i:nth-child(3) {
+		bottom: 0;
+		left: 0;
+		border-width: 0 0 1px 1px;
+	}
+	.frame i:nth-child(4) {
+		right: 0;
+		bottom: 0;
+		border-width: 0 1px 1px 0;
+	}
+
+	.id {
+		position: fixed;
+		top: var(--gut);
+		left: var(--gut);
+	}
+	h1 {
+		margin: 0;
+		color: var(--ink);
+		font: 200 18px/1 var(--sans);
+		letter-spacing: 0.5em;
+		text-transform: uppercase;
+	}
+	.id .tag {
+		margin-top: 10px;
+	}
+
+	.clock {
+		position: fixed;
+		top: var(--gut);
+		right: var(--gut);
+		text-align: right;
+	}
+	.clock .t {
+		font: 200 40px/1 var(--mono);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.04em;
+	}
+	.clock .t small {
+		margin-left: 8px;
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.24em;
+		vertical-align: 22px;
+	}
+	.clock .d {
+		margin-top: 8px;
+		color: var(--soft);
+		font: 300 11px/1 var(--mono);
+		letter-spacing: 0.14em;
+	}
+	.state {
+		display: inline-flex;
+		gap: 10px;
+		align-items: center;
+		margin-top: 14px;
+	}
+	.state .cap {
+		color: var(--soft);
+	}
+	.pulse {
+		width: 5px;
+		height: 5px;
+		background: var(--ink);
+		border-radius: 50%;
+		box-shadow: 0 0 10px rgb(255 255 255 / 0.8);
+		animation: breathe 3.2s ease-in-out infinite;
+	}
+	.hud[data-mode='replay'] .pulse {
+		opacity: 0.5;
+		box-shadow: none;
+		animation: none;
+	}
+	@keyframes breathe {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.25;
+		}
+	}
+	.hud[data-late] .pulse {
+		opacity: 0.4;
+		box-shadow: none;
+		animation: none;
+	}
+	.sources {
+		display: grid;
+		gap: 6px;
+		margin: 12px 0 0;
+		padding: 0;
+		list-style: none;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	.sources :global(li[data-state='delayed']),
+	.sources :global(li[data-state='offline']) {
+		color: var(--soft);
+	}
+	.stale {
+		position: fixed;
+		top: var(--gut);
+		left: 50%;
+		max-width: calc(100vw - 2 * var(--gut) - 360px);
+		color: var(--soft);
+		text-align: center;
+		transform: translateX(-50%);
+	}
+	.golive {
+		margin-left: 6px;
+		padding-bottom: 3px;
+		color: var(--soft);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		border-bottom: 1px solid var(--hair);
+	}
+	.golive:hover {
+		color: var(--ink);
+	}
+
+	.layers {
+		position: fixed;
+		top: calc(var(--gut) + 150px);
+		right: var(--gut);
+		display: grid;
+		gap: 14px;
+		justify-items: end;
+	}
+	.sw {
+		display: inline-flex;
+		gap: 10px;
+		align-items: center;
+		min-height: 24px;
+		color: var(--dim);
+	}
+	.sw .cap {
+		color: inherit;
+	}
+	.sw i {
+		width: 4px;
+		height: 4px;
+		border: 1px solid var(--dim);
+		border-radius: 50%;
+	}
+	.sw[aria-pressed='true'] {
+		color: var(--ink);
+	}
+	.sw[aria-pressed='true'] i {
+		background: var(--ink);
+		border-color: var(--ink);
+	}
+	.sw:hover {
+		color: var(--soft);
+	}
+
+	.info {
+		position: fixed;
+		top: calc(var(--gut) + 64px);
+		left: var(--gut);
+		z-index: 2;
+		width: min(25rem, calc(100vw - 2 * var(--gut)));
+	}
+	.info > summary {
+		display: inline-flex;
+		gap: 12px;
+		align-items: center;
+		min-height: 24px;
+		color: var(--dim);
+		list-style: none;
+		cursor: pointer;
+	}
+	.info > summary::-webkit-details-marker {
+		display: none;
+	}
+	.info > summary .label {
+		color: inherit;
+	}
+	.info > summary .o {
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		color: var(--soft);
+		font: 300 10px/1 var(--mono);
+		border: 1px solid var(--hair);
+		border-radius: 50%;
+	}
+	.info > summary:hover,
+	.info[open] > summary {
+		color: var(--soft);
+	}
+	.info[open] > summary .o {
+		color: var(--ink);
+		border-color: var(--soft);
+	}
+	.info[open]::before {
+		position: fixed;
+		inset: 0 auto 0 0;
+		z-index: -1;
+		width: min(44rem, 100vw);
+		pointer-events: none;
+		content: '';
+		background: linear-gradient(90deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent);
+	}
+	.sheet {
+		max-height: calc(100svh - 64px - 2 * var(--gut) - 150px);
+		margin-top: 20px;
+		padding-right: 10px;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		color: var(--soft);
+		font: 300 14px/1.75 var(--sans);
+		scrollbar-color: var(--hair) transparent;
+		scrollbar-width: thin;
+	}
+	.sheet .lead {
+		color: var(--ink);
+		font: 200 18px/1.55 var(--sans);
+	}
+	.sheet h2 {
+		margin: 26px 0 8px;
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+	}
+	.sheet p,
+	.sheet ul {
+		margin: 0 0 12px;
+	}
+	.sheet ul {
+		padding-left: 14px;
+	}
+	.sheet a {
+		color: var(--ink);
+		text-decoration-color: var(--hair);
+		text-underline-offset: 4px;
+	}
+	.sheet .attribution {
+		margin-top: 18px;
+		color: var(--dim);
+		font: 300 10.5px/1.6 var(--mono);
+	}
+	.sheet nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 20px;
+		margin-top: 20px;
+	}
+	.sheet nav a {
+		padding: 6px 0;
+		color: var(--soft);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.2em;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+
+	/* No WebGL: the text goes back in flow, above the fallback image. */
+	:global(body:has([data-globe-fallback]:not([hidden]))) .hud :is(.id, .info, .clock) {
+		position: static;
+		width: auto;
+		margin: var(--gut);
+		text-align: left;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .frame,
+	:global(body:has([data-globe-fallback]:not([hidden]))) .info[open]::before {
+		display: none;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .sheet {
+		max-height: none;
+	}
+
+	@media (max-width: 640px) {
+		.hud {
+			--gut: 18px;
+		}
+		.frame {
+			inset: 8px;
+		}
+		.frame i {
+			width: 22px;
+			height: 22px;
+		}
+		h1 {
+			font-size: 14px;
+			letter-spacing: 0.42em;
+		}
+		.id .tag {
+			display: none;
+		}
+		.clock .t {
+			font-size: 26px;
+		}
+		.clock .t small {
+			margin-left: 5px;
+			font-size: 8px;
+			vertical-align: 14px;
+		}
+		.clock .d {
+			font-size: 10px;
+		}
+		.layers {
+			top: calc(var(--gut) + 112px);
+		}
+		.sources :global(li[data-state='live']),
+		.hud[data-late] .sources {
+			display: none;
+		}
+		.hud:has(.sources:not([hidden]) :global(li:not([data-state='live']))) .layers {
+			top: calc(var(--gut) + 150px);
+		}
+		.stale {
+			top: auto;
+			bottom: calc(var(--gut) + 96px);
+			max-width: calc(100vw - 2 * var(--gut));
+		}
+		.info {
+			top: calc(var(--gut) + 30px);
+		}
+		.info > summary .label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
+		.info[open]::before {
+			inset: auto 0 0;
+			width: auto;
+			height: 80svh;
+			background: linear-gradient(0deg, rgb(0 0 0 / 0.86), rgb(0 0 0 / 0.7) 70%, transparent);
+		}
+		.info[open] .sheet {
+			position: fixed;
+			right: 0;
+			bottom: 0;
+			left: 0;
+			max-height: 62svh;
+			margin: 0;
+			padding: 0 var(--gut) calc(var(--gut) + env(safe-area-inset-bottom));
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pulse {
+			animation: none;
+		}
+		a,
+		button,
+		summary {
+			transition: none;
+		}
+	}
+</style>
+
+<script>
+	import type { GlobeApp } from '../globe/app';
+	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { feedLabel, formatAge } from '../globe/live/freshness';
+	import { formatUtcDate, formatUtcTime } from './hud/format';
+
+	const root = document.querySelector<HTMLElement>('[data-hud]');
+	if (root) {
+		const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector);
+		const time = $<HTMLTimeElement>('[data-time]');
+		const date = $('[data-date]');
+		const state = $('[data-state]');
+		const layers = $('[data-layers]');
+		const clouds = $<HTMLButtonElement>('[data-clouds]');
+		const info = $<HTMLDetailsElement>('[data-info]');
+		const sources = $('[data-sources]');
+		const staleBanner = $('[data-stale]');
+		let app: GlobeApp | undefined;
+
+		const showFreshness = (live: boolean, replayLabel: string) => {
+			const status = live && app ? app.feedStatus() : undefined;
+			const label = status ? feedLabel(status) : { state: live ? 'Live' : replayLabel, banner: '' };
+			root.toggleAttribute('data-late', Boolean(status?.stale));
+			if (state && state.textContent !== label.state) state.textContent = label.state;
+			if (staleBanner) {
+				staleBanner.hidden = !label.banner;
+				if (staleBanner.textContent !== label.banner) staleBanner.textContent = label.banner;
+			}
+			if (sources) {
+				const lines = (status?.sources ?? []).map((s) => ({
+					state: s.state,
+					text: [s.label, s.state === 'live' ? null : s.state, s.ageMs === null ? null : formatAge(s.ageMs)]
+						.filter(Boolean)
+						.join(' · '),
+				}));
+				sources.hidden = lines.length === 0;
+				const html = lines.map((l) => `<li data-state="${l.state}">${l.text}</li>`).join('');
+				if (sources.innerHTML !== html) sources.innerHTML = html;
+			}
+		};
+
+		const tick = () => {
+			const now = app?.clock.time() ?? Date.now();
+			const text = formatUtcTime(now);
+			if (time && time.textContent !== text) {
+				time.textContent = text;
+				time.dateTime = new Date(now).toISOString();
+			}
+			const day = formatUtcDate(now);
+			if (date && date.textContent !== day) date.textContent = day;
+			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
+			if (root.dataset.mode !== mode) root.dataset.mode = mode;
+			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
+			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+		};
+		tick();
+		setInterval(tick, 250);
+
+		window.addEventListener(GLOBE_READY, (event) => {
+			app = (event as CustomEvent<GlobeApp>).detail;
+			if (layers) layers.hidden = false;
+			tick();
+		});
+		window.addEventListener(GLOBE_GONE, () => {
+			app = undefined;
+			if (layers) layers.hidden = true;
+		});
+		window.addEventListener(GLOBE_FALLBACK, () => {
+			if (info) info.open = true;
+		});
+		$('[data-live]')?.addEventListener('click', () => {
+			app?.clock.live();
+			tick();
+		});
+		clouds?.addEventListener('click', () => {
+			if (app) app.clouds.setVisible(!app.clouds.visible);
+			tick();
+		});
+		document.addEventListener('keydown', (event) => {
+			if (event.key !== 'Escape' || !info?.open) return;
+			info.open = false;
+			info.querySelector('summary')?.focus();
+		});
+	}
+</script>

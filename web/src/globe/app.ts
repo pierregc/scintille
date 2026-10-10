@@ -1,13 +1,14 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
-import { createClouds } from './clouds';
+import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
 import { createGlobeControls } from './controls';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning } from './lightning';
 import { startLiveFeed } from './live';
+import { type FeedStatus, feedStatus } from './live/freshness';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
 import { cappedPixelRatio } from './viewport';
@@ -25,6 +26,14 @@ function deviceHints(context: WebGL2RenderingContext) {
 }
 
 export interface GlobeApp {
+	readonly clock: SceneClock;
+	readonly clouds: Clouds;
+	/** Freshness of the live feed now. */
+	feedStatus(): FeedStatus;
+	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
+	hasData(time: number): boolean;
+	/** Earliest loaded observation window (UTC ms), or null. */
+	dataStart(): number | null;
 	dispose(): void;
 }
 
@@ -54,7 +63,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	const stars = createStarfield();
 	scene.add(stars.points);
 
-	const live = startLiveFeed();
+	const live = startLiveFeed({ now: () => clock.wallTime() });
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -113,6 +122,12 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	});
 
 	return {
+		clock,
+		clouds,
+		feedStatus: () =>
+			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
+		hasData: (time) => live.client.covers(time),
+		dataStart: () => live.client.coverageStart(),
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
