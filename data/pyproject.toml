@@ -10,6 +10,7 @@ dev = [
     "pytest>=8.4",
     "ruff>=0.14",
     "sqlalchemy>=2",
+    "types-shapely>=2.1.0.20260728",
 ]
 
 [tool.ruff]
