@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import duckdb
 import psycopg
 from dagster import ConfigurableResource, EnvVar
-from obstore.store import S3Store
+from obstore.store import ObjectStore, S3Store
 from pyiceberg.catalog import Catalog
 from scintille_lake.config import LOCAL_URI, LOCAL_WAREHOUSE, LakeConfig
 from scintille_lake.connect import duckdb_attach, pyiceberg_catalog
@@ -80,7 +80,7 @@ class R2Resource(ConfigurableResource):  # type: ignore[type-arg]
     secret_access_key: str = "scintille-local-secret"
     region: str = "auto"
 
-    def store(self) -> S3Store:
+    def store(self) -> ObjectStore:
         return S3Store(
             self.bucket,
             endpoint=self.endpoint,
