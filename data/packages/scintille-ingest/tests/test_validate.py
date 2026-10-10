@@ -54,7 +54,7 @@ def test_flags_each_broken_rule_with_a_reason() -> None:
 
 
 def test_bad_rows_land_in_quarantine_with_their_reason(tmp_path: Path) -> None:
-    product = Product("glm/OR_GLM.nc", START)
+    product = Product("glm/f.nc", START)
 
     class Source:
         name = "glm-east"

@@ -2,11 +2,15 @@
 
 import asyncio
 import contextlib
+import json
 import logging
+import os
 import statistics
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -68,6 +72,94 @@ class ObjectLiveStore:
         await obstore.delete_async(self._store, self._prefix + path)
 
 
+class Outbox:
+    """Flashes accepted by `publish()` until a manifest lists their chunk; survives restarts.
+
+    `pending/` holds accepted frames, `inflight/` the frames bound to a chunk being written,
+    `published/` the flash ids already listed, for deduplication over the live window.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        self.pending_dir = directory / "pending"
+        self.inflight_dir = directory / "inflight"
+        self.published_dir = directory / "published"
+        for d in (self.pending_dir, self.inflight_dir, self.published_dir):
+            d.mkdir(parents=True, exist_ok=True)
+
+    def add(self, frame: pl.DataFrame, now: datetime) -> str:
+        name = f"{now.strftime('%Y%m%dT%H%M%S%f')}-{uuid.uuid4().hex}.arrow"
+        _write_atomic(self.pending_dir / name, frame.write_ipc)
+        return name
+
+    def pending(self) -> list[tuple[str, pl.DataFrame]]:
+        return [(p.name, pl.read_ipc(p)) for p in sorted(self.pending_dir.glob("*.arrow"))]
+
+    def published_ids(self, horizon: datetime) -> dict[str, datetime]:
+        ids: dict[str, datetime] = {}
+        for path in sorted(self.published_dir.glob("*.arrow")):
+            at = accepted_at(path.name)
+            if at > horizon:
+                ids.update(dict.fromkeys(pl.read_ipc(path)["flash_id"].to_list(), at))
+        return ids
+
+    def begin(self, chunk: str, names: list[str]) -> None:
+        _write_atomic(self._record(chunk), lambda p: Path(p).write_text(json.dumps(names)))
+
+    def ack(self, chunk: str) -> None:
+        """The chunk is listed: its frames move to `published/` as flash ids. Idempotent."""
+        record = self._record(chunk)
+        if not record.exists():
+            return
+        for name in json.loads(record.read_text()):
+            frame_path = self.pending_dir / name
+            if frame_path.exists():
+                ids = pl.read_ipc(frame_path).select("flash_id")
+                _write_atomic(self.published_dir / name, ids.write_ipc)
+                frame_path.unlink()
+        record.unlink()
+        _fsync_directory(self.pending_dir)
+
+    def abort(self, chunk: str) -> None:
+        """The chunk is not listed: its frames stay pending."""
+        self._record(chunk).unlink(missing_ok=True)
+
+    def inflight(self) -> list[str]:
+        return [_chunk_of(p.name) for p in sorted(self.inflight_dir.glob("*.json"))]
+
+    def prune(self, horizon: datetime) -> None:
+        for path in self.published_dir.glob("*.arrow"):
+            if accepted_at(path.name) <= horizon:
+                path.unlink(missing_ok=True)
+
+    def _record(self, chunk: str) -> Path:
+        return self.inflight_dir / (chunk.replace("/", "__") + ".json")
+
+
+def _chunk_of(record_name: str) -> str:
+    return record_name.removesuffix(".json").replace("__", "/")
+
+
+def accepted_at(name: str) -> datetime:
+    return datetime.strptime(name.split("-")[0], "%Y%m%dT%H%M%S%f").replace(tzinfo=UTC)
+
+
+def _write_atomic(final: Path, write: Callable[[Path], object]) -> None:
+    partial = final.with_name(final.name + ".partial")
+    write(partial)
+    with partial.open("rb") as handle:
+        os.fsync(handle.fileno())
+    partial.replace(final)
+    _fsync_directory(final.parent)
+
+
+def _fsync_directory(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 @dataclass
 class _SourceTimes:
     last_event: datetime | None = None
@@ -75,12 +167,13 @@ class _SourceTimes:
 
 
 class LiveFeed:
-    """A `Publisher` for `IngestLive`: buffers flashes, then `flush()` publishes one chunk."""
+    """A `Publisher` for `IngestLive`: `publish()` is durable, `flush()` writes one chunk."""
 
     def __init__(
         self,
         store: LiveStore,
         *,
+        outbox: Path,
         chunk_seconds: int = 30,
         window: timedelta = timedelta(hours=1),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -92,23 +185,37 @@ class LiveFeed:
         self._clock = clock
         self.metrics = metrics or Metrics()
         self.chunks: list[ChunkRef] = []
-        self._pending: list[pl.DataFrame] = []
+        self.outbox = Outbox(outbox)
+        self._pending: list[tuple[str, pl.DataFrame]] = []
+        self._unlisted: list[str] = []
         self._recent_ids: dict[str, datetime] = {}
         self._sources: dict[str, _SourceTimes] = {s: _SourceTimes() for s in SOURCE_VALUES}
         self._stop = asyncio.Event()
 
     async def restore(self) -> None:
-        """Continues the chunk list of the manifest already published, if recent."""
+        """Continues the published chunk list and reloads the flashes no manifest lists yet."""
         data = await self.store.get("manifest.json")
-        if data is None:
-            return
-        manifest = LiveManifest.model_validate_json(data)
+        manifest = LiveManifest.model_validate_json(data) if data else None
         horizon = self._clock() - self.window
-        self.chunks = [c for c in manifest.chunks if c.end > horizon]
-        for status in manifest.sources:
-            self._sources[status.source] = _SourceTimes(
-                status.last_event_time, status.last_ingest_time
-            )
+        listed = {c.path for c in manifest.chunks} if manifest else set()
+        for chunk in self.outbox.inflight():
+            if chunk in listed:
+                self.outbox.ack(chunk)
+            else:
+                self.outbox.abort(chunk)
+        if manifest:
+            self.chunks = [c for c in manifest.chunks if c.end > horizon]
+            for status in manifest.sources:
+                self._sources[status.source] = _SourceTimes(
+                    status.last_event_time, status.last_ingest_time
+                )
+        self._recent_ids = self.outbox.published_ids(horizon)
+        for name, frame in self.outbox.pending():
+            at = accepted_at(name)
+            self._pending.append((name, frame))
+            self._recent_ids.update(dict.fromkeys(frame["flash_id"].to_list(), at))
+            for (source,), group in frame.group_by("source"):
+                self._seen(str(source), group, at)
 
     async def publish(self, source: str, flashes: pl.DataFrame) -> None:
         """Idempotent by `flash_id` over the live window."""
@@ -118,14 +225,18 @@ class LiveFeed:
         fresh = flashes.filter(~pl.col("flash_id").is_in(list(self._recent_ids)))
         if fresh.height == 0:
             return
-        for flash_id in fresh["flash_id"].to_list():
-            self._recent_ids[flash_id] = now
-        self._pending.append(fresh)
+        name = self.outbox.add(fresh, now)
+        self._recent_ids.update(dict.fromkeys(fresh["flash_id"].to_list(), now))
+        self._pending.append((name, fresh))
+        self._seen(source, fresh, now)
+
+    def _seen(self, source: str, flashes: pl.DataFrame, at: datetime) -> None:
         times = self._sources[source]
-        latest = fresh["event_time"].max()
+        latest = flashes["event_time"].max()
         if isinstance(latest, datetime) and (times.last_event is None or latest > times.last_event):
             times.last_event = latest
-        times.last_ingest = now
+        if times.last_ingest is None or at > times.last_ingest:
+            times.last_ingest = at
 
     def _next_window(self, now: datetime) -> tuple[datetime, datetime]:
         end = now.replace(microsecond=0)
@@ -140,11 +251,19 @@ class LiveFeed:
         start, end = self._next_window(now)
         if end <= start:
             return None
-        flashes = pl.concat(self._pending, how="vertical_relaxed") if self._pending else None
-        body = compress(encode(Chunk(start, columns(flashes, start))))
         path = chunk_name(start)
-        await self.store.put(path, body, CHUNK_HEADERS)
-        self._pending = []
+        batch, self._pending = self._pending, []
+        try:
+            frames = [frame for _, frame in batch]
+            flashes = pl.concat(frames, how="vertical_relaxed") if frames else None
+            body = compress(encode(Chunk(start, columns(flashes, start))))
+            self.outbox.begin(path, [name for name, _ in batch])
+            await self.store.put(path, body, CHUNK_HEADERS)
+        except BaseException:
+            self.outbox.abort(path)
+            self._pending = batch + self._pending
+            raise
+        self._unlisted.append(path)
         event_min, event_max = event_span(flashes)
         ref = ChunkRef(
             start=start,
@@ -162,6 +281,10 @@ class LiveFeed:
         await self.store.put(
             "manifest.json", self.manifest(now).model_dump_json().encode(), MANIFEST_HEADERS
         )
+        for listed in self._unlisted:
+            self.outbox.ack(listed)
+        self._unlisted = []
+        self.outbox.prune(horizon)
         for chunk in expired:
             with contextlib.suppress(Exception):
                 await self.store.delete(chunk.path)

@@ -362,7 +362,8 @@ def test_reconciliation_reads_spooled_files_from_postgres(
             source = "glm-east" if "_G19_" in key else "glm-west"
             for checksum in ("sha256:a", "sha256:b"):
                 conn.execute(
-                    "INSERT INTO ingest_files VALUES (%s, %s, %s, 'spooled', NULL, now())",
+                    "INSERT INTO ingest_files (key, checksum, source, state, updated_at)"
+                    " VALUES (%s, %s, %s, 'spooled', now())",
                     [key, checksum, source],
                 )
     result = run(checks.silver_reconciliation, lake=lake, postgres=postgres)

@@ -97,7 +97,7 @@ class IngestLive:
     async def poll(self, source: Source) -> int:
         """One listing of `source`; processes every file not spooled yet. Returns how many."""
         products = await source.list_recent(self._clock())
-        done = self.state.spooled_keys(source.name, [p.key for p in products])
+        done = self.state.spooled_keys(source.name, {p.key: p.etag for p in products})
         todo = sorted((p for p in products if p.key not in done), key=lambda p: (p.start, p.key))
         for product in todo:
             if self._stop.is_set():
@@ -111,10 +111,11 @@ class IngestLive:
         identity = FileIdentity.of(product.key, data)
         record = self.state.get(identity)
         if record and record.state == "spooled":
+            self.state.advance(identity, source.name, "spooled", etag=product.etag)
             return
         if not self.raw_cache_paused:
-            await self.raw_cache.put(source.name, identity, data)
-        self.state.advance(identity, source.name, "downloaded")
+            await self._cache_raw(source.name, identity, data)
+        self.state.advance(identity, source.name, "downloaded", etag=product.etag)
         self._after_step("downloaded", identity)
 
         parsed = source.parse(product, data, received_at)
@@ -133,7 +134,7 @@ class IngestLive:
             )
         if flashes.height and (record is None or ORDER[record.state] < ORDER["published_live"]):
             await self.publisher.publish(source.name, flashes)
-        self.state.advance(identity, source.name, "published_live")
+        self.state.advance(identity, source.name, "published_live", etag=product.etag)
         self._after_step("published_live", identity)
 
         batch = batch_id([identity])
@@ -151,7 +152,7 @@ class IngestLive:
             ),
         )
         self._after_step("spool_written", identity)
-        self.state.advance(identity, source.name, "spooled", batch)
+        self.state.advance(identity, source.name, "spooled", batch, etag=product.etag)
         self._after_step("spooled", identity)
 
         lag = (self._clock() - product.start).total_seconds()
@@ -170,6 +171,14 @@ class IngestLive:
                 }
             },
         )
+
+    async def _cache_raw(self, source: str, identity: FileIdentity, data: bytes) -> None:
+        """Best effort: an R2 outage must not stop the live feed."""
+        try:
+            await self.raw_cache.put(source, identity, data)
+        except Exception:
+            self.metrics.inc("ingest_raw_cache_errors_total", source=source)
+            log.exception("raw cache upload failed", extra={"fields": {"key": identity.key}})
 
     async def source_loop(self, source: Source) -> None:
         """Polls on the source's cadence; on errors backs off exponentially, alone."""
