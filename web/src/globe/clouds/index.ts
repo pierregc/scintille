@@ -123,6 +123,11 @@ export function createClouds(
 	const target = () =>
 		Number.isFinite(sceneTime) ? framePosition(frames.map((f) => f.time), sceneTime) : frames.length - 1;
 
+	const shownTime = () => {
+		const { a, b, mix } = blendPair(position, frames.length);
+		return frames[a].time + (frames[b].time - frames[a].time) * mix;
+	};
+
 	const show = () => {
 		if (frames.length === 0) return;
 		const { a, b, mix } = blendPair(position, frames.length);
@@ -146,7 +151,7 @@ export function createClouds(
 			if (disposed) return next.texture.dispose();
 			next.texture.anisotropy = Math.min(anisotropy, maxAnisotropy);
 			next.texture.needsUpdate = true;
-			const shown = frames.length > 0 ? frames[Math.round(position)]?.time : undefined;
+			const shown = frames.length > 0 ? shownTime() : Number.NaN;
 			const same = frames.findIndex((f) => f.time === next.time);
 			if (same >= 0) {
 				if (frames[same].texture !== next.texture) frames[same].texture.dispose();
@@ -156,9 +161,8 @@ export function createClouds(
 				frames.sort((x, y) => x.time - y.time);
 			}
 			while (frames.length > MAX_CLOUD_FRAMES) frames.shift()?.texture.dispose();
-			// Keep showing the same frame; the next setTime eases toward the new target.
-			const kept = shown === undefined ? -1 : frames.findIndex((f) => f.time === shown);
-			position = kept >= 0 ? kept + (position - Math.round(position)) : target();
+			// Keep showing the same instant; the next setTime eases toward the new target.
+			position = Number.isFinite(shown) ? framePosition(frames.map((f) => f.time), shown) : target();
 			show();
 			syncVisibility();
 		},

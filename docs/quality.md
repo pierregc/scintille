@@ -7,7 +7,7 @@ tier there.
 |---|---|---|---|
 | Earth textures | 2k | 4k | 4k |
 | Pixel ratio cap | 1 | 1.5 | 2 |
-| Flashes on the GPU | 65,536 | whole live window | whole live window |
+| Flashes on the GPU | 65,536 around the playhead | whole live window | whole live window |
 | Clouds lit by flashes (#64) | off | on | on |
 | Bicubic cloud filtering | off | on | on |
 | Bloom on flashes (#58) | off | off | on (about 0.5 ms GPU per frame) |
