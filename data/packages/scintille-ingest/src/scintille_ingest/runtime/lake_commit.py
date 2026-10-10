@@ -104,11 +104,11 @@ class LakeCommit:
             log_frames = {b: to_ingest_log(f) for b, f in logs.items()}
             self._replace(bronze, "key", files, log_frames)
             self.after_commit("bronze")
+            empty = pl.DataFrame(schema={c: pl.Null for c in QUARANTINE_COLUMNS})
             quarantined = {
-                b: f.select(QUARANTINE_COLUMNS) for b, f in rejected.items() if f is not None
+                b: empty if f is None else f.select(QUARANTINE_COLUMNS) for b, f in rejected.items()
             }
-            if quarantined:
-                self._append(quarantine, list(quarantined), quarantined)
+            self._replace(quarantine, "product_file", names, quarantined)
             self.after_commit("quarantine")
         for batch in batches:
             spool.delete(batch)
