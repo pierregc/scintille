@@ -13,13 +13,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
+from scintille_lake.config import LakeConfig
+from scintille_lake.connect import pyiceberg_catalog
+from scintille_lake.locks import partition_locks
 
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
 from scintille_ingest.runtime import health
+from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.logs import configure as configure_json_logs
+from scintille_ingest.runtime.metrics import Metrics
 from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource
@@ -86,8 +91,19 @@ async def run_live(spool_dir: Path, port: int) -> int:
 
 
 async def run_lake_writer(spool_dir: Path, interval: float) -> int:
+    """Catalog from `SCINTILLE_LAKE_*`, partition locks in `SCINTILLE_POSTGRES_DSN`."""
     configure_json_logs()
-    writer = LakeWriter(Spool(spool_dir), interval=interval)
+    dsn = os.environ.get("SCINTILLE_POSTGRES_DSN")
+    if not dsn:
+        log.error("SCINTILLE_POSTGRES_DSN is not set")
+        return 2
+    metrics = Metrics()
+    commit = LakeCommit(
+        catalog=lambda: pyiceberg_catalog(LakeConfig.from_env()),
+        locker=lambda keys: partition_locks(dsn, keys),
+        metrics=metrics,
+    )
+    writer = LakeWriter(Spool(spool_dir), commit=commit, interval=interval, metrics=metrics)
     _stop_on_signals(writer.stop)
     await writer.run()
     return 0

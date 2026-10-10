@@ -8,7 +8,7 @@ production, Lakekeeper locally. Definitions live in code, in `data/packages/scin
 | Table | Partitioning | Notes |
 |---|---|---|
 | `bronze.ingest_log` | `day(product_start)` | One row per product file |
-| `silver.flashes` | `day(event_time)`, `source`; sorted by `event_time` | Rows carry `parser_version` and `calibration_version` |
+| `silver.flashes` | `day(event_time)`, `source`; sorted by `event_time` | Rows carry `parser_version` and `calibration_version`; `intensity` null until #33 |
 | `silver.flashes_quarantine` | `day(ingest_time)` | Rejected rows as JSON, with the reason |
 | `gold.*` | per table | Created through `gold_table()`, which sets merge-on-read |
 
@@ -21,7 +21,8 @@ cd data
 uv run scintille-lake migrate
 ```
 
-It creates missing namespaces and tables, adds new optional columns and restores table properties.
+It creates missing namespaces and tables, adds new optional columns, makes required columns optional
+when the code says so, and restores table properties.
 A second run prints `up to date`. It refuses anything else.
 
 ## Schema evolution policy
@@ -29,6 +30,7 @@ A second run prints `up to date`. It refuses anything else.
 Allowed without a new table version, applied by `migrate`:
 
 - adding an **optional** top-level column (old rows read it as null);
+- making a required top-level column optional (old rows keep their values);
 - changing a table property declared in code.
 
 Refused by `migrate`, and needing a new table (for example `silver.flashes_v2`) plus a backfill:

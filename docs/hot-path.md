@@ -33,8 +33,21 @@ without delaying the others. SIGTERM lets files in progress finish (30 s).
 
 ## `lake-writer` (`scintille-ingest lake-writer`)
 
-Drains the spool every 5 minutes. The commit to `silver.flashes` and `bronze.ingest_log` arrives
-with #39; until then it reports the backlog and leaves the spool untouched.
+Drains the spool every 5 minutes, up to 200 batches per commit:
+
+1. takes the Postgres advisory lock of every partition it writes (`silver.flashes/<day>/<source>`,
+   shared with backfills, #40), in sorted order;
+2. writes to `silver.flashes`, then `bronze.ingest_log`, only the batches each table does not hold
+   yet; the batch ids go into the snapshot property `scintille.batch_ids`. Each write is one Iceberg
+   overwrite filtered on the batches' product files, so an upstream revision of a file (same key,
+   new ETag) replaces the rows of the previous one instead of adding to them;
+3. deletes the spool files.
+
+A crash anywhere replays the drain: batches found in a table's snapshots are skipped, so nothing is
+appended twice, and a batch committed to silver but not bronze completes bronze only. If the catalog
+is down, the batches stay in the spool and the next drain retries; `ingest-live` never notices.
+`intensity` stays null until the cross-source calibration (#33). Catalog operations are counted in
+`catalog_operations_total`.
 
 ## Run locally
 

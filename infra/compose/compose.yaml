@@ -88,8 +88,13 @@ services:
     <<: *service
     image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
     command: ["scintille-ingest", "lake-writer", "--spool", "/var/lib/scintille/spool"]
+    environment:
+      SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
     volumes:
       - spool:/var/lib/scintille/spool
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres:
