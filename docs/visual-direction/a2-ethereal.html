@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scintille · A2 · Ethereal instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+/* Layout: instrument A, stripped to light and air. No boxes, no glass; type and hairlines float over the Earth. */
+:root {
+	--space: #000000;
+	--ink: rgb(238 242 247 / 0.9);
+	--soft: rgb(238 242 247 / 0.62);
+	--dim: rgb(238 242 247 / 0.4);
+	--hair: rgb(238 242 247 / 0.14);
+	--glow: #F3E7CC;
+	--shade: rgb(0 0 0 / 0.55);
+	--mono: 'IBM Plex Mono', ui-monospace, monospace;
+	--sans: 'IBM Plex Sans', system-ui, sans-serif;
+	--gut: clamp(18px, 2.6vw, 40px);
+	color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+	background: var(--space) url(globe-desktop.jpg) center / cover no-repeat;
+	color: var(--ink);
+	font: 300 14px/1.6 var(--sans);
+	overflow: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-shadow: 0 0 14px var(--shade);
+}
+@media (max-width: 640px) { body { background-image: url(globe-mobile.jpg); } }
+button, summary { font: inherit; color: inherit; text-shadow: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+a, button, summary { transition: color .6s ease, opacity .6s ease; }
+:focus-visible { outline: 1px solid var(--soft); outline-offset: 5px; }
+svg { display: block; }
+.cap { font: 300 10px/1 var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim); }
+[data-mode="live"] .replay-only, [data-mode="replay"] .live-only { display: none !important; }
+
+/* corners: barely there */
+.frame { position: fixed; inset: 12px; pointer-events: none; }
+.frame i { position: absolute; width: 34px; height: 34px; border: 0 solid var(--hair); }
+.frame i:nth-child(1) { top: 0; left: 0; border-width: 1px 0 0 1px; }
+.frame i:nth-child(2) { top: 0; right: 0; border-width: 1px 1px 0 0; }
+.frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
+.frame i:nth-child(4) { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+
+/* name */
+.id { position: fixed; top: var(--gut); left: var(--gut); }
+h1 { margin: 0; font: 200 18px/1 var(--sans); letter-spacing: 0.5em; text-transform: uppercase; color: var(--ink); }
+.id .tag { margin-top: 10px; }
+
+/* clock: the one strong element */
+.clock { position: fixed; top: var(--gut); right: var(--gut); text-align: right; }
+.clock .t { font: 200 40px/1 var(--mono); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.clock .t small { font: 300 10px/1 var(--mono); letter-spacing: 0.24em; color: var(--dim); margin-left: 8px; vertical-align: 22px; }
+.clock .d { margin-top: 8px; font: 300 11px/1 var(--mono); color: var(--soft); letter-spacing: 0.14em; }
+.state { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; }
+.pulse { width: 5px; height: 5px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 10px rgb(255 255 255 / 0.8); animation: breathe 3.2s ease-in-out infinite; }
+[data-mode="replay"] .pulse { animation: none; opacity: 0.5; box-shadow: none; }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.state .cap { color: var(--soft); }
+.golive { margin-left: 6px; color: var(--soft); font: 300 10px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase; border-bottom: 1px solid var(--hair); padding-bottom: 3px; }
+.golive:hover { color: var(--ink); }
+
+/* layers: two words */
+.layers { position: fixed; right: var(--gut); top: calc(var(--gut) + 150px); display: grid; gap: 14px; justify-items: end; }
+.sw { display: inline-flex; align-items: center; gap: 10px; color: var(--dim); }
+.sw .cap { color: inherit; }
+.sw i { width: 4px; height: 4px; border-radius: 50%; border: 1px solid var(--dim); }
+.sw[aria-pressed="true"] { color: var(--ink); }
+.sw[aria-pressed="true"] i { background: var(--ink); border-color: var(--ink); }
+.sw:hover { color: var(--soft); }
+
+/* bottom: time, speed, storm */
+.strip { position: fixed; left: var(--gut); right: var(--gut); bottom: var(--gut); display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 32px; }
+.ctl { display: flex; align-items: center; gap: 22px; }
+.tx { display: inline-flex; align-items: center; gap: 10px; color: var(--soft); font: 300 10.5px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase; }
+.tx:hover { color: var(--ink); }
+.speed { display: flex; gap: 14px; }
+.speed button { font: 300 11px/1 var(--mono); color: var(--dim); padding-bottom: 4px; border-bottom: 1px solid transparent; }
+.speed button[aria-checked="true"] { color: var(--ink); border-bottom-color: var(--soft); }
+.when { color: var(--soft); font: 300 11px/1 var(--mono); letter-spacing: 0.08em; border-bottom: 1px solid var(--hair); padding-bottom: 4px; }
+.when:hover { color: var(--ink); }
+
+.scale { position: relative; height: 26px; }
+.scale .ticks { position: absolute; left: 0; right: 0; bottom: 8px; height: 6px; background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48)); }
+.scale .lbl { position: absolute; bottom: -8px; font: 300 9px/1 var(--mono); color: var(--dim); letter-spacing: 0.1em; transform: translateX(-50%); }
+.scale .head { position: absolute; bottom: 4px; height: 18px; width: 1px; background: var(--glow); left: 77.9%; box-shadow: 0 0 8px var(--glow); }
+.scale .head b { position: absolute; top: -14px; left: 8px; font: 300 10px/1 var(--mono); color: var(--glow); white-space: nowrap; }
+
+.storm { display: inline-flex; align-items: center; gap: 12px; color: var(--glow); font: 300 11px/1 var(--mono); letter-spacing: 0.22em; text-transform: uppercase; }
+.storm span { width: 26px; height: 1px; background: currentColor; opacity: 0.6; transition: width .8s ease; }
+.storm:hover span { width: 40px; }
+
+/* info: words on a soft shadow, no panel */
+details.info { position: fixed; top: calc(var(--gut) + 64px); left: var(--gut); width: min(25rem, calc(100vw - 2 * var(--gut))); z-index: 2; }
+details.info > summary { list-style: none; display: inline-flex; align-items: center; gap: 12px; cursor: pointer; color: var(--dim); }
+details.info > summary::-webkit-details-marker { display: none; }
+details.info > summary .o { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--hair); display: grid; place-items: center; font: 300 10px/1 var(--mono); color: var(--soft); }
+details.info > summary:hover, details.info[open] > summary { color: var(--soft); }
+details.info[open] > summary .o { border-color: var(--soft); color: var(--ink); }
+details.info[open]::before { content: ''; position: fixed; inset: 0 auto 0 0; width: min(44rem, 100vw); background: linear-gradient(90deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent); pointer-events: none; z-index: -1; }
+.sheet { margin-top: 20px; max-height: calc(100svh - 64px - 2 * var(--gut) - 150px); overflow-y: auto; overscroll-behavior: contain; padding-right: 10px; color: var(--soft); font: 300 14px/1.75 var(--sans); scrollbar-width: thin; scrollbar-color: var(--hair) transparent; }
+.sheet .lead { margin-top: 0; font: 200 18px/1.55 var(--sans); color: var(--ink); }
+.sheet h2 { margin: 26px 0 8px; font: 300 10px/1 var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: var(--dim); }
+.sheet p, .sheet ul { margin: 0 0 12px; }
+.sheet ul { padding-left: 14px; }
+.sheet a { color: var(--ink); text-decoration-color: var(--hair); text-underline-offset: 4px; }
+.sheet .attribution { font: 300 10.5px/1.6 var(--mono); color: var(--dim); margin-top: 18px; }
+.sheet nav { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+.sheet nav a { font: 300 10px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase; text-decoration: none; color: var(--soft); padding: 6px 0; }
+
+@media (max-width: 640px) {
+	:root { --gut: 18px; }
+	.frame { inset: 8px; }
+	.frame i { width: 22px; height: 22px; }
+	h1 { font-size: 14px; letter-spacing: 0.42em; }
+	.id .tag { display: none; }
+	.clock .t { font-size: 26px; }
+	.clock .t small { font-size: 8px; vertical-align: 14px; margin-left: 5px; }
+	.clock .d { font-size: 10px; }
+	.layers { top: calc(var(--gut) + 112px); grid-auto-flow: column; gap: 18px; }
+	.strip { grid-template-columns: 1fr auto; grid-template-areas: "scale scale" "ctl storm"; gap: 26px 12px; }
+	.scale { grid-area: scale; }
+	.ctl { grid-area: ctl; gap: 14px; flex-wrap: wrap; }
+	.storm { grid-area: storm; letter-spacing: 0.16em; }
+	.storm span { width: 14px; }
+	.speed { gap: 10px; }
+	[data-mode="live"] .scale { display: none; }
+	[data-mode="live"] .strip { grid-template-areas: "ctl storm"; }
+	.strip > .live-only.spacer { display: none !important; }
+	details.info { top: calc(var(--gut) + 30px); }
+	details.info > summary .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+	details.info[open]::before { inset: auto 0 0 0; width: auto; height: 80svh; background: linear-gradient(0deg, rgb(0 0 0 / 0.86), rgb(0 0 0 / 0.7) 70%, transparent); }
+	details.info[open] .sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; max-height: 62svh; padding: 0 var(--gut) calc(var(--gut) + env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<header class="id">
+	<h1>Scintille</h1>
+	<div class="tag cap">Lightning · seen from orbit</div>
+</header>
+
+<details class="info">
+	<summary><span class="o" aria-hidden="true">i</span><span class="lbl cap">About this globe</span></summary>
+	<div class="sheet">
+		<p class="lead">Lightning across the planet, in near real time. Satellites watching the Earth from orbit record the light of each flash they detect, day and night, and every one of them lands here shortly after, on a globe lit by the Sun as it is right now.</p>
+		<h2>What the dots mean</h2>
+		<p>One dot is one lightning flash, detected from orbit by its optical pulse. That includes flashes inside and between clouds, not only those that reach the ground.</p>
+		<p>Brightness follows the optical energy the satellite measured for that flash. The instruments do not measure exactly the same quantity, so their values are brought to a common scale.</p>
+		<p>Coverage has gaps. The satellites see only part of the planet, and detection weakens near the edge of their view. Where there is no data, the globe says so: an empty region is not a region without lightning.</p>
+		<h2>Sources</h2>
+		<ul>
+			<li><a href="https://www.goes-r.gov/spacesegment/glm.html">NOAA GOES Geostationary Lightning Mapper</a> (GLM), on GOES-East and GOES-West, over the Americas and the surrounding oceans.</li>
+			<li><a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.</li>
+		</ul>
+		<p class="attribution">GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.</p>
+		<nav aria-label="More about Scintille"><a href="#about">About</a><a href="#methodology">Methodology</a><a href="#how-its-built">How it’s built</a></nav>
+	</div>
+</details>
+
+<section class="clock" aria-label="Time">
+	<div class="t"><time data-clock><span data-time>00:00:00</span></time><small>UTC</small></div>
+	<div class="d" data-date></div>
+	<div class="state" role="status"><span class="pulse" aria-hidden="true"></span><span class="cap" data-live-label>Live</span><button class="golive replay-only" data-go="live">Back to live</button></div>
+</section>
+
+<div class="layers" role="group" aria-label="Layers">
+	<button class="sw" aria-pressed="false"><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+	<button class="sw" aria-pressed="false"><span class="cap">Sound</span><i aria-hidden="true"></i></button>
+</div>
+
+<section class="strip" aria-label="Playback">
+	<div class="ctl">
+		<button class="tx live-only" data-go="replay" aria-label="Replay a past date and time">
+			<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1"><path d="M2.5 7a4.5 4.5 0 1 0 1.3-3.2M2.5 1.5v2.8h2.8"/><path d="M7 4.5V7l1.8 1.2"/></svg>
+			Travel in time
+		</button>
+		<button class="tx replay-only" data-play aria-label="Pause">
+			<svg width="9" height="11" viewBox="0 0 10 12" fill="currentColor"><rect x="1.5" y="1" width="1.4" height="10"/><rect x="7.1" y="1" width="1.4" height="10"/></svg>
+		</button>
+		<div class="speed replay-only" role="radiogroup" aria-label="Playback speed">
+			<button role="radio" aria-checked="false">1×</button><button role="radio" aria-checked="true">60×</button><button role="radio" aria-checked="false">600×</button><button role="radio" aria-checked="false">3600×</button>
+		</div>
+		<button class="when replay-only" aria-label="Change date and time"><span data-iso></span> · <span data-time-short></span></button>
+	</div>
+	<div class="scale replay-only" role="slider" tabindex="0" aria-label="Time position" aria-valuetext="15 July 2026, 18:42 UTC" aria-valuemin="0" aria-valuemax="100" aria-valuenow="78">
+		<div class="ticks"></div>
+		<span class="lbl" style="left:0">00</span><span class="lbl" style="left:25%">06</span><span class="lbl" style="left:50%">12</span><span class="lbl" style="left:75%">18</span><span class="lbl" style="left:100%">24</span>
+		<div class="head"><b data-time-short></b></div>
+	</div>
+	<div class="live-only spacer" aria-hidden="true"></div>
+	<button class="storm" data-storm>Drift to a storm<span aria-hidden="true"></span></button>
+</section>
+
+<script>(() => {
+	const root = document.documentElement;
+	const q = new URLSearchParams(location.search);
+	const info = document.querySelector('details.info');
+	const storm = document.querySelector('[data-storm]');
+	const setMode = (m) => {
+		root.dataset.mode = m;
+		document.querySelectorAll('[data-live-label]').forEach((el) => (el.textContent = m === 'live' ? 'Live' : 'Replay'));
+	};
+	setMode(q.get('mode') === 'replay' ? 'replay' : 'live');
+	if (info && q.get('info') === '1') info.open = true;
+	const label = q.get('cta');
+	if (label) storm.firstChild.textContent = label;
+
+	const pad = (n) => String(n).padStart(2, '0');
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	const replayAt = Date.UTC(2026, 6, 15, 18, 42, 10);
+	const tick = () => {
+		const d = new Date(root.dataset.mode === 'live' ? Date.now() : replayAt);
+		const time = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+		document.querySelectorAll('[data-time]').forEach((el) => (el.textContent = time));
+		document.querySelectorAll('[data-time-short]').forEach((el) => (el.textContent = time.slice(0, 5)));
+		document.querySelectorAll('[data-date]').forEach((el) => (el.textContent = `${pad(d.getUTCDate())} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`));
+		document.querySelectorAll('[data-iso]').forEach((el) => (el.textContent = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`));
+		document.querySelectorAll('time[data-clock]').forEach((el) => el.setAttribute('datetime', d.toISOString()));
+	};
+	tick();
+	setInterval(tick, 1000);
+
+	document.addEventListener('click', (e) => {
+		const t = e.target.closest('button');
+		if (!t) return;
+		if (t.matches('[data-go="replay"]')) setMode('replay');
+		if (t.matches('[data-go="live"]')) setMode('live');
+		if (t.matches('[aria-pressed]')) t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+		const group = t.closest('[role="radiogroup"]');
+		if (group) group.querySelectorAll('[role="radio"]').forEach((b) => b.setAttribute('aria-checked', String(b === t)));
+		if (t.matches('[data-play]')) t.setAttribute('aria-label', t.getAttribute('aria-label') === 'Pause' ? 'Play' : 'Pause');
+		tick();
+	});
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape' && info?.open) { info.open = false; info.querySelector('summary').focus(); }
+	});
+})();
+</script>
+</body>
+</html>
