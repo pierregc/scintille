@@ -1,4 +1,4 @@
-"""Command line: `scintille-ingest glm --once`, `live` and `lake-writer`."""
+"""Command line: `scintille-ingest glm --once`, `live`, `lake-writer` and `clouds`."""
 
 import argparse
 import asyncio
@@ -18,6 +18,9 @@ from scintille_lake.config import LakeConfig
 from scintille_lake.connect import pyiceberg_catalog
 from scintille_lake.locks import partition_locks
 
+from scintille_ingest.clouds import gfs, gmgsi
+from scintille_ingest.clouds.collector import CloudCollector
+from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
@@ -56,7 +59,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
     )
     writer.add_argument("--interval", type=float, default=300.0, help="seconds between drains")
+    clouds = commands.add_parser("clouds", help="publish GMGSI cloud textures to the live bucket")
+    clouds.add_argument("--port", type=int, default=8081, help="/healthz and /metrics")
     args = parser.parse_args(argv)
+    if args.command == "clouds":
+        return asyncio.run(run_clouds(args.port))
     if args.command == "live":
         return asyncio.run(run_live(args.spool, args.port))
     if args.command == "lake-writer":
@@ -108,8 +115,37 @@ def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
     if not bucket:
         log.warning("SCINTILLE_LIVE_BUCKET is not set: no live feed, spool only")
         return None
+    return LiveFeed(ObjectLiveStore(live_store(bucket)), outbox=outbox, metrics=metrics)
+
+
+async def run_clouds(port: int) -> int:
+    """Until SIGTERM or SIGINT; textures go to `SCINTILLE_LIVE_BUCKET`."""
+    configure_json_logs()
+    bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+    if not bucket:
+        log.error("SCINTILLE_LIVE_BUCKET is not set")
+        return 2
+    store = live_store(bucket)
+    metrics = Metrics()
+    collector = CloudCollector(
+        public_store(gmgsi.BUCKET),
+        gfs.GfsSkin(public_store(gfs.BUCKET)),
+        CloudPublisher(
+            ObjectLiveStore(store, prefix="live/clouds/"),
+            ObjectLiveStore(store, prefix="archive/clouds/"),
+        ),
+        metrics=metrics,
+    )
+    server = await health.serve(port, collector.healthy, metrics.render)
+    _stop_on_signals(collector.stop)
+    async with server:
+        await collector.start()
+    return 0
+
+
+def live_store(bucket: str) -> S3Store:
     endpoint = os.environ["SCINTILLE_R2_ENDPOINT"]
-    store = S3Store(
+    return S3Store(
         bucket,
         endpoint=endpoint,
         access_key_id=os.environ["SCINTILLE_R2_ACCESS_KEY_ID"],
@@ -117,7 +153,6 @@ def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
         region="auto",
         client_options={"allow_http": endpoint.startswith("http://")},
     )
-    return LiveFeed(ObjectLiveStore(store), outbox=outbox, metrics=metrics)
 
 
 async def run_lake_writer(spool_dir: Path, interval: float) -> int:

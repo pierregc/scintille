@@ -96,6 +96,18 @@ services:
       postgres:
         condition: service_healthy
 
+  # Cloud textures (ADR 0007). Off until COMPOSE_PROFILES includes "clouds" in .env.
+  clouds:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    profiles: ["clouds"]
+    command: ["scintille-ingest", "clouds", "--port", "8081"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/healthz', timeout=5)"]
+      interval: 15s
+      start_period: 20s
+      retries: 4
+
 volumes:
   postgres:
   spool:

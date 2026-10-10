@@ -145,7 +145,8 @@ curl -sI https://pr-<number>-scintille.<account-subdomain>.workers.dev/ | grep -
 
 Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Docker Compose, from
 `infra/compose/compose.yaml`: `postgres` (Dagster storage and pipeline state), `dagster-webserver`,
-`dagster-daemon`, and `ingest` (opt-in until the hot path service, #35).
+`dagster-daemon`, and `ingest` (opt-in until the hot path service, #35). `clouds` (cloud textures,
+[hot path](hot-path.md)) only starts when `.env` sets `COMPOSE_PROFILES=clouds`.
 
 - **Images.** `data/Dockerfile` builds one image per package (uv, non-root user `10001`, pinned base
   digests, no secrets). The `images` workflow builds both on every data change; on `main` it pushes
