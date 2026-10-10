@@ -470,7 +470,7 @@ import Timeline from './Timeline.astro';
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
@@ -511,6 +511,9 @@ import Timeline from './Timeline.astro';
 		window.addEventListener(GLOBE_GONE, () => {
 			app = undefined;
 			if (layers) layers.hidden = true;
+		});
+		window.addEventListener(GLOBE_FALLBACK, () => {
+			if (info) info.open = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
 			app?.clock.live();
