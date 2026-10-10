@@ -3,8 +3,6 @@ import type { FlashRing } from '../live';
 /** Floats per flash: direction xyz, time (s from origin), intensity, radius (km). */
 export const FLASH_STRIDE = 6;
 
-export const DEFAULT_LIGHTNING_CAPACITY = 1 << 17;
-
 /** Beyond this distance between scene time and origin, times are rebased to keep float32 precision. */
 export const REBASE_MS = 6 * 3_600_000;
 
@@ -29,7 +27,8 @@ export class FlashInstances {
 	readonly #ring: FlashRing;
 	readonly #onRange: RangeListener;
 
-	constructor(ring: FlashRing, capacity = DEFAULT_LIGHTNING_CAPACITY, onRange: RangeListener = () => {}) {
+	/** Defaults to the ring's capacity, so the whole live window stays on the GPU. */
+	constructor(ring: FlashRing, capacity = ring.capacity, onRange: RangeListener = () => {}) {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
 		this.capacity = capacity;
 		this.data = new Float32Array(capacity * FLASH_STRIDE);

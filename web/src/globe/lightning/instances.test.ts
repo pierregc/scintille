@@ -71,6 +71,15 @@ describe('FlashInstances', () => {
 		expect(times()).toEqual([1002, 1003, 1004, 1005]);
 	});
 
+	it('holds as many flashes as the ring by default', () => {
+		const ring = new FlashRing(64);
+		const instances = new FlashInstances(ring);
+		push(ring, 1, 64);
+		instances.sync(1000);
+		expect(instances.capacity).toBe(64);
+		expect(instances.count).toBe(64);
+	});
+
 	it('rebases times when the scene time moves far from the origin', () => {
 		const { ring, instances, ranges } = setup(8, 8);
 		push(ring, 1, 2);

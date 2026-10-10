@@ -11,10 +11,10 @@ import {
 	Vector2,
 } from 'three';
 import type { FlashRing } from '../live';
-import { DEFAULT_LIGHTNING_CAPACITY, FLASH_STRIDE, FlashInstances } from './instances';
+import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 
-export { DEFAULT_LIGHTNING_CAPACITY, FlashInstances } from './instances';
+export { FlashInstances } from './instances';
 
 /** Scene time a flash stays on screen; becomes adjustable in #55. */
 export const DEFAULT_DISPLAY_MS = 1500;
@@ -24,7 +24,7 @@ export const CLOUD_TOP_KM = 12;
 
 export interface LightningOptions {
 	radius?: number;
-	/** Most recent flashes kept on the GPU. */
+	/** Most recent flashes kept on the GPU; defaults to the ring's capacity. */
 	capacity?: number;
 	displayMs?: number;
 }
@@ -44,7 +44,7 @@ class NumberUniform {
 /** All flashes of the ring in one instanced draw call, aged on the GPU. */
 export function createLightning(
 	ring: FlashRing,
-	{ radius = 1, capacity = DEFAULT_LIGHTNING_CAPACITY, displayMs = DEFAULT_DISPLAY_MS }: LightningOptions = {},
+	{ radius = 1, capacity = ring.capacity, displayMs = DEFAULT_DISPLAY_MS }: LightningOptions = {},
 ): Lightning {
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute(
