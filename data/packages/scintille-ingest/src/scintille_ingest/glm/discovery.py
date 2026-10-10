@@ -1,6 +1,7 @@
 """Find new GLM files by listing the hour prefixes of the public NOAA buckets."""
 
 from collections.abc import Set
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import obstore
@@ -19,7 +20,11 @@ def list_products(store: ObjectStore, hour: datetime) -> list[ProductKey]:
     """Product files of one hour, oldest first."""
     keys: list[ProductKey] = []
     for batch in obstore.list(store, prefix=hour_prefix(hour), chunk_size=1000):
-        keys.extend(parse_key(meta["path"]) for meta in batch if meta["path"].endswith(".nc"))
+        keys.extend(
+            replace(parse_key(meta["path"]), etag=meta["e_tag"])
+            for meta in batch
+            if meta["path"].endswith(".nc")
+        )
     return sorted(keys, key=lambda product: (product.start, product.created))
 
 

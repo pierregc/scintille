@@ -31,7 +31,24 @@ def test_states_only_move_forward() -> None:
     state.advance(file, "glm-east", "spooled", "batch-2")
     record = state.get(file)
     assert record is not None and (record.state, record.batch_id) == ("spooled", "batch-1")
-    assert state.spooled_keys("glm-east", [file.key, "other"]) == {file.key}
+    assert state.spooled_keys("glm-east", {file.key: None, "other": None}) == {file.key}
+    state.close()
+
+
+def test_a_new_etag_under_a_spooled_key_is_not_done() -> None:
+    state = PostgresState(DSN)
+    file = FileIdentity(f"test/{uuid4().hex}.nc", "sha256:1")
+    state.advance(file, "glm-east", "spooled", "batch-1", etag="v1")
+    assert state.spooled_keys("glm-east", {file.key: "v1"}) == {file.key}
+    assert state.spooled_keys("glm-east", {file.key: "v2"}) == set()
+    state.advance(file, "glm-east", "spooled", etag="v2")
+    record = state.get(file)
+    assert record is not None and (record.state, record.batch_id, record.etag) == (
+        "spooled",
+        "batch-1",
+        "v2",
+    )
+    assert state.spooled_keys("glm-east", {file.key: "v2"}) == {file.key}
     state.close()
 
 
@@ -76,4 +93,6 @@ def test_restart_after_a_crash_spools_once(tmp_path: Path) -> None:
     state = PostgresState(DSN)
     asyncio.run(IngestLive([Source()], state, spool).poll(Source()))
     assert len(spool.pending()) == 2
-    assert state.spooled_keys("glm-east", [p.key for p in products]) == {p.key for p in products}
+    assert state.spooled_keys("glm-east", {p.key: p.etag for p in products}) == {
+        p.key for p in products
+    }

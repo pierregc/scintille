@@ -1,6 +1,7 @@
 """lake-writer's commit: spooled batches into silver and bronze, at most once each."""
 
 import logging
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from dataclasses import dataclass, field
 import polars as pl
 import pyarrow as pa
 from pyiceberg.catalog import Catalog
+from pyiceberg.expressions import In, Reference
+from pyiceberg.expressions.literals import literal
 from pyiceberg.table import Table
 from scintille_lake.locks import partition_key
 from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
@@ -92,10 +95,14 @@ class LakeCommit:
             .unique()
             .iter_rows()
         }
+        files = {b: logs[b]["key"].to_list() for b in batches}
         with self.locker(locks):
-            self._append(silver, batches, {b: to_silver(f) for b, f in flashes.items()})
+            silver_frames = {b: to_silver(f) for b, f in flashes.items()}
+            names = {b: [k.rsplit("/", 1)[-1] for k in keys] for b, keys in files.items()}
+            self._replace(silver, "product_file", names, silver_frames)
             self.after_commit("silver")
-            self._append(bronze, batches, {b: to_ingest_log(f) for b, f in logs.items()})
+            log_frames = {b: to_ingest_log(f) for b, f in logs.items()}
+            self._replace(bronze, "key", files, log_frames)
             self.after_commit("bronze")
             quarantined = {
                 b: f.select(QUARANTINE_COLUMNS) for b, f in rejected.items() if f is not None
@@ -110,18 +117,39 @@ class LakeCommit:
         self.metrics.inc("lake_rows_committed_total", rows)
         log.info("batches committed", extra={"fields": {"batches": len(batches), "rows": rows}})
 
-    def _append(self, table: Table, batches: list[str], frames: dict[str, pl.DataFrame]) -> None:
-        """Appends the batches this table does not hold yet, recording their ids in the snapshot."""
+    def _replace(
+        self,
+        table: Table,
+        column: str,
+        files: dict[str, list[str]],
+        frames: dict[str, pl.DataFrame],
+    ) -> None:
+        """Writes the batches this table does not hold yet, in one commit recording their ids.
+
+        Rows of an earlier revision of the same product file (`column`) are replaced; within the
+        commit the latest batch of a file wins.
+        """
         done = committed_batches(table)
-        todo = [b for b in batches if b not in done]
+        todo = [b for b in files if b not in done]
         if not todo:
             return
+        latest = {name: b for b in todo for name in files[b]}
         schema = table.schema().as_arrow()
+        parts = [
+            frames[b].filter(pl.col(column).is_in([n for n, w in latest.items() if w == b]))
+            for b in todo
+        ]
         data = pa.concat_tables(
-            [frames[b].to_arrow().cast(schema) for b in todo if frames[b].height]
-            or [schema.empty_table()]
+            [p.to_arrow().cast(schema) for p in parts if p.height] or [schema.empty_table()]
         )
-        table.append(data, snapshot_properties={BATCHES_PROPERTY: ",".join(todo)})
+        properties = {BATCHES_PROPERTY: ",".join(todo)}
+        if latest:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", "Delete operation did not match any records")
+                replaced = In(term=Reference(column), values={literal(n) for n in latest})
+                table.overwrite(data, replaced, snapshot_properties=properties)
+        else:
+            table.append(data, snapshot_properties=properties)
         self.metrics.inc("catalog_operations_total", 1, op="append")
 
 

@@ -3,8 +3,10 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import obstore
 import polars as pl
 import pytest
+from obstore.store import MemoryStore
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
@@ -12,6 +14,7 @@ from scintille_ingest.runtime import health
 from scintille_ingest.runtime.identity import FileIdentity, batch_id
 from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.metrics import Metrics
+from scintille_ingest.runtime.raw_cache import ObjectRawCache, raw_key
 from scintille_ingest.runtime.service import Crash, DiskUsage, IngestLive, Settings
 from scintille_ingest.runtime.sources import Product
 from scintille_ingest.runtime.spool import Spool
@@ -74,6 +77,7 @@ class FakeSource:
         ]
         self.fetches = 0
         self.corrupt: set[str] = set()
+        self.content: dict[str, bytes] = {}
 
     async def list_recent(self, now: datetime) -> list[Product]:
         if self.failing:
@@ -82,7 +86,7 @@ class FakeSource:
 
     async def fetch(self, product: Product) -> bytes:
         self.fetches += 1
-        return product.key.encode()
+        return product.key.encode() if product.etag is None else self.content[product.etag]
 
     def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
         if product.key in self.corrupt:
@@ -230,6 +234,70 @@ def test_disk_thresholds_warn_then_pause_the_raw_cache(tmp_path: Path) -> None:
         used["ratio"] = ratio
         live.check_disk()
         assert live.raw_cache_paused is paused
+
+
+def test_a_revised_object_under_the_same_key_is_fetched_again(tmp_path: Path) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path), FakeSource("glm-east", files=1)
+    first = source.products[0]
+    source.content = {"v1": b"first", "v2": b"revised", "v3": b"revised"}
+    live = service(state, spool, source)
+
+    source.products = [Product(first.key, first.start, "v1")]
+    assert asyncio.run(live.poll(source)) == 1
+    assert asyncio.run(live.poll(source)) == 0
+
+    source.products = [Product(first.key, first.start, "v2")]
+    assert asyncio.run(live.poll(source)) == 1
+    assert len(spool.pending()) == 2
+    assert {r.identity.checksum for r in state.records.values()} == {
+        FileIdentity.of(first.key, b"first").checksum,
+        FileIdentity.of(first.key, b"revised").checksum,
+    }
+
+    source.products = [Product(first.key, first.start, "v3")]
+    assert asyncio.run(live.poll(source)) == 1
+    assert asyncio.run(live.poll(source)) == 0
+    assert len(spool.pending()) == 2
+    assert source.fetches == 3
+
+
+class FailingCache:
+    async def put(self, source: str, identity: FileIdentity, data: bytes) -> None:
+        raise ConnectionError("R2 unreachable")
+
+
+def test_raw_cache_stores_originals_unless_the_disk_is_almost_full(tmp_path: Path) -> None:
+    store = MemoryStore()
+    used = {"ratio": 0.4}
+    source = FakeSource("glm-east", files=2)
+    live = service(
+        MemoryState(),
+        Spool(tmp_path),
+        source,
+        raw_cache=ObjectRawCache(store),
+        disk_usage=lambda p: DiskUsage(100, int(used["ratio"] * 100), 0),
+    )
+    cached, skipped = source.products
+    live.check_disk()
+    asyncio.run(live.process(source, cached))
+    used["ratio"] = 0.92
+    live.check_disk()
+    asyncio.run(live.process(source, skipped))
+
+    key = raw_key("glm-east", FileIdentity.of(cached.key, cached.key.encode()))
+    assert key.startswith("raw/glm-east/glm-east/") and key.endswith("_file-0.nc")
+    assert obstore.get(store, key).bytes().to_bytes() == cached.key.encode()
+    listed = [m["path"] for batch in obstore.list(store, prefix="raw/") for m in batch]
+    assert listed == [key]
+    assert len(live.spool.pending()) == 2
+
+
+def test_a_raw_cache_outage_does_not_block_the_spool(tmp_path: Path) -> None:
+    source = FakeSource("glm-east")
+    live = service(MemoryState(), Spool(tmp_path), source, raw_cache=FailingCache())
+    assert asyncio.run(live.poll(source)) == 3
+    assert len(live.spool.pending()) == 3
+    assert live.metrics.counters[("ingest_raw_cache_errors_total", (("source", "glm-east"),))] == 3
 
 
 def test_batch_id_ignores_order() -> None:

@@ -49,10 +49,13 @@ def sync_table(catalog: Catalog, table: TableDef) -> list[str]:
         return [f"create table {name}"]
 
     check_layout(name, current, table)
-    added = additive_columns(name, current.schema(), table.schema)
+    added, relaxed = additive_columns(name, current.schema(), table.schema)
     changes = [f"add column {name}.{column}" for column in added]
-    if added:
+    changes += [f"make column {name}.{column} optional" for column in relaxed]
+    if added or relaxed:
         with current.update_schema() as update:
+            for column in relaxed:
+                update.make_column_optional(column)
             for column in added:
                 field = table.schema.find_field(column)
                 update.add_column(column, field.field_type, doc=field.doc)
@@ -68,23 +71,26 @@ def sync_table(catalog: Catalog, table: TableDef) -> list[str]:
     return changes
 
 
-def additive_columns(name: str, current: Schema, wanted: Schema) -> list[str]:
-    """New optional top-level columns; anything else is an incompatible change."""
+def additive_columns(name: str, current: Schema, wanted: Schema) -> tuple[list[str], list[str]]:
+    """New optional top-level columns and required ones made optional; anything else is refused."""
     have = {f.name: f for f in current.fields}
     want = {f.name: f for f in wanted.fields}
     removed = sorted(have.keys() - want.keys())
     if removed:
         raise IncompatibleChange(f"{name}: columns removed {removed}")
     added: list[str] = []
+    relaxed: list[str] = []
     for column, field in want.items():
         old = have.get(column)
         if old is None:
             if field.required:
                 raise IncompatibleChange(f"{name}: new column {column} must be optional")
             added.append(column)
-        elif str(old.field_type) != str(field.field_type) or old.required != field.required:
+        elif str(old.field_type) != str(field.field_type) or (field.required and not old.required):
             raise IncompatibleChange(f"{name}: column {column} changed")
-    return added
+        elif old.required and not field.required:
+            relaxed.append(column)
+    return added, relaxed
 
 
 def check_layout(name: str, current: Table, table: TableDef) -> None:
