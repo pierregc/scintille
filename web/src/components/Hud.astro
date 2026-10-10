@@ -71,6 +71,7 @@ import Timeline from './Timeline.astro';
 
 	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
 		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+		<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
 	</div>
 
 	<Timeline />
@@ -526,6 +527,7 @@ import Timeline from './Timeline.astro';
 		const state = $('[data-state]');
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
+		const sound = $<HTMLButtonElement>('[data-sound]');
 		const info = $<HTMLDetailsElement>('[data-info]');
 		const sources = $('[data-sources]');
 		const staleBanner = $('[data-stale]');
@@ -566,6 +568,7 @@ import Timeline from './Timeline.astro';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
 		};
 		tick();
 		setInterval(tick, 250);
@@ -573,6 +576,7 @@ import Timeline from './Timeline.astro';
 		window.addEventListener(GLOBE_READY, (event) => {
 			app = (event as CustomEvent<GlobeApp>).detail;
 			if (layers) layers.hidden = false;
+			if (sound) sound.hidden = !app.thunder.supported;
 			tick();
 		});
 		window.addEventListener(GLOBE_GONE, () => {
@@ -588,6 +592,10 @@ import Timeline from './Timeline.astro';
 		});
 		clouds?.addEventListener('click', () => {
 			if (app) app.clouds.setVisible(!app.clouds.visible);
+			tick();
+		});
+		sound?.addEventListener('click', () => {
+			if (app) app.thunder.setEnabled(!app.thunder.enabled);
 			tick();
 		});
 		document.addEventListener('keydown', (event) => {

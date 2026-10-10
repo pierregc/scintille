@@ -13,6 +13,7 @@ import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
+import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -31,6 +32,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	readonly thunder: Thunder;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
@@ -74,6 +76,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.lightMap);
+	const thunder = createThunder(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
 		: undefined;
@@ -127,6 +130,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
+		thunder.update(now);
 		if (fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer);
 		if (post) post.render();
@@ -139,6 +143,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		flyTo: controls.flyTo,
 		clock,
 		clouds,
+		thunder,
 		feedStatus: () =>
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
 		hasData: (time) => live.client.covers(time),
@@ -156,6 +161,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
+			thunder.dispose();
 			renderer.dispose();
 		},
 	};
