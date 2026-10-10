@@ -35,6 +35,13 @@ describe('flashProfile', () => {
 		const v = Array.from({ length: 100 }, (_, i) => flashProfile(0.1 + i / 100, DISPLAY, 700, 0.5, false));
 		expect(v.every((x, i) => i === 0 || x <= v[i - 1])).toBe(true);
 	});
+
+	it('keeps the same blink and lingers in the afterglow over a minutes-long display', () => {
+		const display = 15 * 60;
+		expect(flashProfile(0.004, display, 250, 0.5)).toBeCloseTo(flashProfile(0.004, DISPLAY, 250, 0.5), 6);
+		expect(flashProfile(60, display, 250, 0.5)).toBeCloseTo(PROFILE.afterglow * (1 - 60 / display) ** 2, 6);
+		expect(flashProfile(PROFILE.softRise, display, 250, 0.5, false)).toBeGreaterThan(0.99);
+	});
 });
 
 describe('glslFloat', () => {

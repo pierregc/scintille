@@ -7,7 +7,7 @@ import { createGlobeControls, type GlobeControls } from './controls';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
-import { createLightning } from './lightning';
+import { createLightning, type Lightning } from './lightning';
 import { startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
@@ -31,6 +31,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
@@ -139,6 +140,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		flyTo: controls.flyTo,
 		clock,
 		clouds,
+		lightning,
 		feedStatus: () =>
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
 		hasData: (time) => live.client.covers(time),

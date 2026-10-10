@@ -11,6 +11,8 @@ export const PROFILE = {
 	pulseFade: 0.7,
 	/** Afterglow level relative to the first pulse. */
 	afterglow: 0.18,
+	/** Rise of the reduced-motion fade, seconds, at most 4 % of the display time. */
+	softRise: 0.06,
 } as const;
 
 const ATTACK = 0.004;
@@ -43,7 +45,7 @@ export function pulseStart(k: number, n: number, flicker: number, seed: number):
 export function flashProfile(age: number, display: number, durationMs: number, seed: number, flicker = true): number {
 	if (age < 0 || age > display) return 0;
 	const t = age / display;
-	if (!flicker) return smoothstep(0, 0.04, t) * (1 - t) * (1 - t);
+	if (!flicker) return smoothstep(0, Math.min(PROFILE.softRise, display * 0.04), age) * (1 - t) * (1 - t);
 	const length = Math.min(flickerLength(durationMs), display * 0.6);
 	const n = pulseCount(length);
 	let b = 0;
@@ -66,7 +68,7 @@ float flashProfile(float age, float display, float durationMs, float seed, float
 	if (age < 0.0 || age > display) return 0.0;
 	float t = age / display;
 	float fade = (1.0 - t) * (1.0 - t);
-	if (flicker < 0.5) return smoothstep(0.0, 0.04, t) * fade;
+	if (flicker < 0.5) return smoothstep(0.0, min(${f(PROFILE.softRise)}, display * 0.04), age) * fade;
 	float len = min(clamp(durationMs / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), display * 0.6);
 	float n = min(${f(PROFILE.maxPulses)}, 1.0 + floor(len / ${f(PROFILE.pulseEvery)}));
 	float b = 0.0;
