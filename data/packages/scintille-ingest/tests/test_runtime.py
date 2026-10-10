@@ -333,3 +333,62 @@ def test_health_endpoint() -> None:
     healthz, metrics = asyncio.run(scenario())
     assert healthz.startswith(b"HTTP/1.1 200") and healthz.endswith(b"ok\n")
     assert metrics.endswith(b"m 1\n")
+
+
+class FakePinger:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.pings: list[tuple[bool, str]] = []
+        self.error = error
+
+    async def ping(self, ok: bool = True, message: str = "") -> bool:
+        self.pings.append((ok, message))
+        if self.error:
+            raise self.error
+        return True
+
+
+class DyingSource(FakeSource):
+    async def list_recent(self, now: datetime) -> list[Product]:
+        raise Crash
+
+
+def heartbeat_run(tmp_path: Path, sources: list[FakeSource], pinger: FakePinger) -> IngestLive:
+    live = IngestLive(
+        sources,  # type: ignore[arg-type]
+        MemoryState(),
+        Spool(tmp_path),
+        heartbeat=pinger,
+        clock=lambda: NOW,
+        settings=Settings(heartbeat_every=0.01),
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(live.run(grace=1))
+        await asyncio.sleep(0.1)
+        live.stop()
+        await task
+
+    asyncio.run(scenario())
+    return live
+
+
+def test_main_loop_pings_while_every_loop_runs(tmp_path: Path) -> None:
+    pinger = FakePinger()
+    heartbeat_run(tmp_path, [FakeSource("glm-east")], pinger)
+    assert len(pinger.pings) >= 2
+    assert set(pinger.pings) == {(True, "")}
+    assert len(Spool(tmp_path).pending()) == 3
+
+
+def test_a_stopped_loop_turns_the_heartbeat_into_a_fail(tmp_path: Path) -> None:
+    pinger = FakePinger()
+    heartbeat_run(tmp_path, [FakeSource("glm-east"), DyingSource("glm-west")], pinger)
+    assert pinger.pings[-1] == (False, "stopped: glm-west")
+
+
+def test_a_failing_heartbeat_does_not_disturb_ingestion(tmp_path: Path) -> None:
+    pinger = FakePinger(ConnectionError("healthchecks down"))
+    live = heartbeat_run(tmp_path, [FakeSource("glm-east")], pinger)
+    assert len(pinger.pings) >= 2
+    assert len(Spool(tmp_path).pending()) == 3
+    assert not any(t.exception() for t in live._tasks if not t.cancelled())

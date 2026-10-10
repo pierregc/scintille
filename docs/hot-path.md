@@ -26,7 +26,9 @@ States live in Postgres (`ingest_files`) and only move forward, so a step replay
 changes nothing. It never calls the catalog. A failing source backs off exponentially (5 s to 5 min)
 without delaying the others. SIGTERM lets files in progress finish (30 s).
 
-- `GET :8080/healthz`: 200 while every loop runs (container healthcheck, #20).
+- `GET :8080/healthz`: 200 while every loop runs (container healthcheck).
+- Heartbeat: a Healthchecks.io ping every minute when `SCINTILLE_HEALTHCHECK_URL` is set
+  ([operations](operations.md)).
 - `GET :8080/metrics`: Prometheus text (files, flashes, errors, lag per source, spool size, disk use).
 - Logs: one JSON object per line.
 - Disk: warnings at 50 % and 80 %; past 90 %, raw cache uploads pause first.
