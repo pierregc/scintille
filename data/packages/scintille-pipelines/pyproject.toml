@@ -8,7 +8,9 @@ dependencies = [
     "dagster-postgres>=0.29",
     "dagster-webserver>=1.13",
     "obstore>=0.11.1",
+    "polars>=2.0.0",
     "psycopg[binary]>=3.2",
+    "scipy>=1.16",
     "scintille-ingest",
     "scintille-lake",
 ]
