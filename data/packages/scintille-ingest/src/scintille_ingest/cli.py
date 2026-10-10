@@ -27,6 +27,7 @@ from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
+from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource
 from scintille_ingest.runtime.spool import Spool
@@ -71,7 +72,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 async def run_live(spool_dir: Path, port: int) -> int:
-    """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`)."""
+    """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`), original files
+    in R2 (`SCINTILLE_R2_*`)."""
     configure_json_logs()
     dsn = os.environ.get("SCINTILLE_POSTGRES_DSN")
     if not dsn:
@@ -84,6 +86,7 @@ async def run_live(spool_dir: Path, port: int) -> int:
         PostgresState(dsn),
         Spool(spool_dir),
         publisher=feed,
+        raw_cache=ObjectRawCache(r2_store_from_env()),
         metrics=metrics,
     )
     server = await health.serve(port, service.healthy, metrics.render)
