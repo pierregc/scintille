@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 from obstore.store import MemoryStore
 from scintille_ingest.glm.ingest import IngestedFile
+from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.runtime import health
 from scintille_ingest.runtime.identity import FileIdentity, batch_id
@@ -23,10 +24,32 @@ NOW = datetime(2026, 7, 15, 18, 30, tzinfo=UTC)
 STEPS = ("downloaded", "published_live", "spool_written", "spooled")
 
 
+def flash_rows(product: Product, source: str, count: int) -> pl.DataFrame:
+    rows: list[dict[str, object]] = [
+        {
+            "flash_id": hashlib.sha256(f"{product.key}|{i}".encode()).hexdigest()[:32],
+            "source": source,
+            "product_file": product.key.rsplit("/", 1)[-1],
+            "native_flash_id": i,
+            "event_time": product.start + timedelta(seconds=i),
+            "ingest_time": NOW,
+            "lat": 10.0,
+            "lon": 20.0,
+            "energy_raw": 1e-14,
+            "energy_unit": "J",
+            "intensity": None,
+            "area_km2": 100.0,
+            "duration_ms": 200.0,
+            "quality": [],
+        }
+        for i in range(count)
+    ]
+    return pl.DataFrame(rows, schema=FLASH_SCHEMA)
+
+
 def ingested(
     product: Product, source: str, flashes: int = 4, error: str | None = None
 ) -> IngestedFile:
-    ids = [hashlib.sha256(f"{product.key}|{i}".encode()).hexdigest()[:32] for i in range(flashes)]
     log = IngestLogRecord(
         key=product.key,
         source=source,  # type: ignore[arg-type]
@@ -40,7 +63,7 @@ def ingested(
         parse_duration_ms=1.0,
         error=error,
     )
-    return IngestedFile(pl.DataFrame({"flash_id": ids, "source": [source] * flashes}), log)
+    return IngestedFile(flash_rows(product, source, flashes), log)
 
 
 class FakeSource:

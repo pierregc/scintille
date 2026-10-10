@@ -13,7 +13,7 @@ from pyiceberg.expressions import In, Reference
 from pyiceberg.expressions.literals import literal
 from pyiceberg.table import Table
 from scintille_lake.locks import partition_key
-from scintille_lake.tables import FLASHES, INGEST_LOG
+from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 
 from .metrics import Metrics
 from .spool import Spool
@@ -23,6 +23,7 @@ log = logging.getLogger("scintille_ingest.lake_writer")
 BATCHES_PROPERTY = "scintille.batch_ids"
 SILVER_COLUMNS = [f.name for f in FLASHES.schema.fields]
 LOG_COLUMNS = [f.name for f in INGEST_LOG.schema.fields]
+QUARANTINE_COLUMNS = [f.name for f in FLASHES_QUARANTINE.schema.fields]
 
 Locker = Callable[[Iterable[str]], AbstractContextManager[object]]
 
@@ -80,8 +81,10 @@ class LakeCommit:
         self.metrics.inc("catalog_operations_total", 1, op="load")
         silver = catalog.load_table(FLASHES.identifier)
         bronze = catalog.load_table(INGEST_LOG.identifier)
+        quarantine = catalog.load_table(FLASHES_QUARANTINE.identifier)
         flashes = {b: spool.read(b) for b in batches}
         logs = {b: spool.read_log(b) for b in batches}
+        rejected = {b: spool.read_quarantine(b) for b in batches}
         locks = {
             partition_key("silver.flashes", day, source)
             for frame in flashes.values()
@@ -101,6 +104,12 @@ class LakeCommit:
             log_frames = {b: to_ingest_log(f) for b, f in logs.items()}
             self._replace(bronze, "key", files, log_frames)
             self.after_commit("bronze")
+            empty = pl.DataFrame(schema={c: pl.Null for c in QUARANTINE_COLUMNS})
+            quarantined = {
+                b: empty if f is None else f.select(QUARANTINE_COLUMNS) for b, f in rejected.items()
+            }
+            self._replace(quarantine, "product_file", names, quarantined)
+            self.after_commit("quarantine")
         for batch in batches:
             spool.delete(batch)
         rows = sum(f.height for f in flashes.values())

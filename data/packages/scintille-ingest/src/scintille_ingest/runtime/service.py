@@ -13,6 +13,8 @@ from typing import NamedTuple, Protocol
 
 import polars as pl
 
+from scintille_ingest.validate import quarantine_rows, validate
+
 from .identity import FileIdentity, batch_id
 from .metrics import Metrics
 from .sources import Product, Source
@@ -117,7 +119,11 @@ class IngestLive:
         self._after_step("downloaded", identity)
 
         parsed = source.parse(product, data, received_at)
-        flashes = parsed.flashes
+        flashes, rejected = validate(
+            parsed.flashes, (parsed.log.product_start, parsed.log.product_end)
+        )
+        if rejected.height:
+            self.metrics.inc("ingest_quarantined_total", rejected.height, source=source.name)
         if parsed.log.status != "ok":
             self.metrics.inc("ingest_unreadable_files_total", source=source.name)
             log.warning(
@@ -141,6 +147,9 @@ class IngestLive:
                 pl.lit(identity.checksum).alias("source_checksum"),
             ),
             pl.DataFrame([asdict(parsed.log)]),
+            quarantine_rows(
+                rejected, self.settings.parser_version, self.settings.calibration_version
+            ),
         )
         self._after_step("spool_written", identity)
         self.state.advance(identity, source.name, "spooled", batch, etag=product.etag)

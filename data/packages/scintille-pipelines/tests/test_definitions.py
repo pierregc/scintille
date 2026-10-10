@@ -73,7 +73,11 @@ def lake(tmp_path: Path) -> SqliteLake:
 def test_code_location_loads() -> None:
     repo = defs.get_repository_def()
     assert repo.get_job("daily_gold")
-    assert {s.name for s in repo.schedule_defs} == {"daily_gold_schedule"}
+    assert {s.name for s in repo.schedule_defs} == {
+        "daily_gold_schedule",
+        "silver_hourly_checks_schedule",
+        "silver_daily_checks_schedule",
+    }
     assert {s.name for s in repo.sensor_defs} == {"silver_changed", "alert_on_failure"}
 
 
