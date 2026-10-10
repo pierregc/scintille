@@ -78,7 +78,11 @@ def test_code_location_loads() -> None:
         "silver_hourly_checks_schedule",
         "silver_daily_checks_schedule",
     }
-    assert {s.name for s in repo.sensor_defs} == {"silver_changed", "alert_on_failure"}
+    assert {s.name for s in repo.sensor_defs} == {
+        "silver_changed",
+        "alert_on_failure",
+        "ops_status",
+    }
 
 
 def test_day_bounds_are_utc() -> None:
