@@ -28,6 +28,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 | `web/` | Astro site; the globe will live in `web/src/globe/` |
 | `data/packages/scintille-contract/` | Shared data contract (flash schema, live feed format) |
 | `data/packages/scintille-ingest/` | Hot path service: satellite ingestion, live feed publishing |
+| `data/packages/scintille-lake/` | Iceberg tables as code, catalog connections ([lakehouse](docs/lakehouse.md)) |
 | `data/packages/scintille-pipelines/` | Batch pipelines orchestrated by Dagster |
 | `data/dbt/` | dbt models for the gold layer |
 | `docs/` | Documentation; `docs/adr/` holds architecture decision records |

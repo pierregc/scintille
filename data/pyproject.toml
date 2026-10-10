@@ -6,8 +6,10 @@ members = ["packages/*"]
 dev = [
     "brotli>=1.1",
     "mypy>=1.18",
+    "pyarrow-stubs>=20",
     "pytest>=8.4",
     "ruff>=0.14",
+    "sqlalchemy>=2",
 ]
 
 [tool.ruff]
@@ -24,5 +26,8 @@ files = ["packages/*/src", "packages/*/tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages/*/tests"]
-addopts = ["--import-mode=importlib", "-m", "not network"]
-markers = ["network: needs internet access to the NOAA buckets (run with -m network)"]
+addopts = ["--import-mode=importlib", "-m", "not network and not lake"]
+markers = [
+    "network: needs internet access to the NOAA buckets (run with -m network)",
+    "lake: needs the local lakehouse from compose.yaml (run with -m lake)",
+]

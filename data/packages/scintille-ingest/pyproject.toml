@@ -6,8 +6,11 @@ requires-python = ">=3.13"
 dependencies = [
     "netcdf4>=1.7.4",
     "obstore>=0.11.1",
+    "pandera[polars]>=0.34",
     "polars>=2.0.0",
+    "psycopg[binary]>=3.2",
     "scintille-contract",
+    "scintille-lake",
 ]
 
 [project.scripts]
@@ -22,3 +25,4 @@ module-name = "scintille_ingest"
 
 [tool.uv.sources]
 scintille-contract = { workspace = true }
+scintille-lake = { workspace = true }
