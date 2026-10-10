@@ -19,16 +19,26 @@ export interface SourceFreshness {
 
 export interface FeedStatus {
 	stale: boolean;
-	/** Age of the feed: since the manifest was generated, or since the last successful poll if older. */
+	/** Polls are currently failing. */
+	failing: boolean;
+	/** Age of the loaded data: since its manifest was generated, or since it was loaded if older. */
 	ageMs: number | null;
 	sources: SourceFreshness[];
 }
 
-/** Freshness of the live feed at `now`, from the latest manifest and when it was received. */
-export function feedStatus(manifest: LiveManifest | null, receivedAt: number | null, now: number): FeedStatus {
-	if (!manifest || receivedAt === null) return { stale: true, ageMs: null, sources: [] };
+/**
+ * Freshness at `now` of the data actually in the ring: `manifest` is the latest one whose chunks all
+ * loaded, `loadedAt` when that happened.
+ */
+export function feedStatus(
+	manifest: LiveManifest | null,
+	loadedAt: number | null,
+	now: number,
+	failing = false,
+): FeedStatus {
+	if (!manifest || loadedAt === null) return { stale: true, failing, ageMs: null, sources: [] };
 	const generated = Date.parse(manifest.generated_at);
-	const ageMs = Math.max(now - generated, now - receivedAt, 0);
+	const ageMs = Math.max(now - generated, now - loadedAt, 0);
 	const stale = !(ageMs <= STALE_AFTER_MS);
 	const sources = (manifest.sources ?? []).map((s) => ({
 		source: s.source,
@@ -36,7 +46,18 @@ export function feedStatus(manifest: LiveManifest | null, receivedAt: number | n
 		state: stale ? ('delayed' as const) : s.state,
 		ageMs: s.last_event_time ? Math.max(now - Date.parse(s.last_event_time), 0) : null,
 	}));
-	return { stale, ageMs, sources };
+	return { stale, failing, ageMs, sources };
+}
+
+/** HUD wording for a feed status: the state next to the pulse, and the banner (empty when fresh). */
+export function feedLabel(status: FeedStatus): { state: string; banner: string } {
+	if (!status.stale) return { state: 'Live', banner: '' };
+	if (status.ageMs === null) {
+		return status.failing
+			? { state: 'Offline', banner: 'Live data is unavailable' }
+			: { state: 'Connecting', banner: 'Waiting for live data' };
+	}
+	return { state: 'Delayed', banner: `Live data is late · last update ${formatAge(status.ageMs)} ago` };
 }
 
 /** `48 s`, `12 min`, `3 h`, `2 d`. */

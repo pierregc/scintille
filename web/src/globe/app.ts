@@ -18,6 +18,10 @@ export interface GlobeApp {
 	readonly clouds: Clouds;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
+	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
+	hasData(time: number): boolean;
+	/** Earliest loaded observation window (UTC ms), or null. */
+	dataStart(): number | null;
 	dispose(): void;
 }
 
@@ -86,7 +90,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	return {
 		clock,
 		clouds,
-		feedStatus: () => feedStatus(live.client.manifest, live.client.manifestAt, clock.wallTime()),
+		feedStatus: () =>
+			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
+		hasData: (time) => live.client.covers(time),
+		dataStart: () => live.client.coverageStart(),
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();

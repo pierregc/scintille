@@ -461,8 +461,12 @@ import Timeline from './Timeline.astro';
 		.layers {
 			top: calc(var(--gut) + 112px);
 		}
-		.sources {
+		.sources :global(li[data-state='live']),
+		.hud[data-late] .sources {
 			display: none;
+		}
+		.hud:has(.sources:not([hidden]) :global(li:not([data-state='live']))) .layers {
+			top: calc(var(--gut) + 150px);
 		}
 		.stale {
 			top: auto;
@@ -510,8 +514,8 @@ import Timeline from './Timeline.astro';
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { formatAge } from '../globe/live/freshness';
+	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { feedLabel, formatAge } from '../globe/live/freshness';
 	import { formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
@@ -527,18 +531,14 @@ import Timeline from './Timeline.astro';
 		const staleBanner = $('[data-stale]');
 		let app: GlobeApp | undefined;
 
-		const showFreshness = (live: boolean) => {
+		const showFreshness = (live: boolean, replayLabel: string) => {
 			const status = live && app ? app.feedStatus() : undefined;
+			const label = status ? feedLabel(status) : { state: live ? 'Live' : replayLabel, banner: '' };
 			root.toggleAttribute('data-late', Boolean(status?.stale));
-			if (state) state.textContent = !live ? 'Replay' : status?.stale ? 'Delayed' : 'Live';
+			if (state && state.textContent !== label.state) state.textContent = label.state;
 			if (staleBanner) {
-				const text = status?.stale
-					? status.ageMs === null
-						? 'Waiting for live data'
-						: `Live data is late · last update ${formatAge(status.ageMs)} ago`
-					: '';
-				staleBanner.hidden = !text;
-				if (staleBanner.textContent !== text) staleBanner.textContent = text;
+				staleBanner.hidden = !label.banner;
+				if (staleBanner.textContent !== label.banner) staleBanner.textContent = label.banner;
 			}
 			if (sources) {
 				const lines = (status?.sources ?? []).map((s) => ({
@@ -564,7 +564,7 @@ import Timeline from './Timeline.astro';
 			if (date && date.textContent !== day) date.textContent = day;
 			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
-			showFreshness(mode === 'live');
+			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 		};
 		tick();
@@ -578,6 +578,9 @@ import Timeline from './Timeline.astro';
 		window.addEventListener(GLOBE_GONE, () => {
 			app = undefined;
 			if (layers) layers.hidden = true;
+		});
+		window.addEventListener(GLOBE_FALLBACK, () => {
+			if (info) info.open = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
 			app?.clock.live();

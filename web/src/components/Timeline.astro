@@ -266,7 +266,8 @@
 		});
 
 		$('[data-travel]')?.addEventListener('click', () => {
-			app?.clock.replay(Date.now() - REPLAY_LOOKBACK_MS, DEFAULT_SPEED);
+			if (!app) return;
+			app.clock.replay(Math.max(Date.now() - REPLAY_LOOKBACK_MS, app.dataStart() ?? 0), DEFAULT_SPEED);
 			tick();
 			play?.focus();
 		});
