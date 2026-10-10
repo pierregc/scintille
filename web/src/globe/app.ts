@@ -15,6 +15,10 @@ import { CONTEXT_ATTRIBUTES } from './webgl';
 export interface GlobeApp {
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
+	hasData(time: number): boolean;
+	/** Earliest loaded observation window (UTC ms), or null. */
+	dataStart(): number | null;
 	dispose(): void;
 }
 
@@ -83,6 +87,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	return {
 		clock,
 		clouds,
+		hasData: (time) => live.client.covers(time),
+		dataStart: () => live.client.coverageStart(),
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();

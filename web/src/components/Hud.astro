@@ -494,10 +494,9 @@ import Timeline from './Timeline.astro';
 			const day = formatUtcDate(now);
 			if (date && date.textContent !== day) date.textContent = day;
 			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
-			if (root.dataset.mode !== mode) {
-				root.dataset.mode = mode;
-				if (state) state.textContent = mode === 'live' ? 'Live' : 'Replay';
-			}
+			if (root.dataset.mode !== mode) root.dataset.mode = mode;
+			const label = mode === 'live' ? 'Live' : app?.hasData(now) ? 'Replay' : 'Replay · no data';
+			if (state && state.textContent !== label) state.textContent = label;
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 		};
 		tick();
