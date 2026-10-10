@@ -21,9 +21,13 @@ unreadable file gets a `failed` row in `bronze.ingest_log`.
 | `silver_uniqueness` | daily, yesterday (closed partitions only) | no `flash_id` twice; a violation calls for a partition rebuild (#40) | error |
 | `silver_reconciliation` | daily, yesterday | per source and hour: files spooled in Postgres = files in bronze, flashes parsed = silver + quarantine | error |
 
-- Error: something is wrong with the data or the pipeline and needs action; the run fails and
+- Error: something is wrong with the data or the pipeline and needs action. Error checks are
+  `blocking`, so a failed result fails the run; a check that raises fails it too. Either way
   `alert_on_failure` posts it.
 - Warning: unusual but possibly real (a quiet night, a huge storm); visible in the UI, no alert.
+
+Reconciliation reads each side on its own (Postgres by the day encoded in the file name, bronze by
+`product_start`, silver and quarantine by `product_file`) and lists the files missing from any side.
 
 Schedules: `silver_hourly_checks` at :10 every hour, `silver_daily_checks` at 02:00 UTC. Results show
 in the Dagster UI on the `silver/flashes` asset; their summary in `metrics.json` comes with #38.

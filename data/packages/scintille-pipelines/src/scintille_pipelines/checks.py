@@ -71,7 +71,9 @@ def _result(
 
 
 @asset_check(
-    asset=SILVER.key, description="Each source has recent flashes in silver (lag < 20 min)."
+    asset=SILVER.key,
+    blocking=True,
+    description="Each source has recent flashes in silver (lag < 20 min).",
 )
 def silver_freshness(lake: LakeResource) -> AssetCheckResult:
     now = clock()
@@ -85,7 +87,9 @@ def silver_freshness(lake: LakeResource) -> AssetCheckResult:
 
 
 @asset_check(
-    asset=SILVER.key, description="≥ 99 % of the expected product files in the last closed hour."
+    asset=SILVER.key,
+    blocking=True,
+    description="≥ 99 % of the expected product files in the last closed hour.",
 )
 def silver_completeness(lake: LakeResource) -> AssetCheckResult:
     hour = last_closed_hour(clock())
@@ -97,7 +101,9 @@ def silver_completeness(lake: LakeResource) -> AssetCheckResult:
 
 
 @asset_check(
-    asset=SILVER.key, description="Coordinates, energy and event times in range, last closed hour."
+    asset=SILVER.key,
+    blocking=True,
+    description="Coordinates, energy and event times in range, last closed hour.",
 )
 def silver_ranges(lake: LakeResource) -> AssetCheckResult:
     hour = last_closed_hour(clock())
@@ -139,7 +145,11 @@ def closed_day(now: datetime) -> date:
     return (now - timedelta(days=1)).date()
 
 
-@asset_check(asset=SILVER.key, description="No flash_id twice in yesterday's partitions.")
+@asset_check(
+    asset=SILVER.key,
+    blocking=True,
+    description="No flash_id twice in yesterday's partitions.",
+)
 def silver_uniqueness(lake: LakeResource) -> AssetCheckResult:
     day = closed_day(clock())
     start = datetime(day.year, day.month, day.day, tzinfo=UTC)
@@ -154,6 +164,7 @@ def silver_uniqueness(lake: LakeResource) -> AssetCheckResult:
 
 @asset_check(
     asset=SILVER.key,
+    blocking=True,
     description="Postgres file states, bronze and silver agree per source and hour (yesterday).",
 )
 def silver_reconciliation(lake: LakeResource, postgres: PostgresResource) -> AssetCheckResult:
@@ -172,27 +183,17 @@ def silver_reconciliation(lake: LakeResource, postgres: PostgresResource) -> Ass
     rejected = _scan(
         catalog, FLASHES_QUARANTINE.identifier, "ingest_time", start, end + timedelta(hours=2)
     )
-    hour_of = {
-        k.rsplit("/", 1)[-1]: (s, t.hour)
-        for k, s, t in log.select("key", "source", "product_start").iter_rows()
-    }
-    logged = Counter(hour_of.values())
-    log_rows = Counter[tuple[str, int]]()
-    for source, t, n in log.select("source", "product_start", "row_count").iter_rows():
-        log_rows[(source, t.hour)] += n
-    parsed = Counter[tuple[str, int]]()
-    for frame in (flashes, rejected):
-        for product_file in frame["product_file"].to_list():
-            if product_file in hour_of:
-                parsed[hour_of[product_file]] += 1
-    keys = log["key"].to_list()
+    parsed = pl.concat(
+        [f.select("product_file", "source") for f in (flashes, rejected)], how="vertical"
+    )
     with postgres.connect() as conn:
         rows = conn.execute(
-            "SELECT key FROM ingest_files WHERE state = 'spooled' AND key = ANY(%s)", [keys]
+            "SELECT DISTINCT key, source FROM ingest_files"
+            " WHERE state = 'spooled' AND source = ANY(%s) AND key LIKE %s",
+            [SOURCES, f"%\\_s{day:%Y%j}%"],
         ).fetchall()
-    known = {r[0] for r in rows}
-    spooled = Counter(hour_of[k.rsplit("/", 1)[-1]] for k in keys if k in known)
-    return _result(quality.reconciliation(spooled, logged, log_rows, parsed))
+    spooled = pl.DataFrame(rows, schema={"key": pl.String, "source": pl.String}, orient="row")
+    return _result(quality.reconciliation(day, spooled, log, parsed))
 
 
 HOURLY = [silver_freshness, silver_completeness, silver_ranges, silver_volume]
