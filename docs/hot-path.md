@@ -66,9 +66,37 @@ is down, the batches stay in the spool and the next drain retries; `ingest-live`
 `intensity` stays null until the cross-source calibration (#33). Catalog operations are counted in
 `catalog_operations_total`.
 
+## `clouds` (`scintille-ingest clouds`)
+
+Cloud textures from NOAA GMGSI longwave IR ([ADR 0007](adr/0007-cloud-source.md)), in its own
+container so the CPU work never delays the live feed (compose profile `clouds`).
+
+Every minute it lists the last 7 hour prefixes of `noaa-gmgsi-pds` (`GMGSI_LW/`; a new hourly
+mosaic lands about 40 minutes after its nominal time) and, oldest first, takes every mosaic of the
+last 6 hours that the manifest does not list yet, or lists under another file name (a revision):
+
+1. **brightness temperature**: 8-bit counts to kelvin on the McIDAS IR scale
+   (`330 - c/2` up to 176, then `418 - c`), on the source's Mercator grid (0.072°, ±72.7°);
+2. **surface reference**: GFS skin temperature (`TMP:surface`, 0.25°) valid at the frame's hour,
+   from the newest cycle that has it, read with one range request from `noaa-gfs-bdp-pds` through
+   the `.idx` file and decoded with ecCodes. When GFS is late, the nearest field fetched in the
+   last 24 hours is reused; the manifest names the field used (`reference`);
+3. **opacity**: `smoothstep(4 K, 32 K, T_surface - BT)` on a 4096 × 2048 equirectangular grid
+   (bilinear on both inputs), faded out between 68° and 72.7° and 0 without data;
+4. **publish**: grayscale WebP (q70) per tier, `2k` and `4k`, then the manifest, then the live
+   textures that left the window ([format](data-contract.md#cloud-frames-on-r2)). The same textures
+   go to `archive/clouds/<tier>/<yyyy>/<mm>/<dd>/` (30 days, bucket lifecycle rule; #41).
+
+The manifest is the only state: on restart the service continues it. A failing poll backs off
+(1 to 10 minutes). One frame takes about 2 s of CPU and 1.4 MB of textures.
+
+- `GET :8081/healthz`, `GET :8081/metrics`: `cloud_frames_total`, `cloud_errors_total`,
+  `cloud_frame_age_seconds` (nominal time → published) and `cloud_publish_delay_seconds` (upstream
+  object → published, which should stay under 2 minutes).
+
 ## Run locally
 
 ```sh
-docker compose -f infra/compose/compose.local.yaml up -d --build --wait ingest lake-writer
+docker compose -f infra/compose/compose.local.yaml up -d --build --wait ingest lake-writer clouds
 curl -s localhost:8080/metrics   # from inside the stack: docker compose ... exec ingest ...
 ```
