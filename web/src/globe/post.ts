@@ -71,7 +71,8 @@ export function createPostProcessing(
 	const quad = new FullScreenQuad(
 		new ShaderMaterial({ ...addBloom, blending: AdditiveBlending, depthTest: false, depthWrite: false }),
 	);
-	(quad.material as ShaderMaterial).uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
+	// Bloom only: the composer buffer also holds the flashes, already drawn by the main pass.
+	(quad.material as ShaderMaterial).uniforms.bloomTexture.value = bloom.renderTargetsHorizontal[0].texture;
 
 	return {
 		render() {
