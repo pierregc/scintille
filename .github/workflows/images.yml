@@ -63,10 +63,17 @@ jobs:
       - if: failure()
         run: docker compose -f infra/compose/compose.local.yaml logs
 
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: infra/compose/test_deploy.sh
+
   deploy:
     # Off until the VPS secrets exist and the repository variable VPS_DEPLOY is "true" (docs/deploy.md).
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.VPS_DEPLOY == 'true'
-    needs: [build, smoke]
+    needs: [build, smoke, rollback]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -87,5 +94,7 @@ jobs:
         env:
           HOST: ${{ vars.VPS_HOST }}
         run: |
-          scp infra/compose/compose.yaml infra/compose/deploy.sh "deploy@$HOST:/srv/scintille/"
+          ssh "deploy@$HOST" "mkdir -p /srv/scintille/releases/$GITHUB_SHA"
+          scp infra/compose/compose.yaml "deploy@$HOST:/srv/scintille/releases/$GITHUB_SHA/"
+          scp infra/compose/deploy.sh "deploy@$HOST:/srv/scintille/"
           ssh "deploy@$HOST" "/srv/scintille/deploy.sh $GITHUB_SHA"
