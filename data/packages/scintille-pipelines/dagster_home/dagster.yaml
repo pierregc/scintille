@@ -1,0 +1,14 @@
+# Dagster instance: run, event and schedule storage in Postgres.
+storage:
+  postgres:
+    postgres_url:
+      env: SCINTILLE_POSTGRES_DSN
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 2
+
+telemetry:
+  enabled: false

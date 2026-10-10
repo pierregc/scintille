@@ -17,6 +17,10 @@ services:
     image: mirror.gcr.io/library/postgres:17
     environment:
       POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./infra/local/postgres-init.sql:/docker-entrypoint-initdb.d/scintille.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 2s
