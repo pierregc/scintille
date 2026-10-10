@@ -47,7 +47,10 @@ import Timeline from './Timeline.astro';
 					<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
 				</li>
 			</ul>
-			<p class="attribution">GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.</p>
+			<p class="attribution">
+				GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.
+				<span data-cloud-credit>Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).</span>
+			</p>
 
 			<nav aria-label="More about Scintille">
 				<a href="/methodology">Methodology and sources</a>
@@ -71,6 +74,7 @@ import Timeline from './Timeline.astro';
 
 	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
 		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+		<p class="frame" data-cloud-time hidden></p>
 	</div>
 
 	<Timeline />
@@ -310,6 +314,14 @@ import Timeline from './Timeline.astro';
 	.sw:hover {
 		color: var(--soft);
 	}
+	.frame {
+		margin: -8px 0 0;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
 
 	.info {
 		position: fixed;
@@ -516,7 +528,7 @@ import Timeline from './Timeline.astro';
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
-	import { formatUtcDate, formatUtcTime } from './hud/format';
+	import { cloudCaption, formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -528,6 +540,8 @@ import Timeline from './Timeline.astro';
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
 		const info = $<HTMLDetailsElement>('[data-info]');
 		const sources = $('[data-sources]');
+		const cloudTime = $('[data-cloud-time]');
+		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
 		let app: GlobeApp | undefined;
 
@@ -566,6 +580,15 @@ import Timeline from './Timeline.astro';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+			if (cloudTime) {
+				const caption = app
+					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudFeed.settled)
+					: '';
+				cloudTime.hidden = !caption;
+				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
+			}
+			const credit = app?.cloudFeed.attribution;
+			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
 		};
 		tick();
 		setInterval(tick, 250);

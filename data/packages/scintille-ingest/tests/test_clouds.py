@@ -368,3 +368,14 @@ def test_latest_gmgsi_files_are_listed() -> None:
     products = gmgsi.list_products(public_store(gmgsi.BUCKET), datetime.now(UTC), hours=4)
     assert products
     assert all(p.key.startswith("GMGSI_LW/") for p in products)
+
+
+def test_client_fixture_matches_the_manifest_model() -> None:
+    root = Path(__file__).parents[4] / "fixtures" / "live" / "clouds"
+    manifest = CloudManifest.model_validate_json((root / "manifest.json").read_text())
+    assert manifest.attribution == ATTRIBUTION
+    for frame in manifest.frames:
+        for texture in frame.textures.values():
+            image = Image.open(root / texture.path)
+            assert image.size == (texture.width, texture.height)
+            assert (root / texture.path).stat().st_size == texture.size_bytes

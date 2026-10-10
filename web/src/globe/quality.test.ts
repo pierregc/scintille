@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FpsMonitor, guessTier, lowerTier, tierFromSearch } from './quality';
+import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 
 describe('guessTier', () => {
 	it('starts phones and weak GPUs low', () => {
@@ -26,6 +26,12 @@ describe('tiers', () => {
 	it('steps down and stops at low', () => {
 		expect(lowerTier('high')).toBe('medium');
 		expect(lowerTier('low')).toBe('low');
+	});
+});
+
+describe('cloud tiers', () => {
+	it('loads 2k clouds on low and 4k above', () => {
+		expect([PRESETS.low.clouds, PRESETS.medium.clouds, PRESETS.high.clouds]).toEqual(['2k', '4k', '4k']);
 	});
 });
 
