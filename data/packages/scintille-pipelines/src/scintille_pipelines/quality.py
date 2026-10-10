@@ -1,8 +1,10 @@
 """Data quality rules on silver and bronze, as pure functions the Dagster checks call."""
 
+import re
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import polars as pl
 
@@ -80,26 +82,79 @@ def uniqueness(flash_ids: pl.Series) -> Outcome:
     return Outcome(duplicates == 0, {"rows": flash_ids.len(), "duplicates": duplicates})
 
 
-Counts = Mapping[tuple[str, int], int]
+_PRODUCT_START = re.compile(r"_s(\d{4})(\d{3})(\d{2})\d{5}_")
+
+
+def product_hour(name: str) -> datetime | None:
+    """Start hour encoded in a GOES product file name (`_sYYYYJJJHHMMSSt_`)."""
+    match = _PRODUCT_START.search(name)
+    if match is None:
+        return None
+    year, day, hour = (int(g) for g in match.groups())
+    return datetime(year, 1, 1, tzinfo=UTC) + timedelta(days=day - 1, hours=hour)
+
+
+def _file_name(key: str) -> str:
+    return key.rsplit("/", 1)[-1]
 
 
 def reconciliation(
-    spooled: Counts, logged: Counts, log_rows: Counts, silver_rows: Counts
+    day: date, spooled: pl.DataFrame, bronze: pl.DataFrame, parsed: pl.DataFrame
 ) -> Outcome:
-    """Per (source, hour): files spooled in Postgres = files in bronze, and flashes parsed (bronze
-    `row_count`) = flashes in silver + quarantine."""
-    keys = sorted(set(spooled) | set(logged) | set(log_rows) | set(silver_rows))
+    """Per (source, hour) of `day`: files spooled in Postgres (`key`, `source`) = files in bronze
+    (`key`, `source`, `row_count`), and flashes parsed (bronze `row_count`) = rows in silver +
+    quarantine (`product_file`, `source`). Each side is read independently, so a file missing
+    from any of them is reported by name."""
+
+    def bucket(name: str, source: str) -> tuple[str, int] | None:
+        hour = product_hour(name)
+        return (source, hour.hour) if hour is not None and hour.date() == day else None
+
+    spooled_files = {
+        _file_name(k): b
+        for k, s in spooled.select("key", "source").iter_rows()
+        if (b := bucket(_file_name(k), s))
+    }
+    bronze_files: dict[str, tuple[str, int]] = {}
+    bronze_rows = Counter[tuple[str, int]]()
+    for key, source, rows in bronze.select("key", "source", "row_count").iter_rows():
+        name = _file_name(key)
+        if b := bucket(name, source):
+            bronze_files[name] = b
+            bronze_rows[b] += rows
+    silver_files: dict[str, tuple[str, int]] = {}
+    silver_rows = Counter[tuple[str, int]]()
+    for name, source in parsed.select("product_file", "source").iter_rows():
+        if b := bucket(name, source):
+            silver_files[name] = b
+            silver_rows[b] += 1
+    spooled_count = Counter(spooled_files.values())
+    bronze_count = Counter(bronze_files.values())
+    keys = sorted(set(spooled_count) | set(bronze_count) | set(silver_rows))
     mismatches = [
         {
             "source": source,
             "hour": hour,
-            "spooled_files": spooled.get((source, hour), 0),
-            "bronze_files": logged.get((source, hour), 0),
-            "bronze_rows": log_rows.get((source, hour), 0),
-            "silver_and_quarantine_rows": silver_rows.get((source, hour), 0),
+            "spooled_files": spooled_count[(source, hour)],
+            "bronze_files": bronze_count[(source, hour)],
+            "bronze_rows": bronze_rows[(source, hour)],
+            "silver_and_quarantine_rows": silver_rows[(source, hour)],
         }
         for source, hour in keys
-        if spooled.get((source, hour), 0) != logged.get((source, hour), 0)
-        or log_rows.get((source, hour), 0) != silver_rows.get((source, hour), 0)
+        if spooled_count[(source, hour)] != bronze_count[(source, hour)]
+        or bronze_rows[(source, hour)] != silver_rows[(source, hour)]
     ]
-    return Outcome(not mismatches, {"hours": len(keys), "mismatches": mismatches[:20]})
+    unmatched = {
+        "spooled_not_in_bronze": sorted(spooled_files.keys() - bronze_files.keys()),
+        "bronze_not_spooled": sorted(bronze_files.keys() - spooled_files.keys()),
+        "silver_without_bronze": sorted(silver_files.keys() - bronze_files.keys()),
+    }
+    failed = bool(mismatches) or any(unmatched.values())
+    return Outcome(
+        not failed,
+        {
+            "hours": len(keys),
+            "mismatches": mismatches[:20],
+            **{k: {"count": len(v), "files": v[:20]} for k, v in unmatched.items()},
+        },
+    )
