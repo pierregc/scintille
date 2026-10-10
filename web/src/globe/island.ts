@@ -1,6 +1,11 @@
 import type { GlobeApp } from './app';
 import { getWebGL2Context } from './webgl';
 
+/** Window events announcing the running globe app, for the HUD. */
+export const GLOBE_READY = 'globe:ready';
+export const GLOBE_GONE = 'globe:gone';
+export const GLOBE_FALLBACK = 'globe:fallback';
+
 interface IslandElements {
 	canvas: HTMLCanvasElement;
 	fallback: HTMLElement;
@@ -25,6 +30,7 @@ export function mountGlobeIsland({ canvas, fallback }: IslandElements): void {
 	const showFallback = () => {
 		canvas.hidden = true;
 		fallback.hidden = false;
+		window.dispatchEvent(new CustomEvent(GLOBE_FALLBACK));
 	};
 
 	const start = async () => {
@@ -37,6 +43,7 @@ export function mountGlobeIsland({ canvas, fallback }: IslandElements): void {
 			const { createGlobeApp } = await import('./app');
 			if (current !== generation) return;
 			app = createGlobeApp(canvas, context);
+			window.dispatchEvent(new CustomEvent(GLOBE_READY, { detail: app }));
 		} catch {
 			showFallback();
 		}
@@ -44,6 +51,7 @@ export function mountGlobeIsland({ canvas, fallback }: IslandElements): void {
 
 	const stop = () => {
 		generation++;
+		if (app) window.dispatchEvent(new CustomEvent(GLOBE_GONE));
 		app?.dispose();
 		app = undefined;
 	};
