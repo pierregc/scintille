@@ -55,6 +55,11 @@ export function flashProfile(age: number, display: number, durationMs: number, s
 	return Math.max(b, glow);
 }
 
+/** GLSL float literal: GLSL ES has no implicit int to float conversion. */
+export const glslFloat = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
+
+const f = glslFloat;
+
 /** GLSL twin of `flashProfile`, with `seed`, `durationMs` and `flicker` as inputs. */
 export const flashProfileGlsl = /* glsl */ `
 float flashProfile(float age, float display, float durationMs, float seed, float flicker) {
@@ -62,16 +67,16 @@ float flashProfile(float age, float display, float durationMs, float seed, float
 	float t = age / display;
 	float fade = (1.0 - t) * (1.0 - t);
 	if (flicker < 0.5) return smoothstep(0.0, 0.04, t) * fade;
-	float len = min(clamp(durationMs / 1000.0, ${PROFILE.minFlicker}, ${PROFILE.maxFlicker}), display * 0.6);
-	float n = min(${PROFILE.maxPulses}.0, 1.0 + floor(len / ${PROFILE.pulseEvery}));
+	float len = min(clamp(durationMs / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), display * 0.6);
+	float n = min(${f(PROFILE.maxPulses)}, 1.0 + floor(len / ${f(PROFILE.pulseEvery)}));
 	float b = 0.0;
 	for (int i = 0; i < ${PROFILE.maxPulses}; i++) {
 		float k = float(i);
 		if (k >= n) break;
 		float start = i == 0 ? 0.0 : len * (k + (fract(seed * (k + 1.0) * 7.13) - 0.5) * 0.4) / n;
 		float a = age - start;
-		if (a >= 0.0) b = max(b, pow(${PROFILE.pulseFade}, k) * smoothstep(0.0, ${ATTACK}, a) * exp(-a / ${PROFILE.pulseTau}));
+		if (a >= 0.0) b = max(b, pow(${f(PROFILE.pulseFade)}, k) * smoothstep(0.0, ${f(ATTACK)}, a) * exp(-a / ${f(PROFILE.pulseTau)}));
 	}
-	return max(b, ${PROFILE.afterglow} * smoothstep(0.0, len, age) * fade);
+	return max(b, ${f(PROFILE.afterglow)} * smoothstep(0.0, len, age) * fade);
 }
 `;
