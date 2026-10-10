@@ -30,6 +30,11 @@ describe('cloud timeline', () => {
 		expect(steps.every((v, i) => i === 0 || v >= steps[i - 1])).toBe(true);
 	});
 
+	it('never extrapolates outside the two frames', () => {
+		expect(blendPair(-0.25, 6)).toEqual({ a: 0, b: 1, mix: 0 });
+		expect(blendPair(7, 6)).toEqual({ a: 5, b: 5, mix: 0 });
+	});
+
 	it('snaps on seeks and on the first frame', () => {
 		expect(easePosition(0, 4, 1 / 60)).toBe(4);
 		expect(easePosition(Number.NaN, 1, 1 / 60)).toBe(1);

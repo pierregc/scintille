@@ -25,5 +25,5 @@ export function easePosition(current: number, target: number, dtSeconds: number,
 export function blendPair(position: number, count: number): { a: number; b: number; mix: number } {
 	const a = Math.min(Math.max(Math.floor(position), 0), count - 1);
 	const b = Math.min(a + 1, count - 1);
-	return { a, b, mix: b === a ? 0 : position - a };
+	return { a, b, mix: b === a ? 0 : Math.min(Math.max(position - a, 0), 1) };
 }
