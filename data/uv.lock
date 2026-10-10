@@ -2199,6 +2199,7 @@ dependencies = [
     { name = "dagster-webserver" },
     { name = "obstore" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "scintille-ingest" },
     { name = "scintille-lake" },
 ]
 
@@ -2209,6 +2210,7 @@ requires-dist = [
     { name = "dagster-webserver", specifier = ">=1.13" },
     { name = "obstore", specifier = ">=0.11.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "scintille-ingest", editable = "packages/scintille-ingest" },
     { name = "scintille-lake", editable = "packages/scintille-lake" },
 ]
 
