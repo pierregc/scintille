@@ -21,7 +21,8 @@ cd data
 uv run scintille-lake migrate
 ```
 
-It creates missing namespaces and tables, adds new optional columns and restores table properties.
+It creates missing namespaces and tables, adds new optional columns, makes required columns optional
+when the code says so, and restores table properties.
 A second run prints `up to date`. It refuses anything else.
 
 ## Schema evolution policy
@@ -29,6 +30,7 @@ A second run prints `up to date`. It refuses anything else.
 Allowed without a new table version, applied by `migrate`:
 
 - adding an **optional** top-level column (old rows read it as null);
+- making a required top-level column optional (old rows keep their values);
 - changing a table property declared in code.
 
 Refused by `migrate`, and needing a new table (for example `silver.flashes_v2`) plus a backfill:
