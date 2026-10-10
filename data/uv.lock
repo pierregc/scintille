@@ -19,7 +19,6 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "brotli", specifier = ">=1.1" },
-    { name = "dagster-webserver", specifier = ">=1.13" },
     { name = "mypy", specifier = ">=1.18" },
     { name = "pyarrow-stubs", specifier = ">=20" },
     { name = "pytest", specifier = ">=8.4" },
@@ -2168,6 +2167,7 @@ source = { editable = "packages/scintille-pipelines" }
 dependencies = [
     { name = "dagster" },
     { name = "dagster-postgres" },
+    { name = "dagster-webserver" },
     { name = "obstore" },
     { name = "psycopg", extra = ["binary"] },
     { name = "scintille-lake" },
@@ -2177,6 +2177,7 @@ dependencies = [
 requires-dist = [
     { name = "dagster", specifier = ">=1.13" },
     { name = "dagster-postgres", specifier = ">=0.29" },
+    { name = "dagster-webserver", specifier = ">=1.13" },
     { name = "obstore", specifier = ">=0.11.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "scintille-lake", editable = "packages/scintille-lake" },
