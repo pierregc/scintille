@@ -61,6 +61,13 @@ jobs:
           docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon dagster-daemon liveness-check
           test "$(docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon id -u)" = 10001
           docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())"
+      - name: Original files reach the raw cache
+        run: |
+          for _ in $(seq 30); do
+            docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import obstore; from scintille_ingest.runtime.raw_cache import r2_store_from_env; n = sum(len(b) for b in obstore.list(r2_store_from_env(), prefix='raw/')); print(n, 'raw files'); assert n" && exit 0
+            sleep 5
+          done
+          exit 1
       - if: failure()
         run: docker compose -f infra/compose/compose.local.yaml logs
 
