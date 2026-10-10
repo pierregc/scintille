@@ -6,7 +6,7 @@ import type { CloudFrame } from './frame';
 import { browserStorage, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 import { blendPair, easePosition, framePosition, MAX_CLOUD_FRAMES } from './timeline';
 
-export { CLOUD_FIXTURE, type CloudFrame, cloudFixtureUrl, loadCloudFrame } from './frame';
+export { type CloudFrame, loadCloudFrame } from './frame';
 
 const EARTH_RADIUS_KM = 6371;
 const DEG = Math.PI / 180;
@@ -22,6 +22,9 @@ export const CLOUDS_RENDER_ORDER = -1;
 
 const FLASH_GAIN = 5;
 
+/** Beyond this distance from every frame, the scene time has no honest cloud picture: the layer hides. */
+export const CLOUD_MAX_GAP_MS = 3 * 3_600_000;
+
 export interface CloudsOptions {
 	radius?: number;
 	altitudeKm?: number;
@@ -33,14 +36,14 @@ export interface CloudsOptions {
 	bicubic?: boolean;
 	/** Where the on/off choice persists; null keeps it in memory only. */
 	storage?: PreferenceStorage | null;
-	/** Wall clock in milliseconds, for crossfades. */
-	now?: () => number;
+	/** Frames kept on the GPU. */
+	maxFrames?: number;
 }
 
 export interface Clouds {
 	mesh: Mesh;
 	readonly visible: boolean;
-	/** Observation time (UTC ms) of the frame mostly shown, or null before the first frame. */
+	/** Observation time (UTC ms) of the frame mostly shown, or null when none is shown. */
 	readonly frameTime: number | null;
 	/**
 	 * Adds a frame to the timeline; the layer crossfades between the frames around the scene time.
@@ -71,7 +74,7 @@ export function createClouds(
 		anisotropy = 8,
 		bicubic = true,
 		storage = browserStorage(),
-		now = () => performance.now(),
+		maxFrames = MAX_CLOUD_FRAMES,
 	}: CloudsOptions = {},
 ): Clouds {
 	const geometry = new SphereGeometry(cloudShellRadius(radius, altitudeKm), widthSegments, heightSegments);
@@ -112,11 +115,13 @@ export function createClouds(
 	const frames: CloudFrame[] = [];
 	let position = Number.NaN;
 	let sceneTime = Number.NaN;
-	let lastWall = Number.NaN;
 	let visible = readCloudsVisible(storage);
 	let disposed = false;
+	const covered = () =>
+		frames.length > 0 &&
+		(!Number.isFinite(sceneTime) || frames.some((f) => Math.abs(f.time - sceneTime) <= CLOUD_MAX_GAP_MS));
 	const syncVisibility = () => {
-		mesh.visible = visible && frames.length > 0;
+		mesh.visible = visible && covered();
 	};
 	syncVisibility();
 
@@ -144,14 +149,14 @@ export function createClouds(
 			return visible;
 		},
 		get frameTime() {
-			if (frames.length === 0) return null;
+			if (!covered()) return null;
 			return frames[Math.min(Math.round(position), frames.length - 1)].time;
 		},
 		setFrame(next) {
 			if (disposed) return next.texture.dispose();
 			next.texture.anisotropy = Math.min(anisotropy, maxAnisotropy);
 			next.texture.needsUpdate = true;
-			const shown = frames.length > 0 ? shownTime() : Number.NaN;
+			const shown = mesh.visible ? shownTime() : Number.NaN;
 			const same = frames.findIndex((f) => f.time === next.time);
 			if (same >= 0) {
 				if (frames[same].texture !== next.texture) frames[same].texture.dispose();
@@ -160,8 +165,8 @@ export function createClouds(
 				frames.push(next);
 				frames.sort((x, y) => x.time - y.time);
 			}
-			while (frames.length > MAX_CLOUD_FRAMES) frames.shift()?.texture.dispose();
-			// Keep showing the same instant; the next setTime eases toward the new target.
+			while (frames.length > Math.max(maxFrames, 1)) frames.shift()?.texture.dispose();
+			// Keep showing the same instant, if any is on screen; the next setTime eases toward the new target.
 			position = Number.isFinite(shown) ? framePosition(frames.map((f) => f.time), shown) : target();
 			show();
 			syncVisibility();
@@ -173,12 +178,14 @@ export function createClouds(
 		},
 		setTime(utcMs) {
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
+			// Eases on scene time, so a paused or rendered clock gives the same picture every time.
+			const previous = sceneTime;
 			sceneTime = utcMs;
-			const wall = now();
-			const dt = Number.isFinite(lastWall) ? (wall - lastWall) / 1000 : 0;
-			lastWall = wall;
+			syncVisibility();
 			if (frames.length === 0) return;
-			position = easePosition(position, target(), dt);
+			position = Number.isFinite(previous)
+				? easePosition(position, target(), Math.abs(utcMs - previous) / 1000)
+				: target();
 			show();
 		},
 		setFlashLight(map) {

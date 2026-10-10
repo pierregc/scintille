@@ -41,13 +41,13 @@ permission or credit. The site's attribution must credit NASA.
 
 ## Cloud fixture
 
-Until ingestion (#61) publishes live frames, the dev server shows one cloud frame from
-`fixtures/clouds/gmgsi_20260715T180000Z.webp` (327 KB), served by `python3 fixtures/serve.py` under the
-live feed root (`PUBLIC_LIVE_BASE_URL`, default `http://localhost:8787/`). It is never loaded in production.
+The globe loads live cloud frames from `live/clouds/manifest.json` ([format](data-contract.md#cloud-frames-on-r2)).
+In dev, `python3 fixtures/serve.py` serves `fixtures/live/clouds/`, a manifest with one frame at the
+instant of the lightning fixtures; open the page with `?replay=2026-07-15T18:00:00Z` to see it.
 
 | Texture | Source | Resolution | License |
 |---|---|---|---|
-| `clouds/gmgsi_20260715T180000Z.webp` | [NOAA NESDIS GMGSI](https://registry.opendata.aws/noaa-gmgsi/) longwave IR, 2026-07-15 18:00 UTC, converted to opacity against the GFS skin temperature ([ADR 0007](adr/0007-cloud-source.md)) | 2048 × 1024, grayscale WebP q70, 0 = clear, 255 = opaque; no data beyond ±72.7° | NOAA open data. Credit: "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)" |
+| `live/clouds/2k/20260715T180000Z-f7492cd2.webp` | [NOAA NESDIS GMGSI](https://registry.opendata.aws/noaa-gmgsi/) longwave IR, 2026-07-15 18:00 UTC, converted to opacity against the GFS skin temperature ([ADR 0007](adr/0007-cloud-source.md)) | 2048 × 1024, grayscale WebP q70, 0 = clear, 255 = opaque; no data beyond ±72.7° | NOAA open data. Credit: "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)" |
 
 ## Formats
 

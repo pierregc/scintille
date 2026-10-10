@@ -3,12 +3,13 @@ import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
+import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning } from './lightning';
-import { startLiveFeed } from './live';
+import { liveBaseUrl, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
@@ -31,6 +32,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	readonly cloudFeed: CloudFeed;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
@@ -60,8 +62,19 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	scene.add(earth.mesh);
 	const atmosphere = createAtmosphere(RADIUS);
 	earth.mesh.add(atmosphere.mesh);
-	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), { radius: RADIUS, bicubic: preset.cloudBicubic });
+	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), {
+		radius: RADIUS,
+		bicubic: preset.cloudBicubic,
+		maxFrames: LIVE_CLOUD_FRAMES,
+	});
 	earth.mesh.add(clouds.mesh);
+	const cloudFeed = new CloudFeed({
+		baseUrl: liveBaseUrl(),
+		tier: preset.clouds,
+		onFrame: (frame) => clouds.setFrame(frame),
+		onError: (error) => console.warn('clouds:', error),
+	});
+	cloudFeed.start();
 	const detachDevClouds = import.meta.env.DEV ? attachDevClouds(clouds, window) : undefined;
 	const stars = createStarfield();
 	scene.add(stars.points);
@@ -139,6 +152,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		flyTo: controls.flyTo,
 		clock,
 		clouds,
+		cloudFeed,
 		feedStatus: () =>
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
 		hasData: (time) => live.client.covers(time),
@@ -147,6 +161,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			renderer.setAnimationLoop(null);
 			controls.dispose();
 			live.stop();
+			cloudFeed.stop();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();
