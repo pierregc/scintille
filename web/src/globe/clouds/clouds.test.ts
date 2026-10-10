@@ -108,6 +108,23 @@ describe('createClouds', () => {
 		expect(late.disposed()).toBe(true);
 	});
 
+	it('keeps a valid blend when the frame it fades from is evicted', () => {
+		let wall = 0;
+		const clouds = createClouds(16, { storage: null, now: () => wall });
+		const frames = Array.from({ length: MAX_CLOUD_FRAMES + 1 }, (_, i) => frame(CLOUD_FIXTURE.time + i * HOUR));
+		for (const f of frames.slice(0, -1)) clouds.setFrame(f.frame);
+		for (let i = 0; i < 20; i++, wall += 1000) clouds.setTime(CLOUD_FIXTURE.time + 0.75 * HOUR);
+		expect(uniforms(clouds).cloudMix.value).toBeCloseTo(0.75, 3);
+		clouds.setFrame(frames[MAX_CLOUD_FRAMES].frame);
+		const u = uniforms(clouds);
+		expect(u.cloudMap.value).toBe(frames[1].frame.texture);
+		expect(u.cloudMix.value).toBe(0);
+		wall += 100;
+		clouds.setTime(CLOUD_FIXTURE.time + 0.75 * HOUR);
+		expect(u.cloudMix.value).toBeGreaterThanOrEqual(0);
+		expect(u.cloudMix.value).toBeLessThanOrEqual(1);
+	});
+
 	it('crossfades between the frames around the scene time', () => {
 		let wall = 0;
 		const clouds = createClouds(16, { storage: null, now: () => wall });
