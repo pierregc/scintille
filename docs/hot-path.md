@@ -6,10 +6,12 @@ lakehouse can never slow down or stop the live feed.
 ## `ingest-live` (`scintille-ingest live`)
 
 One asyncio task per source (GLM East, GLM West; MTG LI with #32). Each lists its bucket on its own
-cadence and takes every file not spooled yet through:
+cadence and takes every file not spooled yet (a known key listed with a new ETag counts as not
+spooled) through:
 
-1. **download**: file identity = object key + SHA-256 (a revised product is a new file); raw cache
-   upload (paused past 90 % spool disk); state `downloaded`;
+1. **download**: file identity = object key + SHA-256 (a revised product is a new file); original
+   uploaded to R2 under `raw/<source>/<key dir>/<checksum>_<name>` (`SCINTILLE_R2_*`, deleted after
+   30 days by the bucket rule; best effort, paused past 90 % spool disk); state `downloaded`;
 2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`;
    state `published_live`;
 3. **spool**: per batch, its flashes and its `bronze.ingest_log` rows as Parquet, each written to a
