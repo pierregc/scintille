@@ -1,6 +1,8 @@
+import { flashProfileGlsl } from './profile';
+
 export const lightningVertexShader = /* glsl */ `
 attribute vec4 flash;
-attribute vec2 flashShape;
+attribute vec3 flashShape;
 
 uniform float time;
 uniform float duration;
@@ -11,22 +13,18 @@ uniform float glowScale;
 uniform float minPixels;
 uniform float viewportHeight;
 uniform float intensityFloor;
+uniform float flicker;
 
 varying vec2 vCorner;
 varying float vBrightness;
 
-// Fast rise, then a decay that reaches zero at the end of the display duration.
-float envelope(float age) {
-	if (age < 0.0 || age > duration) return 0.0;
-	float t = age / duration;
-	return smoothstep(0.0, 0.03, t) * exp(-t * 5.0) * (1.0 - t);
-}
-
+${flashProfileGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
-	float brightness = envelope(time - flash.w) * mix(intensityFloor, 1.0, flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+	float brightness = flashProfile(time - flash.w, duration, flashShape.z, seed, flicker) * mix(intensityFloor, 1.0, flashShape.x) * smoothstep(0.0, 0.1, facing);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

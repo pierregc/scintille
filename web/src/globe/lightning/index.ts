@@ -59,7 +59,7 @@ export function createLightning(
 	});
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
-	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 2, 4));
+	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 3, 4));
 	geometry.instanceCount = 0;
 
 	const time = new NumberUniform();
@@ -76,6 +76,7 @@ export function createLightning(
 			minPixels: { value: 5 },
 			viewportHeight: { value: 1 },
 			intensityFloor: { value: 0.15 },
+			flicker: { value: 1 },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
 		},
@@ -83,6 +84,13 @@ export function createLightning(
 		transparent: true,
 		depthWrite: false,
 	});
+
+	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
+	const applyMotion = () => {
+		material.uniforms.flicker.value = reducedMotion?.matches ? 0 : 1;
+	};
+	applyMotion();
+	reducedMotion?.addEventListener('change', applyMotion);
 
 	const mesh = new Mesh(geometry, material);
 	mesh.frustumCulled = false;
@@ -100,6 +108,7 @@ export function createLightning(
 			time.value = (utcMs - instances.origin) / 1000;
 		},
 		dispose() {
+			reducedMotion?.removeEventListener('change', applyMotion);
 			geometry.dispose();
 			material.dispose();
 		},
