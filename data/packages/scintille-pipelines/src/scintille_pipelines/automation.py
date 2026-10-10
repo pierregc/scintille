@@ -1,11 +1,14 @@
 """Schedule and sensor for the gold assets."""
 
+from datetime import UTC, datetime, timedelta
+
 from dagster import (
     RunRequest,
+    ScheduleEvaluationContext,
     SensorEvaluationContext,
     SkipReason,
-    build_schedule_from_partitioned_job,
     define_asset_job,
+    schedule,
     sensor,
 )
 from scintille_lake.tables import FLASHES
@@ -15,10 +18,24 @@ from .resources import LakeResource
 
 daily_gold = define_asset_job("daily_gold", selection=[daily_flash_counts], partitions_def=daily)
 
-# Yesterday's partition, once late files have landed.
-daily_gold_schedule = build_schedule_from_partitioned_job(
-    daily_gold, hour_of_day=1, minute_of_hour=30
-)
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def open_day(now: datetime) -> str:
+    return now.astimezone(UTC).date().isoformat()
+
+
+def closed_day(now: datetime) -> str:
+    return (now.astimezone(UTC).date() - timedelta(days=1)).isoformat()
+
+
+@schedule(job=daily_gold, cron_schedule="30 1 * * *", execution_timezone="UTC")
+def daily_gold_schedule(context: ScheduleEvaluationContext) -> RunRequest:
+    """Yesterday's partition, once late files have landed."""
+    day = closed_day(context.scheduled_execution_time or utc_now())
+    return RunRequest(run_key=day, partition_key=day)
 
 
 @sensor(job=daily_gold, minimum_interval_seconds=600)
@@ -31,7 +48,4 @@ def silver_changed(context: SensorEvaluationContext, lake: LakeResource) -> RunR
     if snapshot_id == context.cursor:
         return SkipReason("no new snapshot")
     context.update_cursor(snapshot_id)
-    today = daily.get_last_partition_key()
-    if today is None:
-        return SkipReason("no partition yet")
-    return RunRequest(run_key=snapshot_id, partition_key=today)
+    return RunRequest(run_key=snapshot_id, partition_key=open_day(utc_now()))
