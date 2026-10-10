@@ -3,7 +3,8 @@ import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
-import { createGlobeControls } from './controls';
+import { createGlobeControls, type GlobeControls } from './controls';
+import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning } from './lightning';
@@ -27,6 +28,7 @@ function deviceHints(context: WebGL2RenderingContext) {
 }
 
 export interface GlobeApp {
+	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
 	/** Freshness of the live feed now. */
@@ -131,7 +133,10 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		else renderer.render(scene, camera);
 	});
 
+	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+
 	return {
+		flyTo: controls.flyTo,
 		clock,
 		clouds,
 		feedStatus: () =>
