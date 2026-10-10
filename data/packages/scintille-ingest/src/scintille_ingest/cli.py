@@ -27,6 +27,7 @@ from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
+from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource
 from scintille_ingest.runtime.spool import Spool
@@ -71,19 +72,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 async def run_live(spool_dir: Path, port: int) -> int:
-    """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`)."""
+    """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`), original files
+    in R2 (`SCINTILLE_R2_*`)."""
     configure_json_logs()
     dsn = os.environ.get("SCINTILLE_POSTGRES_DSN")
     if not dsn:
         log.error("SCINTILLE_POSTGRES_DSN is not set")
         return 2
     metrics = Metrics()
-    feed = live_feed_from_env(metrics)
+    feed = live_feed_from_env(metrics, spool_dir / "live-outbox")
     service = IngestLive(
         [GlmSource(s) for s in satellites_from_env()],
         PostgresState(dsn),
         Spool(spool_dir),
         publisher=feed,
+        raw_cache=ObjectRawCache(r2_store_from_env()),
         metrics=metrics,
     )
     server = await health.serve(port, service.healthy, metrics.render)
@@ -99,7 +102,7 @@ async def run_live(spool_dir: Path, port: int) -> int:
     return 0
 
 
-def live_feed_from_env(metrics: Metrics) -> LiveFeed | None:
+def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
     """Publishes to `SCINTILLE_LIVE_BUCKET`, with the R2 credentials used elsewhere, when set."""
     bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
     if not bucket:
@@ -114,7 +117,7 @@ def live_feed_from_env(metrics: Metrics) -> LiveFeed | None:
         region="auto",
         client_options={"allow_http": endpoint.startswith("http://")},
     )
-    return LiveFeed(ObjectLiveStore(store), metrics=metrics)
+    return LiveFeed(ObjectLiveStore(store), outbox=outbox, metrics=metrics)
 
 
 async def run_lake_writer(spool_dir: Path, interval: float) -> int:

@@ -33,17 +33,19 @@ class Source:
 
     def __init__(self) -> None:
         self.products = [
-            Product(f"glm/{i:02d}.nc", HOUR + timedelta(minutes=5 * i)) for i in range(12)
+            Product(f"glm/{i:02d}.nc", HOUR + timedelta(minutes=5 * i), etag="v1")
+            for i in range(12)
         ]
+        self.revised: set[str] = set()
 
     async def list_recent(self, now: datetime) -> list[Product]:
         return self.products
 
     async def fetch(self, product: Product) -> bytes:
-        return product.key.encode()
+        return product.key.encode() + (b"v2" if product.key in self.revised else b"")
 
     def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
-        n = 0 if product.key.endswith("11.nc") else 5
+        n = 0 if product.key.endswith("11.nc") else 3 if data.endswith(b"v2") else 5
         rows: list[dict[str, object]] = [
             {
                 "flash_id": hashlib.sha256(f"{product.key}|{i}".encode()).hexdigest()[:32],
@@ -200,3 +202,38 @@ def test_batches_are_recorded_in_snapshot_properties(tmp_path: Path, catalog: Ca
     LakeCommit(lambda: catalog, max_batches=5)(spool, sorted(batches))
     assert committed_batches(catalog.load_table(FLASHES.identifier)) == batches
     assert len(catalog.load_table(FLASHES.identifier).metadata.snapshots) == 3
+
+
+def test_a_revised_file_replaces_its_previous_rows(tmp_path: Path, catalog: Catalog) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path / "spool"), Source()
+    service = IngestLive([source], state, spool, clock=lambda: HOUR)
+    asyncio.run(service.poll(source))
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+
+    revised = source.products[2]
+    source.revised.add(revised.key)
+    source.products[2] = Product(revised.key, revised.start, etag="v2")
+    assert asyncio.run(service.poll(source)) == 1
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+
+    silver = catalog.load_table(FLASHES.identifier).scan().to_arrow()
+    assert silver.num_rows == 53
+    assert len(pc.unique(silver["flash_id"])) == 53
+    bronze = pl.from_arrow(catalog.load_table(INGEST_LOG.identifier).scan().to_arrow())
+    assert isinstance(bronze, pl.DataFrame)
+    assert bronze.height == 12
+    assert bronze.filter(pl.col("key") == revised.key)["row_count"].to_list() == [3]
+
+
+def test_two_revisions_in_one_commit_keep_the_latest(tmp_path: Path, catalog: Catalog) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path / "spool"), Source()
+    service = IngestLive([source], state, spool, clock=lambda: HOUR)
+    asyncio.run(service.poll(source))
+    revised = source.products[2]
+    source.revised.add(revised.key)
+    source.products[2] = Product(revised.key, revised.start, etag="v2")
+    asyncio.run(service.poll(source))
+    assert len(spool.pending()) == 13
+
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+    assert counts(catalog) == (53, 12)

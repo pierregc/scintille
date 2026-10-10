@@ -23,7 +23,7 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 | Asset | `gold/daily_flash_counts` | Placeholder gold table: flashes per source and UTC day, one daily partition rebuilt whole |
 | Asset check | `one_row_per_source` | Blocking: a failed check fails the run |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
-| Sensor | `silver_changed` | Example: rebuilds today when `silver.flashes` gets a new snapshot |
+| Sensor | `silver_changed` | Example: rebuilds the open UTC day when `silver.flashes` gets a new snapshot (`daily` has `end_offset=1`) |
 | Sensor | `alert_on_failure` | Posts failed runs to `SCINTILLE_ALERT_WEBHOOK` |
 
 ## Resources

@@ -3,13 +3,16 @@ import contextlib
 import gzip
 import hashlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 import polars as pl
 import pytest
 from scintille_contract.chunk import decode
 from scintille_contract.models import LiveManifest
+from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
+from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.intensity import provisional_intensity
 from scintille_ingest.runtime.live_feed import (
     CHUNK_HEADERS,
@@ -17,6 +20,10 @@ from scintille_ingest.runtime.live_feed import (
     LiveFeed,
     source_state,
 )
+from scintille_ingest.runtime.service import Crash, IngestLive
+from scintille_ingest.runtime.sources import Product
+from scintille_ingest.runtime.spool import Spool
+from scintille_ingest.runtime.state import MemoryState
 
 T0 = datetime(2026, 7, 15, 18, 0, tzinfo=UTC)
 
@@ -84,9 +91,9 @@ class Clock:
         return self.now
 
 
-def test_publishes_chunks_then_the_manifest() -> None:
+def test_publishes_chunks_then_the_manifest(tmp_path: Path) -> None:
     store, clock = FakeStore(), Clock()
-    feed = LiveFeed(store, clock=clock)
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock)
 
     async def scenario() -> None:
         for step in range(4):
@@ -112,9 +119,9 @@ def test_publishes_chunks_then_the_manifest() -> None:
     assert manifest.sources[0].state == "live"
 
 
-def test_manifest_never_references_a_missing_chunk() -> None:
+def test_manifest_never_references_a_missing_chunk(tmp_path: Path) -> None:
     store, clock = FakeStore(), Clock()
-    feed = LiveFeed(store, clock=clock, window=timedelta(minutes=5))
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock, window=timedelta(minutes=5))
 
     async def scenario() -> None:
         for step in range(12):
@@ -137,9 +144,9 @@ def test_manifest_never_references_a_missing_chunk() -> None:
     }
 
 
-def test_republishing_the_same_file_adds_nothing() -> None:
+def test_republishing_the_same_file_adds_nothing(tmp_path: Path) -> None:
     store, clock = FakeStore(), Clock()
-    feed = LiveFeed(store, clock=clock)
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock)
     batch = flashes("glm-west", T0, 5)
 
     async def scenario() -> None:
@@ -153,7 +160,7 @@ def test_republishing_the_same_file_adds_nothing() -> None:
     assert manifest is not None and manifest.chunks[-1].flash_count == 5
 
 
-def test_restart_continues_the_published_chunk_list() -> None:
+def test_restart_continues_the_published_chunk_list(tmp_path: Path) -> None:
     store, clock = FakeStore(), Clock()
 
     async def run_once(feed: LiveFeed) -> None:
@@ -162,11 +169,165 @@ def test_restart_continues_the_published_chunk_list() -> None:
         clock.now += timedelta(seconds=30)
         await feed.flush()
 
-    asyncio.run(run_once(LiveFeed(store, clock=clock)))
-    asyncio.run(run_once(LiveFeed(store, clock=clock)))
+    asyncio.run(run_once(LiveFeed(store, outbox=tmp_path, clock=clock)))
+    asyncio.run(run_once(LiveFeed(store, outbox=tmp_path, clock=clock)))
     manifest = store.manifest()
     assert manifest is not None and len(manifest.chunks) == 2
     assert manifest.chunks[0].end == manifest.chunks[1].start
+
+
+def counts(store: FakeStore) -> list[int]:
+    manifest = store.manifest()
+    return [c.flash_count for c in manifest.chunks] if manifest else []
+
+
+class PausingStore(FakeStore):
+    """Holds the first chunk upload until `release` is set."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.uploading = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+        if path.startswith("chunks/") and not self.release.is_set():
+            self.uploading.set()
+            await self.release.wait()
+        await super().put(path, data, headers)
+
+
+def test_flashes_arriving_during_a_chunk_upload_go_in_the_next_chunk(tmp_path: Path) -> None:
+    store, clock = PausingStore(), Clock()
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+
+    async def scenario() -> None:
+        await feed.publish("glm-east", flashes("glm-east", T0, 1, "a"))
+        clock.now += timedelta(seconds=30)
+        flushing = asyncio.create_task(feed.flush())
+        await store.uploading.wait()
+        await feed.publish("glm-east", flashes("glm-east", T0, 1, "b"))
+        store.release.set()
+        await flushing
+        clock.now += timedelta(seconds=30)
+        await feed.flush()
+
+    asyncio.run(scenario())
+    assert counts(store) == [1, 1]
+
+
+def test_flashes_of_a_failed_upload_survive_a_restart(tmp_path: Path) -> None:
+    store, clock = FakeStore(), Clock()
+
+    async def first_run() -> None:
+        feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+        await feed.publish("glm-east", flashes("glm-east", T0, 3))
+        clock.now += timedelta(seconds=30)
+        store.fail = {"chunks/"}
+        with pytest.raises(ConnectionError):
+            await feed.flush()
+
+    async def second_run() -> None:
+        store.fail = set()
+        feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+        await feed.restore()
+        await feed.publish("glm-east", flashes("glm-east", T0, 3))
+        clock.now += timedelta(seconds=30)
+        await feed.flush()
+
+    asyncio.run(first_run())
+    asyncio.run(second_run())
+    assert counts(store) == [3]
+
+
+@pytest.mark.parametrize("failing", ["manifest", "ack"])
+def test_restart_after_a_partial_flush_publishes_each_flash_once(
+    tmp_path: Path, failing: str
+) -> None:
+    store, clock = FakeStore(), Clock()
+    batch = flashes("mtg-li", T0, 4)
+
+    async def first_run() -> None:
+        feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+        await feed.publish("mtg-li", batch)
+        clock.now += timedelta(seconds=30)
+        if failing == "manifest":
+            store.fail = {"manifest.json"}
+        else:
+
+            def crash(chunk: str) -> None:
+                raise Crash(chunk)
+
+            feed.outbox.ack = crash  # type: ignore[method-assign]
+        with pytest.raises((ConnectionError, Crash)):
+            await feed.flush()
+
+    async def second_run() -> None:
+        store.fail = set()
+        feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+        await feed.restore()
+        await feed.publish("mtg-li", batch)
+        clock.now += timedelta(seconds=30)
+        await feed.flush()
+
+    asyncio.run(first_run())
+    asyncio.run(second_run())
+    assert sum(counts(store)) == 4
+
+
+class FlashSource:
+    name = "glm-east"
+    cadence = 0.01
+
+    def __init__(self, files: int) -> None:
+        self.products = [
+            Product(f"glm-east/f{i}.nc", T0 + timedelta(seconds=20 * i)) for i in range(files)
+        ]
+
+    async def list_recent(self, now: datetime) -> list[Product]:
+        return list(self.products)
+
+    async def fetch(self, product: Product) -> bytes:
+        return product.key.encode()
+
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        frame = flashes(self.name, product.start, 5, product.key)
+        log = IngestLogRecord(
+            key=product.key,
+            source="glm-east",
+            satellite="G19",
+            product_start=product.start,
+            product_end=product.start + timedelta(seconds=20),
+            received_at=received_at,
+            row_count=frame.height,
+            checksum="sha256:x",
+            status="ok",
+            parse_duration_ms=1.0,
+            error=None,
+        )
+        return IngestedFile(frame, log)
+
+
+def test_ingest_live_restart_before_the_next_chunk_loses_nothing(tmp_path: Path) -> None:
+    store, clock, state = FakeStore(), Clock(), MemoryState()
+    spool, source = Spool(tmp_path / "spool"), FlashSource(files=11)
+
+    def run_once(flush: bool) -> None:
+        feed = LiveFeed(store, outbox=tmp_path / "outbox", clock=clock)
+        service = IngestLive([source], state, spool, publisher=feed, clock=clock)
+
+        async def scenario() -> None:
+            await feed.restore()
+            await service.poll(source)
+            if flush:
+                clock.now += timedelta(seconds=30)
+                await feed.flush()
+
+        asyncio.run(scenario())
+
+    run_once(flush=False)
+    assert {r.state for r in state.records.values()} == {"spooled"}
+    run_once(flush=True)
+    assert sum(counts(store)) == 55
 
 
 def test_source_states_age_out() -> None:
