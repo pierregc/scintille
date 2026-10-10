@@ -11,6 +11,8 @@ interface Props {
 	type?: 'website' | 'article';
 	/** schema.org nodes for this page. */
 	jsonLd?: JsonLd[];
+	/** Keeps the page out of search results. */
+	noindex?: boolean;
 }
 
 const {
@@ -21,6 +23,7 @@ const {
 	imageAlt = 'Scintille',
 	type = 'website',
 	jsonLd = [],
+	noindex = false,
 } = Astro.props;
 
 const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.site).href;
@@ -34,6 +37,7 @@ const imageUrl = new URL(image, Astro.site).href;
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		<link rel="canonical" href={canonicalUrl} />
+		{noindex && <meta name="robots" content="noindex" />}
 
 		<link rel="icon" href="/favicon.ico" sizes="32x32" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
