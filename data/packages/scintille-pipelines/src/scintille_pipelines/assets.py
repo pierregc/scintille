@@ -23,7 +23,8 @@ from scintille_lake.tables import FLASHES, gold_table
 
 from .resources import LakeResource
 
-daily = DailyPartitionsDefinition(start_date="2026-07-01", timezone="UTC")
+# end_offset=1 keeps the open UTC day available to the live sensor.
+daily = DailyPartitionsDefinition(start_date="2026-07-01", timezone="UTC", end_offset=1)
 
 DAILY_FLASH_COUNTS = gold_table(
     "daily_flash_counts",

@@ -152,9 +152,11 @@ Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Dock
   them to GHCR as `ghcr.io/pierregc/scintille-<package>:<sha>` and `:main`.
 - **Smoke test.** The same workflow starts the stack with the local lakehouse and checks the
   webserver, the daemon liveness and the non-root user.
-- **Deploy.** On `main`, the `deploy` job copies `compose.yaml` and `deploy.sh` to `/srv/scintille`
-  and runs `deploy.sh <sha>`: pull, `up --wait`, and on a failed health check, back to the previous
-  SHA. It only runs once the repository variable `VPS_DEPLOY` is `true`.
+- **Deploy.** On `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
+  and `deploy.sh` to `/srv/scintille`, then runs `deploy.sh <sha>`: pull, `up --wait`, and on a
+  failed health check, back to the previous SHA with its own compose file. It only runs once the
+  repository variable `VPS_DEPLOY` is `true`. The `rollback` job tests that path on every change
+  with a release that changes a command.
 - **Dagster UI.** Bound to the VPS loopback: `ssh -L 3000:localhost:3000 deploy@<host>`, then
   http://localhost:3000. Never published.
 - **Logs.** `SCINTILLE_LOG_DRIVER=journald` on the VPS: `journalctl CONTAINER_NAME=<container>`.
