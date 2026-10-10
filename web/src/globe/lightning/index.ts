@@ -170,14 +170,19 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 		points.frustumCulled = false;
 		scene.add(points);
 	}
+	const clearColor = new Color();
 	return {
 		target,
 		render(renderer: WebGLRenderer) {
 			const previous = renderer.getRenderTarget();
+			renderer.getClearColor(clearColor);
+			const clearAlpha = renderer.getClearAlpha();
 			renderer.setRenderTarget(target);
+			renderer.setClearColor(0x000000, 0);
 			renderer.clear(true, false, false);
 			geometry.instanceCount = flashGeometry.instanceCount;
 			if (geometry.instanceCount > 0) renderer.render(scene, camera);
+			renderer.setClearColor(clearColor, clearAlpha);
 			renderer.setRenderTarget(previous);
 		},
 		dispose() {
