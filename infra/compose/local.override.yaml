@@ -1,0 +1,14 @@
+# Services that read the lake share the store's network, so that localhost:8181 (catalog) and
+# localhost:9000 (S3, as vended by the catalog) resolve as they do on the host.
+services:
+  dagster-daemon:
+    network_mode: service:lake-s3
+  ingest:
+    network_mode: service:lake-s3
+    environment:
+      SCINTILLE_LIVE_BUCKET: scintille-lake
+      SCINTILLE_R2_ENDPOINT: http://localhost:9000
+      SCINTILLE_R2_ACCESS_KEY_ID: scintille-local
+      SCINTILLE_R2_SECRET_ACCESS_KEY: scintille-local-secret
+  lake-writer:
+    network_mode: service:lake-s3

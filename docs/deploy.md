@@ -140,3 +140,40 @@ curl -sI https://pr-<number>-scintille.<account-subdomain>.workers.dev/ | grep -
 - https://developers.cloudflare.com/workers/wrangler/commands/workers/: `wrangler preview`, `preview delete`.
 - https://developers.cloudflare.com/workers/configuration/routing/custom-domains/: Custom Domains.
 - https://docs.astro.build/en/guides/integrations-guide/cloudflare/: adapter, dev on `workerd`.
+
+## Data services
+
+Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Docker Compose, from
+`infra/compose/compose.yaml`: `postgres` (Dagster storage and pipeline state), `dagster-webserver`,
+`dagster-daemon`, and `ingest` (opt-in until the hot path service, #35).
+
+- **Images.** `data/Dockerfile` builds one image per package (uv, non-root user `10001`, pinned base
+  digests, no secrets). The `images` workflow builds both on every data change; on `main` it pushes
+  them to GHCR as `ghcr.io/pierregc/scintille-<package>:<sha>` and `:main`.
+- **Smoke test.** The same workflow starts the stack with the local lakehouse and checks the
+  webserver, the daemon liveness and the non-root user.
+- **Deploy.** On `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
+  and `deploy.sh` to `/srv/scintille`, then runs `deploy.sh <sha>`: pull, `up --wait`, and on a
+  failed health check, back to the previous SHA with its own compose file. It only runs once the
+  repository variable `VPS_DEPLOY` is `true`. The `rollback` job tests that path on every change
+  with a release that changes a command.
+- **Dagster UI.** Bound to the VPS loopback: `ssh -L 3000:localhost:3000 deploy@<host>`, then
+  http://localhost:3000. Never published.
+- **Logs.** `SCINTILLE_LOG_DRIVER=journald` on the VPS: `journalctl CONTAINER_NAME=<container>`.
+
+### Local
+
+```sh
+docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon lakekeeper
+docker compose -f infra/compose/compose.local.yaml run --rm lake-init
+```
+
+The webserver is on http://localhost:3000, with the local lakehouse from `compose.yaml`.
+
+### First deploy (by hand, once)
+
+1. On the VPS, as `deploy`: `mkdir -p /srv/scintille`, then create `/srv/scintille/.env` from
+   `infra/compose/.env.example` (`chmod 600`).
+2. `docker login ghcr.io` as `deploy` with a token that can only read packages.
+3. In GitHub: secrets `VPS_SSH_KEY` (a key for `deploy` only) and `VPS_KNOWN_HOSTS`
+   (`ssh-keyscan <host>`), variables `VPS_HOST` and `VPS_DEPLOY=true`.

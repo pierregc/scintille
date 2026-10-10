@@ -1,9 +1,7 @@
 import type { FlashRing } from '../live';
 
-/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km). */
-export const FLASH_STRIDE = 6;
-
-export const DEFAULT_LIGHTNING_CAPACITY = 1 << 17;
+/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km), duration (ms). */
+export const FLASH_STRIDE = 7;
 
 /** Beyond this distance between scene time and origin, times are rebased to keep float32 precision. */
 export const REBASE_MS = 6 * 3_600_000;
@@ -15,7 +13,8 @@ const DEG = Math.PI / 180;
 export type RangeListener = (start: number, count: number) => void;
 
 /**
- * GPU-ready copy of the newest flashes of a ring, filled incrementally.
+ * GPU-ready copy of a ring window, filled incrementally: the newest flashes, or, when the GPU
+ * holds fewer flashes than the ring, the ones from the playhead on (replay).
  * Times are stored in seconds relative to `origin` so they fit in float32.
  */
 export class FlashInstances {
@@ -25,16 +24,24 @@ export class FlashInstances {
 	origin = Number.NaN;
 	#count = 0;
 	#cursor = 0;
-	#read = 0;
+	/** Ring window on the GPU, in `ring.written` indices. */
+	#start = 0;
+	#end = 0;
 	readonly #ring: FlashRing;
 	readonly #onRange: RangeListener;
+	readonly #lookbackMs: number;
 
-	constructor(ring: FlashRing, capacity = DEFAULT_LIGHTNING_CAPACITY, onRange: RangeListener = () => {}) {
+	/**
+	 * Defaults to the ring's capacity, so the whole live window stays on the GPU.
+	 * `lookbackMs`: how long a flash stays visible, so the window keeps it behind the playhead.
+	 */
+	constructor(ring: FlashRing, capacity = ring.capacity, onRange: RangeListener = () => {}, lookbackMs = 0) {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
 		this.capacity = capacity;
 		this.data = new Float32Array(capacity * FLASH_STRIDE);
 		this.#ring = ring;
 		this.#onRange = onRange;
+		this.#lookbackMs = lookbackMs;
 	}
 
 	/** Valid instances. */
@@ -42,24 +49,44 @@ export class FlashInstances {
 		return this.#count;
 	}
 
-	/** Copies the flashes pushed since the last call; rebases first if `sceneTime` is far from the origin. */
+	/** Copies what the playhead needs and was not copied yet; reloads after a rebase or a seek back out of the window. */
 	sync(sceneTime: number): void {
 		const ring = this.#ring;
-		if (!(Math.abs(sceneTime - this.origin) < REBASE_MS)) {
+		const oldest = ring.written - ring.size;
+		const need = this.#firstAt(sceneTime - this.#lookbackMs);
+		const from = Math.max(oldest, Math.min(need, ring.written - this.capacity));
+		this.#start = Math.max(this.#start, oldest, this.#end - this.capacity);
+		if (!(Math.abs(sceneTime - this.origin) < REBASE_MS) || need < this.#start) {
 			this.origin = Math.round(sceneTime);
 			this.#count = 0;
 			this.#cursor = 0;
-			this.#copy(Math.min(ring.size, this.capacity));
-			return;
+			this.#start = this.#end = from;
+		} else if (this.#end < from) {
+			// Skip flashes the playhead has already passed.
+			this.#start = this.#end = from;
 		}
-		const fresh = ring.written - this.#read;
-		if (fresh > 0) this.#copy(Math.min(fresh, ring.size, this.capacity));
+		const room = this.capacity - (this.#end - Math.max(need, this.#start));
+		this.#copy(Math.min(ring.written - this.#end, room));
+	}
+
+	/** Written index of the first stored flash at or after `time`; assumes the ring is in time order. */
+	#firstAt(time: number): number {
+		const ring = this.#ring;
+		let lo = 0;
+		let hi = ring.size;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (ring.time[ring.slot(mid)] < time) lo = mid + 1;
+			else hi = mid;
+		}
+		return ring.written - ring.size + lo;
 	}
 
 	#copy(n: number): void {
+		if (n <= 0) return;
 		const ring = this.#ring;
 		const data = this.data;
-		const first = ring.size - n;
+		const first = this.#end - (ring.written - ring.size);
 		const start = this.#cursor;
 		for (let k = 0; k < n; k++) {
 			const s = ring.slot(first + k);
@@ -74,11 +101,11 @@ export class FlashInstances {
 			data[o + 3] = (ring.time[s] - this.origin) / 1000;
 			data[o + 4] = ring.intensity[s];
 			data[o + 5] = Math.max(MIN_RADIUS_KM, Math.sqrt(ring.areaKm2[s] / Math.PI));
+			data[o + 6] = ring.durationMs[s];
 			this.#cursor = (this.#cursor + 1) % this.capacity;
 		}
-		this.#read = ring.written;
+		this.#end += n;
 		this.#count = Math.min(this.#count + n, this.capacity);
-		if (n === 0) return;
 		const head = Math.min(n, this.capacity - start);
 		this.#onRange(start, head);
 		if (n > head) this.#onRange(0, n - head);

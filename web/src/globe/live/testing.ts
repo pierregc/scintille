@@ -48,6 +48,8 @@ export class FakeFeed {
 	chunks: ChunkRef[] = [];
 	majorVersion = 2;
 	failing = false;
+	/** Serves the manifest but fails every chunk download. */
+	failingChunks = false;
 
 	/** Publishes a chunk of `count` flashes; durations and names are deliberately irregular. */
 	async publish(startSeconds: number, durationSeconds: number, count: number, major = 2): Promise<ChunkRef> {
@@ -97,6 +99,7 @@ export class FakeFeed {
 		if (this.failing) return new Response('down', { status: 503 });
 		const { pathname } = new URL(url);
 		if (pathname === '/live/manifest.json') return Response.json(this.manifest());
+		if (this.failingChunks) return new Response('down', { status: 503 });
 		const file = this.files.get(pathname.replace(/^\/live\//, ''));
 		return file ? new Response(file) : new Response('missing', { status: 404 });
 	};

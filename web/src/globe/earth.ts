@@ -22,7 +22,7 @@ export interface Earth {
 	dispose(): void;
 }
 
-const TEXTURE_TIER = '4k';
+export type TextureTier = '2k' | '4k' | '8k';
 
 /** Textures root: `PUBLIC_TEXTURES_URL`, else `public/textures` in dev and R2 in production. */
 export function texturesRoot(configured: unknown = import.meta.env.PUBLIC_TEXTURES_URL, dev = import.meta.env.DEV): string {
@@ -30,11 +30,11 @@ export function texturesRoot(configured: unknown = import.meta.env.PUBLIC_TEXTUR
 	return dev ? '/textures' : 'https://data.scintille.app/textures/v2';
 }
 
-export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot()): string {
-	return `${root}/${TEXTURE_TIER}/${name}.webp`;
+export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot(), tier: TextureTier = '4k'): string {
+	return `${root}/${tier}/${name}.webp`;
 }
 
-export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {
+export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTier = '4k'): Earth {
 	const geometry = new SphereGeometry(radius, 128, 64);
 	const twilight = twilightUniforms();
 	const material = new ShaderMaterial({
@@ -65,7 +65,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {
 	let disposed = false;
 
 	const load = async (name: 'day' | 'night' | 'mask', srgb: boolean) => {
-		const texture = await loader.loadAsync(texturesUrl(name));
+		const texture = await loader.loadAsync(texturesUrl(name, texturesRoot(), tier));
 		texture.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
 		texture.wrapS = RepeatWrapping;
 		texture.anisotropy = anisotropy;
