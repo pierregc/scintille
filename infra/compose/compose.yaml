@@ -96,6 +96,12 @@ services:
       postgres:
         condition: service_healthy
 
+  # Reads the public manifest through Cloudflare and reports to Healthchecks.io (docs/operations.md).
+  live-probe:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    command: ["scintille-ingest", "live-probe"]
+
 volumes:
   postgres:
   spool:

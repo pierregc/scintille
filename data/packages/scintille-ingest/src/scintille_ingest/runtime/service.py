@@ -34,6 +34,10 @@ class RawCache(Protocol):
     async def put(self, source: str, identity: FileIdentity, data: bytes) -> None: ...
 
 
+class Pinger(Protocol):
+    async def ping(self, ok: bool = True, message: str = "") -> bool: ...
+
+
 class NullPublisher:
     async def publish(self, source: str, flashes: pl.DataFrame) -> None:
         pass
@@ -58,6 +62,7 @@ class Settings:
     max_backoff: float = 300.0
     disk_warn: tuple[float, ...] = (0.5, 0.8)
     disk_pause_raw: float = 0.9
+    heartbeat_every: float = 60.0
 
 
 class Crash(Exception):
@@ -73,6 +78,7 @@ class IngestLive:
         *,
         publisher: Publisher | None = None,
         raw_cache: RawCache | None = None,
+        heartbeat: Pinger | None = None,
         metrics: Metrics | None = None,
         settings: Settings | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -84,6 +90,7 @@ class IngestLive:
         self.spool = spool
         self.publisher = publisher or NullPublisher()
         self.raw_cache = raw_cache or NullRawCache()
+        self.heartbeat = heartbeat
         self.metrics = metrics or Metrics()
         self.settings = settings or Settings()
         self._clock = clock
@@ -236,6 +243,16 @@ class IngestLive:
             self.check_disk()
             await self._sleep(every)
 
+    async def heartbeat_loop(self, heartbeat: Pinger) -> None:
+        """Pings while every loop runs, reports the stopped ones otherwise."""
+        while not self._stop.is_set():
+            stopped = sorted(t.get_name() for t in self._tasks if t.done())
+            with contextlib.suppress(Exception):
+                await heartbeat.ping(
+                    not stopped, "stopped: " + ", ".join(stopped) if stopped else ""
+                )
+            await self._sleep(self.settings.heartbeat_every)
+
     def healthy(self) -> bool:
         return bool(self._tasks) and not any(t.done() for t in self._tasks)
 
@@ -243,6 +260,10 @@ class IngestLive:
         """Runs until `stop()`; files in progress get `grace` seconds to finish."""
         self._tasks = [asyncio.create_task(self.source_loop(s), name=s.name) for s in self.sources]
         self._tasks.append(asyncio.create_task(self.disk_loop(), name="disk"))
+        if self.heartbeat:
+            self._tasks.append(
+                asyncio.create_task(self.heartbeat_loop(self.heartbeat), name="heartbeat")
+            )
         await self._stop.wait()
         _, late = await asyncio.wait(self._tasks, timeout=grace)
         for task in late:
