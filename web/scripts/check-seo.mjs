@@ -1,5 +1,5 @@
-// Checks every built page has a unique title, description and canonical URL,
-// and that robots.txt, llms.txt and the sitemap are built.
+// Checks every built page has a unique title, description and canonical URL, that its JSON-LD
+// parses, and that robots.txt, llms.txt and the sitemap are built.
 import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import process from 'node:process';
@@ -37,9 +37,28 @@ const seen = { title: new Map(), description: new Map(), canonical: new Map() };
 
 if (files.length === 0) errors.push(`no HTML files found in ${DIST}`);
 
+function checkJsonLd(page, html) {
+	for (const [, body] of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi)) {
+		let nodes;
+		try {
+			nodes = [JSON.parse(body)].flat();
+		} catch (error) {
+			errors.push(`${page}: JSON-LD does not parse (${error.message})`);
+			continue;
+		}
+		for (const node of nodes) {
+			if (node['@context'] !== 'https://schema.org' || typeof node['@type'] !== 'string') {
+				errors.push(`${page}: JSON-LD node without schema.org @context or @type`);
+			}
+		}
+	}
+}
+
 for (const file of files) {
 	const page = relative(DIST, file);
-	const fields = extract(await readFile(file, 'utf8'));
+	const html = await readFile(file, 'utf8');
+	checkJsonLd(page, html);
+	const fields = extract(html);
 	for (const [field, values] of Object.entries(fields)) {
 		if (values.length !== 1 || !values[0]) {
 			errors.push(`${page}: expected exactly one non-empty ${field}, found ${values.length}`);

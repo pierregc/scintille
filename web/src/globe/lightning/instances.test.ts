@@ -10,10 +10,10 @@ function push(ring: FlashRing, startSeconds: number, count: number, lat = 0, lon
 	ring.push(decodeChunk(encodeChunk(startSeconds, flashes).buffer));
 }
 
-function setup(ringCapacity: number, capacity: number) {
+function setup(ringCapacity: number, capacity: number, lookbackMs = 0) {
 	const ring = new FlashRing(ringCapacity);
 	const ranges: [number, number][] = [];
-	const instances = new FlashInstances(ring, capacity, (start, count) => ranges.push([start, count]));
+	const instances = new FlashInstances(ring, capacity, (start, count) => ranges.push([start, count]), lookbackMs);
 	const times = () =>
 		Array.from({ length: instances.count }, (_, i) =>
 			Math.round(instances.origin + instances.data[i * FLASH_STRIDE + 3] * 1000),
@@ -22,7 +22,7 @@ function setup(ringCapacity: number, capacity: number) {
 }
 
 describe('FlashInstances', () => {
-	it('stores direction, relative time, intensity and radius', () => {
+	it('stores direction, relative time, intensity, radius and duration', () => {
 		const { ring, instances } = setup(8, 4);
 		push(ring, 100, 1, 30, -60);
 		instances.sync(100_000);
@@ -34,18 +34,19 @@ describe('FlashInstances', () => {
 		expect(d[3]).toBe(0);
 		expect(d[4]).toBeCloseTo(1);
 		expect(d[5]).toBeCloseTo(Math.sqrt(100 / Math.PI));
+		expect(d[6]).toBe(250);
 		expect(instances.origin).toBe(100_000);
 	});
 
 	it('uploads only new flashes, wrapping around the capacity', () => {
 		const { ring, instances, ranges, times } = setup(16, 4);
 		push(ring, 1, 3);
-		instances.sync(1000);
+		instances.sync(3000);
 		expect(ranges).toEqual([[0, 3]]);
-		instances.sync(1000);
+		instances.sync(3000);
 		expect(ranges).toHaveLength(1);
 		push(ring, 2, 2);
-		instances.sync(1000);
+		instances.sync(3000);
 		expect(ranges.slice(1)).toEqual([
 			[3, 1],
 			[0, 1],
@@ -56,9 +57,9 @@ describe('FlashInstances', () => {
 
 	it('keeps the newest flashes when more arrive than it holds', () => {
 		const { ring, instances, times } = setup(16, 3);
-		instances.sync(1000);
+		instances.sync(3000);
 		push(ring, 1, 10);
-		instances.sync(1000);
+		instances.sync(3000);
 		expect(times().sort()).toEqual([1007, 1008, 1009]);
 	});
 
@@ -69,6 +70,28 @@ describe('FlashInstances', () => {
 		instances.sync(1000);
 		expect(instances.count).toBe(4);
 		expect(times()).toEqual([1002, 1003, 1004, 1005]);
+	});
+
+	it('holds as many flashes as the ring by default', () => {
+		const ring = new FlashRing(64);
+		const instances = new FlashInstances(ring);
+		push(ring, 1, 64);
+		instances.sync(1000);
+		expect(instances.capacity).toBe(64);
+		expect(instances.count).toBe(64);
+	});
+
+	it('follows the replay playhead when it holds fewer flashes than the ring', () => {
+		const { ring, instances, times } = setup(16, 4, 2);
+		push(ring, 1, 10);
+		instances.sync(1000);
+		expect(times()).toEqual([1000, 1001, 1002, 1003]);
+		instances.sync(1005);
+		expect(times().sort()).toEqual([1003, 1004, 1005, 1006]);
+		instances.sync(1000);
+		expect(times()).toEqual([1000, 1001, 1002, 1003]);
+		instances.sync(1009);
+		expect(times().sort()).toContain(1009);
 	});
 
 	it('rebases times when the scene time moves far from the origin', () => {

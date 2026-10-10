@@ -1,0 +1,7 @@
+# Local development: the same data services next to the local lakehouse.
+#   docker compose -f infra/compose/compose.local.yaml up -d --wait --build
+include:
+  - ../../compose.yaml
+  - path:
+      - compose.yaml
+      - local.override.yaml
