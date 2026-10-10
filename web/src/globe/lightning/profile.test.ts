@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashProfile, flickerLength, PROFILE, pulseCount } from './profile';
+import { flashProfile, flickerLength, glslFloat, PROFILE, pulseCount } from './profile';
 
 const DISPLAY = 1.5;
 
@@ -34,5 +34,12 @@ describe('flashProfile', () => {
 		expect(peaks(700, 0.5, false)).toBe(1);
 		const v = Array.from({ length: 100 }, (_, i) => flashProfile(0.1 + i / 100, DISPLAY, 700, 0.5, false));
 		expect(v.every((x, i) => i === 0 || x <= v[i - 1])).toBe(true);
+	});
+});
+
+describe('glslFloat', () => {
+	it('always prints a float literal', () => {
+		expect(glslFloat(1)).toBe('1.0');
+		expect(glslFloat(0.04)).toBe('0.04');
 	});
 });
