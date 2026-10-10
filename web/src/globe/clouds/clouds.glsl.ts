@@ -95,7 +95,7 @@ void main() {
 	color *= mix(vec3(1.0), warmTint, terminatorTint * edge);
 	color += nightColor * (1.0 - level);
 	// Flashes light the cloud from inside; clear sky has no alpha, so it never glows.
-	color += flashColor * flashGain * texture2D(flashLight, vUv).r;
+	color += flashColor * (1.0 - exp(-flashGain * texture2D(flashLight, vUv).r));
 
 	float opacity = mix(sampleOpacity(cloudMap, vUv), sampleOpacity(cloudMapNext, vUv), cloudMix) * maxOpacity;
 	float mu = max(dot(n, view), 0.05);
