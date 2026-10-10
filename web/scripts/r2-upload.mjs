@@ -9,7 +9,7 @@ import process from 'node:process';
 const WEB = join(import.meta.dirname, '..');
 const FIXTURES = join(WEB, '..', 'fixtures');
 const TEXTURES = join(WEB, 'scripts', 'textures', 'out');
-export const TEXTURES_PREFIX = 'textures/v1';
+export const TEXTURES_PREFIX = 'textures/v2';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 

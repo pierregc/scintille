@@ -17,7 +17,7 @@ Both folders are git-ignored.
 ## Loading in the globe
 
 The Earth shader loads `<PUBLIC_TEXTURES_URL>/4k/{day,night,mask}.webp`. `PUBLIC_TEXTURES_URL` defaults to
-`/textures` in dev and to `https://data.scintille.app/textures/v1` in production builds. For local
+`/textures` in dev and to `https://data.scintille.app/textures/v2` in production builds. For local
 development, link the generated folder into `public/` (ignored by Git):
 
 ```sh
@@ -30,7 +30,7 @@ For production, upload them to R2 with `pnpm -C web r2:upload textures` ([deploy
 
 | Texture | Source | Resolution | License |
 |---|---|---|---|
-| `day` | [NASA Blue Marble Next Generation](https://science.nasa.gov/earth/earth-observatory/), topography and bathymetry, August 2004 (`world.topo.bathy.200408.3x21600x10800.jpg`) | 21600 × 10800 | Public domain (NASA imagery). Credit: NASA Earth Observatory |
+| `day` | [NASA Blue Marble Next Generation](https://science.nasa.gov/earth/earth-observatory/), topography without bathymetry, August 2004 (`world.topo.200408.3x21600x10800.jpg`) | 21600 × 10800 | Public domain (NASA imagery). Credit: NASA Earth Observatory |
 | `night` | [NASA Black Marble 2016](https://science.nasa.gov/earth/earth-observatory/), color map, Suomi NPP VIIRS (`BlackMarble_2016_3km.jpg`) | 13500 × 6750 | Public domain (NASA imagery). Credit: NASA Earth Observatory |
 | `mask` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:10m ocean and lakes polygons (`ne_10m_ocean`, `ne_10m_lakes`) | vector, rasterized per tier | Public domain |
 
@@ -68,9 +68,9 @@ Measured download size of each tier (day + night + mask), in MB (10^6 bytes):
 
 | Tier | Size | KTX2 day / night / mask | KTX2 total | WebP total |
 |---|---|---|---|---|
-| `8k` | 8192 × 4096 | 4.30 / 1.43 / 0.42 | 6.16 | 4.09 |
-| `4k` | 4096 × 2048 | 1.22 / 0.42 / 0.18 | 1.83 | 1.26 |
-| `2k` (mobile) | 2048 × 1024 | 0.36 / 0.14 / 0.08 | 0.59 | 0.40 |
+| `8k` | 8192 × 4096 | 2.67 / 1.43 / 0.42 | 4.53 | 3.37 |
+| `4k` | 4096 × 2048 | 0.73 / 0.42 / 0.18 | 1.34 | 1.01 |
+| `2k` (mobile) | 2048 × 1024 | 0.22 / 0.14 / 0.08 | 0.45 | 0.32 |
 
 The mobile tier is well under the 4 MB target. Sizes change if encoder settings change: re-run the
 script and update this table from `out/manifest.json`.
