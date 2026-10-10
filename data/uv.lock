@@ -2132,6 +2132,7 @@ dependencies = [
     { name = "netcdf4" },
     { name = "obstore" },
     { name = "polars" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "scintille-contract" },
 ]
 
@@ -2140,6 +2141,7 @@ requires-dist = [
     { name = "netcdf4", specifier = ">=1.7.4" },
     { name = "obstore", specifier = ">=0.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "scintille-contract", editable = "packages/scintille-contract" },
 ]
 

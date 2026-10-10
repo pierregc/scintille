@@ -1,4 +1,4 @@
-# Data services on the VPS: hot path, Dagster and Postgres. Settings come from .env (see .env.example);
+# Data services on the VPS: hot path (ingest, lake-writer), Dagster and Postgres. Settings come from .env (see .env.example);
 # locally, run compose.local.yaml (docs/deploy.md#data-services).
 name: scintille-data
 
@@ -68,10 +68,29 @@ services:
       dockerfile: Dockerfile
       args:
         PACKAGE: scintille-ingest
-    # The long-running hot path arrives with #35; until then the service is opt-in.
-    profiles: ["ingest"]
-    command: ["scintille-ingest", "glm", "--once"]
-    restart: "no"
+    command: ["scintille-ingest", "live", "--spool", "/var/lib/scintille/spool", "--port", "8080"]
+    environment:
+      SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+    volumes:
+      - spool:/var/lib/scintille/spool
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 15s
+      start_period: 20s
+      retries: 4
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Separate from ingest so that the lakehouse can never slow down or stop the live feed.
+  lake-writer:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    command: ["scintille-ingest", "lake-writer", "--spool", "/var/lib/scintille/spool"]
+    volumes:
+      - spool:/var/lib/scintille/spool
 
 volumes:
   postgres:
+  spool:
