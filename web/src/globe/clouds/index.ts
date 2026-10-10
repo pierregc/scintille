@@ -4,6 +4,7 @@ import { twilightUniforms } from '../twilight';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
 import type { CloudFrame } from './frame';
 import { browserStorage, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
+import { blendPair, easePosition, framePosition, MAX_CLOUD_FRAMES } from './timeline';
 
 export { CLOUD_FIXTURE, type CloudFrame, cloudFixtureUrl, loadCloudFrame } from './frame';
 
@@ -32,14 +33,19 @@ export interface CloudsOptions {
 	bicubic?: boolean;
 	/** Where the on/off choice persists; null keeps it in memory only. */
 	storage?: PreferenceStorage | null;
+	/** Wall clock in milliseconds, for crossfades. */
+	now?: () => number;
 }
 
 export interface Clouds {
 	mesh: Mesh;
 	readonly visible: boolean;
-	/** Observation time (UTC ms) of the frame shown, or null before the first frame. */
+	/** Observation time (UTC ms) of the frame mostly shown, or null before the first frame. */
 	readonly frameTime: number | null;
-	/** Shows a frame; the layer takes ownership of its texture and disposes the previous one. */
+	/**
+	 * Adds a frame to the timeline; the layer crossfades between the frames around the scene time.
+	 * It owns the texture: a frame with the same time replaces it, the oldest beyond the limit are disposed.
+	 */
 	setFrame(frame: CloudFrame): void;
 	/** Turns the layer on or off and remembers the choice. */
 	setVisible(visible: boolean): void;
@@ -65,6 +71,7 @@ export function createClouds(
 		anisotropy = 8,
 		bicubic = true,
 		storage = browserStorage(),
+		now = () => performance.now(),
 	}: CloudsOptions = {},
 ): Clouds {
 	const geometry = new SphereGeometry(cloudShellRadius(radius, altitudeKm), widthSegments, heightSegments);
@@ -74,6 +81,8 @@ export function createClouds(
 		fragmentShader: cloudsFragmentShader,
 		uniforms: {
 			cloudMap: { value: null },
+			cloudMapNext: { value: null },
+			cloudMix: { value: 0 },
 			cloudMapSize: { value: new Vector2(1, 1) },
 			sunDirection: { value: new Vector3(1, 0, 0) },
 			twilightEdges: { value: new Vector4(...twilight.edges) },
@@ -100,13 +109,34 @@ export function createClouds(
 	const mesh = new Mesh(geometry, material);
 	mesh.renderOrder = CLOUDS_RENDER_ORDER;
 
-	let frame: CloudFrame | null = null;
+	const frames: CloudFrame[] = [];
+	let position = Number.NaN;
+	let sceneTime = Number.NaN;
+	let lastWall = Number.NaN;
 	let visible = readCloudsVisible(storage);
 	let disposed = false;
 	const syncVisibility = () => {
-		mesh.visible = visible && frame !== null;
+		mesh.visible = visible && frames.length > 0;
 	};
 	syncVisibility();
+
+	const target = () =>
+		Number.isFinite(sceneTime) ? framePosition(frames.map((f) => f.time), sceneTime) : frames.length - 1;
+
+	const shownTime = () => {
+		const { a, b, mix } = blendPair(position, frames.length);
+		return frames[a].time + (frames[b].time - frames[a].time) * mix;
+	};
+
+	const show = () => {
+		if (frames.length === 0) return;
+		const { a, b, mix } = blendPair(position, frames.length);
+		const image = frames[a].texture.image as { width: number; height: number };
+		material.uniforms.cloudMap.value = frames[a].texture;
+		material.uniforms.cloudMapNext.value = frames[b].texture;
+		material.uniforms.cloudMix.value = mix;
+		material.uniforms.cloudMapSize.value.set(image.width, image.height);
+	};
 
 	return {
 		mesh,
@@ -114,17 +144,26 @@ export function createClouds(
 			return visible;
 		},
 		get frameTime() {
-			return frame?.time ?? null;
+			if (frames.length === 0) return null;
+			return frames[Math.min(Math.round(position), frames.length - 1)].time;
 		},
 		setFrame(next) {
 			if (disposed) return next.texture.dispose();
-			if (frame && frame.texture !== next.texture) frame.texture.dispose();
 			next.texture.anisotropy = Math.min(anisotropy, maxAnisotropy);
 			next.texture.needsUpdate = true;
-			const image = next.texture.image as { width: number; height: number };
-			material.uniforms.cloudMap.value = next.texture;
-			material.uniforms.cloudMapSize.value.set(image.width, image.height);
-			frame = next;
+			const shown = frames.length > 0 ? shownTime() : Number.NaN;
+			const same = frames.findIndex((f) => f.time === next.time);
+			if (same >= 0) {
+				if (frames[same].texture !== next.texture) frames[same].texture.dispose();
+				frames[same] = next;
+			} else {
+				frames.push(next);
+				frames.sort((x, y) => x.time - y.time);
+			}
+			while (frames.length > MAX_CLOUD_FRAMES) frames.shift()?.texture.dispose();
+			// Keep showing the same instant; the next setTime eases toward the new target.
+			position = Number.isFinite(shown) ? framePosition(frames.map((f) => f.time), shown) : target();
+			show();
 			syncVisibility();
 		},
 		setVisible(next) {
@@ -134,6 +173,13 @@ export function createClouds(
 		},
 		setTime(utcMs) {
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
+			sceneTime = utcMs;
+			const wall = now();
+			const dt = Number.isFinite(lastWall) ? (wall - lastWall) / 1000 : 0;
+			lastWall = wall;
+			if (frames.length === 0) return;
+			position = easePosition(position, target(), dt);
+			show();
 		},
 		setFlashLight(map) {
 			material.uniforms.flashLight.value = map;
@@ -141,8 +187,7 @@ export function createClouds(
 		},
 		dispose() {
 			disposed = true;
-			frame?.texture.dispose();
-			frame = null;
+			for (const f of frames.splice(0)) f.texture.dispose();
 			geometry.dispose();
 			material.dispose();
 		},

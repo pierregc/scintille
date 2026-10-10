@@ -21,6 +21,8 @@ void main() {
 
 export const cloudsFragmentShader = /* glsl */ `
 uniform sampler2D cloudMap;
+uniform sampler2D cloudMapNext;
+uniform float cloudMix;
 uniform vec2 cloudMapSize;
 uniform vec4 twilightEdges;
 uniform vec4 twilightWeights;
@@ -51,7 +53,7 @@ float twilight(float sinElevation) {
 }
 
 // Cubic B-spline from four bilinear taps: rounds texel blocks off when zoomed in.
-float sampleOpacity(vec2 uv) {
+float sampleOpacity(sampler2D map, vec2 uv) {
 #ifdef BICUBIC
 	vec2 gx = dFdx(uv);
 	vec2 gy = dFdy(uv);
@@ -68,13 +70,13 @@ float sampleOpacity(vec2 uv) {
 	vec2 g1 = w2 + w3;
 	vec2 h0 = (i - 0.5 + w1 / g0) / cloudMapSize;
 	vec2 h1 = (i + 1.5 + w3 / g1) / cloudMapSize;
-	float a = textureGrad(cloudMap, vec2(h0.x, h0.y), gx, gy).r;
-	float b = textureGrad(cloudMap, vec2(h1.x, h0.y), gx, gy).r;
-	float c = textureGrad(cloudMap, vec2(h0.x, h1.y), gx, gy).r;
-	float d = textureGrad(cloudMap, vec2(h1.x, h1.y), gx, gy).r;
+	float a = textureGrad(map, vec2(h0.x, h0.y), gx, gy).r;
+	float b = textureGrad(map, vec2(h1.x, h0.y), gx, gy).r;
+	float c = textureGrad(map, vec2(h0.x, h1.y), gx, gy).r;
+	float d = textureGrad(map, vec2(h1.x, h1.y), gx, gy).r;
 	return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * c + g1.x * d);
 #else
-	return texture2D(cloudMap, uv).r;
+	return texture2D(map, uv).r;
 #endif
 }
 
@@ -95,7 +97,7 @@ void main() {
 	// Flashes light the cloud from inside; clear sky has no alpha, so it never glows.
 	color += flashColor * (1.0 - exp(-flashGain * texture2D(flashLight, vUv).r));
 
-	float opacity = sampleOpacity(vUv) * maxOpacity;
+	float opacity = mix(sampleOpacity(cloudMap, vUv), sampleOpacity(cloudMapNext, vUv), cloudMix) * maxOpacity;
 	float mu = max(dot(n, view), 0.05);
 	float alpha = 1.0 - pow(1.0 - opacity, 1.0 / mix(1.0, mu, limbThickening));
 	alpha *= 1.0 - smoothstep(fadeLatitudes.x, fadeLatitudes.y, abs(normalize(vLocalNormal).y));
