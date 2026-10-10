@@ -43,7 +43,7 @@ On the pinned versions, DuckDB `INSERT` and `DELETE` work on a partitioned merge
 (`test_duckdb_write_path_on_a_partitioned_gold_table`, `-m lake`). Writes still go through one
 PyIceberg overwrite per day: a single atomic commit, the same path as silver backfills, and testable
 on the SQLite catalog. `region_daily` downloads Natural Earth admin-0 countries
-once (pinned checksum, cached in `SCINTILLE_CACHE_DIR`) and needs DuckDB's `spatial` extension.
+once (pinned checksum, cached in `SCINTILLE_CACHE_DIR`, the `cache` volume in compose) and needs DuckDB's `spatial` extension.
 
 ## Resources
 
