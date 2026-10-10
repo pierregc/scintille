@@ -124,14 +124,14 @@ CREATE TABLE IF NOT EXISTS ops_status (
 # One row per spooled file key, from ingest-live's `ingest_files` table.
 FILE_STATS = """
 WITH files AS (
-    SELECT source, key, min(updated_at) AS at
+    SELECT source, key, min(updated_at) AS at, max(updated_at) AS last
     FROM ingest_files
     WHERE state = 'spooled' AND updated_at > %(budget_start)s
     GROUP BY source, key
 )
 SELECT source,
     count(*) FILTER (WHERE at > %(hour_start)s),
-    max(at),
+    max(last),
     count(*),
     min(at)
 FROM files
