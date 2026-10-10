@@ -14,10 +14,9 @@ source at a time, with the same parsing and validation code as the hot path
 3. Downloads in parallel, parses on one thread (HDF5 is not thread-safe), validates. The 99 % rule
    applies again to the files that actually parsed, and an empty result is refused: unreadable
    files never replace a good partition.
-4. Under the partition's Postgres advisory lock (shared with lake-writer), refuses to write while
-   the hot path still has spooled files of that day (in `ingest_files`, not yet in bronze): they
-   would land on top of the rebuild as duplicates. Once lake-writer has drained them, relaunch.
-   If the spool is known to be lost, the run config `ignore_pending: true` skips this guard.
+4. Takes the partition's Postgres advisory lock (shared with lake-writer). A live batch of the same
+   files drained later is not a problem: lake-writer replaces rows by product file, so it
+   replaces the rebuilt rows of that file instead of duplicating them.
 5. Replaces, each in one Iceberg commit: the day of that source in `silver.flashes` (deduplicated
    on `flash_id`), its rows in `bronze.ingest_log` (on `key`) and the quarantine rows of its files.
    An interrupted run never reaches the commits, so the partition stays as it was; Iceberg has no
@@ -26,6 +25,5 @@ source at a time, with the same parsing and validation code as the hot path
 
 Launch from the Dagster UI: select partitions (any date range × source) and materialize. Runs are
 queued one backfill at a time (the asset is in the `noaa` pool, limited to one run in
-`dagster.yaml`); every partition is
-independent, so a stopped backfill resumes by launching the missing partitions. The `raw/` cache is
-not used yet: the hot path does not upload raw files (raw cache hook in #35).
+`dagster.yaml`); every partition is independent, so a stopped backfill resumes by launching the
+missing partitions. Backfills always read NOAA; they do not read the hot path's `raw/` cache yet.

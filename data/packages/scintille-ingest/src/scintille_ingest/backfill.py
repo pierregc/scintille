@@ -33,24 +33,18 @@ Lister = Callable[[datetime], list[Product]]
 Fetcher = Callable[[Product], bytes]
 Parser = Callable[[Product, bytes, datetime], IngestedFile]
 Locker = Callable[[Iterable[str]], AbstractContextManager[object]]
-Spooled = Callable[[date, str], set[str]]
 
 
 def no_lock(keys: Iterable[str]) -> AbstractContextManager[object]:
     return nullcontext()
 
 
-def nothing_spooled(day: date, source: str) -> set[str]:
-    return set()
-
-
 class IncompletePartition(Exception):
     """Not enough upstream files parsed: the existing partition is left as it is."""
 
 
-class PendingBatches(Exception):
-    """The hot path still has files of this partition to commit: rebuilding now would let them
-    land on top of the rebuild as duplicates."""
+class DayNotClosed(Exception):
+    """The hot path may still be writing this day: its files are not all upstream yet."""
 
 
 def _name(key: str) -> str:
@@ -78,8 +72,6 @@ def backfill_partition(
     parser_version: str,
     calibration_version: str = "none",
     locker: Locker = no_lock,
-    spooled: Spooled = nothing_spooled,
-    ignore_pending: bool = False,
     workers: int = 8,
     min_completeness: float = MIN_COMPLETENESS,
     expected_files: int | None = None,
@@ -87,15 +79,15 @@ def backfill_partition(
 ) -> BackfillResult:
     """Downloads and parses every file of `day`, then replaces the partition.
 
-    Nothing is written unless at least `min_completeness` of the expected files parsed, the day is
-    closed and the hot path has no file of it left to commit (`spooled` keys not yet in bronze).
-    `spooled` lists the keys the hot path has spooled for a day and source.
+    Nothing is written unless the day is closed and at least `min_completeness` of the expected
+    files parsed. lake-writer replaces rows by product file, so a live batch drained after the
+    rebuild replaces that file's rows instead of duplicating them.
     """
     start = datetime(day.year, day.month, day.day, tzinfo=UTC)
     end = start + timedelta(days=1)
     received = now()
     if received < end + LIVE_MARGIN:
-        raise PendingBatches(f"{source} {day}: the day is not closed yet")
+        raise DayNotClosed(f"{source} {day}: the day is not closed yet")
     hours = [start - timedelta(hours=1)] + [start + timedelta(hours=h) for h in range(25)]
     # One product per start time; a reprocessed file replaces the original (later name wins).
     latest: dict[datetime, Product] = {}
@@ -157,27 +149,6 @@ def backfill_partition(
         silver = catalog.load_table(FLASHES.identifier)
         bronze = catalog.load_table(INGEST_LOG.identifier)
         quarantine = catalog.load_table(FLASHES_QUARANTINE.identifier)
-        # Files of the previous day that start just before midnight also write into this day.
-        edge_names = {_name(p.key) for p in edge if p.start < start}
-        candidates = {_name(k) for k in spooled(day, source)} | (
-            {_name(k) for k in spooled(day - timedelta(days=1), source)} & edge_names
-        )
-        committed_filter = (
-            f"product_start >= '{(start - EDGE).isoformat()}'"
-            f" AND product_start < '{end.isoformat()}' AND source == '{source}'"
-        )
-        committed = {
-            _name(str(k))
-            for k in bronze.scan(row_filter=committed_filter, selected_fields=("key",))
-            .to_arrow()["key"]
-            .to_pylist()
-        }
-        pending = candidates - committed
-        if pending and not ignore_pending:
-            raise PendingBatches(
-                f"{source} {day}: {len(pending)} spooled files not committed yet,"
-                f" e.g. {sorted(pending)[0]}"
-            )
         silver.overwrite(
             to_silver(flashes).to_arrow().cast(silver.schema().as_arrow()),
             overwrite_filter=f"event_time >= {span.format('event_time')} AND source == '{source}'",

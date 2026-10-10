@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import threading
 import time
@@ -11,11 +12,15 @@ import pyarrow as pa
 import pytest
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
-from scintille_ingest.backfill import IncompletePartition, PendingBatches, backfill_partition
+from scintille_ingest.backfill import DayNotClosed, IncompletePartition, backfill_partition
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
+from scintille_ingest.runtime.lake_commit import LakeCommit
+from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import Product
+from scintille_ingest.runtime.spool import Spool
+from scintille_ingest.runtime.state import MemoryState
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 
@@ -200,33 +205,46 @@ def test_a_reprocessed_upstream_file_is_read_once(catalog: Catalog) -> None:
     assert catalog.load_table(INGEST_LOG.identifier).scan().to_arrow().num_rows == FILES
 
 
-def test_waits_for_spooled_files_of_the_partition(catalog: Catalog) -> None:
-    run(Upstream(), catalog)
-    snapshot = catalog.load_table(FLASHES.identifier).current_snapshot()
-    keys = {p.key for p in Upstream().products}
-    with pytest.raises(PendingBatches, match="not committed"):
-        run(Upstream(), catalog, spooled=lambda day, source: keys | {"GLM/late.nc"})
-    assert catalog.load_table(FLASHES.identifier).current_snapshot() == snapshot
-    run(Upstream(), catalog, spooled=lambda day, source: keys & {"GLM/00010.nc"})
-    run(Upstream(), catalog, spooled=lambda day, source: {"GLM/lost.nc"}, ignore_pending=True)
-    assert silver(catalog).num_rows == FILES * 3
+class LiveSource:
+    """The hot path's view of the same upstream files."""
+
+    name = "glm-west"
+    cadence = 1.0
+
+    def __init__(self, upstream: Upstream, products: list[Product]) -> None:
+        self.upstream, self.products = upstream, products
+
+    async def list_recent(self, now: datetime) -> list[Product]:
+        return self.products
+
+    async def fetch(self, product: Product) -> bytes:
+        return self.upstream.fetch(product)
+
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        return self.upstream.parse(product, data, received_at)
 
 
-def test_waits_for_a_spooled_file_of_the_previous_day_that_crosses_midnight(
-    catalog: Catalog,
+def test_a_live_batch_drained_after_the_rebuild_does_not_duplicate(
+    tmp_path: Path, catalog: Catalog
 ) -> None:
     upstream = Upstream()
-    edge = Product("GLM/edge.nc", START - timedelta(minutes=1))
-    upstream.products.append(edge)
-
-    def spooled(day: date, source: str) -> set[str]:
-        return {edge.key} if day < DAY else set()
-
-    with pytest.raises(PendingBatches, match=r"edge\.nc"):
-        run(upstream, catalog, spooled=spooled)
+    spool = Spool(tmp_path / "spool")
+    live = LiveSource(upstream, upstream.products[:3] + upstream.products[-2:])
+    service = IngestLive([live], MemoryState(), spool, clock=lambda: START)
+    asyncio.run(service.poll(live))
+    assert len(spool.pending()) == 5
+    run(upstream, catalog)
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+    rows = silver(catalog)
+    times = [t for t in rows["event_time"].to_pylist() if t is not None]
+    day_rows = [t for t in times if START <= t < START + timedelta(days=1)]
+    assert len(day_rows) == FILES * 3
+    assert len(set(rows["flash_id"].to_pylist())) == rows.num_rows
+    log = catalog.load_table(INGEST_LOG.identifier).scan().to_arrow()
+    assert len(set(log["key"].to_pylist())) == log.num_rows
 
 
 def test_refuses_a_day_still_being_written(catalog: Catalog) -> None:
-    with pytest.raises(PendingBatches, match="not closed"):
+    with pytest.raises(DayNotClosed):
         run(Upstream(), catalog, now=lambda: START + timedelta(days=1, minutes=30))
     assert silver(catalog).num_rows == 0
