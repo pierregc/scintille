@@ -1,4 +1,4 @@
-"""`lake-writer`: drains the spool into the lakehouse. The commit itself arrives with #39."""
+"""`lake-writer`: drains the spool into the lakehouse on a fixed interval."""
 
 import asyncio
 import contextlib
@@ -14,7 +14,7 @@ Commit = Callable[[Spool, list[str]], None]
 
 
 def log_only(spool: Spool, batches: list[str]) -> None:
-    """Placeholder until #39: reports the backlog and leaves the spool untouched."""
+    """Reports the backlog and leaves the spool untouched (no catalog configured)."""
     log.info(
         "spool backlog", extra={"fields": {"batches": len(batches), "bytes": spool.size_bytes()}}
     )
