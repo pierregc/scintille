@@ -1,4 +1,6 @@
 ---
+import { type JsonLd, serialize } from '../seo/jsonld';
+
 interface Props {
 	title: string;
 	description: string;
@@ -7,6 +9,8 @@ interface Props {
 	image?: string;
 	imageAlt?: string;
 	type?: 'website' | 'article';
+	/** schema.org nodes for this page. */
+	jsonLd?: JsonLd[];
 }
 
 const {
@@ -16,6 +20,7 @@ const {
 	image = '/og-default.png',
 	imageAlt = 'Scintille',
 	type = 'website',
+	jsonLd = [],
 } = Astro.props;
 
 const canonicalUrl = new URL(canonical ?? Astro.url.pathname, Astro.site).href;
@@ -50,6 +55,7 @@ const imageUrl = new URL(image, Astro.site).href;
 		<meta name="twitter:description" content={description} />
 		<meta name="twitter:image" content={imageUrl} />
 		<meta name="twitter:image:alt" content={imageAlt} />
+		{jsonLd.length > 0 && <script type="application/ld+json" set:html={serialize(jsonLd)} />}
 	</head>
 	<body>
 		<slot />
