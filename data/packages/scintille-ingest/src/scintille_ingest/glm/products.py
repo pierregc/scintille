@@ -40,6 +40,7 @@ class ProductKey:
     start: datetime
     end: datetime
     created: datetime
+    etag: str | None = None
 
     @property
     def name(self) -> str:
