@@ -94,6 +94,25 @@ describe('FlashInstances', () => {
 		expect(times().sort()).toContain(1009);
 	});
 
+	it('reloads older flashes from the ring when the lookback grows', () => {
+		const { ring, instances, times } = setup(16, 4, 2);
+		push(ring, 1, 10);
+		instances.sync(1008);
+		expect(times().sort()).toEqual([1006, 1007, 1008, 1009]);
+		instances.lookbackMs = 3;
+		instances.sync(1008);
+		expect(times().sort()).toEqual([1005, 1006, 1007, 1008]);
+	});
+
+	it('keeps the flashes closest to the playhead when the lookback holds more than fits', () => {
+		const { ring, instances, times } = setup(16, 4, 60_000);
+		push(ring, 1, 10);
+		instances.sync(1008);
+		expect(times().sort()).toEqual([1005, 1006, 1007, 1008]);
+		instances.sync(1009);
+		expect(times().sort()).toEqual([1006, 1007, 1008, 1009]);
+	});
+
 	it('rebases times when the scene time moves far from the origin', () => {
 		const { ring, instances, ranges } = setup(8, 8);
 		push(ring, 1, 2);

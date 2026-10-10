@@ -69,8 +69,14 @@ import Timeline from './Timeline.astro';
 
 	<p class="stale cap" role="status" data-stale hidden></p>
 
-	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
-		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+	<div class="layers" data-layers hidden>
+		<div class="group" role="group" aria-label="Layers">
+			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+		</div>
+		<div class="afterglow">
+			<span class="cap" id="afterglow-label">Afterglow</span>
+			<div class="opts" role="radiogroup" aria-labelledby="afterglow-label" data-display></div>
+		</div>
 	</div>
 
 	<Timeline />
@@ -310,6 +316,47 @@ import Timeline from './Timeline.astro';
 	.sw:hover {
 		color: var(--soft);
 	}
+	.group {
+		display: grid;
+		gap: 14px;
+		justify-items: end;
+	}
+	.afterglow {
+		display: grid;
+		gap: 6px;
+		justify-items: end;
+	}
+	.opts {
+		display: flex;
+		gap: 12px;
+		align-items: baseline;
+	}
+	.opts :global(button) {
+		min-width: 14px;
+		min-height: 24px;
+		padding: 0 0 4px;
+		color: var(--dim);
+		font: 300 11px/1 var(--mono);
+		font-variant-numeric: tabular-nums;
+		text-shadow: inherit;
+		cursor: pointer;
+		background: none;
+		border: 0;
+		border-bottom: 1px solid transparent;
+		transition: color 0.6s ease;
+	}
+	.opts :global(button:hover) {
+		color: var(--soft);
+	}
+	.opts :global(button[aria-checked='true']) {
+		color: var(--ink);
+		border-bottom-color: var(--soft);
+	}
+	.opts :global(small) {
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+	}
 
 	.info {
 		position: fixed;
@@ -515,6 +562,7 @@ import Timeline from './Timeline.astro';
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
 	import { formatUtcDate, formatUtcTime } from './hud/format';
 
@@ -529,6 +577,7 @@ import Timeline from './Timeline.astro';
 		const info = $<HTMLDetailsElement>('[data-info]');
 		const sources = $('[data-sources]');
 		const staleBanner = $('[data-stale]');
+		const display = $('[data-display]');
 		let app: GlobeApp | undefined;
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
@@ -566,7 +615,39 @@ import Timeline from './Timeline.astro';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+			for (const { minutes, button } of displayButtons) {
+				const checked = app?.lightning.displayMinutes === minutes;
+				button.setAttribute('aria-checked', String(checked));
+				button.tabIndex = checked ? 0 : -1;
+			}
 		};
+
+		const chooseDisplay = (index: number) => {
+			const choice = displayButtons[(index + displayButtons.length) % displayButtons.length];
+			app?.lightning.setDisplayMinutes(choice.minutes);
+			tick();
+			choice.button.focus();
+		};
+		const displayButtons = DISPLAY_MINUTES.map((minutes, index) => {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.setAttribute('role', 'radio');
+			button.setAttribute('aria-label', `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+			button.textContent = String(minutes);
+			button.addEventListener('click', () => chooseDisplay(index));
+			button.addEventListener('keydown', (event) => {
+				const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+				if (!step) return;
+				event.preventDefault();
+				chooseDisplay(index + step);
+			});
+			display?.append(button);
+			return { minutes, button };
+		});
+		const unit = document.createElement('small');
+		unit.setAttribute('aria-hidden', 'true');
+		unit.textContent = 'MIN';
+		display?.append(unit);
 		tick();
 		setInterval(tick, 250);
 
