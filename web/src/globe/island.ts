@@ -4,6 +4,7 @@ import { getWebGL2Context } from './webgl';
 /** Window events announcing the running globe app, for the HUD. */
 export const GLOBE_READY = 'globe:ready';
 export const GLOBE_GONE = 'globe:gone';
+export const GLOBE_FALLBACK = 'globe:fallback';
 
 interface IslandElements {
 	canvas: HTMLCanvasElement;
@@ -29,6 +30,7 @@ export function mountGlobeIsland({ canvas, fallback }: IslandElements): void {
 	const showFallback = () => {
 		canvas.hidden = true;
 		fallback.hidden = false;
+		window.dispatchEvent(new CustomEvent(GLOBE_FALLBACK));
 	};
 
 	const start = async () => {

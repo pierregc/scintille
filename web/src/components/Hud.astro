@@ -467,7 +467,7 @@ import '@fontsource/ibm-plex-mono/latin-300.css';
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
@@ -508,6 +508,9 @@ import '@fontsource/ibm-plex-mono/latin-300.css';
 		window.addEventListener(GLOBE_GONE, () => {
 			app = undefined;
 			if (layers) layers.hidden = true;
+		});
+		window.addEventListener(GLOBE_FALLBACK, () => {
+			if (info) info.open = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
 			app?.clock.live();
