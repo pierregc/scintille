@@ -38,6 +38,11 @@ export class SceneClock {
 		return this.#speed;
 	}
 
+	/** Wall-clock time in UTC milliseconds, whatever the mode: for data freshness, never for the scene. */
+	wallTime(): number {
+		return this.#now();
+	}
+
 	/** Current scene time in UTC milliseconds. */
 	time(): number {
 		switch (this.#mode) {

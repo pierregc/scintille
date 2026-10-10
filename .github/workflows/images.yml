@@ -1,0 +1,122 @@
+name: images
+
+on:
+  pull_request:
+    paths: ["data/**", "compose.yaml", "infra/local/**", "infra/compose/**", ".github/workflows/images.yml"]
+  push:
+    branches: [main]
+    paths: ["data/**", "compose.yaml", "infra/local/**", "infra/compose/**", ".github/workflows/images.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        package: [scintille-ingest, scintille-pipelines]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: data
+          file: data/Dockerfile
+          build-args: PACKAGE=${{ matrix.package }}
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.package }}:main
+          cache-from: type=gha,scope=${{ matrix.package }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.package }}
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Local stack from the VPS compose file
+        run: |
+          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer lakekeeper
+          docker compose -f infra/compose/compose.local.yaml run --rm lake-init
+      - name: Webserver answers, daemon is alive, images run as non-root
+        run: |
+          curl -sf http://127.0.0.1:3000/server_info
+          docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon dagster-daemon liveness-check
+          test "$(docker compose -f infra/compose/compose.local.yaml exec -T dagster-daemon id -u)" = 10001
+          docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())"
+      - name: Original files reach the raw cache
+        run: |
+          for _ in $(seq 30); do
+            docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "import obstore; from scintille_ingest.runtime.raw_cache import r2_store_from_env; n = sum(len(b) for b in obstore.list(r2_store_from_env(), prefix='raw/')); print(n, 'raw files'); assert n" && exit 0
+            sleep 5
+          done
+          exit 1
+      - name: Live manifest lists chunks with flashes
+        run: |
+          for i in $(seq 1 24); do
+            if docker compose -f infra/compose/compose.local.yaml exec -T ingest python -c "
+          import json, obstore
+          from obstore.store import S3Store
+          s = S3Store('scintille-lake', endpoint='http://localhost:9000', access_key_id='scintille-local', secret_access_key='scintille-local-secret', region='auto', client_options={'allow_http': True})
+          m = json.loads(obstore.get(s, 'live/manifest.json').bytes().to_bytes())
+          print(len(m['chunks']), 'chunks,', sum(c['flash_count'] for c in m['chunks']), 'flashes,', [(x['source'], x['state']) for x in m['sources']])
+          assert sum(c['flash_count'] for c in m['chunks']) > 0
+          "; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - if: failure()
+        run: docker compose -f infra/compose/compose.local.yaml logs
+
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: infra/compose/test_deploy.sh
+
+  deploy:
+    # Off until the VPS secrets exist and the repository variable VPS_DEPLOY is "true" (docs/deploy.md).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.VPS_DEPLOY == 'true'
+    needs: [build, smoke, rollback]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: vps-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy and roll back on failure
+        env:
+          HOST: ${{ vars.VPS_HOST }}
+        run: |
+          ssh "deploy@$HOST" "mkdir -p /srv/scintille/releases/$GITHUB_SHA"
+          scp infra/compose/compose.yaml "deploy@$HOST:/srv/scintille/releases/$GITHUB_SHA/"
+          scp infra/compose/deploy.sh "deploy@$HOST:/srv/scintille/"
+          ssh "deploy@$HOST" "/srv/scintille/deploy.sh $GITHUB_SHA"
