@@ -1,18 +1,30 @@
-"""Command line: `scintille-ingest glm --once`."""
+"""Command line: `scintille-ingest glm --once`, `live` and `lake-writer`."""
 
 import argparse
+import asyncio
 import logging
+import os
+import signal
 import statistics
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 import polars as pl
 
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
+from scintille_ingest.runtime import health
+from scintille_ingest.runtime.lake_writer import LakeWriter
+from scintille_ingest.runtime.logs import configure as configure_json_logs
+from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
+from scintille_ingest.runtime.service import IngestLive
+from scintille_ingest.runtime.sources import GlmSource
+from scintille_ingest.runtime.spool import Spool
+from scintille_ingest.runtime.state import PostgresState
 
 log = logging.getLogger("scintille_ingest")
 
@@ -27,9 +39,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     glm.add_argument("--east-bucket", help="override the GOES-East bucket")
     glm.add_argument("--west-bucket", help="override the GOES-West bucket")
     glm.add_argument("--rows", type=int, default=5, help="flashes to print per file")
+    live = commands.add_parser("live", help="run ingest-live: sources to live feed and spool")
+    live.add_argument(
+        "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
+    )
+    live.add_argument("--port", type=int, default=8080, help="/healthz and /metrics")
+    writer = commands.add_parser("lake-writer", help="drain the spool into the lakehouse")
+    writer.add_argument(
+        "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
+    )
+    writer.add_argument("--interval", type=float, default=300.0, help="seconds between drains")
     args = parser.parse_args(argv)
+    if args.command == "live":
+        return asyncio.run(run_live(args.spool, args.port))
+    if args.command == "lake-writer":
+        return asyncio.run(run_lake_writer(args.spool, args.interval))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
     if not args.once:
         parser.error("only --once is supported for now")
     buckets = {"glm-east": args.east_bucket, "glm-west": args.west_bucket}
@@ -37,6 +62,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         replace(sat, bucket=buckets[sat.source] or sat.bucket) for sat in satellites_from_env()
     ]
     return glm_once(satellites, args.rows)
+
+
+async def run_live(spool_dir: Path, port: int) -> int:
+    """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`), original files
+    in R2 (`SCINTILLE_R2_*`)."""
+    configure_json_logs()
+    dsn = os.environ.get("SCINTILLE_POSTGRES_DSN")
+    if not dsn:
+        log.error("SCINTILLE_POSTGRES_DSN is not set")
+        return 2
+    service = IngestLive(
+        [GlmSource(s) for s in satellites_from_env()],
+        PostgresState(dsn),
+        Spool(spool_dir),
+        raw_cache=ObjectRawCache(r2_store_from_env()),
+    )
+    server = await health.serve(port, service.healthy, service.metrics.render)
+    _stop_on_signals(service.stop)
+    async with server:
+        await service.run()
+    return 0
+
+
+async def run_lake_writer(spool_dir: Path, interval: float) -> int:
+    configure_json_logs()
+    writer = LakeWriter(Spool(spool_dir), interval=interval)
+    _stop_on_signals(writer.stop)
+    await writer.run()
+    return 0
+
+
+def _stop_on_signals(stop: Callable[[], None]) -> None:
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop)
 
 
 def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
