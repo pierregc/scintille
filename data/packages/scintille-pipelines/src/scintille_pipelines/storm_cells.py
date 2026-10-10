@@ -30,6 +30,7 @@ from scintille_lake.migrate import sync_table
 from scintille_lake.tables import FLASHES, gold_table
 
 from .clustering import Params, st_dbscan, summarize
+from .hotspots import HotspotRule, drop_hotspots, fixed_hotspots
 from .resources import LakeResource
 
 hourly = HourlyPartitionsDefinition(start_date="2026-07-01-00:00", timezone="UTC")
@@ -71,21 +72,39 @@ class StormCellsConfig(Config):
     eps_minutes: float = 10.0
     min_pts: int = 10
     overlap_minutes: int = 30
+    hotspot_min_flashes: int = 2000
+    hotspot_min_hours: int = 12
+    hotspot_radius_km: float = 10.0
 
     @property
     def params(self) -> Params:
         return Params(self.eps_km, self.eps_minutes, self.min_pts)
 
+    @property
+    def rule(self) -> HotspotRule:
+        return HotspotRule(
+            min_flashes=self.hotspot_min_flashes,
+            min_hours=self.hotspot_min_hours,
+            radius_km=self.hotspot_radius_km,
+        )
+
 
 def hour_cells(
-    flashes: pl.DataFrame, hour: datetime, overlap: timedelta, params: Params
+    flashes: pl.DataFrame,
+    hour: datetime,
+    overlap: timedelta,
+    params: Params,
+    rule: HotspotRule | None = None,
 ) -> pl.DataFrame:
     """Cells of [hour - overlap, hour + 1 h) with at least one flash in the hour itself.
 
-    Cells entirely inside the overlap belong to the previous window.
+    Cells entirely inside the overlap belong to the previous window. With a `rule`, flashes
+    of fixed hot spots seen over the lookback ending with the hour are left out.
     """
     end = hour + timedelta(hours=1)
     window = flashes.filter(pl.col("event_time").is_between(hour - overlap, end, closed="left"))
+    if rule is not None:
+        window = drop_hotspots(window, fixed_hotspots(flashes, end, rule), rule.radius_km)
     t = window["event_time"].dt.epoch("us").to_numpy() / 1e6
     labels = st_dbscan(window["lat"].to_numpy(), window["lon"].to_numpy(), t, params)
     cells = summarize(window, labels, hour, end, params)
@@ -93,11 +112,16 @@ def hour_cells(
 
 
 def range_cells(
-    flashes: pl.DataFrame, start: datetime, end: datetime, overlap: timedelta, params: Params
+    flashes: pl.DataFrame,
+    start: datetime,
+    end: datetime,
+    overlap: timedelta,
+    params: Params,
+    rule: HotspotRule | None = None,
 ) -> pl.DataFrame:
     hours = int((end - start) / timedelta(hours=1))
     frames = [
-        hour_cells(flashes, start + timedelta(hours=h), overlap, params) for h in range(hours)
+        hour_cells(flashes, start + timedelta(hours=h), overlap, params, rule) for h in range(hours)
     ]
     return pl.concat(frames)
 
@@ -141,13 +165,15 @@ def storm_cells(
 ) -> MaterializeResult:  # type: ignore[type-arg]
     start, end = context.partition_time_window
     overlap = timedelta(minutes=config.overlap_minutes)
+    rule = config.rule
+    lookback = max(overlap, timedelta(hours=rule.lookback_hours))
     catalog = lake.catalog()
     sync_table(catalog, STORM_CELLS)
     flashes = pl.from_arrow(
         catalog.load_table(FLASHES.identifier)
         .scan(
             row_filter=(
-                f"event_time >= '{(start - overlap).isoformat()}' "
+                f"event_time >= '{(start - lookback).isoformat()}' "
                 f"AND event_time < '{end.isoformat()}'"
             ),
             selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
@@ -155,7 +181,7 @@ def storm_cells(
         .to_arrow()
     )
     assert isinstance(flashes, pl.DataFrame)
-    cells = range_cells(flashes, start, end, overlap, config.params)
+    cells = range_cells(flashes, start, end, overlap, config.params, rule)
     table = catalog.load_table(STORM_CELLS.identifier)
     table.overwrite(
         cells.to_arrow().cast(table.schema().as_arrow()),
@@ -165,7 +191,8 @@ def storm_cells(
     )
     return MaterializeResult(
         metadata={
-            "flashes": flashes.height,
+            "flashes": flashes.filter(pl.col("event_time") >= start - overlap).height,
+            "hotspots": fixed_hotspots(flashes, end, rule).height,
             "cells": cells.height,
             "clustered_flashes": int(cells["flash_count"].sum()),
         },
