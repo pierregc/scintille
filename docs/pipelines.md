@@ -39,9 +39,10 @@ replaced in the gold table in one PyIceberg commit. Upstream tables are `{placeh
 and dependencies are asset deps, so a later move to dbt is mechanical. Checks are SQL selecting the
 failing rows, like dbt generic tests. Gold tables are merge-on-read (`gold_table()`).
 
-The DuckDB Iceberg extension cannot yet be trusted to replace a partition atomically, so writes go
-through PyIceberg; `test_duckdb_write_path_on_a_partitioned_gold_table` (`-m lake`) tracks what
-DuckDB writes do on the pinned versions. `region_daily` downloads Natural Earth admin-0 countries
+On the pinned versions, DuckDB `INSERT` and `DELETE` work on a partitioned merge-on-read gold table
+(`test_duckdb_write_path_on_a_partitioned_gold_table`, `-m lake`). Writes still go through one
+PyIceberg overwrite per day: a single atomic commit, the same path as silver backfills, and testable
+on the SQLite catalog. `region_daily` downloads Natural Earth admin-0 countries
 once (pinned checksum, cached in `SCINTILLE_CACHE_DIR`) and needs DuckDB's `spatial` extension.
 
 ## Resources
