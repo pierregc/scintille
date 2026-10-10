@@ -3,16 +3,18 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
-from dagster import EnvVar, materialize
+from dagster import EnvVar, RunRequest, build_schedule_context, build_sensor_context, materialize
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES
+from scintille_pipelines import automation
 from scintille_pipelines.alerts import failure_payload
 from scintille_pipelines.assets import (
     DAILY_FLASH_COUNTS,
     check_counts,
     count_by_source,
+    daily,
     daily_flash_counts,
     day_bounds,
 )
@@ -120,3 +122,21 @@ def test_secrets_come_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(env_or("SCINTILLE_POSTGRES_DSN", "x"), EnvVar)
     monkeypatch.delenv("SCINTILLE_POSTGRES_DSN")
     assert env_or("SCINTILLE_POSTGRES_DSN", "x") == "x"
+
+
+MIDDAY = datetime(2026, 7, 16, 12, tzinfo=UTC)
+
+
+def test_sensor_requests_the_open_day(lake: SqliteLake, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(automation, "utc_now", lambda: MIDDAY)
+    request = automation.silver_changed(build_sensor_context(resources={"lake": lake}))
+    assert isinstance(request, RunRequest)
+    assert request.partition_key == "2026-07-16"
+    assert "2026-07-16" in daily.get_partition_keys(current_time=MIDDAY)
+
+
+def test_schedule_requests_the_last_closed_day() -> None:
+    tick = datetime(2026, 7, 16, 1, 30, tzinfo=UTC)
+    request = automation.daily_gold_schedule(build_schedule_context(scheduled_execution_time=tick))
+    assert isinstance(request, RunRequest)
+    assert request.partition_key == "2026-07-15"
