@@ -151,6 +151,8 @@ America, south-east and central US, Europe), grow and decay over 30 to 120 minut
 the wind. Each flash is assigned to the instrument that covers it; product files of 20 s (GLM) or
 30 s (LI) arrive 12 to 35 s after they close. GOES-West stops 4 minutes before the end and is
 marked `delayed`, so clients can exercise the degraded state.
+`metrics.json` holds the matching `OpsMetrics` for the end of that hour (flash counts derived from
+the chunks) and feeds `/status` in development.
 
 ```sh
 python3 fixtures/serve.py        # http://localhost:8787/ shows the decoded hour

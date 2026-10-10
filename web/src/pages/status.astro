@@ -1,0 +1,272 @@
+---
+import '@fontsource/ibm-plex-sans/latin-200.css';
+import '@fontsource/ibm-plex-sans/latin-300.css';
+import '@fontsource/ibm-plex-mono/latin-200.css';
+import '@fontsource/ibm-plex-mono/latin-300.css';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+	title="Status · Scintille"
+	description="Live operational metrics of the Scintille lightning feed: throughput, latency, completeness and freshness against their targets."
+>
+	<main class="status" data-stale="true">
+		<header class="top">
+			<a class="name" href="/">Scintille</a>
+			<h1>Status</h1>
+			<p class="state"><span class="pulse" aria-hidden="true"></span><span class="cap" data-state>Connecting</span><span class="cap asof" data-asof></span></p>
+			<p class="banner" data-banner role="status">Waiting for metrics</p>
+		</header>
+
+		<div class="sources" data-sources></div>
+
+		<div class="layers">
+			<section>
+				<h2>Freshness</h2>
+				<div data-freshness></div>
+			</section>
+			<section>
+				<h2>Data quality</h2>
+				<div data-quality></div>
+			</section>
+			<section>
+				<h2>Lakehouse, this month</h2>
+				<div data-lake></div>
+			</section>
+		</div>
+
+		<p class="note">
+			Measured by the ingestion service and refreshed every minute. Flashes are counted per minute of
+			ingestion; the last minute is still in progress. Lakehouse size and storms detected are not
+			published yet.
+		</p>
+	</main>
+</BaseLayout>
+
+<script>
+	import { startStatusPage } from '../status/page';
+
+	const root = document.querySelector<HTMLElement>('.status');
+	if (root) startStatusPage(root);
+</script>
+
+<style>
+	.status {
+		--ink: rgb(238 242 247 / 0.9);
+		--soft: rgb(238 242 247 / 0.62);
+		--dim: rgb(238 242 247 / 0.4);
+		--hair: rgb(238 242 247 / 0.14);
+		--mono: 'IBM Plex Mono', ui-monospace, monospace;
+		--sans: 'IBM Plex Sans', system-ui, sans-serif;
+		--gut: clamp(16px, 2.6vw, 40px);
+		max-width: 1120px;
+		margin: 0 auto;
+		padding: var(--gut);
+		color: var(--ink);
+		font: 300 14px/1.6 var(--sans);
+		font-variant-numeric: tabular-nums;
+		-webkit-font-smoothing: antialiased;
+	}
+	.status :global(h2),
+	.cap,
+	.status :global(dt),
+	.status :global(.axis),
+	.status :global(.verdict) {
+		font: 300 10px/1.4 var(--mono);
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: var(--dim);
+	}
+	.status :global(h2) {
+		margin: 0;
+		color: var(--soft);
+	}
+	.name {
+		color: var(--ink);
+		font: 200 18px/1 var(--sans);
+		letter-spacing: 0.5em;
+		text-transform: uppercase;
+		text-decoration: none;
+	}
+	h1 {
+		margin: 28px 0 0;
+		font: 200 40px/1 var(--mono);
+		letter-spacing: 0.04em;
+	}
+	.state {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 14px 0 0;
+	}
+	.state .cap {
+		color: var(--soft);
+	}
+	.state .asof {
+		color: var(--dim);
+	}
+	.pulse {
+		width: 5px;
+		height: 5px;
+		background: var(--ink);
+		border-radius: 50%;
+		box-shadow: 0 0 10px rgb(255 255 255 / 0.8);
+		animation: breathe 3.2s ease-in-out infinite;
+	}
+	.status[data-stale='true'] .pulse {
+		opacity: 0.4;
+		box-shadow: none;
+		animation: none;
+	}
+	@keyframes breathe {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.25;
+		}
+	}
+	.banner {
+		margin: 10px 0 0;
+		color: var(--soft);
+		font: 300 11px/1.5 var(--mono);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	[hidden] {
+		display: none !important;
+	}
+	.sources,
+	.layers {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 48px;
+		margin-top: 56px;
+	}
+	.status[data-stale='true'] .sources,
+	.status[data-stale='true'] .layers {
+		opacity: 0.55;
+	}
+	.sources,
+	.layers {
+		transition: opacity 0.6s ease;
+	}
+	.status :global(.source header) {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
+	}
+	.status :global(.rate) {
+		color: var(--ink);
+		font: 300 12px/1 var(--mono);
+	}
+	.status :global(.chart) {
+		position: relative;
+		margin: 30px 0 0;
+	}
+	.status :global(.chart svg) {
+		display: block;
+		width: 100%;
+		height: 64px;
+		overflow: visible;
+		touch-action: pan-y;
+	}
+	.status :global(.chart .base) {
+		stroke: var(--hair);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+	}
+	.status :global(.chart .line) {
+		fill: none;
+		stroke: var(--ink);
+		stroke-width: 1;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+	}
+	.status :global(.chart .current) {
+		stroke: var(--dim);
+		stroke-dasharray: 2 3;
+	}
+	.status :global(.chart .cursor) {
+		stroke: var(--soft);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+	}
+	.status :global(.tip) {
+		position: absolute;
+		top: -20px;
+		white-space: nowrap;
+		color: var(--ink);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.08em;
+		text-shadow: 0 0 14px rgb(0 0 0 / 0.9);
+		pointer-events: none;
+	}
+	.status :global(.axis) {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 8px;
+		letter-spacing: 0.14em;
+	}
+	.status :global(dl) {
+		margin: 18px 0 0;
+	}
+	.status :global(.row) {
+		display: grid;
+		grid-template-columns: minmax(6.5rem, 40%) minmax(0, 1fr);
+		gap: 12px;
+		padding: 9px 0;
+		border-top: 1px solid var(--hair);
+	}
+	.status :global(dt) {
+		padding-top: 3px;
+		letter-spacing: 0.14em;
+	}
+	.status :global(dd) {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		font: 300 13px/1.5 var(--mono);
+	}
+	.status :global(.verdict) {
+		letter-spacing: 0.12em;
+	}
+	.status :global(.verdict.missed) {
+		color: var(--ink);
+	}
+	.note {
+		max-width: 60ch;
+		margin: 64px 0 0;
+		color: var(--dim);
+		font-size: 13px;
+	}
+	:focus-visible {
+		outline: 1px solid var(--soft);
+		outline-offset: 5px;
+	}
+	@media (max-width: 860px) {
+		.sources,
+		.layers {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 40px;
+			margin-top: 40px;
+		}
+		h1 {
+			font-size: 26px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pulse {
+			animation: none;
+		}
+		.sources,
+		.layers {
+			transition: none;
+		}
+	}
+</style>
