@@ -52,6 +52,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1): Earth {
 			nightLights: { value: 1.2 },
 			specular: { value: 1 },
 			seaRoughness: { value: 0.02 },
+			glintCap: { value: 0.3 },
 			terminatorTint: { value: 0.5 },
 		},
 	});

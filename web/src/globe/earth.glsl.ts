@@ -28,6 +28,7 @@ uniform float twilightFloor;
 uniform float nightLights;
 uniform float specular;
 uniform float seaRoughness;
+uniform float glintCap;
 uniform float terminatorTint;
 
 varying vec2 vUv;
@@ -48,7 +49,7 @@ float glint(vec3 n, vec3 sun, vec3 view) {
 	float nh2 = nh * nh;
 	float slopes = exp((nh2 - 1.0) / (nh2 * seaRoughness)) / (3.14159 * seaRoughness * nh2 * nh2);
 	float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(h, view), 0.0), 5.0);
-	return min(slopes * fresnel / (4.0 * max(dot(n, view), 0.1)), 1.0);
+	return min(slopes * fresnel / (4.0 * max(dot(n, view), 0.1)), glintCap);
 }
 
 void main() {
