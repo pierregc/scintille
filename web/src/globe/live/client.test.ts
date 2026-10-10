@@ -163,6 +163,28 @@ describe('LiveClient', () => {
 		live.stop();
 	});
 
+	it('covers only the windows of chunks it loaded', async () => {
+		await feed.publish(T0, 30, 1);
+		await feed.publish(T0 + 30, 30, 1);
+		const missing = await feed.publish(T0 + 60, 30, 1);
+		feed.files.delete(missing.path);
+		const live = client();
+		expect(live.covers(T0 * 1000)).toBe(false);
+		expect(live.coverageStart()).toBeNull();
+		live.start();
+		await settle();
+
+		expect(live.coverageStart()).toBe(T0 * 1000);
+		expect(live.covers(T0 * 1000 + 45_000)).toBe(true);
+		expect(live.covers(T0 * 1000 + 75_000)).toBe(false);
+		expect(live.covers(T0 * 1000 - 1)).toBe(false);
+
+		feed.expire(1);
+		await tick(POLL);
+		expect(live.covers(T0 * 1000)).toBe(false);
+		live.stop();
+	});
+
 	it('backs off on errors and recovers', async () => {
 		await feed.publish(T0, 30, 1);
 		feed.failing = true;
