@@ -44,6 +44,8 @@ export interface LiveClientOptions {
 	random?: () => number;
 	onManifest?: (manifest: LiveManifest) => void;
 	onError?: (error: unknown) => void;
+	/** Wall clock, UTC ms; when unset, the client does not record when data was loaded. */
+	now?: () => number;
 }
 
 /** Polls the live manifest and pushes every chunk it has not seen yet into the ring, once. */
@@ -59,6 +61,9 @@ export class LiveClient {
 	readonly #onManifest?: (manifest: LiveManifest) => void;
 	readonly #onError: (error: unknown) => void;
 	readonly #seen = new Set<string>();
+	readonly #now: () => number;
+	#manifest: LiveManifest | null = null;
+	#loadedAt: number | null = null;
 	/** Ingest windows [start, end) of the chunks loaded into the ring, by path. */
 	readonly #loaded = new Map<string, readonly [number, number]>();
 	#failures = 0;
@@ -81,6 +86,17 @@ export class LiveClient {
 		this.#random = options.random ?? Math.random;
 		this.#onManifest = options.onManifest;
 		this.#onError = options.onError ?? (() => {});
+		this.#now = options.now ?? (() => Number.NaN);
+	}
+
+	/** Latest manifest whose chunks all reached the ring, or null. */
+	get manifest(): LiveManifest | null {
+		return this.#manifest;
+	}
+
+	/** When that manifest was fully loaded (UTC ms), or null. */
+	get loadedAt(): number | null {
+		return this.#loadedAt;
 	}
 
 	/** Consecutive failed polls. */
@@ -138,7 +154,11 @@ export class LiveClient {
 			const manifest = await this.#fetchManifest(signal);
 			this.#onManifest?.(manifest);
 			await this.#fetchMissing(manifest, signal);
+			if (!this.#running) return;
 			this.#failures = 0;
+			this.#manifest = manifest;
+			const at = this.#now();
+			this.#loadedAt = Number.isNaN(at) ? null : at;
 		} catch (error) {
 			if (!this.#running) return;
 			this.#failures++;
