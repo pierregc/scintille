@@ -39,8 +39,12 @@ to upload keeps its flashes for the next one, and the manifest only lists chunks
 Flashes are deduplicated by `flash_id` over the hour, so a file published again after a crash adds
 nothing. Source state: `live` if a file arrived in the last 2 minutes, `delayed` up to 10, then
 `offline`. `live_latency_seconds` (event time → manifest) is logged and exported per source.
-Intensity uses a provisional log-energy mapping until #33. On restart, the chunk list of the
-published manifest is continued.
+Intensity uses a provisional log-energy mapping until #33.
+
+`publish()` returns only once the flashes are in the outbox (`<spool>/live-outbox/`, fsynced), so
+the file state can advance safely. A chunk's flashes leave the outbox only after a manifest lists
+that chunk; their ids stay for an hour for deduplication. On restart, the chunk list of the
+published manifest is continued and every flash not listed yet goes into the next chunk.
 
 ## `lake-writer` (`scintille-ingest lake-writer`)
 

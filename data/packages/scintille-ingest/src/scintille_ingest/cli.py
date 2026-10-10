@@ -78,7 +78,7 @@ async def run_live(spool_dir: Path, port: int) -> int:
         log.error("SCINTILLE_POSTGRES_DSN is not set")
         return 2
     metrics = Metrics()
-    feed = live_feed_from_env(metrics)
+    feed = live_feed_from_env(metrics, spool_dir / "live-outbox")
     service = IngestLive(
         [GlmSource(s) for s in satellites_from_env()],
         PostgresState(dsn),
@@ -99,7 +99,7 @@ async def run_live(spool_dir: Path, port: int) -> int:
     return 0
 
 
-def live_feed_from_env(metrics: Metrics) -> LiveFeed | None:
+def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
     """Publishes to `SCINTILLE_LIVE_BUCKET`, with the R2 credentials used elsewhere, when set."""
     bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
     if not bucket:
@@ -114,7 +114,7 @@ def live_feed_from_env(metrics: Metrics) -> LiveFeed | None:
         region="auto",
         client_options={"allow_http": endpoint.startswith("http://")},
     )
-    return LiveFeed(ObjectLiveStore(store), metrics=metrics)
+    return LiveFeed(ObjectLiveStore(store), outbox=outbox, metrics=metrics)
 
 
 async def run_lake_writer(spool_dir: Path, interval: float) -> int:
