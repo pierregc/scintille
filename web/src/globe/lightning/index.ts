@@ -32,7 +32,7 @@ export const CLOUD_TOP_KM = 12;
 
 export interface LightningOptions {
 	radius?: number;
-	/** Most recent flashes kept on the GPU; defaults to the ring's capacity. */
+	/** Flashes kept on the GPU around the playhead; defaults to the ring's capacity. */
 	capacity?: number;
 	displayMs?: number;
 	/** Equirectangular flash light map width, for clouds lit from inside; 0 disables it. */
@@ -67,10 +67,15 @@ export function createLightning(
 	);
 	geometry.setIndex([0, 1, 2, 0, 2, 3]);
 
-	const instances = new FlashInstances(ring, capacity, (start, count) => {
-		buffer.addUpdateRange(start * FLASH_STRIDE, count * FLASH_STRIDE);
-		buffer.needsUpdate = true;
-	});
+	const instances = new FlashInstances(
+		ring,
+		capacity,
+		(start, count) => {
+			buffer.addUpdateRange(start * FLASH_STRIDE, count * FLASH_STRIDE);
+			buffer.needsUpdate = true;
+		},
+		displayMs,
+	);
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
 	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 3, 4));
