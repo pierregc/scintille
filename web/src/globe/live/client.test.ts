@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChunkFormatError } from './decode';
 import { LiveClient, backoffDelay, type LiveClientOptions } from './client';
+import { feedLabel, feedStatus, STALE_AFTER_MS } from './freshness';
 import { FlashRing } from './ring';
 import { FakeFeed, FakeVisibility } from './testing';
 
@@ -160,6 +161,51 @@ describe('LiveClient', () => {
 		live.start();
 		await tick(5 * POLL);
 		expect(feed.requests).toEqual([]);
+		live.stop();
+	});
+
+	it('dates freshness from the last fully loaded manifest, so a stalled feed shows as stale', async () => {
+		let wall = Date.UTC(2026, 6, 15, 19);
+		await feed.publish(T0, 30, 1);
+		const live = client({ now: () => wall });
+		live.start();
+		await settle();
+		expect(live.manifest?.chunks).toHaveLength(1);
+		expect(live.loadedAt).toBe(wall);
+
+		feed.failing = true;
+		wall += STALE_AFTER_MS + 1;
+		await tick(POLL);
+		expect(live.loadedAt).toBe(wall - STALE_AFTER_MS - 1);
+		expect(feedStatus(live.manifest, live.loadedAt, wall, live.failures > 0)).toMatchObject({
+			stale: true,
+			failing: true,
+		});
+		live.stop();
+	});
+
+	it('goes stale when manifests stay fresh but chunk downloads fail', async () => {
+		let wall = T0 * 1000 + 30_000;
+		await feed.publish(T0, 30, 1);
+		const live = client({ now: () => wall });
+		live.start();
+		await settle();
+		const written = ring.written;
+		expect(feedLabel(feedStatus(live.manifest, live.loadedAt, wall)).state).toBe('Live');
+
+		feed.failingChunks = true;
+		for (let i = 1; i <= 8; i++) {
+			wall += POLL;
+			await feed.publish(T0 + i * 30, 30, 1);
+			await vi.advanceTimersByTimeAsync(POLL);
+			await settle();
+		}
+		const status = feedStatus(live.manifest, live.loadedAt, wall, live.failures > 0);
+		expect(feed.manifest().generated_at).toBe(new Date(wall).toISOString());
+		expect(ring.written).toBe(written);
+		expect(live.failures).toBeGreaterThan(0);
+		expect(status.stale).toBe(true);
+		expect(feedLabel(status).state).toBe('Delayed');
 		live.stop();
 	});
 
