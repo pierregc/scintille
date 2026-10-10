@@ -1,4 +1,4 @@
-import type { LiveManifest } from '../../contract/types';
+import type { ChunkRef, LiveManifest } from '../../contract/types';
 import { CONTRACT_MAJOR, ChunkFormatError, fetchChunk, type DecodedChunk } from './decode';
 import type { FlashRing } from './ring';
 
@@ -59,6 +59,8 @@ export class LiveClient {
 	readonly #onManifest?: (manifest: LiveManifest) => void;
 	readonly #onError: (error: unknown) => void;
 	readonly #seen = new Set<string>();
+	/** Ingest windows [start, end) of the chunks loaded into the ring, by path. */
+	readonly #loaded = new Map<string, readonly [number, number]>();
 	#failures = 0;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#polling = false;
@@ -84,6 +86,19 @@ export class LiveClient {
 	/** Consecutive failed polls. */
 	get failures(): number {
 		return this.#failures;
+	}
+
+	/** Whether `time` (UTC ms) falls inside a chunk window loaded into the ring. */
+	covers(time: number): boolean {
+		for (const [start, end] of this.#loaded.values()) if (time >= start && time < end) return true;
+		return false;
+	}
+
+	/** Start of the earliest loaded chunk window (UTC ms), or null. */
+	coverageStart(): number | null {
+		let first: number | null = null;
+		for (const [start] of this.#loaded.values()) if (first === null || start < first) first = start;
+		return first;
 	}
 
 	start(): void {
@@ -163,10 +178,11 @@ export class LiveClient {
 	}
 
 	async #fetchMissing(manifest: LiveManifest, signal?: AbortSignal): Promise<void> {
-		const listed = new Set(manifest.chunks.map((ref) => ref.path));
+		const listed = new Map(manifest.chunks.map((ref) => [ref.path, ref]));
 		for (const path of this.#seen) if (!listed.has(path)) this.#seen.delete(path);
+		for (const path of this.#loaded.keys()) if (!listed.has(path)) this.#loaded.delete(path);
 
-		const missing = [...listed].filter((path) => !this.#seen.has(path));
+		const missing = [...listed.keys()].filter((path) => !this.#seen.has(path));
 		let failure: unknown;
 		for (let i = 0; i < missing.length && this.#running; i += this.#concurrency) {
 			const batch = missing.slice(i, i + this.#concurrency);
@@ -175,7 +191,7 @@ export class LiveClient {
 			);
 			if (!this.#running) return;
 			results.forEach((result, j) => {
-				if (result.status === 'fulfilled') this.#accept(batch[j], result.value);
+				if (result.status === 'fulfilled') this.#accept(listed.get(batch[j]) as ChunkRef, result.value);
 				else if (result.reason instanceof ChunkFormatError) {
 					this.#seen.add(batch[j]);
 					this.#onError(result.reason);
@@ -185,8 +201,9 @@ export class LiveClient {
 		}
 	}
 
-	#accept(path: string, chunk: DecodedChunk): void {
-		this.#seen.add(path);
+	#accept(ref: ChunkRef, chunk: DecodedChunk): void {
+		this.#seen.add(ref.path);
+		this.#loaded.set(ref.path, [Date.parse(ref.start), Date.parse(ref.end)]);
 		this.#ring.push(chunk);
 	}
 }
