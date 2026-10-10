@@ -1,0 +1,85 @@
+# Local lakehouse for development and tests only: Lakekeeper (Iceberg REST catalog) on Postgres,
+# with Silo as the S3-compatible store. Never pointed at production. Docker Hub images come through
+# mirror.gcr.io to avoid its pull rate limit.
+# Lakekeeper shares Silo's network namespace so that http://localhost:9000 means the same store
+# for the catalog and for clients on the host.
+name: scintille
+
+x-lakekeeper-env: &lakekeeper-env
+  LAKEKEEPER__PG_ENCRYPTION_KEY: local-only-not-a-secret
+  LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://postgres:postgres@lake-db:5432/postgres
+  LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://postgres:postgres@lake-db:5432/postgres
+  LAKEKEEPER__METRICS_PORT: "9100"
+  RUST_LOG: info
+
+services:
+  lake-db:
+    image: mirror.gcr.io/library/postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 15
+
+  lake-s3:
+    image: mirror.gcr.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: scintille-local
+      MINIO_ROOT_PASSWORD: scintille-local-secret
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:8181:8181"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      retries: 15
+
+  lake-bucket:
+    image: mirror.gcr.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    depends_on:
+      lake-s3:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - mc alias set local http://lake-s3:9000 scintille-local scintille-local-secret && mc mb --ignore-existing local/scintille-lake
+
+  lake-migrate:
+    image: quay.io/lakekeeper/catalog:v0.14.0
+    environment: *lakekeeper-env
+    command: ["migrate"]
+    depends_on:
+      lake-db:
+        condition: service_healthy
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.14.0
+    environment: *lakekeeper-env
+    command: ["serve"]
+    network_mode: service:lake-s3
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 2s
+      retries: 15
+    depends_on:
+      lake-migrate:
+        condition: service_completed_successfully
+      lake-bucket:
+        condition: service_completed_successfully
+
+  lake-init:
+    image: mirror.gcr.io/curlimages/curl:8.22.0
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+    volumes:
+      - ./infra/local/warehouse.json:/warehouse.json:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        curl -sf -X POST http://lake-s3:8181/management/v1/bootstrap -H 'Content-Type: application/json' -d '{"accept-terms-of-use": true}' || true
+        curl -sf http://lake-s3:8181/management/v1/warehouse | grep -q '"scintille"' && exit 0
+        curl -sf -X POST http://lake-s3:8181/management/v1/warehouse -H 'Content-Type: application/json' -d @/warehouse.json
