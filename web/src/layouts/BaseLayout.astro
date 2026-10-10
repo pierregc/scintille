@@ -1,4 +1,5 @@
 ---
+import Analytics from '../analytics/Analytics.astro';
 import { type JsonLd, serialize } from '../seo/jsonld';
 
 interface Props {
@@ -56,6 +57,7 @@ const imageUrl = new URL(image, Astro.site).href;
 		<meta name="twitter:image" content={imageUrl} />
 		<meta name="twitter:image:alt" content={imageAlt} />
 		{jsonLd.length > 0 && <script type="application/ld+json" set:html={serialize(jsonLd)} />}
+		<Analytics />
 	</head>
 	<body>
 		<slot />
