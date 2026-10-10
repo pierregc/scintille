@@ -6,7 +6,8 @@ Photographic, soft, realistic light and colour. Never cartoon, never neon, never
 
 The interface is direction **A2, "ethereal instrument"**: a quiet instrument floating over the view. Type
 and hairlines sit directly on the Earth, with no panels, no frames and no frosted glass. The reference
-mockup is the `a2-ethereal.html` page of the Scintille HUD directions artifact.
+mockup is [`visual-direction/a2-ethereal.html`](visual-direction/a2-ethereal.html) (open it in a browser;
+`?mode=replay` and `?info=1` show the other states).
 
 ## Principles
 
@@ -34,8 +35,8 @@ mockup is the `a2-ethereal.html` page of the Scintille HUD directions artifact.
 | `pulse` | `#FFFFFF` | Live indicator, with a white glow |
 
 The Earth itself takes its colours from NASA imagery (Blue Marble, Black Marble), not from this palette.
-Lightning stays blue-white; its warmth and brightness come from measured energy and the cloud it lights,
-never from a colour scale.
+Lightning stays blue-white; its intensity comes from measured energy, and any warmth only from the cloud it
+lights, never from a colour scale.
 
 ## Typography
 
@@ -63,7 +64,9 @@ inside the about sheet.
 These come from the mockup and are expected to change after real use:
 
 - Call to action: **"Drift to a storm"**; time travel entry: **"Travel in time"**.
-- Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default.
+- Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default. Flash display and flicker are timed in scene
+  time, so at 60× and above a flash lasts a frame or two; they need wall-time (or speed-scaled) timing before
+  60× ships as the default.
 - Timeline: one UTC day, ticks every 30 minutes, labels every 6 hours.
 - No flash counter and no activity histogram.
 
