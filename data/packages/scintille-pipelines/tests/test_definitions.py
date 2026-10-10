@@ -1,24 +1,17 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow as pa
 import pytest
-from dagster import EnvVar, RunRequest, build_schedule_context, build_sensor_context, materialize
+from dagster import EnvVar, RunRequest, build_schedule_context, build_sensor_context
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES
 from scintille_pipelines import automation
 from scintille_pipelines.alerts import failure_payload
-from scintille_pipelines.assets import (
-    DAILY_FLASH_COUNTS,
-    check_counts,
-    count_by_source,
-    daily,
-    daily_flash_counts,
-    day_bounds,
-)
 from scintille_pipelines.definitions import defs
+from scintille_pipelines.gold.assets import daily
 from scintille_pipelines.resources import LakeResource, env_or
 
 
@@ -79,40 +72,6 @@ def test_code_location_loads() -> None:
         "silver_daily_checks_schedule",
     }
     assert {s.name for s in repo.sensor_defs} == {"silver_changed", "alert_on_failure"}
-
-
-def test_day_bounds_are_utc() -> None:
-    assert day_bounds("2026-07-15") == (
-        date(2026, 7, 15),
-        "2026-07-15T00:00:00+00:00",
-        "2026-07-16T00:00:00+00:00",
-    )
-
-
-def test_check_flags_duplicates_and_negatives() -> None:
-    schema = DAILY_FLASH_COUNTS.schema.as_arrow()
-    ok = count_by_source(pa.table({"source": ["a", "b", "a"]}), date(2026, 7, 15), schema)
-    assert ok["flash_count"].to_pylist() == [2, 1]
-    assert check_counts(ok).passed
-    rows = [{"day": date(2026, 7, 15), "source": "a", "flash_count": n} for n in (1, -1)]
-    assert not check_counts(pa.Table.from_pylist(rows, schema=schema)).passed
-
-
-def test_materializes_a_day(lake: SqliteLake) -> None:
-    result = materialize([daily_flash_counts], partition_key="2026-07-15", resources={"lake": lake})
-    assert result.success
-    checks = result.get_asset_check_evaluations()
-    assert [c.passed for c in checks] == [True]
-    rows = lake.catalog().load_table(DAILY_FLASH_COUNTS.identifier).scan().to_arrow()
-    assert sorted(
-        zip(rows["source"].to_pylist(), rows["flash_count"].to_pylist(), strict=True)
-    ) == [
-        ("glm-east", 2),
-        ("mtg-li", 1),
-    ]
-    again = materialize([daily_flash_counts], partition_key="2026-07-15", resources={"lake": lake})
-    assert again.success
-    assert lake.catalog().load_table(DAILY_FLASH_COUNTS.identifier).scan().to_arrow().num_rows == 2
 
 
 def test_failure_payload() -> None:
