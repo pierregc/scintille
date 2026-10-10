@@ -43,6 +43,39 @@ def test_adds_optional_columns_once(catalog: Catalog) -> None:
     assert migrate(catalog, (evolved,)) == []
 
 
+def test_upgrades_flashes_created_with_required_intensity(
+    catalog: Catalog, flash_rows: Callable[[str, Table], pa.Table]
+) -> None:
+    fields = [
+        f.model_copy(update={"required": True}) if f.name == "intensity" else f
+        for f in FLASHES.schema.fields
+    ]
+    old = replace(FLASHES, schema=Schema(*fields))
+    migrate(catalog, tuple(old if t is FLASHES else t for t in TABLES))
+    catalog.load_table(FLASHES.identifier).append(
+        flash_rows("old.nc", catalog.load_table(FLASHES.identifier))
+    )
+
+    assert migrate(catalog) == ["make column silver.flashes.intensity optional"]
+    assert migrate(catalog) == []
+    table = catalog.load_table(FLASHES.identifier)
+    assert not table.schema().find_field("intensity").required
+    rows = flash_rows("new.nc", table).set_column(10, "intensity", pa.nulls(3, pa.float32()))
+    table.append(rows)
+    intensity = table.scan().to_arrow().sort_by("product_file")["intensity"].to_pylist()
+    assert intensity == [None] * 3 + [0.5] * 3
+
+
+def test_refuses_making_a_column_required(catalog: Catalog) -> None:
+    migrate(catalog)
+    fields = [
+        f.model_copy(update={"required": True}) if f.name == "error" else f
+        for f in INGEST_LOG.schema.fields
+    ]
+    with pytest.raises(IncompatibleChange, match="error changed"):
+        migrate(catalog, (replace(INGEST_LOG, schema=Schema(*fields)),))
+
+
 @pytest.mark.parametrize(
     "schema",
     [
