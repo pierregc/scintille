@@ -15,6 +15,7 @@ from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.definitions import defs
 from scintille_pipelines.resources import LakeResource
 from scintille_pipelines.storm_cells import range_cells, storm_cells
+from scintille_pipelines.storm_levels import STORM_LEVELS, StormLevelsConfig, storm_levels
 from scintille_pipelines.storms import STORM_TRACKS, STORMS, check_storms, storm_tracks, storms
 from scintille_pipelines.tracking import (
     TRACK_SCHEMA,
@@ -270,6 +271,66 @@ def test_fails_when_the_previous_hour_is_not_tracked(lake: SqliteLake) -> None:
         raise_on_error=False,
     )
     assert not result.success
+
+
+def test_cells_count_their_hour_per_source_and_minute() -> None:
+    east = flashes(400, -30, -60, start=T0 + timedelta(minutes=40), minutes=40)
+    df = pl.concat([east, east.with_columns(source=pl.lit("glm-west"))]).sort("event_time")
+    cells = range_cells(df, T0, T0 + timedelta(hours=2), OVERLAP, PARAMS)
+    for row in cells.iter_rows(named=True):
+        counts = pl.DataFrame(row["minute_counts"])
+        assert counts["flashes"].sum() == row["hour_flash_count"]
+        assert set(counts["source"]) == {"glm-east", "glm-west"}
+        assert counts["minute"].min() >= row["window_start"]
+        assert counts["minute"].max() < row["window_end"]
+
+
+@pytest.fixture
+def two_sources(tmp_path: Path) -> SqliteLake:
+    resource = SqliteLake(path=str(tmp_path))
+    catalog = resource.catalog()
+    migrate(catalog)
+    east = flashes(900, -30, -60, start=T0 + timedelta(minutes=20), minutes=90, speed_kmh=(60, 0))
+    small = flashes(200, 20, -100, start=T0 + timedelta(minutes=10), minutes=20)
+    df = pl.concat([east, east.head(500).with_columns(source=pl.lit("glm-west")), small])
+    table = catalog.load_table(FLASHES.identifier)
+    table.append(silver_rows(df, table.schema().as_arrow()))
+    return resource
+
+
+def run(lake: SqliteLake, key: str, config: dict[str, object] | None = None) -> None:
+    result = materialize(
+        [storm_cells, storm_tracks, storms, storm_levels],
+        partition_key=key,
+        resources={"lake": lake},
+        run_config={"ops": {"gold__storm_levels": {"config": config or {}}}},
+    )
+    assert result.success
+    assert all(c.passed for c in result.get_asset_check_evaluations())
+
+
+def test_materializes_levels_hour_after_hour(two_sources: SqliteLake) -> None:
+    run(two_sources, "2026-07-15-18:00")
+    first = scan(two_sources, STORM_LEVELS.identifier).sort("flashes")
+    for key in ("2026-07-15-19:00", "2026-07-15-19:00", "2026-07-15-20:00"):
+        run(two_sources, key)
+    rows = scan(two_sources, STORM_LEVELS.identifier).sort("flashes")
+    assert rows["storm_id"].to_list() == first["storm_id"].to_list()
+    assert rows["closed"].to_list() == [True, True]
+    assert rows["level_source"].to_list() == ["glm-east", "glm-east"]
+    assert rows["flashes"][0] == 200
+    assert 0.95 * 900 <= rows["flashes"][1] <= 900
+    assert (rows["level"] >= first["level"]).all()
+    assert rows["level_rule"][0] == str(StormLevelsConfig().rule)
+
+    run(
+        two_sources,
+        "2026-07-15-20:00",
+        {"score": "flashes", "thresholds": [100, 1000], "names": ["Light", "Moderate", "Strong"]},
+    )
+    changed = scan(two_sources, STORM_LEVELS.identifier).sort("flashes")
+    assert changed["level"].to_list() == [2, 2]
+    assert changed["level_name"].to_list() == ["Moderate", "Moderate"]
 
 
 def test_registered_in_the_code_location() -> None:
