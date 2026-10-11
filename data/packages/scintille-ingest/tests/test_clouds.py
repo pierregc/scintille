@@ -302,7 +302,7 @@ def test_publish_keeps_a_six_hour_window_and_the_archive() -> None:
     m = manifest(store)
     assert [f.time.hour for f in m.frames] == [2, 3, 4, 5, 6, 7]
     live = {k for k in keys(store) if k.startswith("live/clouds/2k/")}
-    assert len(live) == 6
+    assert len(live) == 7
     assert len({k for k in keys(store) if k.startswith("archive/clouds/2k/")}) == 8
 
 
@@ -314,7 +314,21 @@ def test_revised_product_gets_a_new_path_and_replaces_the_frame() -> None:
     )
     assert first.textures["2k"].path != again.textures["2k"].path
     assert [f.product for f in manifest(store).frames] == [again.product]
+    assert f"live/clouds/{first.textures['2k'].path}" in keys(store)
+    asyncio.run(pub.publish(T0 + timedelta(hours=1), NAME, "gfs", TEXTURES, T0))
     assert f"live/clouds/{first.textures['2k'].path}" not in keys(store)
+
+
+def test_archive_failure_does_not_block_the_live_frame() -> None:
+    store = MemoryStore()
+
+    class Broken(ObjectLiveStore):
+        async def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+            raise OSError("r2 down")
+
+    pub = CloudPublisher(ObjectLiveStore(store, "live/clouds/"), Broken(store, "archive/"))
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    assert [f.time for f in manifest(store).frames] == [T0]
 
 
 def test_restore_continues_the_published_frames() -> None:
@@ -359,6 +373,21 @@ def test_collector_publishes_new_mosaics_once() -> None:
     assert pixels.shape == (1024, 2048)
     assert pixels[512].min() > 250
     assert collector.metrics.counters[("cloud_frames_total", ())] == 2
+
+
+def test_a_failing_mosaic_does_not_block_newer_ones() -> None:
+    source = MemoryStore()
+    lat, lon = mercator_lat(60), gmgsi_lon(120)
+    good = gmgsi_file(np.full((60, 120), 200.0, np.float32), lat, lon)
+    for h, data in ((0, b"corrupt"), (1, good)):
+        time = T0 + timedelta(hours=h)
+        obstore.put(source, f"{gmgsi.hour_prefix(time)}{gmgsi_name(time, time)}", data)
+    pub, store = publisher()
+    now = T0 + timedelta(hours=1, minutes=40)
+    collector = CloudCollector(source, FixedSkin(), pub, clock=lambda: now)
+    with pytest.raises(RuntimeError):
+        asyncio.run(collector.poll())
+    assert [f.time for f in manifest(store).frames] == [T0 + timedelta(hours=1)]
 
 
 @pytest.mark.network
