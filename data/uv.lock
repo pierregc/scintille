@@ -2197,8 +2197,10 @@ dependencies = [
     { name = "dagster" },
     { name = "dagster-postgres" },
     { name = "dagster-webserver" },
+    { name = "duckdb" },
     { name = "obstore" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "scintille-contract" },
     { name = "scintille-ingest" },
     { name = "scintille-lake" },
 ]
@@ -2208,8 +2210,10 @@ requires-dist = [
     { name = "dagster", specifier = ">=1.13" },
     { name = "dagster-postgres", specifier = ">=0.29" },
     { name = "dagster-webserver", specifier = ">=1.13" },
+    { name = "duckdb", specifier = ">=1.5" },
     { name = "obstore", specifier = ">=0.11.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "scintille-contract", editable = "packages/scintille-contract" },
     { name = "scintille-ingest", editable = "packages/scintille-ingest" },
     { name = "scintille-lake", editable = "packages/scintille-lake" },
 ]
