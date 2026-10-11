@@ -9,6 +9,7 @@ from .checks import DAILY, HOURLY, SILVER
 from .gold.assets import GOLD, daily_stats_feed
 from .lineage import BRONZE, COUNTRIES, RAW
 from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
+from .ops_status import ops_status
 from .resources import resources
 
 hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelection.checks(*HOURLY))
@@ -31,6 +32,6 @@ defs = Definitions(
             job=weekly_maintenance, cron_schedule="0 3 * * 0", execution_timezone="UTC"
         ),
     ],
-    sensors=[silver_changed, alert_on_failure],
+    sensors=[silver_changed, alert_on_failure, ops_status],
     resources=resources(),
 )
