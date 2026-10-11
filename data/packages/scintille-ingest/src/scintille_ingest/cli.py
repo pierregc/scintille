@@ -1,4 +1,4 @@
-"""Command line: `scintille-ingest glm --once`, `live`, `lake-writer` and `clouds`."""
+"""Command line: `scintille-ingest glm --once`, `live`, `lake-writer`, `live-probe` and `clouds`."""
 
 import argparse
 import asyncio
@@ -24,12 +24,16 @@ from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
+from scintille_ingest.ownership import outside_owner_zone
 from scintille_ingest.runtime import health
+from scintille_ingest.runtime.heartbeat import heartbeat_from_env
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
+from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
+from scintille_ingest.runtime.ops import OpsPublisher, PostgresOps
 from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource
@@ -59,9 +63,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
     )
     writer.add_argument("--interval", type=float, default=300.0, help="seconds between drains")
+    probe = commands.add_parser("live-probe", help="check the freshness of the public manifest")
+    probe.add_argument("--url", default=os.environ.get("SCINTILLE_LIVE_MANIFEST_URL", MANIFEST_URL))
+    probe.add_argument("--max-age", type=float, default=MAX_AGE, help="seconds")
+    probe.add_argument("--every", type=float, default=60.0, help="seconds between checks")
+    probe.add_argument("--once", action="store_true", help="check once; exit 1 if not fresh")
     clouds = commands.add_parser("clouds", help="publish GMGSI cloud textures to the live bucket")
     clouds.add_argument("--port", type=int, default=8081, help="/healthz and /metrics")
     args = parser.parse_args(argv)
+    if args.command == "live-probe":
+        return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "clouds":
         return asyncio.run(run_clouds(args.port))
     if args.command == "live":
@@ -88,12 +99,15 @@ async def run_live(spool_dir: Path, port: int) -> int:
         return 2
     metrics = Metrics()
     feed = live_feed_from_env(metrics, spool_dir / "live-outbox")
+    spool = Spool(spool_dir)
+    ops = OpsPublisher(feed.store, feed, spool, PostgresOps(dsn), metrics=metrics) if feed else None
     service = IngestLive(
         [GlmSource(s) for s in satellites_from_env()],
         PostgresState(dsn),
-        Spool(spool_dir),
+        spool,
         publisher=feed,
         raw_cache=ObjectRawCache(r2_store_from_env()),
+        heartbeat=heartbeat_from_env("SCINTILLE_HEALTHCHECK_URL", "ingest-live", metrics),
         metrics=metrics,
     )
     server = await health.serve(port, service.healthy, metrics.render)
@@ -102,10 +116,14 @@ async def run_live(spool_dir: Path, port: int) -> int:
         service.stop()
         if feed:
             feed.stop()
+        if ops:
+            ops.stop()
 
     _stop_on_signals(stop)
     async with server:
-        await asyncio.gather(service.run(), *([feed.run()] if feed else []))
+        await asyncio.gather(
+            service.run(), *([feed.run()] if feed else []), *([ops.run()] if ops else [])
+        )
     return 0
 
 
@@ -163,14 +181,32 @@ async def run_lake_writer(spool_dir: Path, interval: float) -> int:
         log.error("SCINTILLE_POSTGRES_DSN is not set")
         return 2
     metrics = Metrics()
+    ops = PostgresOps(dsn)
     commit = LakeCommit(
         catalog=lambda: pyiceberg_catalog(LakeConfig.from_env()),
         locker=lambda keys: partition_locks(dsn, keys),
         metrics=metrics,
+        record_operations=lambda n: ops.add_catalog_operations(f"{datetime.now(UTC):%Y-%m}", n),
     )
     writer = LakeWriter(Spool(spool_dir), commit=commit, interval=interval, metrics=metrics)
     _stop_on_signals(writer.stop)
     await writer.run()
+    return 0
+
+
+async def run_live_probe(url: str, max_age: float, every: float, once: bool) -> int:
+    """Reports to `SCINTILLE_HEALTHCHECK_LIVE_URL` when set, except with `--once`."""
+    configure_json_logs()
+    heartbeat = (
+        None
+        if once
+        else heartbeat_from_env("SCINTILLE_HEALTHCHECK_LIVE_URL", "live-manifest", Metrics())
+    )
+    probe = LiveProbe(url, max_age, heartbeat=heartbeat, every=every)
+    if once:
+        return 0 if await probe.once() else 1
+    _stop_on_signals(probe.stop)
+    await probe.run()
     return 0
 
 
@@ -207,10 +243,12 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
 
 def _print_summary(satellite: Satellite, ingested: IngestedFile, rows: int) -> None:
     flashes, entry = ingested.flashes, ingested.log
-    degraded = flashes.filter(pl.col("quality").list.len() > 0).height
+    degraded = flashes.filter(pl.col("quality").list.contains("degraded")).height
+    outside = flashes.filter(outside_owner_zone()).height
     print(
         f"{satellite.source} ({entry.satellite}, s3://{satellite.bucket}) {entry.key}\n"
-        f"  {entry.row_count} normalized flashes, {degraded} degraded, status {entry.status}, "
+        f"  {entry.row_count} normalized flashes, {degraded} degraded, "
+        f"{outside} outside owner zone, status {entry.status}, "
         f"parsed in {entry.parse_duration_ms:.1f} ms"
     )
     if entry.error:

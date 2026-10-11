@@ -13,10 +13,10 @@ from dagster import (
 )
 from scintille_lake.tables import FLASHES
 
-from .assets import daily, daily_flash_counts
+from .gold.assets import GOLD, daily_stats_feed
 from .resources import LakeResource
 
-daily_gold = define_asset_job("daily_gold", selection=[daily_flash_counts], partitions_def=daily)
+daily_gold = define_asset_job("daily_gold", selection=[*GOLD, daily_stats_feed])
 
 
 def utc_now() -> datetime:
@@ -40,7 +40,7 @@ def daily_gold_schedule(context: ScheduleEvaluationContext) -> RunRequest:
 
 @sensor(job=daily_gold, minimum_interval_seconds=600)
 def silver_changed(context: SensorEvaluationContext, lake: LakeResource) -> RunRequest | SkipReason:
-    """Example sensor: rebuilds today's counts when silver.flashes gets a new snapshot."""
+    """Rebuilds today's gold and feed when silver.flashes gets a new snapshot."""
     snapshot = lake.catalog().load_table(FLASHES.identifier).current_snapshot()
     if snapshot is None:
         return SkipReason("silver.flashes is empty")

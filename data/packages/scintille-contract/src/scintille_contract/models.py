@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.0.0"]
-SCHEMA_VERSION: Final = "2.0.0"
+SchemaVersion = Literal["2.2.0"]
+SCHEMA_VERSION: Final = "2.2.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -31,11 +31,12 @@ SOURCE_VALUES: Final[tuple[Source, ...]] = (
 """Instrument that observed the flash. The order is the index used in binary chunks."""
 
 
-QualityFlag = Literal["degraded", "coverage-edge", "overlap"]
+QualityFlag = Literal["degraded", "coverage-edge", "overlap", "outside-owner-zone"]
 QUALITY_FLAG_VALUES: Final[tuple[QualityFlag, ...]] = (
     "degraded",
     "coverage-edge",
     "overlap",
+    "outside-owner-zone",
 )
 """Quality caveat on a flash. The order is the bit index used in binary chunks."""
 
@@ -223,3 +224,110 @@ class LiveChunk(BaseModel):
         description="Start of the ingest window; event offsets are relative to it."
     )
     columns: ChunkColumns
+
+
+class LayerFreshness(BaseModel):
+    """Age of each layer, seconds; null when unknown."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    live_feed_age_seconds: float | None = Field(
+        description="Time since the live manifest was last written."
+    )
+    silver_lag_seconds: float | None = Field(
+        description=(
+            "Age of the oldest spooled batch not yet in silver; 0 when the spool is drained."
+        )
+    )
+    gold_age_seconds: float | None = Field(
+        description="Time since the latest gold build; null before the first one."
+    )
+
+
+class SourceMetrics(BaseModel):
+    """Throughput, latency and completeness of one source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Source
+    series_start: UtcTimestamp = Field(
+        description="Start of the first minute in flashes_per_minute, a whole minute."
+    )
+    flashes_per_minute: list[Annotated[int, Field(ge=0)]] = Field(
+        description=(
+            "Flashes published per minute of ingest_time, oldest first, at most 60; the "
+            "last minute is in progress. Starts later than 60 minutes ago after a "
+            "restart."
+        )
+    )
+    latency_p50_seconds: float | None = Field(
+        description=(
+            "Median time from event_time to publication in the live feed, last 60 "
+            "minutes; null without flashes."
+        )
+    )
+    latency_p95_seconds: float | None = Field(
+        description="95th percentile of the same latency; null without flashes."
+    )
+    completeness: float | None = Field(
+        description=(
+            "Product files spooled in the last 60 minutes over the expected count, 0 to "
+            "1; null when the source has no file in 30 days."
+        )
+    )
+    last_file_time: UtcTimestamp | None = Field(
+        description="When the latest product file of this source was spooled; null if never."
+    )
+    error_budget_remaining: float | None = Field(
+        description=(
+            "Share of the 30-day completeness error budget left: 1 untouched, 0 spent, "
+            "negative when overspent; null when the source has no file in 30 days."
+        )
+    )
+
+
+CheckStatus = Literal["pass", "warn", "fail", "unknown"]
+CHECK_STATUS_VALUES: Final[tuple[CheckStatus, ...]] = (
+    "pass",
+    "warn",
+    "fail",
+    "unknown",
+)
+"""Overall check result: fail if an error check failed, warn if only warnings did."""
+
+
+class QualityStatus(BaseModel):
+    """Latest results of the data quality checks on silver."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: CheckStatus
+    checked_at: UtcTimestamp | None = Field(
+        description="When the most recent check ran; null if none has."
+    )
+    failed: list[str] = Field(description="Names of the checks whose latest result failed.")
+
+
+class CatalogUsage(BaseModel):
+    """Iceberg catalog operations this month against the free tier."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    month: str = Field(pattern="^[0-9]{4}-[0-9]{2}$", description="Calendar month in UTC, YYYY-MM.")
+    operations: int = Field(ge=0, description="Catalog operations made by lake-writer this month.")
+    free_tier: int = Field(
+        ge=0, description="Operations included each month by the catalog provider."
+    )
+
+
+class OpsMetrics(BaseModel):
+    """live/metrics.json: operational metrics and freshness per layer, written every minute."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    generated_at: UtcTimestamp = Field(description="When these metrics were computed.")
+    freshness: LayerFreshness
+    sources: list[SourceMetrics] = Field(description="One entry per source, in Source order.")
+    quality: QualityStatus
+    catalog: CatalogUsage
