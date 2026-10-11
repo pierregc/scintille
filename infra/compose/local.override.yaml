@@ -12,3 +12,6 @@ services:
       SCINTILLE_R2_SECRET_ACCESS_KEY: scintille-local-secret
   lake-writer:
     network_mode: service:lake-s3
+  # Probes the production manifest: off locally, opt in with --profile live-probe.
+  live-probe:
+    profiles: [live-probe]
