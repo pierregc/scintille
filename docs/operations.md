@@ -37,7 +37,7 @@ The probe runs on the VPS, but the alert does not depend on it: if the VPS is do
 and the check goes down too. A one-off check from anywhere:
 
 ```sh
-uv run scintille-ingest live-probe --once   # exit code 1 if not fresh
+uv run scintille-ingest live-probe --once   # exit code 1 if not fresh, never pings
 ```
 
 `--url` (or `SCINTILLE_LIVE_MANIFEST_URL`) and `--max-age` override the defaults.

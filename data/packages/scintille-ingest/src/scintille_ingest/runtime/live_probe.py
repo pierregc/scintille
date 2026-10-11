@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from scintille_contract.models import LiveManifest
 
-from .service import Pinger
+from .heartbeat import Pinger
 
 log = logging.getLogger("scintille_ingest.live_probe")
 

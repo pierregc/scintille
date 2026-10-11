@@ -15,6 +15,7 @@ import polars as pl
 
 from scintille_ingest.validate import quarantine_rows, validate
 
+from .heartbeat import Pinger
 from .identity import FileIdentity, batch_id
 from .metrics import Metrics
 from .sources import Product, Source
@@ -32,10 +33,6 @@ class Publisher(Protocol):
 
 class RawCache(Protocol):
     async def put(self, source: str, identity: FileIdentity, data: bytes) -> None: ...
-
-
-class Pinger(Protocol):
-    async def ping(self, ok: bool = True, message: str = "") -> bool: ...
 
 
 class NullPublisher:

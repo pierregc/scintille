@@ -5,10 +5,16 @@ import logging
 import os
 import urllib.request
 from collections.abc import Callable
+from typing import Protocol
 
 from .metrics import Metrics
 
 log = logging.getLogger("scintille_ingest.heartbeat")
+
+
+class Pinger(Protocol):
+    async def ping(self, ok: bool = True, message: str = "") -> bool: ...
+
 
 Send = Callable[[str, bytes, float], None]
 
