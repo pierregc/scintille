@@ -4,7 +4,7 @@ import numpy as np
 import polars as pl
 from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.hotspots import HotspotRule, drop_hotspots, fixed_hotspots
-from scintille_pipelines.storm_cells import hour_cells
+from scintille_pipelines.storm_cells import StormCellsConfig, hour_cells
 
 PARAMS = Params(eps_km=10, eps_minutes=10, min_pts=10)
 RULE = HotspotRule()
@@ -42,9 +42,10 @@ def flashes(
     )
 
 
-def pixel(per_hour: int = 300, hours: int = 24) -> pl.DataFrame:
-    """A sensor pixel firing around the clock up to the end of the tested hour."""
-    return flashes(per_hour * hours, *PIXEL, END - timedelta(hours=hours), hours, sigma_km=1.5)
+def pixel(per_hour: int = 300, hours: int = 24, sigma_km: float = 1.5) -> pl.DataFrame:
+    """A sensor pixel firing up to the end of the tested hour."""
+    start = END - timedelta(hours=hours)
+    return flashes(per_hour * hours, *PIXEL, start, hours, sigma_km=sigma_km)
 
 
 def test_fixed_pixel_is_found_and_yields_no_cells() -> None:
@@ -66,11 +67,33 @@ def test_real_storm_crossing_the_pixel_is_kept() -> None:
     assert abs(biggest["lat"] - PIXEL[0]) < 0.3 and abs(biggest["lon"] - PIXEL[1]) < 0.3
 
 
+def burst(days_ago: int, sigma_km: float) -> pl.DataFrame:
+    """A pixel bursting for 4 h, ending `days_ago` days before the tested hour ends."""
+    start = END - timedelta(days=days_ago, hours=4)
+    return flashes(4000, *PIXEL, start, 4, sigma_km=sigma_km)
+
+
+def test_pixel_bursting_on_two_days_is_found() -> None:
+    bursts = pl.concat([burst(1, 0.7), burst(0, 0.7)])
+    assert fixed_hotspots(bursts, END, RULE)["stuck_days"].to_list() == [2]
+    assert fixed_hotspots(burst(0, 0.7), END, RULE).is_empty()
+    assert fixed_hotspots(pl.concat([burst(1, 0.7), burst(0, 3)]), END, RULE).is_empty()
+    assert hour_cells(bursts, HOUR, OVERLAP, PARAMS, RULE).height == 0
+
+
+def test_very_tight_pixel_is_found_on_its_first_day() -> None:
+    assert fixed_hotspots(burst(0, 0.2), END, RULE)["tight"].to_list() == [True]
+
+
 def test_storms_are_not_hotspots() -> None:
     # An intense storm of a few hours, and a long-lived one with natural rates.
     intense = flashes(6000, *PIXEL, END - timedelta(hours=4), 4, sigma_km=8)
     lasting = flashes(1500, -24.0, -58.0, END - timedelta(hours=20), 20, sigma_km=5)
-    assert fixed_hotspots(pl.concat([intense, lasting]), END, RULE).is_empty()
+    compact = [
+        flashes(800, 10.0, -70.0 + day, END - timedelta(days=day, hours=6), 6, sigma_km=0.8)
+        for day in range(3)
+    ]
+    assert fixed_hotspots(pl.concat([intense, lasting, *compact]), END, RULE).is_empty()
 
 
 def test_only_the_hotspot_source_is_dropped() -> None:
@@ -86,3 +109,7 @@ def test_drop_keeps_order_and_wraps_the_antimeridian() -> None:
     far = flashes(20, 0, 170, HOUR, 1, sigma_km=1, source="glm-west")
     both = pl.concat([far, df]).sort("event_time")
     assert drop_hotspots(both, spot, 10).equals(both.filter(pl.col("lon") > 0))
+
+
+def test_config_defaults_match_the_rule() -> None:
+    assert StormCellsConfig().rule == RULE
