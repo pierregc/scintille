@@ -1,0 +1,8 @@
+---
+import { BEACON_SRC, beaconConfig } from './beacon';
+
+// Set only for production builds; Previews and local builds ship no beacon.
+const config = beaconConfig(import.meta.env.PUBLIC_CF_WEB_ANALYTICS_TOKEN);
+---
+
+{config && <script is:inline defer src={BEACON_SRC} data-cf-beacon={config} />}

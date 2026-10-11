@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import duckdb
 import psycopg
 from dagster import ConfigurableResource, EnvVar
-from obstore.store import S3Store
+from obstore.store import ObjectStore, S3Store
 from pyiceberg.catalog import Catalog
 from scintille_lake.config import LOCAL_URI, LOCAL_WAREHOUSE, LakeConfig
 from scintille_lake.connect import duckdb_attach, pyiceberg_catalog
@@ -80,7 +80,7 @@ class R2Resource(ConfigurableResource):  # type: ignore[type-arg]
     secret_access_key: str = "scintille-local-secret"
     region: str = "auto"
 
-    def store(self) -> S3Store:
+    def store(self) -> ObjectStore:
         return S3Store(
             self.bucket,
             endpoint=self.endpoint,
@@ -90,6 +90,12 @@ class R2Resource(ConfigurableResource):  # type: ignore[type-arg]
             virtual_hosted_style_request=False,
             client_options={"allow_http": self.endpoint.startswith("http://")},
         )
+
+
+class FeedResource(R2Resource):
+    """Public bucket served at data.scintille.app, separate from the lake bucket."""
+
+    bucket: str = "scintille-live"
 
 
 def env_or(name: str, default: str) -> str | EnvVar:
@@ -109,6 +115,12 @@ def resources() -> dict[str, ConfigurableResource]:  # type: ignore[type-arg]
         "r2": R2Resource(
             endpoint=env_or("SCINTILLE_R2_ENDPOINT", "http://localhost:9000"),
             bucket=env_or("SCINTILLE_R2_BUCKET", "scintille-lake"),
+            access_key_id=env_or("SCINTILLE_R2_ACCESS_KEY_ID", "scintille-local"),
+            secret_access_key=env_or("SCINTILLE_R2_SECRET_ACCESS_KEY", "scintille-local-secret"),
+        ),
+        "feed_bucket": FeedResource(
+            endpoint=env_or("SCINTILLE_R2_ENDPOINT", "http://localhost:9000"),
+            bucket=env_or("SCINTILLE_LIVE_BUCKET", "scintille-live"),
             access_key_id=env_or("SCINTILLE_R2_ACCESS_KEY_ID", "scintille-local"),
             secret_access_key=env_or("SCINTILLE_R2_SECRET_ACCESS_KEY", "scintille-local-secret"),
         ),

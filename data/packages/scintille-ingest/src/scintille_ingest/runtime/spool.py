@@ -1,6 +1,7 @@
 """Local durable spool: per batch, its flashes and its ingest log rows, written atomically."""
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -37,6 +38,12 @@ class Spool:
         """Complete batches waiting for lake-writer, oldest first."""
         files = [p for p in self.directory.glob("*.parquet") if p.name.count(".") == 1]
         return [p.stem for p in sorted(files, key=lambda p: (p.stat().st_mtime, p.name))]
+
+    def oldest_pending_time(self) -> datetime | None:
+        """When the oldest batch waiting for lake-writer was written."""
+        files = [p for p in self.directory.glob("*.parquet") if p.name.count(".") == 1]
+        oldest = min((p.stat().st_mtime for p in files), default=None)
+        return None if oldest is None else datetime.fromtimestamp(oldest, UTC)
 
     def read(self, batch_id: str) -> pl.DataFrame:
         return pl.read_parquet(self.path(batch_id))

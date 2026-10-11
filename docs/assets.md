@@ -39,6 +39,25 @@ The starfield is procedural (`web/src/globe/starfield.ts`): no star catalogue or
 NASA imagery is not copyrighted; NASA asks for credit when it is used. Natural Earth requires no
 permission or credit. The site's attribution must credit NASA.
 
+## Sound
+
+Thunder is synthesized in the browser with Web Audio (`web/src/globe/thunder/synth.ts`): a noise crack
+followed by a rolling brown-noise rumble, six seeded variants built when sound is first turned on. No
+recording is used, so there is no third-party license and nothing to download.
+
+Sound is off by default (browsers block audio until a user gesture) and turned on with the Sound switch.
+Each flash crossing the playhead may get a voice:
+
+- stereo pan from its horizontal screen position;
+- volume from its intensity and the camera-to-flash distance, with a low-pass filter that dulls far thunder;
+- delay from that distance at a **stylized** speed of sound of 6000 km/s, capped at 4 s. The real speed
+  (0.34 km/s) would delay thunder by hours when seen from orbit, so the delay only conveys "far" or "near".
+  The methodology page (#87) should say so.
+
+At most six voices play at once, one new voice every 250 ms at most: once the gap has passed, the loudest
+flash crossed in the next frame gets the voice, and flashes crossed during the gap stay silent. The mix
+goes through a compressor used as a limiter, then a soft clipper that keeps the output below full scale.
+
 ## Cloud fixture
 
 Until ingestion (#61) publishes live frames, the dev server shows one cloud frame from
