@@ -10,6 +10,8 @@ export interface QualityPreset {
 	maxFlashes: number | null;
 	/** Clouds lit from inside by flashes (#64). */
 	cloudLight: boolean;
+	/** Live cloud texture tier. */
+	clouds: '2k' | '4k';
 	/** Bicubic cloud filtering. */
 	cloudBicubic: boolean;
 	/** Bloom and grading (#58). */
@@ -18,9 +20,9 @@ export interface QualityPreset {
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, cloudLight: false, cloudBicubic: false, postProcessing: false },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, cloudLight: true, cloudBicubic: true, postProcessing: false },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, cloudLight: true, cloudBicubic: true, postProcessing: true },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, postProcessing: false },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: false },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: true },
 };
 
 export interface DeviceHints {

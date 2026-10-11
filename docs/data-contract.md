@@ -126,6 +126,12 @@ archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 The model is `CloudManifest` in `scintille_ingest.clouds.publish`; it is not part of the versioned
 flash contract yet.
 
+The globe polls the manifest every minute, loads the newest 3 frames of its quality tier (`2k` on
+the low preset, `4k` above) and cross-fades them on the scene clock. It hides the layer when the
+scene time is more than 3 hours from every loaded frame (stale manifest, or none), and never falls
+back to a sample image. The HUD shows the observation time of the frame on screen; the about sheet
+carries the attribution.
+
 ## Chunk encoding
 
 `LiveChunk` (in `chunk.schema.json`) describes what a chunk contains once decoded: the display fields
@@ -196,6 +202,7 @@ the wind. Each flash is assigned to the instrument that covers it; product files
 marked `delayed`, so clients can exercise the degraded state.
 `metrics.json` holds the matching `OpsMetrics` for the end of that hour (flash counts derived from
 the chunks) and feeds `/status` in development.
+`fixtures/live/clouds/` holds a cloud manifest with one real frame at 18:00 UTC.
 
 ```sh
 python3 fixtures/serve.py        # http://localhost:8787/ shows the decoded hour
