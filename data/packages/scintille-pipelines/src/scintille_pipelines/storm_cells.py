@@ -1,5 +1,6 @@
 """`gold/storm_cells`: flashes clustered into storm cells, one hourly window at a time."""
 
+import math
 from datetime import datetime, timedelta
 
 import polars as pl
@@ -34,6 +35,7 @@ from .hotspots import HotspotRule, drop_hotspots, fixed_hotspots
 from .resources import LakeResource
 
 hourly = HourlyPartitionsDefinition(start_date="2026-07-01-00:00", timezone="UTC")
+CHUNK = timedelta(days=1)
 
 STORM_CELLS = gold_table(
     "storm_cells",
@@ -181,19 +183,33 @@ def storm_cells(
     lookback = max(overlap, rule.lookback)
     catalog = lake.catalog()
     sync_table(catalog, STORM_CELLS)
-    flashes = pl.from_arrow(
-        catalog.load_table(FLASHES.identifier)
-        .scan(
-            row_filter=(
-                f"event_time >= '{(start - lookback).isoformat()}' "
-                f"AND event_time < '{end.isoformat()}'"
-            ),
-            selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
+    source = catalog.load_table(FLASHES.identifier)
+    frames = []
+    spots = []
+    read = 0
+    for chunk in range(math.ceil((end - start) / CHUNK)):
+        lo = start + chunk * CHUNK
+        hi = min(lo + CHUNK, end)
+        flashes = pl.from_arrow(
+            source.scan(
+                row_filter=(
+                    f"event_time >= '{(lo - lookback).isoformat()}' "
+                    f"AND event_time < '{hi.isoformat()}'"
+                ),
+                selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
+            ).to_arrow()
         )
-        .to_arrow()
+        assert isinstance(flashes, pl.DataFrame)
+        read += flashes.filter(pl.col("event_time") >= lo - overlap).height
+        frames.append(range_cells(flashes, lo, hi, overlap, config.params, rule))
+        spots.append(fixed_hotspots(flashes, hi, rule))
+    cells = pl.concat(frames)
+    hotspots = (
+        pl.concat(spots)
+        .select("source", pl.col("lat").round(2), pl.col("lon").round(2))
+        .unique()
+        .sort("source", "lat", "lon")
     )
-    assert isinstance(flashes, pl.DataFrame)
-    cells = range_cells(flashes, start, end, overlap, config.params, rule)
     table = catalog.load_table(STORM_CELLS.identifier)
     table.overwrite(
         cells.to_arrow().cast(table.schema().as_arrow()),
@@ -203,8 +219,11 @@ def storm_cells(
     )
     return MaterializeResult(
         metadata={
-            "flashes": flashes.filter(pl.col("event_time") >= start - overlap).height,
-            "hotspots": fixed_hotspots(flashes, end, rule).height,
+            "flashes": read,
+            "hotspots": hotspots.height,
+            "hotspot_positions": [
+                f"{src} {lat:.2f} {lon:.2f}" for src, lat, lon in hotspots.iter_rows()
+            ],
             "cells": cells.height,
             "clustered_flashes": int(cells["flash_count"].sum()),
         },
