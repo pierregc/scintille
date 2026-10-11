@@ -44,13 +44,15 @@ dropped as noise.
 - **Windows.** Partition `H` clusters the flashes of `[H - overlap, H + 1 h)` and keeps the cells with
   at least one flash in `[H, H + 1 h)`. A cell crossing the hour therefore appears in both windows,
   which is what [storm tracking](#storm-tracking) links. `flash_count` summed over windows double
-  counts the overlap; `hour_flash_count` (flashes in the window's own hour) does not.
-- **Rows.** One row per cell and window: `cell_id` (stable for the same input and parameters),
+  counts the overlap; `hour_flash_count` (flashes in the window's own hour) does not. A storm still
+  active at `H - overlap` starts at that edge: its `t_start` is not a birth.
+- **Rows.** One row per cell and window: `cell_id` (window and earliest flash, by time then id),
   window, first and last flash, flash count, centroid, bbox (`west > east` crosses 180°), convex hull
   as WKT with its area, sources, and the parameters used. Bbox and time range are the query bounds
   of the cell's flashes.
-- **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range, and the
-  `storm-cells` pool keeps one run at a time.
+- **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range that
+  reads one day at a time, and the `storm-cells` pool keeps one run at a time. No schedule
+  or sensor yet; they come with storm tracking.
 - **Parameters** (run config, defaults below), tuned on GLM data of 2026-10-08 (2.5 M flashes) in
   three contrasted regions: a subtropical mesoscale convective system over Argentina and Uruguay,
   scattered tropical cells over the Andes and the Amazon, and coastal cells off Mexico.
@@ -75,7 +77,9 @@ previous partition (a self-dependency), so storms carry over hours and days.
 - **Link.** A cell continues a cell of the previous window when it starts at most `max_gap_minutes`
   after that one ends, and their convex hulls intersect or the discs with the hulls' areas overlap
   once the earlier cell may have moved at `max_speed_kmh` during the gap. A cell crossing the hour
-  is in both windows, so it overlaps itself.
+  is in both windows, so it overlaps itself. A storm with no linked cell in a window ends there, so
+  `max_gap_minutes` only bridges gaps inside the overlap, and a cell falling under `min_pts` for one
+  window splits the storm in two.
 - **Splits and merges.** Candidate pairs are taken by decreasing combined flash count, each storm
   and each cell at most once: the main branch keeps the storm. A cell split off starts a new storm
   with `split_from`; storms merged into a cell end there and are listed in its `merged`.
@@ -89,7 +93,8 @@ previous partition (a self-dependency), so storms carry over hours and days.
 - **Writes.** Tracks overwrite their hours. Storms are rebuilt from the tracks for every storm that
   started at or after the earliest start among the storms active in the run's hours or the hour
   before, so the run is idempotent. Backfills are single runs and the `storm-tracks` pool keeps one
-  run at a time, since each hour needs the previous one.
+  run at a time, since each hour needs the previous one. A run fails when the hour before it was
+  never tracked; `new_chain` starts storms from scratch instead.
 
 | Parameter | Default | Note |
 |---|---|---|
@@ -103,7 +108,9 @@ gives 5,524 storms, 903 of them over three hours or more; every clustered flash 
 
 `gold/storm_names` names each storm once, the first time `gold/storms` has it, from its
 flash-weighted centroid at that time. Rows are only appended, so a name and its slug never change,
-and re-running an hour is a no-op. Lookups are offline, against reference data embedded in the
+and re-running an hour is a no-op. The name describes where the storm started, even if it drifts
+later. If storms are rebuilt and a `storm_id` disappears, its name stays; the run metadata counts
+these `orphans` among the storms starting in its hours. Lookups are offline, against reference data embedded in the
 package (`scintille_pipelines/geodata/`, about 1.5 MB).
 
 - **Land** (inside a Natural Earth country): the most notable GeoNames city of the same country

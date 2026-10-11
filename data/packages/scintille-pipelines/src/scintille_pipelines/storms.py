@@ -12,6 +12,7 @@ from dagster import (
     AssetKey,
     BackfillPolicy,
     Config,
+    Failure,
     MaterializeResult,
     TimeWindowPartitionMapping,
     asset,
@@ -123,6 +124,8 @@ STORMS = gold_table(
 class StormTracksConfig(Config):
     max_speed_kmh: float = 100.0
     max_gap_minutes: float = 30.0
+    new_chain: bool = False
+    """Start storms from scratch when the previous hour was never tracked."""
 
     @property
     def params(self) -> TrackParams:
@@ -191,6 +194,13 @@ def storm_tracks(
     context: AssetExecutionContext, config: StormTracksConfig, lake: LakeResource
 ) -> MaterializeResult:  # type: ignore[type-arg]
     start, end = context.partition_time_window
+    previous = hourly.get_partition_key_for_timestamp((start - HOUR).timestamp())
+    if (
+        not config.new_chain
+        and start - HOUR >= hourly.start
+        and previous not in context.instance.get_materialized_partitions(context.asset_key)
+    ):
+        raise Failure(f"Hour {previous} is not tracked; run it first or set new_chain.")
     catalog = lake.catalog()
     sync_table(catalog, STORM_TRACKS)
     table = catalog.load_table(STORM_TRACKS.identifier)
