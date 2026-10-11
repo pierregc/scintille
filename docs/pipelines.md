@@ -33,6 +33,8 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 | Asset check | `valid_tracks` | Blocking: every cell once, at most one cell per storm and window |
 | Asset | `gold/storms` | One row per storm with its track, rebuilt for the storms active in the hours |
 | Asset check | `valid_storms` | Blocking: unique ids, one track point per step, positive flash counts |
+| Asset | `gold/storm_names` | Place name and slug of each new storm, from embedded open data ([below](#storm-names)) |
+| Asset check | `unique_slugs` | Blocking: one name per storm, no slug used twice |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
 | Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |
 | Asset check | `lake_orphan_inventory` | Weekly (Sunday 03:00 UTC), warn: unreferenced files per table, never deleted ([lakehouse](lakehouse.md#maintenance)) |
@@ -123,6 +125,45 @@ previous partition (a self-dependency), so storms carry over hours and days.
 
 On GLM data of 2026-10-08 (9,791 cells), tracking takes about 13 s for the day in a single run and
 gives 5,524 storms, 903 of them over three hours or more; every clustered flash is counted once.
+
+## Storm names
+
+`gold/storm_names` names each storm once, the first time `gold/storms` has it, from its
+flash-weighted centroid at that time. Rows are only appended, so a name and its slug never change,
+and re-running an hour is a no-op. The name describes where the storm started, even if it drifts
+later. If storms are rebuilt and a `storm_id` disappears, its name stays; the run metadata counts
+these `orphans` among the storms starting in its hours. Lookups are offline, against reference data embedded in the
+package (`scintille_pipelines/geodata/`, about 1.5 MB).
+
+- **Land** (inside a Natural Earth country): the most notable GeoNames city of the same country
+  within 50 km (a city 10 times larger wins when it is at most 20 km further), with its admin-1
+  region: "Ajaccio, Corsica, France". Further than that, the region of the nearest city of the
+  country within 200 km ("Amazonas, Brazil"), else the country.
+- **Offshore**: the smallest Natural Earth marine area containing the point (the nearest one in the
+  rare gaps), and a city of any country within 40 km: "Mediterranean Sea, off Nice, France". Further
+  out, the sea alone: "Gulf of Mexico", "North Atlantic Ocean".
+- **Columns.** `name` is the short name (city, region, country or sea), `label` the full one;
+  `place`, `region`, `country_code` (ISO 3166-1 alpha-2, as in `gold.region_daily`, land only),
+  `country_name`, `sea` and `offshore` are kept for pages and regional aggregates, with `geodata`, the
+  reference data version.
+- **Slugs.** `YYYY-MM-DD-<name>` (UTC day of the first flash, ASCII, at most 60 characters for the
+  name), `YYYY-MM-DD-off-<city>` off a coast, then `-2`, `-3`… in order of first flash when taken.
+
+On the storms of 2026-10-08 (4,774), naming takes 0.2 s: 1,406 near a city, 1,502 by region, 247 by
+country, 103 off a coast and 1,516 by sea. Open oceans give long suffix series (555 storms in the
+North Pacific Ocean that day), mostly small storms.
+
+### Reference data
+
+| File | Source | License |
+|---|---|---|
+| `countries.geojson.gz` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:50m admin-0 countries (same file and checksum as `gold.region_daily`) | Public domain |
+| `marine.geojson.gz` | Natural Earth v5.1.2, 1:10m marine areas (oceans, seas, gulfs, bays, straits…) | Public domain |
+| `places.tsv.gz` | [GeoNames](https://www.geonames.org/) `cities15000` and `admin1CodesASCII` | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credit GeoNames wherever the names are shown |
+
+Coordinates are rounded to 0.001°. `manifest.json` records each source's URL and checksum; Natural
+Earth checksums are pinned, GeoNames dumps change daily, so the snapshot date is the version.
+Rebuild with `uv run python -m scintille_pipelines.geodata.build` from `data/`.
 
 ## Resources
 
