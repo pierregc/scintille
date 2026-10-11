@@ -72,7 +72,11 @@ def test_code_location_loads() -> None:
         "silver_daily_checks_schedule",
         "lake_weekly_maintenance_schedule",
     }
-    assert {s.name for s in repo.sensor_defs} == {"silver_changed", "alert_on_failure"}
+    assert {s.name for s in repo.sensor_defs} == {
+        "silver_changed",
+        "alert_on_failure",
+        "ops_status",
+    }
 
 
 def test_failure_payload() -> None:

@@ -71,6 +71,7 @@ class LakeCommit:
     metrics: Metrics = field(default_factory=Metrics)
     max_batches: int = 200
     after_commit: Callable[[str], None] = lambda table: None
+    record_operations: Callable[[int], None] = lambda count: None
 
     def __call__(self, spool: Spool, batches: list[str]) -> None:
         for group in chunks(batches, self.max_batches):
@@ -78,7 +79,7 @@ class LakeCommit:
 
     def commit(self, spool: Spool, batches: list[str]) -> None:
         catalog = self.catalog()
-        self.metrics.inc("catalog_operations_total", 1, op="load")
+        self._count("load", 3)
         silver = catalog.load_table(FLASHES.identifier)
         bronze = catalog.load_table(INGEST_LOG.identifier)
         quarantine = catalog.load_table(FLASHES_QUARANTINE.identifier)
@@ -150,7 +151,14 @@ class LakeCommit:
                 table.overwrite(data, replaced, snapshot_properties=properties)
         else:
             table.append(data, snapshot_properties=properties)
-        self.metrics.inc("catalog_operations_total", 1, op="append")
+        self._count("append", 1)
+
+    def _count(self, op: str, count: int) -> None:
+        self.metrics.inc("catalog_operations_total", count, op=op)
+        try:
+            self.record_operations(count)
+        except Exception:
+            log.exception("catalog operation count not recorded")
 
 
 def chunks(items: list[str], size: int) -> Iterator[list[str]]:
