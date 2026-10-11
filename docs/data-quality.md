@@ -96,3 +96,9 @@ positive).
 | Bm (3.5° S 22.3° W, bursts) | 374 | 153 | 74 | 41 |
 
 The union removes most of each hot spot; the bursty Bm pixel remains partly unfiltered.
+
+**Limits.** Thresholds come from one month (September to October); the busy threshold is about three
+times the largest natural cell-day seen (711), so peak season storms should be re-checked after a
+full year. Each run lists the hot spots it found in its metadata (`hotspot_positions`), so a new one
+is visible. The fixed 0.05° grid can split a pixel near a cell edge between two cells. Storm
+statistics exclude flashes near hot spots, which the methodology page (#87) has to state.
