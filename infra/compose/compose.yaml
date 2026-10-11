@@ -20,6 +20,10 @@ x-pipelines: &pipelines
       PACKAGE: scintille-pipelines
   environment:
     SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+    SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
+  # Reference downloads (Natural Earth) survive container recreation.
+  volumes:
+    - cache:/var/lib/scintille/cache
   depends_on:
     postgres:
       condition: service_healthy
@@ -99,3 +103,4 @@ services:
 volumes:
   postgres:
   spool:
+  cache:

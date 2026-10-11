@@ -7,13 +7,16 @@ dependencies = [
     "dagster>=1.13",
     "dagster-postgres>=0.29",
     "dagster-webserver>=1.13",
+    "duckdb>=1.5",
     "obstore>=0.11.1",
     "psycopg[binary]>=3.2",
+    "scintille-contract",
     "scintille-ingest",
     "scintille-lake",
 ]
 
 [tool.uv.sources]
+scintille-contract = { workspace = true }
 scintille-ingest = { workspace = true }
 scintille-lake = { workspace = true }
 
