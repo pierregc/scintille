@@ -11,6 +11,7 @@ from .lineage import BRONZE, COUNTRIES, RAW
 from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
 from .ops_status import ops_status
 from .resources import resources
+from .storm_cells import storm_cells
 
 hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelection.checks(*HOURLY))
 daily_checks = define_asset_job(
@@ -21,7 +22,16 @@ weekly_maintenance = define_asset_job(
 )
 
 defs = Definitions(
-    assets=[RAW, BRONZE, COUNTRIES, SILVER, silver_flashes_backfill, *GOLD, daily_stats_feed],
+    assets=[
+        RAW,
+        BRONZE,
+        COUNTRIES,
+        storm_cells,
+        SILVER,
+        silver_flashes_backfill,
+        *GOLD,
+        daily_stats_feed,
+    ],
     asset_checks=[*HOURLY, *DAILY, *DAILY_MAINTENANCE, *WEEKLY_MAINTENANCE],
     jobs=[daily_gold, hourly_checks, daily_checks, weekly_maintenance],
     schedules=[

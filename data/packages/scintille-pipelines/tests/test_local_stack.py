@@ -17,6 +17,7 @@ from scintille_lake.tables import FLASHES, INGEST_LOG, gold_table
 from scintille_pipelines.gold import models
 from scintille_pipelines.gold.assets import GOLD, daily_stats_feed, feed_key
 from scintille_pipelines.resources import FeedResource, LakeResource, PostgresResource
+from scintille_pipelines.storm_cells import storm_cells
 
 pytestmark = pytest.mark.lake
 
@@ -109,6 +110,14 @@ def test_duckdb_write_path_on_a_partitioned_gold_table() -> None:
         con.execute("DELETE FROM lake.gold.duckdb_write_probe WHERE day = DATE '2026-08-01'")
         rows = con.execute("SELECT day, n FROM lake.gold.duckdb_write_probe").fetchall()
     assert rows == [(date(2026, 8, 2), 2)]
+
+
+def test_storm_cells_rerun_against_lakekeeper() -> None:
+    for _ in range(2):
+        result = materialize(
+            [storm_cells], partition_key="2026-07-15-18:00", resources={"lake": LakeResource()}
+        )
+        assert result.success
 
 
 def test_partition_lock_is_exclusive() -> None:
