@@ -28,7 +28,9 @@ sub-points (106.1° W).
 - At parse time, a flash whose point belongs to another instrument gets the quality flag
   `outside-owner-zone`. A point no configured instrument covers has no owner and no flag.
 - The live feed skips flagged flashes ([hot path](hot-path.md#ingest-live-scintille-ingest-live)),
-  so each flash is drawn once. Silver keeps both rows, so the choice can be revisited.
+  so each flash is drawn once, except while the owner has delivered no file for 5 minutes: then
+  they stay live, flag included, so an outage does not hide the zone. Silver keeps both rows, so
+  the choice can be revisited.
 - Consumers that count flashes across sources (storm cells, storm tracks, intensity levels) must
   drop flagged rows: `NOT list_contains(quality, 'outside-owner-zone')`.
 - MTG LI (#32) joins by adding its sub-point (0°) to `SATELLITES`: the mask then splits the

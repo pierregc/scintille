@@ -131,6 +131,52 @@ def test_a_flash_seen_by_two_sources_is_live_once_and_twice_in_silver(tmp_path: 
     assert 'ingest_live_excluded_total{source="glm-west"} 1' in metrics.render()
 
 
+def run_both(tmp_path: Path, owner_gap: timedelta) -> tuple[LiveManifest, list[str], Metrics]:
+    """East then West ingest the same flash, `owner_gap` apart; returns the live result."""
+    store, metrics = MemoryStore(), Metrics()
+    clock = {"now": NOW}
+    feed = LiveFeed(store, outbox=tmp_path / "outbox", clock=lambda: clock["now"])
+    east, west = SeenByBoth("glm-east"), SeenByBoth("glm-west")
+    service = IngestLive(
+        [east, west],
+        MemoryState(),
+        Spool(tmp_path / "spool"),
+        publisher=feed,
+        metrics=metrics,
+        clock=lambda: clock["now"],
+    )
+
+    async def scenario() -> None:
+        await service.poll(east)
+        await feed.flush()
+        clock["now"] += owner_gap
+        await service.poll(west)
+        clock["now"] += timedelta(seconds=30)
+        await feed.flush()
+
+    asyncio.run(scenario())
+    manifest = LiveManifest.model_validate_json(store.objects["manifest.json"])
+    chunks = [decode(gzip.decompress(store.objects[c.path])) for c in manifest.chunks]
+    return (
+        manifest,
+        [SOURCE_VALUES[i] for c in chunks for i in c.columns["source"].tolist()],
+        metrics,
+    )
+
+
+def test_a_source_with_only_excluded_flashes_still_looks_alive(tmp_path: Path) -> None:
+    manifest, live_sources, _ = run_both(tmp_path, timedelta(seconds=20))
+    assert live_sources == ["glm-east"]
+    west = next(s for s in manifest.sources if s.source == "glm-west")
+    assert west.last_ingest_time == NOW + timedelta(seconds=20)
+
+
+def test_flagged_flashes_stay_live_while_the_owner_is_down(tmp_path: Path) -> None:
+    _, live_sources, metrics = run_both(tmp_path, timedelta(minutes=6))
+    assert live_sources == ["glm-east", "glm-west"]
+    assert "ingest_live_excluded_total" not in metrics.render()
+
+
 def test_flags_only_flashes_owned_by_another_source() -> None:
     flagged = flag_outside_owner(
         frame(
