@@ -3,17 +3,18 @@
 from dagster import AssetSelection, Definitions, ScheduleDefinition, define_asset_job
 
 from .alerts import alert_on_failure
-from .assets import daily_flash_counts
 from .automation import daily_gold, daily_gold_schedule, silver_changed
 from .backfill import silver_flashes_backfill
 from .checks import DAILY, HOURLY, SILVER
+from .gold.assets import GOLD, daily_stats_feed
+from .lineage import BRONZE, COUNTRIES, RAW
 from .resources import resources
 
 hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelection.checks(*HOURLY))
 daily_checks = define_asset_job("silver_daily_checks", selection=AssetSelection.checks(*DAILY))
 
 defs = Definitions(
-    assets=[daily_flash_counts, SILVER, silver_flashes_backfill],
+    assets=[RAW, BRONZE, COUNTRIES, SILVER, silver_flashes_backfill, *GOLD, daily_stats_feed],
     asset_checks=[*HOURLY, *DAILY],
     jobs=[daily_gold, hourly_checks, daily_checks],
     schedules=[
