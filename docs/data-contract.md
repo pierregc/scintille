@@ -54,8 +54,8 @@ source:
 - **Quality** lists caveats: `degraded` (flagged by the source product), `coverage-edge` (close to
   the edge of the field of view, where detection efficiency drops), `overlap` (seen where two
   instruments overlap, so it may be detected twice), `outside-owner-zone` (another instrument has
-  the better view of this point and reports the same flash: kept in silver, never in the live feed,
-  see [data quality](data-quality.md#overlap-between-satellites)).
+  the better view of this point and reports the same flash: kept in silver, in the live feed only
+  while that instrument is not delivering, see [data quality](data-quality.md#overlap-between-satellites)).
 
 ## Live feed on R2
 

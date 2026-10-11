@@ -7,13 +7,13 @@ import random
 import shutil
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
 import polars as pl
 
-from scintille_ingest.ownership import outside_owner_zone
+from scintille_ingest.ownership import drop_owned_by
 from scintille_ingest.validate import quarantine_rows, validate
 
 from .identity import FileIdentity, batch_id
@@ -59,6 +59,8 @@ class Settings:
     max_backoff: float = 300.0
     disk_warn: tuple[float, ...] = (0.5, 0.8)
     disk_pause_raw: float = 0.9
+    owner_stale_after: float = 300.0
+    """Seconds without a file before a source's zone takes the other sources' flashes live."""
 
 
 class Crash(Exception):
@@ -94,6 +96,7 @@ class IngestLive:
         self._tasks: list[asyncio.Task[None]] = []
         self.raw_cache_paused = False
         self._disk_level = 0.0
+        self._last_file: dict[str, datetime] = {}
 
     async def poll(self, source: Source) -> int:
         """One listing of `source`; processes every file not spooled yet. Returns how many."""
@@ -134,9 +137,8 @@ class IngestLive:
                 },
             )
         if record is None or ORDER[record.state] < ORDER["published_live"]:
-            live = flashes.filter(~outside_owner_zone())
-            if live.height:
-                await self.publisher.publish(source.name, live)
+            live = drop_owned_by(flashes, self._live_sources())
+            await self.publisher.publish(source.name, live)
             if excluded := flashes.height - live.height:
                 self.metrics.inc("ingest_live_excluded_total", excluded, source=source.name)
         self.state.advance(identity, source.name, "published_live", etag=product.etag)
@@ -160,6 +162,7 @@ class IngestLive:
         self.state.advance(identity, source.name, "spooled", batch, etag=product.etag)
         self._after_step("spooled", identity)
 
+        self._last_file[source.name] = self._clock()
         lag = (self._clock() - product.start).total_seconds()
         self.metrics.inc("ingest_files_total", source=source.name)
         self.metrics.inc("ingest_flashes_total", flashes.height, source=source.name)
@@ -176,6 +179,10 @@ class IngestLive:
                 }
             },
         )
+
+    def _live_sources(self) -> set[str]:
+        limit = self._clock() - timedelta(seconds=self.settings.owner_stale_after)
+        return {name for name, at in self._last_file.items() if at >= limit}
 
     async def _cache_raw(self, source: str, identity: FileIdentity, data: bytes) -> None:
         """Best effort: an R2 outage must not stop the live feed."""
