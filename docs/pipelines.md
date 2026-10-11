@@ -42,13 +42,15 @@ dropped as noise.
 - **Windows.** Partition `H` clusters the flashes of `[H - overlap, H + 1 h)` and keeps the cells with
   at least one flash in `[H, H + 1 h)`. A cell crossing the hour therefore appears in both windows,
   which is what [storm tracking](#storm-tracking) links. `flash_count` summed over windows double
-  counts the overlap; `hour_flash_count` (flashes in the window's own hour) does not.
-- **Rows.** One row per cell and window: `cell_id` (stable for the same input and parameters),
+  counts the overlap; `hour_flash_count` (flashes in the window's own hour) does not. A storm still
+  active at `H - overlap` starts at that edge: its `t_start` is not a birth.
+- **Rows.** One row per cell and window: `cell_id` (window and earliest flash, by time then id),
   window, first and last flash, flash count, centroid, bbox (`west > east` crosses 180°), convex hull
   as WKT with its area, sources, and the parameters used. Bbox and time range are the query bounds
   of the cell's flashes.
-- **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range, and the
-  `storm-cells` pool keeps one run at a time.
+- **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range that
+  reads one day at a time, and the `storm-cells` pool keeps one run at a time. No schedule
+  or sensor yet; they come with storm tracking.
 - **Parameters** (run config, defaults below), tuned on GLM data of 2026-10-08 (2.5 M flashes) in
   three contrasted regions: a subtropical mesoscale convective system over Argentina and Uruguay,
   scattered tropical cells over the Andes and the Amazon, and coastal cells off Mexico.
