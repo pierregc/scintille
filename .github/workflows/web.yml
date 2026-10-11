@@ -75,6 +75,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Check the live version
+        run: |
+          for _ in $(seq 30); do
+            curl -fsS -H 'Cache-Control: no-cache' https://scintille.app/version.json | jq -e --arg sha "$GITHUB_SHA" '.commit == $sha' && exit 0
+            sleep 10
+          done
+          exit 1
 
   # One Preview per PR, bound to scintille-live-preview through the `previews` block.
   preview:
@@ -102,6 +109,9 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          SCINTILLE_COMMIT: ${{ github.event.pull_request.head.sha }}
+          SCINTILLE_PR: ${{ github.event.pull_request.number }}
       - name: Mark the Preview noindex
         run: |
           printf '\n/*\n  X-Robots-Tag: noindex\n' >> dist/client/_headers
