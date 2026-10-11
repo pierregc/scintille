@@ -3,12 +3,16 @@ from pathlib import Path
 
 import pytest
 from dagster import (
+    AssetCheckExecutionContext,
     AssetCheckKey,
+    AssetCheckResult,
+    AssetCheckSeverity,
     AssetKey,
     AssetSelection,
     DagsterInstance,
     Definitions,
     asset,
+    asset_check,
     define_asset_job,
     materialize,
 )
@@ -70,6 +74,25 @@ def test_reads_the_latest_check_results(tmp_path: Path, monkeypatch: pytest.Monk
     results = latest_checks(instance, [key])
     assert [(r.name, r.passed, r.error) for r in results] == [("silver_completeness", False, True)]
     assert summarize(results)["failed"] == ["silver_completeness"]
+
+
+def test_a_pending_rerun_keeps_the_previous_result() -> None:
+    @asset(key=AssetKey(["silver", "example"]))
+    def example() -> int:
+        return 1
+
+    seen: list[list[CheckResult]] = []
+
+    @asset_check(asset=example)
+    def probe(context: AssetCheckExecutionContext) -> AssetCheckResult:
+        seen.append(latest_checks(context.instance, [AssetCheckKey(example.key, "probe")]))
+        return AssetCheckResult(passed=False, severity=AssetCheckSeverity.ERROR)
+
+    instance = DagsterInstance.ephemeral()
+    for _ in range(2):
+        materialize([example, probe], instance=instance, raise_on_error=False)
+    assert seen[0] == []
+    assert [(r.name, r.passed) for r in seen[1]] == [("probe", False)]
 
 
 def test_reads_the_latest_gold_build() -> None:
