@@ -33,7 +33,13 @@ spot warm-up is left out. What it shows:
 
 All options set thresholds at fixed values, taken from percentiles of this month and rounded. All
 count flashes on the satellite that saw the storm best (`flashes`, `peak_rate`). Percentages are
-shares of the 159,412 storms; per day is over 29 days.
+shares of the 159,412 storms; per day is over 29 days. Level descriptions are the medians of this
+month, not a global ranking.
+
+A storm here is any track of ST-DBSCAN cells, which need `min_pts` (10) flashes across both
+satellites; on the best satellite alone a storm can have a single flash. Half of all storms are
+Light by construction of the percentiles, near noise ones included, so "50 % Light" describes this
+population, not the weather.
 
 ### Proposal: two-criterion score, 5 levels
 
@@ -47,7 +53,7 @@ flashed at its peak.*
 | 2 | Moderate | 8 | p50 | 47,403 | 29.7 % | 1,635 | An ordinary thunderstorm, a few flashes a minute for under an hour. |
 | 3 | Strong | 25 | p80 | 24,038 | 15.1 % | 829 | A well-developed storm: hundreds of flashes over about two hours. |
 | 4 | Intense | 120 | p95 | 6,004 | 3.8 % | 207 | A large, very active storm, a flash every two seconds at its peak, for hours. |
-| 5 | Exceptional | 450 | p99 | 1,561 | 1.0 % | 54 | Among the most electric storms on Earth: thousands of flashes, more than one per second at its peak. |
+| 5 | Exceptional | 450 | p99 | 1,561 | 1.0 % | 54 | Among the most active storms we detect: thousands of flashes, more than one per second at its peak. |
 
 Medians by level: 12, 44, 218, 1,449 and 7,716 flashes; peak rates 2, 4, 9, 27 and 67 per minute;
 durations 20, 46, 108, 224 and 410 minutes.
@@ -80,6 +86,12 @@ one level; it ranks long, slow storms higher and short bursts lower.
   check against these thresholds once they flow.
 - **Detection efficiency** drops toward the edges of each field of view; keeping the better
   satellite per storm is a proxy for flash matching across satellites.
+- **Satellite ownership (#182)**: storms are clustered from both satellites together, so duplicate
+  flashes in the overlap help small groups reach `min_pts`. Once #182 assigns each flash to one
+  satellite and the month is backfilled again, the storm population changes and the percentiles must
+  be re-run.
+- **Analysis code**: `storm_metrics.py` copies the logic of `storm_cells.hour_cells` to keep the
+  members of each cell, so it has to follow changes to that function (#182, #183) before a re-run.
 - **Parameters**: changing the ST-DBSCAN or tracking parameters changes storm sizes and calls for
   re-running the notebook.
 - Names avoid *severe* and *warning*, which national weather services use for hazards (hail, wind)
@@ -92,9 +104,10 @@ record becomes accepted with the chosen table.
 
 ## Consequences
 
-- #72 stores `flashes`, `peak_rate`, the score and the level on `gold/storms`, and needs flash
-  counts per source per cell (or per-minute counts per storm), which the current tables do not
-  keep.
+- #72 stores `flashes`, `peak_rate`, the score and the level per storm, and needs flash counts per
+  source per cell (or per-minute counts per storm), which the current tables do not keep. Because of
+  the table migration policy, #183 stores them in a new `gold/storm_levels` table rather than on
+  `gold/storms`.
 - The thresholds become constants with unit tests on their boundaries; changing them is a new
   ADR, since storm pages would change level.
 - Reviewing the thresholds after a year of data, and once MTG LI is ingested, is planned work.
