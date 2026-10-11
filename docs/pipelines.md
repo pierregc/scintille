@@ -54,7 +54,9 @@ dropped as noise.
 | `eps_minutes` | 10 | Keeps a cell moving at 60 km/h connected |
 | `min_pts` | 10 | 5 chained neighbouring cells into one; 15 left more flashes as noise |
 | `overlap_minutes` | 30 | At least `eps_minutes`, so a cell crossing the hour stays whole in the next window |
-| `hotspot_min_flashes`, `hotspot_min_hours`, `hotspot_radius_km` | 2000, 12, 10 | Fixed hot spots left out before clustering ([data quality](data-quality.md#fixed-hot-spots)) |
+| `hotspot_min_flashes`, `hotspot_min_hours` | 2000, 12 | Busy hot spots, over 24 h ([data quality](data-quality.md#fixed-hot-spots)) |
+| `hotspot_pixel_days`, `hotspot_pixel_min_days`, `hotspot_pixel_min_flashes`, `hotspot_pixel_min_hours`, `hotspot_pixel_spread_km`, `hotspot_pixel_tight_km` | 3, 2, 300, 3, 1.0, 0.5 | Tight (last 24 h) and stuck (multi-day) pixels |
+| `hotspot_radius_km` | 10 | Flashes dropped around each hot spot |
 
 That day takes about 40 s end to end for 24 hourly windows in a single run.
 
