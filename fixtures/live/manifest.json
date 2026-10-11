@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "2.1.0",
   "generated_at": "2026-07-15T19:00:00Z",
   "chunk_seconds": 30,
   "window_seconds": 3600,
@@ -54,7 +54,7 @@
       "end": "2026-07-15T18:03:00Z",
       "path": "chunks/20260715T180230Z.bin.gz",
       "flash_count": 1930,
-      "size_bytes": 19649,
+      "size_bytes": 19647,
       "event_min": "2026-07-15T18:01:30.087000Z",
       "event_max": "2026-07-15T18:02:39.977000Z"
     },
@@ -63,7 +63,7 @@
       "end": "2026-07-15T18:03:30Z",
       "path": "chunks/20260715T180300Z.bin.gz",
       "flash_count": 988,
-      "size_bytes": 10387,
+      "size_bytes": 10383,
       "event_min": "2026-07-15T18:02:30.045000Z",
       "event_max": "2026-07-15T18:02:59.982000Z"
     },
@@ -72,7 +72,7 @@
       "end": "2026-07-15T18:04:00Z",
       "path": "chunks/20260715T180330Z.bin.gz",
       "flash_count": 1354,
-      "size_bytes": 14254,
+      "size_bytes": 14249,
       "event_min": "2026-07-15T18:02:41.019000Z",
       "event_max": "2026-07-15T18:03:39.940000Z"
     },
@@ -108,7 +108,7 @@
       "end": "2026-07-15T18:06:00Z",
       "path": "chunks/20260715T180530Z.bin.gz",
       "flash_count": 912,
-      "size_bytes": 9619,
+      "size_bytes": 9620,
       "event_min": "2026-07-15T18:05:00.044000Z",
       "event_max": "2026-07-15T18:05:29.866000Z"
     },
@@ -180,7 +180,7 @@
       "end": "2026-07-15T18:10:00Z",
       "path": "chunks/20260715T180930Z.bin.gz",
       "flash_count": 788,
-      "size_bytes": 8308,
+      "size_bytes": 8307,
       "event_min": "2026-07-15T18:08:47.969000Z",
       "event_max": "2026-07-15T18:09:39.953000Z"
     },
@@ -216,7 +216,7 @@
       "end": "2026-07-15T18:12:00Z",
       "path": "chunks/20260715T181130Z.bin.gz",
       "flash_count": 407,
-      "size_bytes": 4324,
+      "size_bytes": 4323,
       "event_min": "2026-07-15T18:11:00.040000Z",
       "event_max": "2026-07-15T18:11:36.643000Z"
     },
@@ -252,7 +252,7 @@
       "end": "2026-07-15T18:14:00Z",
       "path": "chunks/20260715T181330Z.bin.gz",
       "flash_count": 1388,
-      "size_bytes": 14557,
+      "size_bytes": 14560,
       "event_min": "2026-07-15T18:13:00.025000Z",
       "event_max": "2026-07-15T18:13:39.990000Z"
     },
@@ -288,7 +288,7 @@
       "end": "2026-07-15T18:16:00Z",
       "path": "chunks/20260715T181530Z.bin.gz",
       "flash_count": 981,
-      "size_bytes": 10347,
+      "size_bytes": 10343,
       "event_min": "2026-07-15T18:14:57.151000Z",
       "event_max": "2026-07-15T18:15:29.968000Z"
     },
@@ -315,7 +315,7 @@
       "end": "2026-07-15T18:17:30Z",
       "path": "chunks/20260715T181700Z.bin.gz",
       "flash_count": 982,
-      "size_bytes": 10371,
+      "size_bytes": 10367,
       "event_min": "2026-07-15T18:16:30.005000Z",
       "event_max": "2026-07-15T18:16:59.986000Z"
     },
@@ -378,7 +378,7 @@
       "end": "2026-07-15T18:21:00Z",
       "path": "chunks/20260715T182030Z.bin.gz",
       "flash_count": 980,
-      "size_bytes": 10317,
+      "size_bytes": 10322,
       "event_min": "2026-07-15T18:20:00.005000Z",
       "event_max": "2026-07-15T18:20:29.697000Z"
     },
@@ -414,7 +414,7 @@
       "end": "2026-07-15T18:23:00Z",
       "path": "chunks/20260715T182230Z.bin.gz",
       "flash_count": 1458,
-      "size_bytes": 15310,
+      "size_bytes": 15307,
       "event_min": "2026-07-15T18:22:00.014000Z",
       "event_max": "2026-07-15T18:22:39.975000Z"
     },
@@ -423,7 +423,7 @@
       "end": "2026-07-15T18:23:30Z",
       "path": "chunks/20260715T182300Z.bin.gz",
       "flash_count": 1031,
-      "size_bytes": 10884,
+      "size_bytes": 10880,
       "event_min": "2026-07-15T18:22:21.381000Z",
       "event_max": "2026-07-15T18:22:59.974000Z"
     },
@@ -432,7 +432,7 @@
       "end": "2026-07-15T18:24:00Z",
       "path": "chunks/20260715T182330Z.bin.gz",
       "flash_count": 1056,
-      "size_bytes": 11092,
+      "size_bytes": 11088,
       "event_min": "2026-07-15T18:23:00.002000Z",
       "event_max": "2026-07-15T18:23:29.971000Z"
     },
@@ -468,7 +468,7 @@
       "end": "2026-07-15T18:26:00Z",
       "path": "chunks/20260715T182530Z.bin.gz",
       "flash_count": 1631,
-      "size_bytes": 16991,
+      "size_bytes": 16992,
       "event_min": "2026-07-15T18:24:30.114000Z",
       "event_max": "2026-07-15T18:25:29.936000Z"
     },
@@ -495,7 +495,7 @@
       "end": "2026-07-15T18:27:30Z",
       "path": "chunks/20260715T182700Z.bin.gz",
       "flash_count": 2026,
-      "size_bytes": 20780,
+      "size_bytes": 20787,
       "event_min": "2026-07-15T18:26:00.285000Z",
       "event_max": "2026-07-15T18:26:59.983000Z"
     },
@@ -504,7 +504,7 @@
       "end": "2026-07-15T18:28:00Z",
       "path": "chunks/20260715T182730Z.bin.gz",
       "flash_count": 1107,
-      "size_bytes": 11712,
+      "size_bytes": 11708,
       "event_min": "2026-07-15T18:27:00.028000Z",
       "event_max": "2026-07-15T18:27:39.025000Z"
     },
@@ -522,7 +522,7 @@
       "end": "2026-07-15T18:29:00Z",
       "path": "chunks/20260715T182830Z.bin.gz",
       "flash_count": 1556,
-      "size_bytes": 16374,
+      "size_bytes": 16369,
       "event_min": "2026-07-15T18:28:00.013000Z",
       "event_max": "2026-07-15T18:28:39.952000Z"
     },
@@ -531,7 +531,7 @@
       "end": "2026-07-15T18:29:30Z",
       "path": "chunks/20260715T182900Z.bin.gz",
       "flash_count": 614,
-      "size_bytes": 6430,
+      "size_bytes": 6428,
       "event_min": "2026-07-15T18:28:20.885000Z",
       "event_max": "2026-07-15T18:28:59.809000Z"
     },
@@ -549,7 +549,7 @@
       "end": "2026-07-15T18:30:30Z",
       "path": "chunks/20260715T183000Z.bin.gz",
       "flash_count": 1560,
-      "size_bytes": 16409,
+      "size_bytes": 16405,
       "event_min": "2026-07-15T18:29:20.007000Z",
       "event_max": "2026-07-15T18:29:59.946000Z"
     },
@@ -558,7 +558,7 @@
       "end": "2026-07-15T18:31:00Z",
       "path": "chunks/20260715T183030Z.bin.gz",
       "flash_count": 1128,
-      "size_bytes": 11866,
+      "size_bytes": 11860,
       "event_min": "2026-07-15T18:30:00.047000Z",
       "event_max": "2026-07-15T18:30:29.969000Z"
     },
@@ -567,7 +567,7 @@
       "end": "2026-07-15T18:31:30Z",
       "path": "chunks/20260715T183100Z.bin.gz",
       "flash_count": 1598,
-      "size_bytes": 16781,
+      "size_bytes": 16775,
       "event_min": "2026-07-15T18:30:20.011000Z",
       "event_max": "2026-07-15T18:30:59.990000Z"
     },
@@ -576,7 +576,7 @@
       "end": "2026-07-15T18:32:00Z",
       "path": "chunks/20260715T183130Z.bin.gz",
       "flash_count": 1161,
-      "size_bytes": 12260,
+      "size_bytes": 12254,
       "event_min": "2026-07-15T18:31:00.008000Z",
       "event_max": "2026-07-15T18:31:38.342000Z"
     },
@@ -594,7 +594,7 @@
       "end": "2026-07-15T18:33:00Z",
       "path": "chunks/20260715T183230Z.bin.gz",
       "flash_count": 1113,
-      "size_bytes": 11587,
+      "size_bytes": 11585,
       "event_min": "2026-07-15T18:31:42.258000Z",
       "event_max": "2026-07-15T18:32:39.984000Z"
     },
@@ -603,7 +603,7 @@
       "end": "2026-07-15T18:33:30Z",
       "path": "chunks/20260715T183300Z.bin.gz",
       "flash_count": 1735,
-      "size_bytes": 17925,
+      "size_bytes": 17923,
       "event_min": "2026-07-15T18:32:00.040000Z",
       "event_max": "2026-07-15T18:32:59.999000Z"
     },
@@ -612,7 +612,7 @@
       "end": "2026-07-15T18:34:00Z",
       "path": "chunks/20260715T183330Z.bin.gz",
       "flash_count": 575,
-      "size_bytes": 6098,
+      "size_bytes": 6096,
       "event_min": "2026-07-15T18:33:00.038000Z",
       "event_max": "2026-07-15T18:33:19.985000Z"
     },
@@ -630,7 +630,7 @@
       "end": "2026-07-15T18:35:00Z",
       "path": "chunks/20260715T183430Z.bin.gz",
       "flash_count": 1675,
-      "size_bytes": 17384,
+      "size_bytes": 17378,
       "event_min": "2026-07-15T18:33:40.025000Z",
       "event_max": "2026-07-15T18:34:29.974000Z"
     },
@@ -657,7 +657,7 @@
       "end": "2026-07-15T18:36:30Z",
       "path": "chunks/20260715T183600Z.bin.gz",
       "flash_count": 1692,
-      "size_bytes": 17537,
+      "size_bytes": 17533,
       "event_min": "2026-07-15T18:35:20.001000Z",
       "event_max": "2026-07-15T18:35:59.946000Z"
     },
@@ -693,7 +693,7 @@
       "end": "2026-07-15T18:38:30Z",
       "path": "chunks/20260715T183800Z.bin.gz",
       "flash_count": 1030,
-      "size_bytes": 10648,
+      "size_bytes": 10653,
       "event_min": "2026-07-15T18:37:20.175000Z",
       "event_max": "2026-07-15T18:37:59.969000Z"
     },
@@ -702,7 +702,7 @@
       "end": "2026-07-15T18:39:00Z",
       "path": "chunks/20260715T183830Z.bin.gz",
       "flash_count": 1851,
-      "size_bytes": 19009,
+      "size_bytes": 19010,
       "event_min": "2026-07-15T18:37:30.002000Z",
       "event_max": "2026-07-15T18:38:39.906000Z"
     },
@@ -729,7 +729,7 @@
       "end": "2026-07-15T18:40:30Z",
       "path": "chunks/20260715T184000Z.bin.gz",
       "flash_count": 1215,
-      "size_bytes": 12897,
+      "size_bytes": 12893,
       "event_min": "2026-07-15T18:39:20.266000Z",
       "event_max": "2026-07-15T18:39:59.992000Z"
     },
@@ -747,7 +747,7 @@
       "end": "2026-07-15T18:41:30Z",
       "path": "chunks/20260715T184100Z.bin.gz",
       "flash_count": 1690,
-      "size_bytes": 17557,
+      "size_bytes": 17559,
       "event_min": "2026-07-15T18:40:20.009000Z",
       "event_max": "2026-07-15T18:40:59.988000Z"
     },
@@ -783,7 +783,7 @@
       "end": "2026-07-15T18:43:30Z",
       "path": "chunks/20260715T184300Z.bin.gz",
       "flash_count": 1803,
-      "size_bytes": 18625,
+      "size_bytes": 18634,
       "event_min": "2026-07-15T18:42:20.098000Z",
       "event_max": "2026-07-15T18:42:59.958000Z"
     },
@@ -810,7 +810,7 @@
       "end": "2026-07-15T18:45:00Z",
       "path": "chunks/20260715T184430Z.bin.gz",
       "flash_count": 738,
-      "size_bytes": 7774,
+      "size_bytes": 7779,
       "event_min": "2026-07-15T18:43:40.231000Z",
       "event_max": "2026-07-15T18:44:19.996000Z"
     },
@@ -819,7 +819,7 @@
       "end": "2026-07-15T18:45:30Z",
       "path": "chunks/20260715T184500Z.bin.gz",
       "flash_count": 2433,
-      "size_bytes": 24864,
+      "size_bytes": 24860,
       "event_min": "2026-07-15T18:44:00.026000Z",
       "event_max": "2026-07-15T18:45:00Z"
     },
@@ -828,7 +828,7 @@
       "end": "2026-07-15T18:46:00Z",
       "path": "chunks/20260715T184530Z.bin.gz",
       "flash_count": 1095,
-      "size_bytes": 11429,
+      "size_bytes": 11428,
       "event_min": "2026-07-15T18:45:00.055000Z",
       "event_max": "2026-07-15T18:45:39.920000Z"
     },
@@ -837,7 +837,7 @@
       "end": "2026-07-15T18:46:30Z",
       "path": "chunks/20260715T184600Z.bin.gz",
       "flash_count": 1994,
-      "size_bytes": 20380,
+      "size_bytes": 20381,
       "event_min": "2026-07-15T18:45:00.011000Z",
       "event_max": "2026-07-15T18:45:59.973000Z"
     },
@@ -846,7 +846,7 @@
       "end": "2026-07-15T18:47:00Z",
       "path": "chunks/20260715T184630Z.bin.gz",
       "flash_count": 1741,
-      "size_bytes": 18022,
+      "size_bytes": 18020,
       "event_min": "2026-07-15T18:46:00.007000Z",
       "event_max": "2026-07-15T18:46:39.969000Z"
     },
@@ -882,7 +882,7 @@
       "end": "2026-07-15T18:49:00Z",
       "path": "chunks/20260715T184830Z.bin.gz",
       "flash_count": 1737,
-      "size_bytes": 17979,
+      "size_bytes": 17982,
       "event_min": "2026-07-15T18:48:00.015000Z",
       "event_max": "2026-07-15T18:48:39.971000Z"
     },
@@ -891,7 +891,7 @@
       "end": "2026-07-15T18:49:30Z",
       "path": "chunks/20260715T184900Z.bin.gz",
       "flash_count": 1267,
-      "size_bytes": 13394,
+      "size_bytes": 13391,
       "event_min": "2026-07-15T18:48:20.299000Z",
       "event_max": "2026-07-15T18:48:59.981000Z"
     },
@@ -918,7 +918,7 @@
       "end": "2026-07-15T18:51:00Z",
       "path": "chunks/20260715T185030Z.bin.gz",
       "flash_count": 1220,
-      "size_bytes": 12868,
+      "size_bytes": 12873,
       "event_min": "2026-07-15T18:50:00.014000Z",
       "event_max": "2026-07-15T18:50:29.919000Z"
     },
@@ -963,7 +963,7 @@
       "end": "2026-07-15T18:53:30Z",
       "path": "chunks/20260715T185300Z.bin.gz",
       "flash_count": 1292,
-      "size_bytes": 13684,
+      "size_bytes": 13689,
       "event_min": "2026-07-15T18:52:20.106000Z",
       "event_max": "2026-07-15T18:52:59.983000Z"
     },
@@ -1008,7 +1008,7 @@
       "end": "2026-07-15T18:56:00Z",
       "path": "chunks/20260715T185530Z.bin.gz",
       "flash_count": 1169,
-      "size_bytes": 12233,
+      "size_bytes": 12232,
       "event_min": "2026-07-15T18:55:00.064000Z",
       "event_max": "2026-07-15T18:55:39.978000Z"
     },
@@ -1062,7 +1062,7 @@
       "end": "2026-07-15T18:59:00Z",
       "path": "chunks/20260715T185830Z.bin.gz",
       "flash_count": 1074,
-      "size_bytes": 11112,
+      "size_bytes": 11110,
       "event_min": "2026-07-15T18:58:00.011000Z",
       "event_max": "2026-07-15T18:58:39.975000Z"
     },
@@ -1080,7 +1080,7 @@
       "end": "2026-07-15T19:00:00Z",
       "path": "chunks/20260715T185930Z.bin.gz",
       "flash_count": 522,
-      "size_bytes": 5480,
+      "size_bytes": 5481,
       "event_min": "2026-07-15T18:59:00.028000Z",
       "event_max": "2026-07-15T18:59:19.975000Z"
     }

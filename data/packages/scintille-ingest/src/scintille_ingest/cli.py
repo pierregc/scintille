@@ -21,6 +21,7 @@ from scintille_lake.locks import partition_locks
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
+from scintille_ingest.ownership import outside_owner_zone
 from scintille_ingest.runtime import health
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
@@ -172,10 +173,12 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
 
 def _print_summary(satellite: Satellite, ingested: IngestedFile, rows: int) -> None:
     flashes, entry = ingested.flashes, ingested.log
-    degraded = flashes.filter(pl.col("quality").list.len() > 0).height
+    degraded = flashes.filter(pl.col("quality").list.contains("degraded")).height
+    outside = flashes.filter(outside_owner_zone()).height
     print(
         f"{satellite.source} ({entry.satellite}, s3://{satellite.bucket}) {entry.key}\n"
-        f"  {entry.row_count} normalized flashes, {degraded} degraded, status {entry.status}, "
+        f"  {entry.row_count} normalized flashes, {degraded} degraded, "
+        f"{outside} outside owner zone, status {entry.status}, "
         f"parsed in {entry.parse_duration_ms:.1f} ms"
     )
     if entry.error:

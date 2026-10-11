@@ -13,6 +13,7 @@ from typing import NamedTuple, Protocol
 
 import polars as pl
 
+from scintille_ingest.ownership import outside_owner_zone
 from scintille_ingest.validate import quarantine_rows, validate
 
 from .identity import FileIdentity, batch_id
@@ -52,7 +53,7 @@ class DiskUsage(NamedTuple):
 
 @dataclass(frozen=True)
 class Settings:
-    parser_version: str = "glm-1"
+    parser_version: str = "glm-2"
     calibration_version: str = "none"
     initial_backoff: float = 5.0
     max_backoff: float = 300.0
@@ -132,8 +133,12 @@ class IngestLive:
                     "fields": {"source": source.name, "key": product.key, "error": parsed.log.error}
                 },
             )
-        if flashes.height and (record is None or ORDER[record.state] < ORDER["published_live"]):
-            await self.publisher.publish(source.name, flashes)
+        if record is None or ORDER[record.state] < ORDER["published_live"]:
+            live = flashes.filter(~outside_owner_zone())
+            if live.height:
+                await self.publisher.publish(source.name, live)
+            if excluded := flashes.height - live.height:
+                self.metrics.inc("ingest_live_excluded_total", excluded, source=source.name)
         self.state.advance(identity, source.name, "published_live", etag=product.etag)
         self._after_step("published_live", identity)
 

@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.0.0"]
-SCHEMA_VERSION: Final = "2.0.0"
+SchemaVersion = Literal["2.1.0"]
+SCHEMA_VERSION: Final = "2.1.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -31,11 +31,12 @@ SOURCE_VALUES: Final[tuple[Source, ...]] = (
 """Instrument that observed the flash. The order is the index used in binary chunks."""
 
 
-QualityFlag = Literal["degraded", "coverage-edge", "overlap"]
+QualityFlag = Literal["degraded", "coverage-edge", "overlap", "outside-owner-zone"]
 QUALITY_FLAG_VALUES: Final[tuple[QualityFlag, ...]] = (
     "degraded",
     "coverage-edge",
     "overlap",
+    "outside-owner-zone",
 )
 """Quality caveat on a flash. The order is the bit index used in binary chunks."""
 
