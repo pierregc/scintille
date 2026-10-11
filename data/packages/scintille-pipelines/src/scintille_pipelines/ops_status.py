@@ -16,7 +16,10 @@ from dagster import (
     SkipReason,
     sensor,
 )
-from dagster._core.storage.asset_check_execution_record import AssetCheckExecutionRecordStatus
+from dagster._core.storage.asset_check_execution_record import (
+    COMPLETED_ASSET_CHECK_EXECUTION_RECORD_STATUSES,
+    AssetCheckExecutionRecordStatus,
+)
 from scintille_ingest.runtime.ops import GOLD_STATUS, QUALITY_STATUS, PostgresOps
 
 from .resources import PostgresResource
@@ -31,10 +34,19 @@ class CheckResult:
 
 
 def latest_checks(instance: DagsterInstance, keys: Sequence[AssetCheckKey]) -> list[CheckResult]:
-    records = instance.event_log_storage.get_latest_asset_check_execution_by_key(list(keys))
+    """The latest completed evaluation per check; a pending rerun keeps the previous result."""
+    storage = instance.event_log_storage
     results = []
-    for key, record in records.items():
-        if record.status == AssetCheckExecutionRecordStatus.PLANNED or record.event is None:
+    for key, latest in storage.get_latest_asset_check_execution_by_key(list(keys)).items():
+        record = latest
+        if record.status == AssetCheckExecutionRecordStatus.PLANNED:
+            history = storage.get_asset_check_execution_history(
+                key, limit=1, status=set(COMPLETED_ASSET_CHECK_EXECUTION_RECORD_STATUSES)
+            )
+            if not history:
+                continue
+            record = history[0]
+        if record.event is None:
             continue
         event = record.event.dagster_event
         evaluation = event.event_specific_data if event else None
