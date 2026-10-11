@@ -53,7 +53,10 @@ function chart(s: SourceView, max: number): HTMLElement {
 	tip.hidden = true;
 	const axis = el('figcaption', 'axis');
 	axis.append(el('span', '', '−60 min'), el('span', '', `max ${formatCount(max)} / min`), el('span', '', 'now'));
-	figure.append(plot, tip, axis);
+	const peak = Math.max(0, ...s.flashesPerMinute);
+	const last = s.lastMinute === null ? 'no data' : formatCount(s.lastMinute);
+	const summary = el('p', 'sr-only', `Last minute ${last}, peak ${formatCount(peak)} flashes per minute over the last hour.`);
+	figure.append(plot, tip, axis, summary);
 
 	const move = (clientX: number) => {
 		const box = plot.getBoundingClientRect();
@@ -99,15 +102,36 @@ function sourceBlock(s: SourceView, max: number): HTMLElement {
 	return block;
 }
 
+function setText(node: Element, text: string): void {
+	if (node.textContent !== text) node.textContent = text;
+}
+
+/** Patches text in place when the structure is unchanged, so values stay selectable. */
+function sync(container: Element, next: Element): void {
+	const current = container.firstElementChild;
+	if (!current || current.outerHTML.replace(/>[^<]*</g, '><') !== next.outerHTML.replace(/>[^<]*</g, '><')) {
+		container.replaceChildren(next);
+		return;
+	}
+	const a = current.querySelectorAll('*');
+	const b = next.querySelectorAll('*');
+	b.forEach((node, i) => {
+		const target = a[i];
+		if (target && node.childElementCount === 0) setText(target, node.textContent ?? '');
+	});
+}
+
 /** Rebuilds the source blocks only when `full`, so a tick keeps the chart hover in place. */
 function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	const q = <T extends Element>(sel: string) => root.querySelector<T>(sel) as T;
 	root.dataset.stale = String(view.stale);
-	q('[data-state]').textContent = view.state;
-	q('[data-asof]').textContent =
-		view.generatedAtMs === null ? '' : `as of ${formatUtcDate(view.generatedAtMs)} ${formatUtcTime(view.generatedAtMs)} UTC`;
+	setText(q('[data-state]'), view.state);
+	setText(
+		q('[data-asof]'),
+		view.generatedAtMs === null ? '' : `as of ${formatUtcDate(view.generatedAtMs)} ${formatUtcTime(view.generatedAtMs)} UTC`,
+	);
 	const banner = q<HTMLElement>('[data-banner]');
-	banner.textContent = view.banner;
+	setText(banner, view.banner);
 	banner.hidden = view.banner === '';
 
 	if (full) {
@@ -116,24 +140,24 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	} else {
 		for (const s of view.sources) {
 			const node = root.querySelector(`[data-lastfile="${s.source}"]`);
-			if (node) node.textContent = s.lastFile;
+			if (node) setText(node, s.lastFile);
 		}
 	}
 
 	const freshness = el('dl');
 	freshness.append(...view.freshness.map((l) => row(l.label, l.measure.text, l.measure)));
-	q('[data-freshness]').replaceChildren(freshness);
+	sync(q('[data-freshness]'), freshness);
 
 	const quality = el('dl');
 	if (view.generatedAtMs !== null) {
 		quality.append(row('Status', view.quality.text), row('Last run', view.quality.checkedAt));
 		if (view.quality.failed.length) quality.append(row('Not passing', view.quality.failed.join(', ')));
 	}
-	q('[data-quality]').replaceChildren(quality);
+	sync(q('[data-quality]'), quality);
 
 	const lake = el('dl');
 	if (view.catalog) lake.append(row('Catalog operations', view.catalog.text), row('Free tier used', view.catalog.share));
-	q('[data-lake]').replaceChildren(lake);
+	sync(q('[data-lake]'), lake);
 }
 
 /** Polls `live/metrics.json` and keeps the page in step; ages tick every second. */
@@ -171,12 +195,13 @@ export function startStatusPage(root: HTMLElement, url = new URL('live/metrics.j
 			console.warn('status:', error);
 		}
 		draw();
+		if (document.hidden) return;
 		const delay = failures ? backoffDelay(failures, DEFAULT_BACKOFF, Math.random) : POLL_INTERVAL_MS;
 		poll = setTimeout(load, delay);
 	};
 
 	const tick = setInterval(() => {
-		if (metrics) draw();
+		if (metrics && !document.hidden) draw();
 	}, 1000);
 	const onVisible = () => {
 		if (!document.hidden) void load();
