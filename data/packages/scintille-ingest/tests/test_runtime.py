@@ -213,7 +213,11 @@ def test_a_failing_source_does_not_delay_the_others(tmp_path: Path) -> None:
 
     async def scenario() -> None:
         task = asyncio.create_task(live.run(grace=1))
-        await asyncio.sleep(0.3)
+        errors = ("ingest_errors_total", (("source", "glm-west"),))
+        for _ in range(500):
+            await asyncio.sleep(0.01)
+            if len(spool.pending()) == 5 and live.metrics.counters.get(errors, 0) >= 3:
+                break
         live.stop()
         await task
 
@@ -364,7 +368,10 @@ def heartbeat_run(tmp_path: Path, sources: list[FakeSource], pinger: FakePinger)
 
     async def scenario() -> None:
         task = asyncio.create_task(live.run(grace=1))
-        await asyncio.sleep(0.1)
+        for _ in range(500):
+            await asyncio.sleep(0.01)
+            if len(pinger.pings) >= 2 and len(Spool(tmp_path).pending()) == 3:
+                break
         live.stop()
         await task
 
