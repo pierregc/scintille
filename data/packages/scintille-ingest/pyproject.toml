@@ -4,11 +4,15 @@ version = "0.1.0"
 description = "Hot path service: satellite ingestion and live feed publishing."
 requires-python = ">=3.13"
 dependencies = [
+    "eccodes>=2.49",
+    "eccodeslib>=2.49 ; sys_platform != 'win32'",
     "netcdf4>=1.7.4",
     "obstore>=0.11.1",
     "pandera[polars]>=0.34",
+    "pillow>=11",
     "polars>=2.0.0",
     "psycopg[binary]>=3.2",
+    "pydantic>=2",
     "scintille-contract",
     "scintille-lake",
 ]

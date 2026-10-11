@@ -4,8 +4,7 @@ import { atmosphereParameters } from '../atmosphere';
 import { CLOUD_TOP_KM } from '../lightning';
 import { zoomLimits } from '../orbit';
 import { isCloudToggleKey } from './dev';
-import { CLOUD_FIXTURE, cloudFixtureUrl } from './frame';
-import { type Clouds, CLOUDS_RENDER_ORDER, cloudShellRadius, createClouds } from './index';
+import { CLOUD_MAX_GAP_MS, type Clouds, CLOUDS_RENDER_ORDER, cloudShellRadius, createClouds } from './index';
 import { MAX_CLOUD_FRAMES } from './timeline';
 import { CLOUDS_VISIBLE_KEY, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 
@@ -30,12 +29,13 @@ const throwing: PreferenceStorage = {
 };
 
 const HOUR = 3_600_000;
+const T0 = Date.UTC(2026, 6, 15, 18);
 
 function uniforms(clouds: Clouds) {
 	return (clouds.mesh.material as unknown as { uniforms: Record<string, { value: unknown }> }).uniforms;
 }
 
-function frame(time = CLOUD_FIXTURE.time) {
+function frame(time = T0) {
 	const texture = new Texture({ width: 2048, height: 1024 });
 	let disposed = false;
 	texture.addEventListener('dispose', () => (disposed = true));
@@ -64,7 +64,7 @@ describe('createClouds', () => {
 		expect(clouds.frameTime).toBeNull();
 		clouds.setFrame(frame().frame);
 		expect(clouds.mesh.visible).toBe(true);
-		expect(clouds.frameTime).toBe(CLOUD_FIXTURE.time);
+		expect(clouds.frameTime).toBe(T0);
 	});
 
 	it('glows from the flash light map only while one is set', () => {
@@ -93,7 +93,7 @@ describe('createClouds', () => {
 
 	it('keeps a bounded timeline and disposes what it drops', () => {
 		const clouds = createClouds(16, { storage: null, anisotropy: 8 });
-		const frames = Array.from({ length: MAX_CLOUD_FRAMES + 1 }, (_, i) => frame(CLOUD_FIXTURE.time + i * HOUR));
+		const frames = Array.from({ length: MAX_CLOUD_FRAMES + 1 }, (_, i) => frame(T0 + i * HOUR));
 		for (const f of frames) clouds.setFrame(f.frame);
 		expect(frames[0].disposed()).toBe(true);
 		expect(frames.slice(1).every((f) => !f.disposed())).toBe(true);
@@ -109,52 +109,83 @@ describe('createClouds', () => {
 	});
 
 	it('keeps a valid blend when the frame it fades from is evicted', () => {
-		let wall = 0;
-		const clouds = createClouds(16, { storage: null, now: () => wall });
-		const frames = Array.from({ length: MAX_CLOUD_FRAMES + 1 }, (_, i) => frame(CLOUD_FIXTURE.time + i * HOUR));
+		const clouds = createClouds(16, { storage: null });
+		const frames = Array.from({ length: MAX_CLOUD_FRAMES + 1 }, (_, i) => frame(T0 + i * HOUR));
 		for (const f of frames.slice(0, -1)) clouds.setFrame(f.frame);
-		for (let i = 0; i < 20; i++, wall += 1000) clouds.setTime(CLOUD_FIXTURE.time + 0.75 * HOUR);
+		clouds.setTime(T0 + 0.75 * HOUR);
 		expect(uniforms(clouds).cloudMix.value).toBeCloseTo(0.75, 3);
 		clouds.setFrame(frames[MAX_CLOUD_FRAMES].frame);
 		const u = uniforms(clouds);
 		expect(u.cloudMap.value).toBe(frames[1].frame.texture);
 		expect(u.cloudMix.value).toBe(0);
-		wall += 100;
-		clouds.setTime(CLOUD_FIXTURE.time + 0.75 * HOUR);
+		clouds.setTime(T0 + 0.75 * HOUR + 100);
 		expect(u.cloudMix.value).toBeGreaterThanOrEqual(0);
 		expect(u.cloudMix.value).toBeLessThanOrEqual(1);
 	});
 
 	it('crossfades between the frames around the scene time', () => {
-		let wall = 0;
-		const clouds = createClouds(16, { storage: null, now: () => wall });
+		const clouds = createClouds(16, { storage: null });
 		const first = frame();
-		const second = frame(CLOUD_FIXTURE.time + HOUR);
+		const second = frame(T0 + HOUR);
+		clouds.setTime(T0 + HOUR / 4);
 		clouds.setFrame(first.frame);
 		clouds.setFrame(second.frame);
-		for (let i = 0; i < 20; i++, wall += 1000) clouds.setTime(CLOUD_FIXTURE.time + HOUR / 4);
+		let t = T0 + HOUR / 4;
+		for (let i = 0; i < 60; i++, t += 1000) clouds.setTime(t);
 		const u = uniforms(clouds);
 		expect(u.cloudMap.value).toBe(first.frame.texture);
 		expect(u.cloudMapNext.value).toBe(second.frame.texture);
-		expect(u.cloudMix.value).toBeCloseTo(0.25, 3);
+		expect(u.cloudMix.value).toBeCloseTo((t - 1000 - T0) / HOUR, 3);
 	});
 
-	it('fades a new live frame in instead of popping', () => {
-		let wall = 0;
-		const clouds = createClouds(16, { storage: null, now: () => wall });
-		const live = CLOUD_FIXTURE.time + 3 * HOUR;
+	it('fades a new live frame in over scene time instead of popping', () => {
+		const clouds = createClouds(16, { storage: null });
+		let live = T0 + 2 * HOUR;
 		clouds.setFrame(frame().frame);
 		clouds.setTime(live);
-		const next = frame(CLOUD_FIXTURE.time + HOUR);
+		const next = frame(T0 + HOUR);
 		clouds.setFrame(next.frame);
 		expect(uniforms(clouds).cloudMix.value).toBe(0);
-		wall += 100;
 		clouds.setTime(live);
+		expect(uniforms(clouds).cloudMix.value).toBe(0);
+		clouds.setTime((live += 100));
 		const mix = uniforms(clouds).cloudMix.value as number;
 		expect(mix).toBeGreaterThan(0);
 		expect(mix).toBeLessThan(0.2);
-		for (let i = 0; i < 20; i++, wall += 1000) clouds.setTime(live);
+		for (let i = 0; i < 20; i++) clouds.setTime((live += 1000));
 		expect(clouds.frameTime).toBe(next.frame.time);
+	});
+
+	it('gives the same picture for the same scene times, whatever the wall clock', () => {
+		const run = () => {
+			const clouds = createClouds(16, { storage: null });
+			clouds.setFrame(frame().frame);
+			clouds.setTime(T0 + 2 * HOUR);
+			clouds.setFrame(frame(T0 + HOUR).frame);
+			clouds.setTime(T0 + 2 * HOUR + 500);
+			return uniforms(clouds).cloudMix.value;
+		};
+		expect(run()).toBe(run());
+	});
+
+	it('hides when the scene time is far from every frame', () => {
+		const clouds = createClouds(16, { storage: null });
+		clouds.setFrame(frame().frame);
+		clouds.setTime(T0 + CLOUD_MAX_GAP_MS);
+		expect(clouds.mesh.visible).toBe(true);
+		expect(clouds.frameTime).toBe(T0);
+		clouds.setTime(T0 + CLOUD_MAX_GAP_MS + 1);
+		expect(clouds.mesh.visible).toBe(false);
+		expect(clouds.frameTime).toBeNull();
+		clouds.setFrame(frame(T0 + 2 * HOUR).frame);
+		expect(clouds.mesh.visible).toBe(true);
+	});
+
+	it('keeps at most maxFrames', () => {
+		const clouds = createClouds(16, { storage: null, maxFrames: 2 });
+		const frames = [0, 1, 2].map((i) => frame(T0 + i * HOUR));
+		for (const f of frames) clouds.setFrame(f.frame);
+		expect(frames.map((f) => f.disposed())).toEqual([true, false, false]);
 	});
 });
 
@@ -192,14 +223,5 @@ describe('isCloudToggleKey', () => {
 		expect(isCloudToggleKey(key({ key: 'C' }))).toBe(false);
 		expect(isCloudToggleKey(key({ target: { tagName: 'INPUT' } as unknown as EventTarget }))).toBe(false);
 		expect(isCloudToggleKey(key({ target: { isContentEditable: true } as unknown as EventTarget }))).toBe(false);
-	});
-});
-
-describe('cloudFixtureUrl', () => {
-	it('resolves the fixture against the feed root', () => {
-		expect(cloudFixtureUrl('http://localhost:8787/')).toBe(
-			'http://localhost:8787/clouds/gmgsi_20260715T180000Z.webp',
-		);
-		expect(CLOUD_FIXTURE.time).toBe(Date.parse('2026-07-15T18:00:00Z'));
 	});
 });

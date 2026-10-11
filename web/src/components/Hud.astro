@@ -47,7 +47,10 @@ import Timeline from './Timeline.astro';
 					<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
 				</li>
 			</ul>
-			<p class="attribution">GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.</p>
+			<p class="attribution">
+				GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.
+				<span data-cloud-credit>Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).</span>
+			</p>
 
 			<nav aria-label="More about Scintille">
 				<a href="/methodology">Methodology and sources</a>
@@ -69,8 +72,16 @@ import Timeline from './Timeline.astro';
 
 	<p class="stale cap" role="status" data-stale hidden></p>
 
-	<div class="layers" role="group" aria-label="Layers" data-layers hidden>
-		<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+	<div class="layers" data-layers hidden>
+		<div class="group" role="group" aria-label="Layers">
+			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+			<p class="frame" data-cloud-time hidden></p>
+			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
+		</div>
+		<div class="afterglow">
+			<span class="cap" id="afterglow-label">Afterglow</span>
+			<div class="opts" role="radiogroup" aria-labelledby="afterglow-label" data-display></div>
+		</div>
 	</div>
 
 	<Timeline />
@@ -310,6 +321,55 @@ import Timeline from './Timeline.astro';
 	.sw:hover {
 		color: var(--soft);
 	}
+	.frame {
+		margin: -8px 0 0;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	.group {
+		display: grid;
+		gap: 14px;
+		justify-items: end;
+	}
+	.afterglow {
+		display: grid;
+		gap: 6px;
+		justify-items: end;
+	}
+	.opts {
+		display: flex;
+		gap: 12px;
+		align-items: baseline;
+	}
+	.opts :global(button) {
+		min-width: 14px;
+		min-height: 24px;
+		padding: 0 0 4px;
+		color: var(--dim);
+		font: 300 11px/1 var(--mono);
+		font-variant-numeric: tabular-nums;
+		text-shadow: inherit;
+		cursor: pointer;
+		background: none;
+		border: 0;
+		border-bottom: 1px solid transparent;
+		transition: color 0.6s ease;
+	}
+	.opts :global(button:hover) {
+		color: var(--soft);
+	}
+	.opts :global(button[aria-checked='true']) {
+		color: var(--ink);
+		border-bottom-color: var(--soft);
+	}
+	.opts :global(small) {
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+	}
 
 	.info {
 		position: fixed;
@@ -515,8 +575,9 @@ import Timeline from './Timeline.astro';
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
-	import { formatUtcDate, formatUtcTime } from './hud/format';
+	import { cloudCaption, formatUtcDate, formatUtcTime } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -526,9 +587,13 @@ import Timeline from './Timeline.astro';
 		const state = $('[data-state]');
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
+		const sound = $<HTMLButtonElement>('[data-sound]');
 		const info = $<HTMLDetailsElement>('[data-info]');
 		const sources = $('[data-sources]');
+		const cloudTime = $('[data-cloud-time]');
+		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
+		const display = $('[data-display]');
 		let app: GlobeApp | undefined;
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
@@ -566,13 +631,56 @@ import Timeline from './Timeline.astro';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+			if (cloudTime) {
+				const caption = app
+					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudFeed.settled)
+					: '';
+				cloudTime.hidden = !caption;
+				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
+			}
+			const credit = app?.cloudFeed.attribution?.trim().replace(/\.+$/, '');
+			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
+			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
+			for (const { minutes, button } of displayButtons) {
+				const checked = app?.lightning.displayMinutes === minutes;
+				button.setAttribute('aria-checked', String(checked));
+				button.tabIndex = checked ? 0 : -1;
+			}
 		};
+
+		const chooseDisplay = (index: number) => {
+			const choice = displayButtons[(index + displayButtons.length) % displayButtons.length];
+			app?.lightning.setDisplayMinutes(choice.minutes);
+			tick();
+			choice.button.focus();
+		};
+		const displayButtons = DISPLAY_MINUTES.map((minutes, index) => {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.setAttribute('role', 'radio');
+			button.setAttribute('aria-label', `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+			button.textContent = String(minutes);
+			button.addEventListener('click', () => chooseDisplay(index));
+			button.addEventListener('keydown', (event) => {
+				const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+				if (!step) return;
+				event.preventDefault();
+				chooseDisplay(index + step);
+			});
+			display?.append(button);
+			return { minutes, button };
+		});
+		const unit = document.createElement('small');
+		unit.setAttribute('aria-hidden', 'true');
+		unit.textContent = 'MIN';
+		display?.append(unit);
 		tick();
 		setInterval(tick, 250);
 
 		window.addEventListener(GLOBE_READY, (event) => {
 			app = (event as CustomEvent<GlobeApp>).detail;
 			if (layers) layers.hidden = false;
+			if (sound) sound.hidden = !app.thunder.supported;
 			tick();
 		});
 		window.addEventListener(GLOBE_GONE, () => {
@@ -588,6 +696,10 @@ import Timeline from './Timeline.astro';
 		});
 		clouds?.addEventListener('click', () => {
 			if (app) app.clouds.setVisible(!app.clouds.visible);
+			tick();
+		});
+		sound?.addEventListener('click', () => {
+			if (app) app.thunder.setEnabled(!app.thunder.enabled);
 			tick();
 		});
 		document.addEventListener('keydown', (event) => {
