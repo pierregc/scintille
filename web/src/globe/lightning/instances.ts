@@ -29,19 +29,17 @@ export class FlashInstances {
 	#end = 0;
 	readonly #ring: FlashRing;
 	readonly #onRange: RangeListener;
-	readonly #lookbackMs: number;
+	/** How long a flash stays visible, so the window keeps it behind the playhead. */
+	lookbackMs: number;
 
-	/**
-	 * Defaults to the ring's capacity, so the whole live window stays on the GPU.
-	 * `lookbackMs`: how long a flash stays visible, so the window keeps it behind the playhead.
-	 */
+	/** Defaults to the ring's capacity, so the whole live window stays on the GPU. */
 	constructor(ring: FlashRing, capacity = ring.capacity, onRange: RangeListener = () => {}, lookbackMs = 0) {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
 		this.capacity = capacity;
 		this.data = new Float32Array(capacity * FLASH_STRIDE);
 		this.#ring = ring;
 		this.#onRange = onRange;
-		this.#lookbackMs = lookbackMs;
+		this.lookbackMs = lookbackMs;
 	}
 
 	/** Valid instances. */
@@ -53,7 +51,8 @@ export class FlashInstances {
 	sync(sceneTime: number): void {
 		const ring = this.#ring;
 		const oldest = ring.written - ring.size;
-		const need = this.#firstAt(sceneTime - this.#lookbackMs);
+		// When the lookback holds more than fits, keep the flashes closest to the playhead.
+		const need = Math.max(this.#firstAt(sceneTime - this.lookbackMs), this.#firstAt(sceneTime + 1) - this.capacity);
 		const from = Math.max(oldest, Math.min(need, ring.written - this.capacity));
 		this.#start = Math.max(this.#start, oldest, this.#end - this.capacity);
 		if (!(Math.abs(sceneTime - this.origin) < REBASE_MS) || need < this.#start) {

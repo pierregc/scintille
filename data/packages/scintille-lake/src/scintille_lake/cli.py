@@ -5,6 +5,7 @@ import sys
 
 from .config import LakeConfig
 from .connect import pyiceberg_catalog
+from .maintenance import MaintenancePolicy
 from .migrate import IncompatibleChange, migrate
 
 
@@ -12,7 +13,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scintille-lake")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="create or update namespaces and tables")
-    parser.parse_args(argv)
+    maintenance = commands.add_parser(
+        "maintenance", help="print the wrangler commands that apply the maintenance policy"
+    )
+    maintenance.add_argument("--bucket", default="scintille-lake")
+    args = parser.parse_args(argv)
+
+    if args.command == "maintenance":
+        for command in MaintenancePolicy.from_env().wrangler_commands(args.bucket):
+            print(command)
+        return 0
 
     config = LakeConfig.from_env()
     print(f"catalog {config.uri} warehouse {config.warehouse}")
