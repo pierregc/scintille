@@ -12,6 +12,7 @@ from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
 from .ops_status import ops_status
 from .resources import resources
 from .storm_cells import storm_cells
+from .storms import storm_tracks, storms
 
 hourly_checks = define_asset_job("silver_hourly_checks", selection=AssetSelection.checks(*HOURLY))
 daily_checks = define_asset_job(
@@ -27,6 +28,8 @@ defs = Definitions(
         BRONZE,
         COUNTRIES,
         storm_cells,
+        storm_tracks,
+        storms,
         SILVER,
         silver_flashes_backfill,
         *GOLD,
