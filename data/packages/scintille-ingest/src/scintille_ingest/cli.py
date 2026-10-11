@@ -150,9 +150,13 @@ async def run_lake_writer(spool_dir: Path, interval: float) -> int:
 
 
 async def run_live_probe(url: str, max_age: float, every: float, once: bool) -> int:
-    """Reports to `SCINTILLE_HEALTHCHECK_LIVE_URL` when set."""
+    """Reports to `SCINTILLE_HEALTHCHECK_LIVE_URL` when set, except with `--once`."""
     configure_json_logs()
-    heartbeat = heartbeat_from_env("SCINTILLE_HEALTHCHECK_LIVE_URL", "live-manifest", Metrics())
+    heartbeat = (
+        None
+        if once
+        else heartbeat_from_env("SCINTILLE_HEALTHCHECK_LIVE_URL", "live-manifest", Metrics())
+    )
     probe = LiveProbe(url, max_age, heartbeat=heartbeat, every=every)
     if once:
         return 0 if await probe.once() else 1
