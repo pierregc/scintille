@@ -20,6 +20,10 @@ x-pipelines: &pipelines
       PACKAGE: scintille-pipelines
   environment:
     SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+    SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
+  # Reference downloads (Natural Earth) survive container recreation.
+  volumes:
+    - cache:/var/lib/scintille/cache
   depends_on:
     postgres:
       condition: service_healthy
@@ -96,6 +100,25 @@ services:
       postgres:
         condition: service_healthy
 
+  # Reads the public manifest through Cloudflare and reports to Healthchecks.io (docs/operations.md).
+  live-probe:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    command: ["scintille-ingest", "live-probe"]
+
+  # Cloud textures (ADR 0007). Off until COMPOSE_PROFILES includes "clouds" in .env.
+  clouds:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    profiles: ["clouds"]
+    command: ["scintille-ingest", "clouds", "--port", "8081"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/healthz', timeout=5)"]
+      interval: 15s
+      start_period: 20s
+      retries: 4
+
 volumes:
   postgres:
   spool:
+  cache:

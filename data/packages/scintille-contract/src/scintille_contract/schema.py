@@ -14,6 +14,7 @@ SCHEMA_FILES = (
     "flash.schema.json",
     "manifest.schema.json",
     "chunk.schema.json",
+    "metrics.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 
