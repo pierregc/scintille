@@ -18,6 +18,7 @@ from scintille_ingest.runtime.service import Settings
 from scintille_ingest.runtime.sources import Product
 from scintille_lake.locks import partition_locks
 
+from .lineage import RAW
 from .resources import LakeResource, PostgresResource
 
 partitions = MultiPartitionsDefinition(
@@ -43,6 +44,7 @@ def bucket_for(source: str, day: date) -> str:
     partitions_def=partitions,
     group_name="silver",
     pool="noaa",
+    deps=[RAW],
     description="Rebuilds one day of one source from every upstream file, only if complete.",
 )
 def silver_flashes_backfill(

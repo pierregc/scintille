@@ -20,8 +20,13 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 
 | Kind | Name | What it does |
 |---|---|---|
-| Asset | `gold/daily_flash_counts` | Placeholder gold table: flashes per source and UTC day, one daily partition rebuilt whole |
-| Asset check | `one_row_per_source` | Blocking: a failed check fails the run |
+| External asset | `raw/glm_files`, `bronze/ingest_log`, `reference/countries` | Written outside Dagster, declared for lineage |
+| Asset | `gold/flash_stats_hourly` | Flashes per hour, source and 1° cell |
+| Asset | `gold/source_sla_daily` | Per source and day: files against expected, completeness, latency p50/p95 |
+| Asset | `gold/region_daily` | Flashes per country, source and day (Natural Earth borders) |
+| Asset | `feeds/daily_stats` | Publishes `stats/daily/<day>.json` to R2 from the gold tables |
+| Asset checks | `unique`, `not_null`, `accepted_ranges`, `relationships` | On each gold asset, blocking: a failed check fails the run |
+| Job | `daily_gold` | The gold assets and the feed, one daily partition rebuilt whole |
 | Asset | `gold/storm_cells` | Flashes clustered into storm cells, hourly partitions with an overlap ([below](#storm-cells)) |
 | Asset check | `valid_cells` | Blocking: unique ids, at least `min_pts` flashes, last flash inside the window |
 | Asset | `gold/storm_tracks` | Each cell linked to a storm, one hourly window after the other ([below](#storm-tracking)) |
@@ -29,8 +34,25 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 | Asset | `gold/storms` | One row per storm with its track, rebuilt for the storms active in the hours |
 | Asset check | `valid_storms` | Blocking: unique ids, one track point per step, positive flash counts |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
-| Sensor | `silver_changed` | Example: rebuilds the open UTC day when `silver.flashes` gets a new snapshot (`daily` has `end_offset=1`) |
+| Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |
+| Asset check | `lake_orphan_inventory` | Weekly (Sunday 03:00 UTC), warn: unreferenced files per table, never deleted ([lakehouse](lakehouse.md#maintenance)) |
+| Asset check | `raw_lifecycle_active` | Weekly, warn: no object under `raw/` older than 30 days plus 2 days of R2 delay |
+| Sensor | `silver_changed` | Rebuilds the open UTC day when `silver.flashes` gets a new snapshot (`daily` has `end_offset=1`) |
 | Sensor | `alert_on_failure` | Posts failed runs to `SCINTILLE_ALERT_WEBHOOK` |
+
+## Gold models
+
+Each model is one SQL file in `scintille_pipelines/gold/sql/`, run by one daily-partitioned asset:
+DuckDB reads silver and bronze through the Iceberg catalog (`lake.silver.flashes`), and the day is
+replaced in the gold table in one PyIceberg commit. Upstream tables are `{placeholders}` in the SQL
+and dependencies are asset deps, so a later move to dbt is mechanical. Checks are SQL selecting the
+failing rows, like dbt generic tests. Gold tables are merge-on-read (`gold_table()`).
+
+On the pinned versions, DuckDB `INSERT` and `DELETE` work on a partitioned merge-on-read gold table
+(`test_duckdb_write_path_on_a_partitioned_gold_table`, `-m lake`). Writes still go through one
+PyIceberg overwrite per day: a single atomic commit, the same path as silver backfills, and testable
+on the SQLite catalog. `region_daily` downloads Natural Earth admin-0 countries
+once (pinned checksum, cached in `SCINTILLE_CACHE_DIR`, the `cache` volume in compose) and needs DuckDB's `spatial` extension.
 
 ## Storm cells
 
@@ -115,5 +137,6 @@ so its value never shows in the UI or the logs. Unset variables fall back to the
 
 ## Tests
 
-`uv run pytest` materializes the asset in-process on a SQLite catalog. `uv run pytest -m lake`
-materializes it against the local Lakekeeper and tests the Postgres lock; the `lake` CI job runs both.
+`uv run pytest` materializes the gold assets and the feed in-process on a SQLite catalog and an
+in-memory bucket. `uv run pytest -m lake` materializes them against the local Lakekeeper and S3
+store, probes the DuckDB write path and tests the Postgres lock; the `lake` CI job runs both.

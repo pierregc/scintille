@@ -1,0 +1,70 @@
+name: render
+
+on:
+  pull_request:
+    paths: ["web/src/**", "web/scripts/render.mjs", "web/package.json", "web/pnpm-lock.yaml", "fixtures/live/**", ".github/workflows/render.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Renders the fixture hour twice with SwiftShader and requires identical frames.
+  determinism:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    env:
+      RANGE: --start 2026-07-15T18:30:00Z --end 2026-07-15T18:31:00Z --frames 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps --no-shell chromium
+      - run: pnpm build
+        env:
+          PUBLIC_LIVE_BASE_URL: http://127.0.0.1:8787/
+          PUBLIC_TEXTURES_URL: /textures
+      - name: Fetch the published textures
+        run: |
+          mkdir -p dist/client/textures/4k
+          for name in day night mask; do
+            curl -fsS --retry 3 -o "dist/client/textures/4k/$name.webp" "https://data.scintille.app/textures/v2/4k/$name.webp"
+          done
+      - name: Serve the site and the fixtures
+        run: |
+          python3 ../fixtures/serve.py 8787 &
+          python3 -m http.server 4321 -b 127.0.0.1 -d dist/client &
+          curl -fsS --retry 10 --retry-connrefused -o /dev/null http://127.0.0.1:4321/render/
+          curl -fsS --retry 10 --retry-connrefused -o /dev/null http://127.0.0.1:8787/live/manifest.json
+      - name: Render twice
+        run: |
+          node scripts/render.mjs $RANGE --width 640 --height 360 --out "$RUNNER_TEMP/a" | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/render.mjs $RANGE --width 640 --height 360 --out "$RUNNER_TEMP/b" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Compare frames
+        working-directory: ${{ runner.temp }}
+        run: |
+          (cd a && sha256sum *.png) > a.sha256
+          (cd b && sha256sum *.png) > b.sha256
+          test "$(wc -l < a.sha256)" -eq 30
+          diff a.sha256 b.sha256
+      - name: Measure 1080p
+        run: node scripts/render.mjs $RANGE --frames 3 --out "$RUNNER_TEMP/hd" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frames
+          path: ${{ runner.temp }}/a
+          retention-days: 7

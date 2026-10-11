@@ -10,7 +10,7 @@ automatically so they can be replayed. Live at [scintille.app](https://scintille
 | Path | What lives there |
 |---|---|
 | `web/` | Astro site and the Three.js globe |
-| `data/` | Python `uv` workspace: data contract, ingestion service, Dagster pipelines, dbt models |
+| `data/` | Python `uv` workspace: data contract, ingestion service, Dagster pipelines and gold SQL models |
 | `docs/` | Documentation and architecture decision records (`docs/adr/`) |
 
 ## Running locally

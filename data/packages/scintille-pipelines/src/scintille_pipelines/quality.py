@@ -7,10 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 import polars as pl
+from scintille_ingest.runtime.ops import COMPLETENESS_TARGET, EXPECTED_FILES_PER_HOUR
 
-# Product files per hour: GLM writes one every 20 s, MTG LI one every 30 s.
-EXPECTED_FILES_PER_HOUR = {"glm-east": 180, "glm-west": 180, "mtg-li": 120}
-COMPLETENESS_TARGET = 0.99
 # lake-writer commits every 5 minutes; anything older than this means silver is stuck.
 FRESHNESS_LIMIT = timedelta(minutes=20)
 VOLUME_RANGE = (0.2, 5.0)

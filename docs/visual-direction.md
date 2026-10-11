@@ -52,7 +52,8 @@ lights, never from a colour scale.
 Minimal. Visible by default:
 
 - top left: the name and an "i" that opens the about text over a soft left gradient (bottom sheet on phones);
-- top right: the UTC clock, date and live/replay state, then two layer switches (Clouds, Sound);
+- top right: the UTC clock, date and live/replay state, then two layer switches (Clouds, Sound) and the
+  afterglow choice (how long a flash stays on screen);
 - bottom: time controls on the left, the replay timeline in the middle, the storm call to action on the right;
 - four faint corner marks.
 
@@ -67,6 +68,7 @@ These come from the mockup and are expected to change after real use:
 - Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default. Flash display and flicker are timed in scene
   time, so at 60× and above a flash lasts a frame or two; they need wall-time (or speed-scaled) timing before
   60× ships as the default.
+- Afterglow: **1, 5, 15, 30, 60 minutes**, 5 by default; never longer than the 60-minute live window.
 - Timeline: one UTC day, ticks every 30 minutes, labels every 6 hours.
 - No flash counter and no activity histogram.
 
