@@ -12,8 +12,10 @@ spooled) through:
 1. **download**: file identity = object key + SHA-256 (a revised product is a new file); original
    uploaded to R2 under `raw/<source>/<key dir>/<checksum>_<name>` (`SCINTILLE_R2_*`, deleted after
    30 days by the bucket rule; best effort, paused past 90 % spool disk); state `downloaded`;
-2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`;
-   state `published_live`;
+2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`,
+   except those flagged `outside-owner-zone`: another satellite has the better view of their point
+   and publishes the same flash ([overlap](data-quality.md#overlap-between-satellites)); they are
+   counted in `ingest_live_excluded_total` and still spooled; state `published_live`;
 3. **spool**: per batch, its flashes and its `bronze.ingest_log` rows as Parquet, each written to a
    temporary name, fsynced, then renamed (flashes last, so they mark a complete batch); `batch_id` =
    hash of the batch's file identities (one file per batch today), so a re-run writes the same batch
