@@ -31,6 +31,20 @@ On every push to `main` that touches `web/`, the `web` workflow runs the checks 
 `wrangler deploy`. Deploys never run in parallel. To redeploy without a change, run the workflow by
 hand: Actions > web > Run workflow on `main` (`gh workflow run web.yml --ref main`).
 
+## Version
+
+Every build is stamped with the commit it was built from, its build time and, on a Preview, the PR
+number (`web/scripts/build-info.mjs`, from `SCINTILLE_COMMIT`, `GITHUB_SHA` or `git`). The About
+sheet of the front page ends with `Build <short sha> · <date> UTC`, linked to the commit (or the PR on
+a Preview), and `/version.json` serves the same data:
+
+```sh
+curl https://scintille.app/version.json   # {"commit":"5c470ef…","pr":null,"builtAt":"2026-10-11T19:30:42.000Z"}
+```
+
+On `main`, the commit is the merge commit GitHub shows on the merged PR. After `wrangler deploy`, the
+`deploy` job waits until `version.json` reports the commit it deployed and fails otherwise.
+
 ## Previews
 
 Each pull request that touches `web/` gets a Preview named `pr-<number>`:
