@@ -9,6 +9,7 @@ in [`data/contract/`](../data/contract/), and enforced by code:
 | Python models (pydantic) | `data/packages/scintille-contract/src/scintille_contract/models.py` | generated |
 | TypeScript types | `web/src/contract/types.ts` | generated |
 | Field reference (end of this doc) | `docs/data-contract.md` | generated section |
+| Ownership mask ([data quality](data-quality.md#overlap-between-satellites)) | `data/contract/ownership.geojson` | generated |
 
 ```sh
 cd data
@@ -37,7 +38,7 @@ source:
 | Source id | Instrument | Product |
 |---|---|---|
 | `glm-east` | GOES-East GLM (75.2° W) | NOAA GLM L2 LCFA (flash variables) |
-| `glm-west` | GOES-West GLM (137.2° W) | NOAA GLM L2 LCFA (flash variables) |
+| `glm-west` | GOES-West GLM (137.0° W) | NOAA GLM L2 LCFA (flash variables) |
 | `mtg-li` | MTG-I1 Lightning Imager (0°) | EUMETSAT LI L2 LFL (flashes) |
 
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
@@ -52,7 +53,9 @@ source:
   defined in #33.
 - **Quality** lists caveats: `degraded` (flagged by the source product), `coverage-edge` (close to
   the edge of the field of view, where detection efficiency drops), `overlap` (seen where two
-  instruments overlap, so it may be detected twice).
+  instruments overlap, so it may be detected twice), `outside-owner-zone` (another instrument has
+  the better view of this point and reports the same flash: kept in silver, in the live feed only
+  while that instrument is not delivering, see [data quality](data-quality.md#overlap-between-satellites)).
 
 ## Live feed on R2
 
@@ -82,6 +85,46 @@ live/chunks/20260715T183030Z.bin.gz
 - **`metrics.json`** (`OpsMetrics`) is rewritten every minute: freshness per layer, flashes per
   minute, latency, completeness and error budget per source, data quality status and catalog usage.
   Targets are in [SLOs](slo.md).
+
+## Cloud frames on R2
+
+```
+live/clouds/manifest.json                     Cache-Control: max-age=60
+live/clouds/2k/20261010T000000Z-1a2b3c4d.webp  Cache-Control: public, max-age=31536000, immutable
+live/clouds/4k/20261010T000000Z-1a2b3c4d.webp
+archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
+```
+
+- A **frame** is one hourly GMGSI mosaic turned into cloud opacity
+  ([ADR 0007](adr/0007-cloud-source.md)): an equirectangular grayscale WebP (west edge at 180° W,
+  top row at 90° N; 0 clear, 255 opaque; 0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and
+  `4k` (4096 × 2048).
+- The **manifest** lists the frames of the last 6 hours, oldest first. Paths are relative to the
+  manifest and opaque; a revised upstream file gets a new path. Clients poll it (a new frame
+  appears about once an hour) and show `time`, the observation time, next to the lightning time.
+
+```json
+{
+  "generated_at": "2026-10-10T00:40:12Z",
+  "window_seconds": 21600,
+  "attribution": "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)",
+  "frames": [
+    {
+      "time": "2026-10-10T00:00:00Z",
+      "published_at": "2026-10-10T00:40:12Z",
+      "product": "GLOBCOMPLIR_v3r0_blend_s202610100000000_e202610100009599_c202610100034153.nc",
+      "reference": "gfs 2026100918 f006",
+      "textures": {
+        "2k": { "path": "2k/20261010T000000Z-1a2b3c4d.webp", "width": 2048, "height": 1024, "size_bytes": 316424 },
+        "4k": { "path": "4k/20261010T000000Z-1a2b3c4d.webp", "width": 4096, "height": 2048, "size_bytes": 1031550 }
+      }
+    }
+  ]
+}
+```
+
+The model is `CloudManifest` in `scintille_ingest.clouds.publish`; it is not part of the versioned
+flash contract yet.
 
 ## Chunk encoding
 
@@ -166,7 +209,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.1.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.2.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -174,7 +217,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.1.0`.
+Value: `2.2.0`.
 
 ### UtcTimestamp
 
@@ -207,6 +250,7 @@ Quality caveat on a flash. The order is the bit index used in binary chunks.
 | 0 | `degraded` |
 | 1 | `coverage-edge` |
 | 2 | `overlap` |
+| 3 | `outside-owner-zone` |
 
 ### EnergyUnit
 

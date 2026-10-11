@@ -7,7 +7,7 @@
     "SchemaVersion": {
       "description": "Contract version (SemVer). Any change that breaks existing readers needs a major bump.",
       "type": "string",
-      "const": "2.1.0"
+      "const": "2.2.0"
     },
     "UtcTimestamp": {
       "description": "UTC instant, RFC 3339 with a Z suffix, up to microsecond precision.",
@@ -22,7 +22,7 @@
     "QualityFlag": {
       "description": "Quality caveat on a flash. The order is the bit index used in binary chunks.",
       "type": "string",
-      "enum": ["degraded", "coverage-edge", "overlap"]
+      "enum": ["degraded", "coverage-edge", "overlap", "outside-owner-zone"]
     },
     "EnergyUnit": {
       "description": "Unit of energy_raw: J for GLM flash_energy, mW m-2 sr-1 for MTG LI flash radiance.",
