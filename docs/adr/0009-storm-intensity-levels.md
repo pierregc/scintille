@@ -23,8 +23,9 @@ spot warm-up is left out. What it shows:
 - **Energy** per flash differs between satellites by up to 1.7 times (median), is not calibrated
   across sources (#33), and will not compare with MTG LI.
 - **Fixed hot spots.** Without the #179 filter, two hot spots become the second and third largest
-  "storms" of the month (close to a million flashes each). With it, percentiles barely move, but
-  12 storms from two weaker spots still reach level 4 or 5.
+  "storms" of the month (close to a million flashes each). With it, percentiles barely move. The
+  refined hot-spot rule (#180) removes most of these pixels; the bursty one near 3.5°S 22.3°W
+  remains partly unfiltered, so levels 4–5 may still contain a few artefacts.
 - **Track bounds.** Energy summed from silver within the bounds of each track step matches the sum
   over each storm's own flashes in ranking (Spearman 0.998) and reads 6 % high in total.
 
