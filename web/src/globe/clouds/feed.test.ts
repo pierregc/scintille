@@ -108,7 +108,7 @@ describe('CloudFeed', () => {
 		const f = start({ frames: 3 });
 		await f.idle();
 		expect(requests).toEqual([`${BASE}live/clouds/manifest.json`]);
-		expect(frames.map((x) => x.time)).toEqual([1, 2, 3].map((h) => T0 + h * HOUR));
+		expect(frames.map((x) => x.time)).toEqual([3, 2, 1].map((h) => T0 + h * HOUR));
 		expect(f.attribution).toBe('Clouds: test');
 		expect(f.settled).toBe(true);
 
@@ -116,6 +116,24 @@ describe('CloudFeed', () => {
 		await vi.advanceTimersByTimeAsync(60_000);
 		await f.idle();
 		expect(loads.slice(3)).toEqual([`${BASE}live/clouds/2k/f4.webp`]);
+	});
+
+	it('loads the newer frames when one fails, then retries it', async () => {
+		const f = start({
+			frames: 3,
+			load: async (url, time) => {
+				loads.push(url);
+				if (url.endsWith('f1.webp') && loads.length < 4) throw new Error('corrupt');
+				return { texture: new Texture(), time };
+			},
+		});
+		await f.idle();
+		expect(frames.map((x) => x.time)).toEqual([3, 2].map((h) => T0 + h * HOUR));
+		expect(errors).toHaveLength(1);
+		expect(f.failures).toBe(1);
+		await vi.runOnlyPendingTimersAsync();
+		await f.idle();
+		expect(frames.map((x) => x.time)).toEqual([3, 2, 1].map((h) => T0 + h * HOUR));
 	});
 
 	it('loads the tier it was given', async () => {

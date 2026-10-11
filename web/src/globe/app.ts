@@ -74,7 +74,6 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		onFrame: (frame) => clouds.setFrame(frame),
 		onError: (error) => console.warn('clouds:', error),
 	});
-	cloudFeed.start();
 	const detachDevClouds = import.meta.env.DEV ? attachDevClouds(clouds, window) : undefined;
 	const stars = createStarfield();
 	scene.add(stars.points);
@@ -137,6 +136,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
+		if (clouds.visible) cloudFeed.start();
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);

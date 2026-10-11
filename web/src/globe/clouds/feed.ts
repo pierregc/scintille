@@ -125,9 +125,16 @@ export class CloudFeed {
 			const sources = frameSources(manifest, this.#tier, this.manifestUrl.href, this.#frames);
 			const listed = new Set(sources.map((s) => s.url));
 			for (const url of this.#loaded) if (!listed.has(url)) this.#loaded.delete(url);
-			for (const source of sources) {
+			let frameError: unknown;
+			for (const source of sources.toReversed()) {
 				if (this.#loaded.has(source.url)) continue;
-				const frame = await this.#load(source.url, source.time);
+				let frame: CloudFrame;
+				try {
+					frame = await this.#load(source.url, source.time);
+				} catch (error) {
+					frameError ??= error;
+					continue;
+				}
 				if (!this.#running) {
 					frame.texture.dispose();
 					return;
@@ -135,6 +142,7 @@ export class CloudFeed {
 				this.#loaded.add(source.url);
 				this.#onFrame(frame);
 			}
+			if (frameError !== undefined) throw frameError;
 			this.#failures = 0;
 		} catch (error) {
 			if (!this.#running) return;

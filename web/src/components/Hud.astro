@@ -587,7 +587,7 @@ import Timeline from './Timeline.astro';
 				cloudTime.hidden = !caption;
 				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
 			}
-			const credit = app?.cloudFeed.attribution;
+			const credit = app?.cloudFeed.attribution?.trim().replace(/\.+$/, '');
 			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
 		};
 		tick();
