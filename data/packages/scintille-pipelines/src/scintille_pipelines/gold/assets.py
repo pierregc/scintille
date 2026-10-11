@@ -18,7 +18,7 @@ from dagster import (
     asset,
 )
 
-from ..resources import LakeResource, R2Resource
+from ..resources import FeedResource, LakeResource
 from .checks import failures
 from .models import (
     FLASH_STATS_HOURLY,
@@ -68,9 +68,11 @@ def gold_asset(model: Model) -> AssetsDefinition:
         with lake.duckdb() as con:
             rows = compute(con, model, day)
             failed = {c.name: failures(con, c, rows, RELATIONS, start, end) for c in model.checks}
-        write(lake.catalog(), model, day, rows)
+        committed = not any(failed.values())
+        if committed:
+            write(lake.catalog(), model, day, rows)
         return MaterializeResult(
-            metadata={"rows": rows.num_rows},
+            metadata={"rows": rows.num_rows, "committed": committed},
             check_results=[
                 AssetCheckResult(
                     check_name=name,
@@ -131,7 +133,7 @@ def daily_stats(
     description="Publishes `stats/daily/<day>.json` to R2: flashes per source and hour, and SLA.",
 )
 def daily_stats_feed(
-    context: AssetExecutionContext, lake: LakeResource, r2: R2Resource
+    context: AssetExecutionContext, lake: LakeResource, feed_bucket: FeedResource
 ) -> MaterializeResult:  # type: ignore[type-arg]
     day = date.fromisoformat(context.partition_key)
     with lake.duckdb() as con:
@@ -139,7 +141,7 @@ def daily_stats_feed(
         feed = daily_stats(con, day, datetime.now(UTC))
     body = json.dumps(feed, separators=(",", ":")).encode()
     path = feed_key(day)
-    obstore.put(r2.store(), path, body, attributes=FEED_HEADERS)
+    obstore.put(feed_bucket.store(), path, body, attributes=FEED_HEADERS)
     return MaterializeResult(
         metadata={"path": path, "bytes": len(body), "sources": len(feed["sources"])}
     )

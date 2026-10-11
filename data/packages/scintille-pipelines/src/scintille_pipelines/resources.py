@@ -92,6 +92,12 @@ class R2Resource(ConfigurableResource):  # type: ignore[type-arg]
         )
 
 
+class FeedResource(R2Resource):
+    """Public bucket served at data.scintille.app, separate from the lake bucket."""
+
+    bucket: str = "scintille-live"
+
+
 def env_or(name: str, default: str) -> str | EnvVar:
     """An `EnvVar` when the variable is set, so Dagster never shows its value; else the default."""
     return EnvVar(name) if os.environ.get(name) else default
@@ -109,6 +115,12 @@ def resources() -> dict[str, ConfigurableResource]:  # type: ignore[type-arg]
         "r2": R2Resource(
             endpoint=env_or("SCINTILLE_R2_ENDPOINT", "http://localhost:9000"),
             bucket=env_or("SCINTILLE_R2_BUCKET", "scintille-lake"),
+            access_key_id=env_or("SCINTILLE_R2_ACCESS_KEY_ID", "scintille-local"),
+            secret_access_key=env_or("SCINTILLE_R2_SECRET_ACCESS_KEY", "scintille-local-secret"),
+        ),
+        "feed_bucket": FeedResource(
+            endpoint=env_or("SCINTILLE_R2_ENDPOINT", "http://localhost:9000"),
+            bucket=env_or("SCINTILLE_LIVE_BUCKET", "scintille-live"),
             access_key_id=env_or("SCINTILLE_R2_ACCESS_KEY_ID", "scintille-local"),
             secret_access_key=env_or("SCINTILLE_R2_SECRET_ACCESS_KEY", "scintille-local-secret"),
         ),
