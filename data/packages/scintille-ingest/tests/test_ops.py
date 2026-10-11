@@ -126,6 +126,8 @@ def test_completeness_and_error_budget() -> None:
     # 43.2 files may be missed in a day; 20 are.
     assert error_budget(short, "glm-east", T0) == pytest.approx(1 - 20 / 43.2, abs=1e-4)
     assert completeness(None, "mtg-li") is None and error_budget(None, "mtg-li", T0) is None
+    outage_aged = FileStats(180, T0, 29 * 24 * 180, T0 - timedelta(days=60))
+    assert error_budget(outage_aged, "glm-east", T0) == pytest.approx(1 - 24 * 180 / 1296, abs=1e-4)
 
 
 def test_quality_status_reads_the_dagster_summary() -> None:

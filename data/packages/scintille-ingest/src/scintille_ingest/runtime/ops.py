@@ -94,7 +94,7 @@ class FileStats:
     files_last_hour: int
     last_file_time: datetime | None
     files_in_budget_window: int
-    first_file_time: datetime | None
+    monitoring_start: datetime | None
 
 
 class OpsStore(Protocol):
@@ -126,13 +126,13 @@ FILE_STATS = """
 WITH files AS (
     SELECT source, key, min(updated_at) AS at, max(updated_at) AS last
     FROM ingest_files
-    WHERE state = 'spooled' AND updated_at > %(budget_start)s
+    WHERE state = 'spooled'
     GROUP BY source, key
 )
 SELECT source,
     count(*) FILTER (WHERE at > %(hour_start)s),
     max(last),
-    count(*),
+    count(*) FILTER (WHERE at > %(budget_start)s),
     min(at)
 FROM files
 GROUP BY source
@@ -192,11 +192,12 @@ def completeness(stats: FileStats | None, source: str) -> float | None:
 
 
 def error_budget(stats: FileStats | None, source: str, now: datetime) -> float | None:
-    """Missing files over the files the 30-day target allows to miss, since the first file."""
+    """Missing files over the files the 30-day target allows to miss, since monitoring started."""
     per_hour = EXPECTED_FILES_PER_HOUR.get(source)
-    if per_hour is None or stats is None or stats.first_file_time is None:
+    if per_hour is None or stats is None or stats.monitoring_start is None:
         return None
-    hours = (now - stats.first_file_time).total_seconds() / 3600
+    start = max(stats.monitoring_start, now - BUDGET_WINDOW)
+    hours = (now - start).total_seconds() / 3600
     expected = per_hour * hours
     allowed = expected * (1 - COMPLETENESS_TARGET)
     if allowed <= 0:
