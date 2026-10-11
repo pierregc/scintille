@@ -58,10 +58,17 @@ class CloudCollector:
             for p in listed
             if now - p.time < self.publisher.window and published.get(p.time) != p.name
         ]
+        failed = 0
         for product in todo:
             if self._stop.is_set():
                 break
-            await self.process(product)
+            try:
+                await self.process(product)
+            except Exception:
+                failed += 1
+                log.exception("cloud frame failed", extra={"fields": {"product": product.name}})
+        if failed:
+            raise RuntimeError(f"{failed} of {len(todo)} cloud frames failed")
         return len(todo)
 
     async def process(self, product: GmgsiProduct) -> None:
