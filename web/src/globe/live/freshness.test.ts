@@ -6,7 +6,7 @@ const T = Date.UTC(2026, 6, 15, 19);
 
 function manifest(generatedAt = T): LiveManifest {
 	return {
-		schema_version: '2.1.0',
+		schema_version: '2.2.0',
 		generated_at: new Date(generatedAt).toISOString(),
 		chunk_seconds: 30,
 		window_seconds: 3600,

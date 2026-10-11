@@ -221,12 +221,11 @@ class LiveFeed:
                 self._seen(str(source), group, at)
 
     async def publish(self, source: str, flashes: pl.DataFrame) -> None:
-        """Idempotent by `flash_id` over the live window."""
-        if flashes.height == 0:
-            return
+        """Idempotent by `flash_id` over the live window; an empty frame still counts as ingest."""
         now = self._clock()
         fresh = flashes.filter(~pl.col("flash_id").is_in(list(self._recent_ids)))
         if fresh.height == 0:
+            self._seen(source, fresh, now)
             return
         name = self.outbox.add(fresh, now)
         self._recent_ids.update(dict.fromkeys(fresh["flash_id"].to_list(), now))
