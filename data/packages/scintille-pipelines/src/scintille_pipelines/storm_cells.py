@@ -74,6 +74,12 @@ class StormCellsConfig(Config):
     overlap_minutes: int = 30
     hotspot_min_flashes: int = 2000
     hotspot_min_hours: int = 12
+    hotspot_pixel_days: int = 3
+    hotspot_pixel_min_days: int = 2
+    hotspot_pixel_min_flashes: int = 300
+    hotspot_pixel_min_hours: int = 3
+    hotspot_pixel_spread_km: float = 1.0
+    hotspot_pixel_tight_km: float = 0.5
     hotspot_radius_km: float = 10.0
 
     @property
@@ -85,6 +91,12 @@ class StormCellsConfig(Config):
         return HotspotRule(
             min_flashes=self.hotspot_min_flashes,
             min_hours=self.hotspot_min_hours,
+            pixel_days=self.hotspot_pixel_days,
+            pixel_min_days=self.hotspot_pixel_min_days,
+            pixel_min_flashes=self.hotspot_pixel_min_flashes,
+            pixel_min_hours=self.hotspot_pixel_min_hours,
+            pixel_spread_km=self.hotspot_pixel_spread_km,
+            pixel_tight_km=self.hotspot_pixel_tight_km,
             radius_km=self.hotspot_radius_km,
         )
 
@@ -99,7 +111,7 @@ def hour_cells(
     """Cells of [hour - overlap, hour + 1 h) with at least one flash in the hour itself.
 
     Cells entirely inside the overlap belong to the previous window. With a `rule`, flashes
-    of fixed hot spots seen over the lookback ending with the hour are left out.
+    of fixed hot spots seen up to the end of the hour are left out.
     """
     end = hour + timedelta(hours=1)
     window = flashes.filter(pl.col("event_time").is_between(hour - overlap, end, closed="left"))
@@ -166,7 +178,7 @@ def storm_cells(
     start, end = context.partition_time_window
     overlap = timedelta(minutes=config.overlap_minutes)
     rule = config.rule
-    lookback = max(overlap, timedelta(hours=rule.lookback_hours))
+    lookback = max(overlap, rule.lookback)
     catalog = lake.catalog()
     sync_table(catalog, STORM_CELLS)
     flashes = pl.from_arrow(
