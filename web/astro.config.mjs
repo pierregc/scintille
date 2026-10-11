@@ -8,5 +8,5 @@ export default defineConfig({
 	site: 'https://scintille.app',
 	adapter: cloudflare({ imageService: 'passthrough' }),
 	session: false,
-	integrations: [sitemap()],
+	integrations: [sitemap({ filter: (page) => !page.endsWith('/render/') })],
 });

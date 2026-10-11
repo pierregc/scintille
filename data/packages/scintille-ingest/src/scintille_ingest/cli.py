@@ -1,4 +1,4 @@
-"""Command line: `scintille-ingest glm --once`, `live` and `lake-writer`."""
+"""Command line: `scintille-ingest glm --once`, `live`, `lake-writer` and `live-probe`."""
 
 import argparse
 import asyncio
@@ -22,11 +22,14 @@ from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
 from scintille_ingest.runtime import health
+from scintille_ingest.runtime.heartbeat import heartbeat_from_env
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
+from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
+from scintille_ingest.runtime.ops import OpsPublisher, PostgresOps
 from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource
@@ -56,7 +59,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
     )
     writer.add_argument("--interval", type=float, default=300.0, help="seconds between drains")
+    probe = commands.add_parser("live-probe", help="check the freshness of the public manifest")
+    probe.add_argument("--url", default=os.environ.get("SCINTILLE_LIVE_MANIFEST_URL", MANIFEST_URL))
+    probe.add_argument("--max-age", type=float, default=MAX_AGE, help="seconds")
+    probe.add_argument("--every", type=float, default=60.0, help="seconds between checks")
+    probe.add_argument("--once", action="store_true", help="check once; exit 1 if not fresh")
     args = parser.parse_args(argv)
+    if args.command == "live-probe":
+        return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "live":
         return asyncio.run(run_live(args.spool, args.port))
     if args.command == "lake-writer":
@@ -81,12 +91,15 @@ async def run_live(spool_dir: Path, port: int) -> int:
         return 2
     metrics = Metrics()
     feed = live_feed_from_env(metrics, spool_dir / "live-outbox")
+    spool = Spool(spool_dir)
+    ops = OpsPublisher(feed.store, feed, spool, PostgresOps(dsn), metrics=metrics) if feed else None
     service = IngestLive(
         [GlmSource(s) for s in satellites_from_env()],
         PostgresState(dsn),
-        Spool(spool_dir),
+        spool,
         publisher=feed,
         raw_cache=ObjectRawCache(r2_store_from_env()),
+        heartbeat=heartbeat_from_env("SCINTILLE_HEALTHCHECK_URL", "ingest-live", metrics),
         metrics=metrics,
     )
     server = await health.serve(port, service.healthy, metrics.render)
@@ -95,10 +108,14 @@ async def run_live(spool_dir: Path, port: int) -> int:
         service.stop()
         if feed:
             feed.stop()
+        if ops:
+            ops.stop()
 
     _stop_on_signals(stop)
     async with server:
-        await asyncio.gather(service.run(), *([feed.run()] if feed else []))
+        await asyncio.gather(
+            service.run(), *([feed.run()] if feed else []), *([ops.run()] if ops else [])
+        )
     return 0
 
 
@@ -128,14 +145,32 @@ async def run_lake_writer(spool_dir: Path, interval: float) -> int:
         log.error("SCINTILLE_POSTGRES_DSN is not set")
         return 2
     metrics = Metrics()
+    ops = PostgresOps(dsn)
     commit = LakeCommit(
         catalog=lambda: pyiceberg_catalog(LakeConfig.from_env()),
         locker=lambda keys: partition_locks(dsn, keys),
         metrics=metrics,
+        record_operations=lambda n: ops.add_catalog_operations(f"{datetime.now(UTC):%Y-%m}", n),
     )
     writer = LakeWriter(Spool(spool_dir), commit=commit, interval=interval, metrics=metrics)
     _stop_on_signals(writer.stop)
     await writer.run()
+    return 0
+
+
+async def run_live_probe(url: str, max_age: float, every: float, once: bool) -> int:
+    """Reports to `SCINTILLE_HEALTHCHECK_LIVE_URL` when set, except with `--once`."""
+    configure_json_logs()
+    heartbeat = (
+        None
+        if once
+        else heartbeat_from_env("SCINTILLE_HEALTHCHECK_LIVE_URL", "live-manifest", Metrics())
+    )
+    probe = LiveProbe(url, max_age, heartbeat=heartbeat, every=every)
+    if once:
+        return 0 if await probe.once() else 1
+    _stop_on_signals(probe.stop)
+    await probe.run()
     return 0
 
 

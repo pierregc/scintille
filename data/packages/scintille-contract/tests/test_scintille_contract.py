@@ -13,6 +13,7 @@ from scintille_contract.models import (
     FlashRecord,
     LiveChunk,
     LiveManifest,
+    OpsMetrics,
 )
 
 ROOT = Path(__file__).parents[4]
@@ -119,6 +120,14 @@ def test_fixture_manifest_and_chunks_agree() -> None:
         assert decoded.start == ref.start
         assert decoded.count == ref.flash_count
     assert {status.source for status in manifest.sources} == {"glm-east", "glm-west", "mtg-li"}
+
+
+def test_fixture_metrics_match_the_feed() -> None:
+    manifest = LiveManifest.model_validate_json((FEED / "manifest.json").read_text())
+    metrics = OpsMetrics.model_validate_json((FEED / "metrics.json").read_text())
+    assert metrics.generated_at == manifest.generated_at
+    published = sum(sum(s.flashes_per_minute) for s in metrics.sources)
+    assert published == sum(ref.flash_count for ref in manifest.chunks)
 
 
 def test_manifest_accepts_chunks_of_varying_duration() -> None:

@@ -17,15 +17,15 @@ import {
 	WebGLRenderTarget,
 	type WebGLRenderer,
 } from 'three';
+import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import type { FlashRing } from '../live';
+import { assertDisplayMinutes, minutesToMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 
+export { DISPLAY_MINUTES } from './display';
 export { FlashInstances } from './instances';
-
-/** Scene time a flash stays on screen; becomes adjustable in #55. */
-export const DEFAULT_DISPLAY_MS = 1500;
 
 const EARTH_RADIUS_KM = 6371;
 export const CLOUD_TOP_KM = 12;
@@ -34,7 +34,8 @@ export interface LightningOptions {
 	radius?: number;
 	/** Flashes kept on the GPU around the playhead; defaults to the ring's capacity. */
 	capacity?: number;
-	displayMs?: number;
+	/** Where the display duration persists; null keeps it in memory only. */
+	storage?: PreferenceStorage | null;
 	/** Equirectangular flash light map width, for clouds lit from inside; 0 disables it. */
 	lightMapWidth?: number;
 }
@@ -43,6 +44,10 @@ export interface Lightning {
 	mesh: Mesh;
 	/** Uploads new flashes and sets the scene time (UTC ms) flashes are aged against. */
 	setTime(utcMs: number): void;
+	/** Minutes of scene time a flash stays on screen. */
+	readonly displayMinutes: number;
+	/** Changes how long flashes stay on screen, from the data already loaded, and remembers the choice. */
+	setDisplayMinutes(minutes: number): void;
 	/** Glow of recent flashes in Earth UV space, or null when disabled. */
 	lightMap: Texture | null;
 	/** Redraws the light map; call once per frame before the main render. */
@@ -58,8 +63,9 @@ class NumberUniform {
 /** All flashes of the ring in one instanced draw call, aged on the GPU. */
 export function createLightning(
 	ring: FlashRing,
-	{ radius = 1, capacity = ring.capacity, displayMs = DEFAULT_DISPLAY_MS, lightMapWidth = 1024 }: LightningOptions = {},
+	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024 }: LightningOptions = {},
 ): Lightning {
+	let displayMinutes = readDisplayMinutes(storage);
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute(
 		'position',
@@ -74,7 +80,7 @@ export function createLightning(
 			buffer.addUpdateRange(start * FLASH_STRIDE, count * FLASH_STRIDE);
 			buffer.needsUpdate = true;
 		},
-		displayMs,
+		minutesToMs(displayMinutes),
 	);
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
@@ -87,7 +93,7 @@ export function createLightning(
 		fragmentShader: lightningFragmentShader,
 		uniforms: {
 			time,
-			duration: { value: displayMs / 1000 },
+			duration: { value: minutesToMs(displayMinutes) / 1000 },
 			radius: { value: radius },
 			lift: { value: CLOUD_TOP_KM / EARTH_RADIUS_KM },
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
@@ -127,6 +133,16 @@ export function createLightning(
 			instances.sync(utcMs);
 			geometry.instanceCount = instances.count;
 			time.value = (utcMs - instances.origin) / 1000;
+		},
+		get displayMinutes() {
+			return displayMinutes;
+		},
+		setDisplayMinutes(minutes) {
+			assertDisplayMinutes(minutes);
+			displayMinutes = minutes;
+			instances.lookbackMs = minutesToMs(minutes);
+			material.uniforms.duration.value = minutesToMs(minutes) / 1000;
+			writeDisplayMinutes(storage, minutes);
 		},
 		lightMap: lightMap?.target.texture ?? null,
 		renderLightMap(renderer) {

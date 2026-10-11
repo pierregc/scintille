@@ -31,6 +31,7 @@ from scintille_contract.models import (
 from scintille_ingest.intensity import provisional_intensity
 
 from .metrics import Metrics
+from .ops import LiveStats
 
 log = logging.getLogger("scintille_ingest.live_feed")
 
@@ -190,12 +191,14 @@ class LiveFeed:
         self._unlisted: list[str] = []
         self._recent_ids: dict[str, datetime] = {}
         self._sources: dict[str, _SourceTimes] = {s: _SourceTimes() for s in SOURCE_VALUES}
+        self.stats = LiveStats(clock())
+        self.manifest_at: datetime | None = None
         self._stop = asyncio.Event()
 
     async def restore(self) -> None:
         """Continues the published chunk list and reloads the flashes no manifest lists yet."""
         data = await self.store.get("manifest.json")
-        manifest = LiveManifest.model_validate_json(data) if data else None
+        manifest = parse_manifest(data) if data else None
         horizon = self._clock() - self.window
         listed = {c.path for c in manifest.chunks} if manifest else set()
         for chunk in self.outbox.inflight():
@@ -288,8 +291,11 @@ class LiveFeed:
         for chunk in expired:
             with contextlib.suppress(Exception):
                 await self.store.delete(chunk.path)
+        self.manifest_at = now
         self._recent_ids = {k: t for k, t in self._recent_ids.items() if t > horizon}
         self._record_latency(flashes, now)
+        if flashes is not None and flashes.height:
+            self.stats.record(flashes, now)
         return ref
 
     def manifest(self, now: datetime) -> LiveManifest:
@@ -344,6 +350,14 @@ class LiveFeed:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+def parse_manifest(data: bytes) -> LiveManifest:
+    """Reads a manifest of any minor version of the current major, e.g. after an upgrade."""
+    raw = json.loads(data)
+    if str(raw.get("schema_version", "")).split(".")[0] == SCHEMA_VERSION.split(".")[0]:
+        raw["schema_version"] = SCHEMA_VERSION
+    return LiveManifest.model_validate(raw)
 
 
 def event_span(flashes: pl.DataFrame | None) -> tuple[datetime | None, datetime | None]:
