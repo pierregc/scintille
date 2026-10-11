@@ -3,6 +3,7 @@
 import math
 from datetime import datetime, timedelta
 
+import numpy as np
 import polars as pl
 from dagster import (
     AssetCheckResult,
@@ -62,6 +63,13 @@ STORM_CELLS = gold_table(
         ),
         NestedField(15, "sources", ListType(16, StringType(), element_required=True), True),
         NestedField(17, "params", StringType(), required=True),
+        NestedField(
+            18,
+            "hour_flash_count",
+            LongType(),
+            required=False,
+            doc="Flashes inside the window's own hour; sums over windows count each flash once.",
+        ),
     ),
     PartitionSpec(PartitionField(2, 1000, DayTransform(), "window_day")),
 )
@@ -122,7 +130,11 @@ def hour_cells(
     t = window["event_time"].dt.epoch("us").to_numpy() / 1e6
     labels = st_dbscan(window["lat"].to_numpy(), window["lon"].to_numpy(), t, params)
     cells = summarize(window, labels, hour, end, params)
-    return cells.filter(pl.col("t_end") >= hour)
+    in_hour = labels[(labels >= 0) & (t >= hour.timestamp())]
+    own = np.bincount(in_hour, minlength=cells.height)
+    return cells.with_columns(hour_flash_count=pl.Series(own, dtype=pl.Int64)).filter(
+        pl.col("t_end") >= hour
+    )
 
 
 def range_cells(
