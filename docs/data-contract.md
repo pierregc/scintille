@@ -9,6 +9,7 @@ in [`data/contract/`](../data/contract/), and enforced by code:
 | Python models (pydantic) | `data/packages/scintille-contract/src/scintille_contract/models.py` | generated |
 | TypeScript types | `web/src/contract/types.ts` | generated |
 | Field reference (end of this doc) | `docs/data-contract.md` | generated section |
+| Ownership mask ([data quality](data-quality.md#overlap-between-satellites)) | `data/contract/ownership.geojson` | generated |
 
 ```sh
 cd data
@@ -37,7 +38,7 @@ source:
 | Source id | Instrument | Product |
 |---|---|---|
 | `glm-east` | GOES-East GLM (75.2° W) | NOAA GLM L2 LCFA (flash variables) |
-| `glm-west` | GOES-West GLM (137.2° W) | NOAA GLM L2 LCFA (flash variables) |
+| `glm-west` | GOES-West GLM (137.0° W) | NOAA GLM L2 LCFA (flash variables) |
 | `mtg-li` | MTG-I1 Lightning Imager (0°) | EUMETSAT LI L2 LFL (flashes) |
 
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
@@ -52,7 +53,9 @@ source:
   defined in #33.
 - **Quality** lists caveats: `degraded` (flagged by the source product), `coverage-edge` (close to
   the edge of the field of view, where detection efficiency drops), `overlap` (seen where two
-  instruments overlap, so it may be detected twice).
+  instruments overlap, so it may be detected twice), `outside-owner-zone` (another instrument has
+  the better view of this point and reports the same flash: kept in silver, in the live feed only
+  while that instrument is not delivering, see [data quality](data-quality.md#overlap-between-satellites)).
 
 ## Live feed on R2
 
@@ -166,7 +169,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.1.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.2.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -174,7 +177,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.1.0`.
+Value: `2.2.0`.
 
 ### UtcTimestamp
 
@@ -207,6 +210,7 @@ Quality caveat on a flash. The order is the bit index used in binary chunks.
 | 0 | `degraded` |
 | 1 | `coverage-edge` |
 | 2 | `overlap` |
+| 3 | `outside-owner-zone` |
 
 ### EnergyUnit
 
