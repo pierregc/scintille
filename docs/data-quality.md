@@ -38,22 +38,36 @@ scan is bounded by downloading that one column.
 
 ## Fixed hot spots
 
-Some GLM pixels fire around the clock at a fixed position: a few thousand to 100k "flashes" a day in
-one spot, with no storm around. They are kept in silver, which stays faithful to the source, and are
-left out of storm detection (`gold/storm_cells`, hence storms) only.
+Some GLM pixels fire at a fixed position with no storm around: around the clock (a few thousand to
+100k "flashes" a day), or in bursts of a few hours that come back day after day. They are kept in
+silver, which stays faithful to the source, and are left out of storm detection
+(`gold/storm_cells`, hence storms) only.
 
-**Rule.** Before clustering hour `H`, flashes of the 24 h ending at `H + 1 h` are counted per source
-and 0.05° grid cell. A cell with at least 2000 flashes in at least 12 distinct hours is a hot spot;
-flashes of that source within 10 km of its median position are dropped from the window. Thresholds
-are run config (`hotspot_*`, see [pipelines](pipelines.md#storm-cells)).
+**Rule.** Before clustering hour `H`, flashes of the 3 days ending at `H + 1 h` are grouped per
+source, 0.05° grid cell and 24 h slot. A cell is a hot spot when any of these holds:
 
-- No coordinates are hard coded: the spot moves when the satellite flips (below).
-- `degraded` is not part of the rule: it is set on up to 99.8 % of the main spot's flashes on some days, but
-  on 9 % on others, and on 3 % of a second pixel that lit up next to it.
-- A real storm crossing the spot keeps its cell: only flashes within 10 km of the pixel are dropped
-  (tested). A storm never reaches the thresholds: the busiest natural 0.05° cell over 30 days held
-  711 flashes in a day with 12 active hours or more (609 in a single hour).
-- A new hot pixel produces cells until it reaches the thresholds, typically for its first half day.
+- **busy**: at least 2000 flashes in at least 12 distinct hours over the last 24 h;
+- **tight**: at least 300 flashes in at least 3 distinct hours over the last 24 h, with a spread
+  under 0.5 km (geometric mean of the north and east standard deviations of the positions);
+- **stuck**: the same with a spread under 1 km, on at least 2 of the 3 slots.
+
+Flashes of that source within 10 km of the hot spot's median position are dropped from the window.
+Thresholds are run config (`hotspot_*`, see [pipelines](pipelines.md#storm-cells)).
+
+- No coordinates are hard coded: the spots move when the satellite flips (below).
+- `degraded` is not part of the rule: it is set on up to 99.8 % of the main spot's flashes on some
+  days, on 9 % on others, on 3 % of a second pixel next to it, and on 0 to 22 % of the weaker spots.
+- A real storm crossing a spot keeps its cell: only flashes within 10 km of the pixel are dropped
+  (tested). Storms do not meet the thresholds. Over 30 days, the busiest natural 0.05° cell held 711
+  flashes in a day with 12 active hours or more. Natural cells with 300 flashes over 3 hours or more
+  never had a spread under 0.70 km, and none of the 148 compact ones (under 1.2 km) came back to
+  the same cell on another day. Pixel cells are mostly under 0.6 km and come back every day.
+- A new hot pixel produces cells until it qualifies: 3 hours when tight, otherwise up to half
+  a day (busy) or a second day (stuck).
+- Reading 3 days of positions per run costs about 6 M rows of 5 columns for both GLM satellites.
+- Known limitation: GLM-West shows short single-pixel bursts over the equatorial Pacific (1 to 2 h,
+  200 to 400 flashes, spread under 0.1 km) at a different place each time. Under 3 active hours,
+  they meet no criterion and are not filtered.
 
 **Characterization** (local backfill, 2026-09-08 to 2026-10-08, 64 M flashes, GLM-East and West):
 
@@ -62,12 +76,23 @@ are run config (`hotspot_*`, see [pipelines](pipelines.md#storm-cells)).
 | 21.315° N 28.66° W | 09-23 to 10-08 | 52k to 123k | 9 % to 99.8 %, about 90 % overall | ~2,300 an hour at every hour, 1 to 3 km spread, median area 89 km² |
 | 21.32° S 121.78° W | 09-08 to 09-21 | 48k to 97k | 76 % | The same pixel before 09-22 |
 | 21.14° N 28.87° W | 10-08 | 10k | 3 % | A second pixel, 25 km away |
-| 3.5° N 128.1° W, then 3.5° S 22.3° W | all days | 5k to 26k | 0 to 22 % | Background at every hour plus bursts; partly caught |
+| 3.46° N 128.18° W and 3.54° N 127.96° W | 09-08 to 09-21 | 9k to 26k | 0 to 40 % | Two pixels, background at every hour plus bursts; the second one 4 ms, 6 fJ flashes |
+| 3.54° S 22.44° W and 3.46° S 22.24° W | 09-23 to 10-08 | 5k to 16k | 0 to 24 % | Mirror of the above; the second one bursts around 07:00 to 10:00 UTC |
 
 The spots before and after 2026-09-22 (missing from the backfill) are symmetric about the
 sub-satellite point (0°, 75.2° W), as expected when a fixed detector pixel is seen after a
 spacecraft yaw flip. Within 1.5° of 21.3° N 28.7° W, natural lightning stayed below 215 flashes a
-day: no real storm crossed the spot in that month. GLM-West has no such spot.
+day: no real storm crossed the spot in that month. GLM-West has no fixed spot.
 
-With the rule, 2026-10-08 loses 42 of 9,822 storm cells (198k of 3.56 M clustered flashes), all
-around the spots; 2026-09-15 loses 45 cells.
+**Verification** (same 30 days, every hour replayed with its 3-day lookback): storm cells left
+within 1° of each spot. No hot spot of any criterion was found outside the spots (no false
+positive).
+
+| Spot | No rule | Tight only | Stuck only | Union (busy, tight or stuck) |
+|---|---|---|---|---|
+| A (21.3° N 28.7° W) | 438 | 35 | 47 | 34 |
+| Am (mirror, 21.3° S 121.8° W) | 343 | 23 | 28 | 10 |
+| B (3.5° N 128.1° W) | 357 | 27 | 26 | 7 |
+| Bm (3.5° S 22.3° W, bursts) | 374 | 153 | 74 | 41 |
+
+The union removes most of each hot spot; the bursty Bm pixel remains partly unfiltered.
