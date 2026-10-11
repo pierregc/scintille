@@ -122,6 +122,9 @@ def storm_names(context: AssetExecutionContext, lake: LakeResource) -> Materiali
     existing = _scan(table, f"day >= '{first.isoformat()}' AND day <= '{last.isoformat()}'")
     new = storms.join(existing.select("storm_id"), on="storm_id", how="anti")
     rows = name_storms(new, existing["slug"])
+    orphans = existing.filter(pl.col("storm_start").is_between(start, end, closed="left")).join(
+        storms.select("storm_id"), on="storm_id", how="anti"
+    )
     if not rows.is_empty():
         table.append(rows.to_arrow().cast(table.schema().as_arrow()))
     return MaterializeResult(
@@ -129,6 +132,7 @@ def storm_names(context: AssetExecutionContext, lake: LakeResource) -> Materiali
             "storms": storms.height,
             "named": rows.height,
             "offshore": int(rows["offshore"].sum()),
+            "orphans": orphans.height,
             "geodata": geodata_version(),
         },
         check_results=[check_names(pl.concat([existing.select(KEYS), rows.select(KEYS)]))],
