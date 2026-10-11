@@ -1,0 +1,24 @@
+---
+import { BUILD, versionLabel, versionUrl } from '../version';
+
+const label = versionLabel(BUILD);
+const href = versionUrl(BUILD);
+---
+
+<p class="version">{href ? <a href={href}>{label}</a> : label}</p>
+
+<style>
+	.version {
+		margin-top: 22px;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+	}
+	.version a {
+		color: inherit;
+		text-decoration: none;
+	}
+	.version a:hover {
+		color: var(--soft);
+	}
+</style>
