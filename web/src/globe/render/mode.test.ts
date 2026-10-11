@@ -1,0 +1,74 @@
+import { PerspectiveCamera } from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import { SceneClock } from '../clock';
+import { createRenderHandle, type RenderDeps } from './mode';
+import { parseRenderParams } from './params';
+
+const params = parseRenderParams('?start=2026-07-15T18:30:00Z&end=2026-07-15T18:31:00Z&frames=4&lat=0&lon=0&alt=6371');
+
+function setup(overrides: { failures?: number; covered?: (time: number) => boolean; loaded?: () => boolean } = {}) {
+	const clock = new SceneClock(() => 0);
+	const camera = new PerspectiveCamera();
+	const times: number[] = [];
+	const stop = vi.fn();
+	const deps: RenderDeps = {
+		clock,
+		camera,
+		radius: 1,
+		feed: {
+			client: {
+				idle: () => Promise.resolve(),
+				failures: overrides.failures ?? 0,
+				covers: overrides.covered ?? (() => true),
+			} as unknown as RenderDeps['feed']['client'],
+			stop,
+		},
+		loaded: overrides.loaded ?? (() => true),
+		draw: () => times.push(clock.time()),
+		timeoutMs: 100,
+	};
+	return { handle: createRenderHandle(params, deps), clock, camera, times, stop };
+}
+
+describe('createRenderHandle', () => {
+	it('freezes the clock until a frame is drawn', () => {
+		const { clock, times } = setup();
+		expect(clock.mode).toBe('render');
+		expect(times).toEqual([]);
+	});
+
+	it('draws each frame at its scene time, in any order', () => {
+		const { handle, times } = setup();
+		handle.frame(3);
+		handle.frame(0);
+		handle.frame(3);
+		expect(times).toEqual([params.start + 45_000, params.start, params.start + 45_000]);
+	});
+
+	it('places the camera above the requested point', () => {
+		const { handle, camera } = setup();
+		handle.frame(0);
+		expect(camera.position.x).toBeCloseTo(2);
+		expect(camera.position.y).toBeCloseTo(0);
+		expect(camera.position.z).toBeCloseTo(0);
+	});
+
+	it('stops polling once the feed is loaded', async () => {
+		const { handle, stop } = setup();
+		await handle.ready();
+		expect(stop).toHaveBeenCalledOnce();
+	});
+
+	it('rejects when the feed failed', async () => {
+		await expect(setup({ failures: 1 }).handle.ready()).rejects.toThrow('live feed failed');
+	});
+
+	it('rejects when the range is not covered', async () => {
+		const covered = (time: number) => time < params.start + 30_000;
+		await expect(setup({ covered }).handle.ready()).rejects.toThrow('no observations loaded for 2026-07-15T18:30:45');
+	});
+
+	it('rejects when textures never load', async () => {
+		await expect(setup({ loaded: () => false }).handle.ready()).rejects.toThrow('textures not loaded');
+	});
+});

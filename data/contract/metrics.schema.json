@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:metrics",
+  "title": "OpsMetrics",
+  "description": "live/metrics.json: operational metrics and freshness per layer, written every minute.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "freshness",
+    "sources",
+    "quality",
+    "catalog"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/SchemaVersion"
+    },
+    "generated_at": {
+      "description": "When these metrics were computed.",
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "freshness": {
+      "$ref": "#/$defs/LayerFreshness"
+    },
+    "sources": {
+      "description": "One entry per source, in Source order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceMetrics"
+      }
+    },
+    "quality": {
+      "$ref": "#/$defs/QualityStatus"
+    },
+    "catalog": {
+      "$ref": "#/$defs/CatalogUsage"
+    }
+  },
+  "$defs": {
+    "LayerFreshness": {
+      "description": "Age of each layer, seconds; null when unknown.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "live_feed_age_seconds",
+        "silver_lag_seconds",
+        "gold_age_seconds"
+      ],
+      "properties": {
+        "live_feed_age_seconds": {
+          "description": "Time since the live manifest was last written.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "silver_lag_seconds": {
+          "description": "Age of the oldest spooled batch not yet in silver; 0 when the spool is drained.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gold_age_seconds": {
+          "description": "Time since the latest gold build; null before the first one.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SourceMetrics": {
+      "description": "Throughput, latency and completeness of one source.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "series_start",
+        "flashes_per_minute",
+        "latency_p50_seconds",
+        "latency_p95_seconds",
+        "completeness",
+        "last_file_time",
+        "error_budget_remaining"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "common.schema.json#/$defs/Source"
+        },
+        "series_start": {
+          "description": "Start of the first minute in flashes_per_minute, a whole minute.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "flashes_per_minute": {
+          "description": "Flashes published per minute of ingest_time, oldest first, at most 60; the last minute is in progress. Starts later than 60 minutes ago after a restart.",
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "latency_p50_seconds": {
+          "description": "Median time from event_time to publication in the live feed, last 60 minutes; null without flashes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latency_p95_seconds": {
+          "description": "95th percentile of the same latency; null without flashes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completeness": {
+          "description": "Product files spooled in the last 60 minutes over the expected count, 0 to 1; null when the source has no file in 30 days.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_file_time": {
+          "description": "When the latest product file of this source was spooled; null if never.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_budget_remaining": {
+          "description": "Share of the 30-day completeness error budget left: 1 untouched, 0 spent, negative when overspent; null when the source has no file in 30 days.",
+          "anyOf": [
+            {
+              "type": "number",
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CheckStatus": {
+      "description": "Overall check result: fail if an error check failed, warn if only warnings did.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "warn",
+        "fail",
+        "unknown"
+      ]
+    },
+    "QualityStatus": {
+      "description": "Latest results of the data quality checks on silver.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "checked_at",
+        "failed"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        },
+        "checked_at": {
+          "description": "When the most recent check ran; null if none has.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failed": {
+          "description": "Names of the checks whose latest result failed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CatalogUsage": {
+      "description": "Iceberg catalog operations this month against the free tier.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "month",
+        "operations",
+        "free_tier"
+      ],
+      "properties": {
+        "month": {
+          "description": "Calendar month in UTC, YYYY-MM.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}$"
+        },
+        "operations": {
+          "description": "Catalog operations made by lake-writer this month.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "free_tier": {
+          "description": "Operations included each month by the catalog provider.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

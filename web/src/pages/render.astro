@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Scintille renderer" description="Frame-by-frame globe rendering for videos and share images." noindex>
+	<canvas data-render-canvas></canvas>
+</BaseLayout>
+
+<style>
+	:global(body) {
+		margin: 0;
+		overflow: hidden;
+	}
+	canvas {
+		display: block;
+	}
+</style>
+
+<script>
+	import { mountRenderPage } from '../globe/render/page';
+
+	const canvas = document.querySelector<HTMLCanvasElement>('[data-render-canvas]');
+	if (canvas) mountRenderPage(canvas);
+</script>

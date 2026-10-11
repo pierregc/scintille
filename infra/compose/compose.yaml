@@ -20,6 +20,10 @@ x-pipelines: &pipelines
       PACKAGE: scintille-pipelines
   environment:
     SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+    SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
+  # Reference downloads (Natural Earth) survive container recreation.
+  volumes:
+    - cache:/var/lib/scintille/cache
   depends_on:
     postgres:
       condition: service_healthy
@@ -96,6 +100,13 @@ services:
       postgres:
         condition: service_healthy
 
+  # Reads the public manifest through Cloudflare and reports to Healthchecks.io (docs/operations.md).
+  live-probe:
+    <<: *service
+    image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
+    command: ["scintille-ingest", "live-probe"]
+
 volumes:
   postgres:
   spool:
+  cache:
