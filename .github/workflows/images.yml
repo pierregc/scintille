@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Local stack from the VPS compose file
         run: |
-          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer lakekeeper
+          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer clouds lakekeeper
           docker compose -f infra/compose/compose.local.yaml run --rm lake-init
       - name: Webserver answers, daemon is alive, images run as non-root
         run: |
@@ -78,6 +78,20 @@ jobs:
           m = json.loads(obstore.get(s, 'live/manifest.json').bytes().to_bytes())
           print(len(m['chunks']), 'chunks,', sum(c['flash_count'] for c in m['chunks']), 'flashes,', [(x['source'], x['state']) for x in m['sources']])
           assert sum(c['flash_count'] for c in m['chunks']) > 0
+          "; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - name: Cloud manifest lists GMGSI frames
+        run: |
+          for i in $(seq 1 36); do
+            if docker compose -f infra/compose/compose.local.yaml exec -T clouds python -c "
+          import json, obstore
+          from obstore.store import S3Store
+          s = S3Store('scintille-lake', endpoint='http://localhost:9000', access_key_id='scintille-local', secret_access_key='scintille-local-secret', region='auto', client_options={'allow_http': True})
+          m = json.loads(obstore.get(s, 'live/clouds/manifest.json').bytes().to_bytes())
+          print([(f['time'], f['reference'], {t: x['size_bytes'] for t, x in f['textures'].items()}) for f in m['frames']])
+          assert m['frames']
           "; then exit 0; fi
             sleep 5
           done
