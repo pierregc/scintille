@@ -108,7 +108,9 @@ gives 5,524 storms, 903 of them over three hours or more; every clustered flash 
 
 `gold/storm_names` names each storm once, the first time `gold/storms` has it, from its
 flash-weighted centroid at that time. Rows are only appended, so a name and its slug never change,
-and re-running an hour is a no-op. Lookups are offline, against reference data embedded in the
+and re-running an hour is a no-op. The name describes where the storm started, even if it drifts
+later. If storms are rebuilt and a `storm_id` disappears, its name stays; the run metadata counts
+these `orphans` among the storms starting in its hours. Lookups are offline, against reference data embedded in the
 package (`scintille_pipelines/geodata/`, about 1.5 MB).
 
 - **Land** (inside a Natural Earth country): the most notable GeoNames city of the same country
