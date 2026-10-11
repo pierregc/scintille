@@ -18,6 +18,7 @@ from scintille_pipelines.gold import models
 from scintille_pipelines.gold.assets import GOLD, daily_stats_feed, feed_key
 from scintille_pipelines.resources import FeedResource, LakeResource, PostgresResource
 from scintille_pipelines.storm_cells import storm_cells
+from scintille_pipelines.storms import storm_tracks, storms
 
 pytestmark = pytest.mark.lake
 
@@ -115,7 +116,10 @@ def test_duckdb_write_path_on_a_partitioned_gold_table() -> None:
 def test_storm_cells_rerun_against_lakekeeper() -> None:
     for _ in range(2):
         result = materialize(
-            [storm_cells], partition_key="2026-07-15-18:00", resources={"lake": LakeResource()}
+            [storm_cells, storm_tracks, storms],
+            partition_key="2026-07-15-18:00",
+            resources={"lake": LakeResource()},
+            run_config={"ops": {"gold__storm_tracks": {"config": {"new_chain": True}}}},
         )
         assert result.success
 

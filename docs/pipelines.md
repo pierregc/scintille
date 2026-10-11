@@ -29,6 +29,10 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 | Job | `daily_gold` | The gold assets and the feed, one daily partition rebuilt whole |
 | Asset | `gold/storm_cells` | Flashes clustered into storm cells, hourly partitions with an overlap ([below](#storm-cells)) |
 | Asset check | `valid_cells` | Blocking: unique ids, at least `min_pts` flashes, last flash inside the window |
+| Asset | `gold/storm_tracks` | Each cell linked to a storm, one hourly window after the other ([below](#storm-tracking)) |
+| Asset check | `valid_tracks` | Blocking: every cell once, at most one cell per storm and window |
+| Asset | `gold/storms` | One row per storm with its track, rebuilt for the storms active in the hours |
+| Asset check | `valid_storms` | Blocking: unique ids, one track point per step, positive flash counts |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
 | Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |
 | Asset check | `lake_orphan_inventory` | Weekly (Sunday 03:00 UTC), warn: unreferenced files per table, never deleted ([lakehouse](lakehouse.md#maintenance)) |
@@ -59,8 +63,9 @@ dropped as noise.
 
 - **Windows.** Partition `H` clusters the flashes of `[H - overlap, H + 1 h)` and keeps the cells with
   at least one flash in `[H, H + 1 h)`. A cell crossing the hour therefore appears in both windows,
-  which is what storm tracking (#70) links. Counts summed over windows double count the overlap, and
-  a storm still active at `H - overlap` starts at that edge: its `t_start` is not a birth.
+  which is what [storm tracking](#storm-tracking) links. `flash_count` summed over windows double
+  counts the overlap; `hour_flash_count` (flashes in the window's own hour) does not. A storm still
+  active at `H - overlap` starts at that edge: its `t_start` is not a birth.
 - **Rows.** One row per cell and window: `cell_id` (window and earliest flash, by time then id),
   window, first and last flash, flash count, centroid, bbox (`west > east` crosses 180°), convex hull
   as WKT with its area, sources, and the parameters used. Bbox and time range are the query bounds
@@ -83,6 +88,41 @@ dropped as noise.
 | `hotspot_radius_km` | 10 | Flashes dropped around each hot spot |
 
 That day takes about 40 s end to end for 24 hourly windows in a single run.
+
+## Storm tracking
+
+`gold/storm_tracks` links the cells of hour `H` to the storms of hour `H - 1`, read back from its own
+previous partition (a self-dependency), so storms carry over hours and days.
+
+- **Link.** A cell continues a cell of the previous window when it starts at most `max_gap_minutes`
+  after that one ends, and their convex hulls intersect or the discs with the hulls' areas overlap
+  once the earlier cell may have moved at `max_speed_kmh` during the gap. A cell crossing the hour
+  is in both windows, so it overlaps itself. A storm with no linked cell in a window ends there, so
+  `max_gap_minutes` only bridges gaps inside the overlap, and a cell falling under `min_pts` for one
+  window splits the storm in two.
+- **Splits and merges.** Candidate pairs are taken by decreasing combined flash count, each storm
+  and each cell at most once: the main branch keeps the storm. A cell split off starts a new storm
+  with `split_from`; storms merged into a cell end there and are listed in its `merged`.
+- **Ids.** A storm takes the `cell_id` of its first cell, so ids are stable while the cells are.
+  Re-running an hour can change the storms of the later hours, which Dagster then shows as stale.
+- **Rows.** `gold/storm_tracks` has one row per cell (step): storm id and start, the cell's time
+  range, counts, centroid, bbox and hull (query bounds of its flashes). `gold/storms` has one row
+  per storm: time range, steps, flash count (sum of `hour_flash_count`, each flash once), largest
+  cell, flash-weighted centroid, bbox, sources, and the track (centroid per step at the middle of the
+  cell's time range). `closed` is set once a later hour has been tracked without the storm.
+- **Writes.** Tracks overwrite their hours. Storms are rebuilt from the tracks for every storm that
+  started at or after the earliest start among the storms active in the run's hours or the hour
+  before, so the run is idempotent. Backfills are single runs and the `storm-tracks` pool keeps one
+  run at a time, since each hour needs the previous one. A run fails when the hour before it was
+  never tracked; `new_chain` starts storms from scratch instead.
+
+| Parameter | Default | Note |
+|---|---|---|
+| `max_speed_kmh` | 100 | Only matters across a gap; cells crossing the hour overlap in space |
+| `max_gap_minutes` | 30 | The overlap of the cell windows |
+
+On GLM data of 2026-10-08 (9,791 cells), tracking takes about 13 s for the day in a single run and
+gives 5,524 storms, 903 of them over three hours or more; every clustered flash is counted once.
 
 ## Resources
 
