@@ -162,7 +162,7 @@ def summarize(
     cells = (
         df.group_by("label")
         .agg(
-            pl.col("flash_id").min().alias("first_flash_id"),
+            pl.col("flash_id").sort_by("event_time", "flash_id").first().alias("first_flash_id"),
             pl.col("event_time").min().alias("t_start"),
             pl.col("event_time").max().alias("t_end"),
             pl.len().cast(pl.Int64).alias("flash_count"),
@@ -196,11 +196,11 @@ def summarize(
     cells = cells.join(bounds, on="label").sort("label")
 
     splits = np.cumsum(cells["flash_count"].to_numpy())[:-1]
-    lons = np.split(df["lon0"].to_numpy() + df["dlon"].to_numpy(), splits)
-    lats = np.split(df["lat"].to_numpy(), splits)
+    lons = np.split(df["lon0"].to_numpy() + df["dlon"].to_numpy(), splits) if cells.height else []
+    lats = np.split(df["lat"].to_numpy(), splits) if cells.height else []
     hulls = [
         _hull(lo, la, float(lo0), float(la0))
-        for lo, la, lo0, la0 in zip(lons, lats, cells["lon"], cells["lat"], strict=False)
+        for lo, la, lo0, la0 in zip(lons, lats, cells["lon"], cells["lat"], strict=True)
     ]
     ids = [cell_id(window_start, f) for f in cells["first_flash_id"]]
     return cells.select(
