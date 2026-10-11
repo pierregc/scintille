@@ -23,6 +23,7 @@ def test_storm_cells_rerun_against_lakekeeper() -> None:
             [storm_cells, storm_tracks, storms],
             partition_key="2026-07-15-18:00",
             resources={"lake": LakeResource()},
+            run_config={"ops": {"gold__storm_tracks": {"config": {"new_chain": True}}}},
         )
         assert result.success
 

@@ -75,7 +75,9 @@ previous partition (a self-dependency), so storms carry over hours and days.
 - **Link.** A cell continues a cell of the previous window when it starts at most `max_gap_minutes`
   after that one ends, and their convex hulls intersect or the discs with the hulls' areas overlap
   once the earlier cell may have moved at `max_speed_kmh` during the gap. A cell crossing the hour
-  is in both windows, so it overlaps itself.
+  is in both windows, so it overlaps itself. A storm with no linked cell in a window ends there, so
+  `max_gap_minutes` only bridges gaps inside the overlap, and a cell falling under `min_pts` for one
+  window splits the storm in two.
 - **Splits and merges.** Candidate pairs are taken by decreasing combined flash count, each storm
   and each cell at most once: the main branch keeps the storm. A cell split off starts a new storm
   with `split_from`; storms merged into a cell end there and are listed in its `merged`.
@@ -89,7 +91,8 @@ previous partition (a self-dependency), so storms carry over hours and days.
 - **Writes.** Tracks overwrite their hours. Storms are rebuilt from the tracks for every storm that
   started at or after the earliest start among the storms active in the run's hours or the hour
   before, so the run is idempotent. Backfills are single runs and the `storm-tracks` pool keeps one
-  run at a time, since each hour needs the previous one.
+  run at a time, since each hour needs the previous one. A run fails when the hour before it was
+  never tracked; `new_chain` starts storms from scratch instead.
 
 | Parameter | Default | Note |
 |---|---|---|
