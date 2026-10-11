@@ -1,0 +1,70 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { website } from '../seo/jsonld';
+---
+
+<BaseLayout
+	title="Privacy · Scintille"
+	description="What Scintille collects: no cookies, no accounts, only anonymous visit counts from Cloudflare Web Analytics."
+	jsonLd={[website()]}
+>
+	<main>
+		<p><a href="/">← Scintille</a></p>
+		<h1>Privacy</h1>
+		<p>
+			Scintille has no accounts, no forms, no advertising and sets no cookies. The only thing it stores in your
+			browser is your display choice for the cloud layer, which never leaves your device.
+		</p>
+
+		<h2>Audience measurement</h2>
+		<p>
+			Visits are counted with <a href="https://www.cloudflare.com/web-analytics/">Cloudflare Web Analytics</a>.
+			It uses no cookies, local storage or fingerprinting and does not track you across sites. It records anonymous,
+			aggregate figures only: pages viewed, referrer, country, browser and device type, and page load times. Because
+			nothing is stored on your device, no consent banner is needed.
+		</p>
+
+		<h2>Hosting</h2>
+		<p>
+			The site and its data files (<code>data.scintille.app</code>) are served by Cloudflare. Like any web server,
+			Cloudflare processes your IP address and request details to deliver pages and protect the site from abuse,
+			under its own <a href="https://www.cloudflare.com/privacypolicy/">privacy policy</a>.
+		</p>
+
+		<h2>Third parties</h2>
+		<p>
+			Fonts and textures are served from Scintille's own domains; the analytics script comes from Cloudflare. No
+			content is loaded from social networks, advertisers or other trackers.
+		</p>
+
+		<h2>Publisher and contact</h2>
+		<p>
+			Scintille is published by [TO COMPLETE: publisher name], [TO COMPLETE: postal address]. For any question
+			about this page or your data, write to [TO COMPLETE: contact email].
+		</p>
+
+		<p class="updated">Last updated: [TO COMPLETE: date].</p>
+	</main>
+</BaseLayout>
+
+<style>
+	main {
+		max-width: 42rem;
+		margin: 0 auto;
+		padding: 3rem 1rem 4rem;
+		font-family: system-ui, sans-serif;
+		line-height: 1.6;
+	}
+	a {
+		color: #9fc3ff;
+	}
+	h2 {
+		margin-top: 2rem;
+		font-size: 1.15rem;
+	}
+	.updated {
+		margin-top: 2.5rem;
+		opacity: 0.7;
+		font-size: 0.9rem;
+	}
+</style>

@@ -18,7 +18,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 | Area | Tools |
 |---|---|
 | Site and globe | Astro (static pages for SEO), raw Three.js with custom shaders, TypeScript strict |
-| Data | Python 3.13, uv workspace, Polars/Arrow, DuckDB, Apache Iceberg on Cloudflare R2, Dagster, dbt |
+| Data | Python 3.13, uv workspace, Polars/Arrow, DuckDB, Apache Iceberg on Cloudflare R2, Dagster |
 | Hosting | Cloudflare (site, R2 storage), OVH VPS (ingestion and pipelines in Docker), Terraform for Cloudflare |
 
 ## Repository layout
@@ -29,8 +29,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 | `data/packages/scintille-contract/` | Shared data contract (flash schema, live feed format) |
 | `data/packages/scintille-ingest/` | Hot path service: satellite ingestion, live feed publishing |
 | `data/packages/scintille-lake/` | Iceberg tables as code, catalog connections ([lakehouse](docs/lakehouse.md)) |
-| `data/packages/scintille-pipelines/` | Batch pipelines orchestrated by Dagster |
-| `data/dbt/` | dbt models for the gold layer |
+| `data/packages/scintille-pipelines/` | Batch pipelines orchestrated by Dagster; gold models as SQL files in `gold/sql/` |
 | `docs/` | Documentation; `docs/adr/` holds architecture decision records |
 
 ## Commands
