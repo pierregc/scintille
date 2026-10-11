@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import pyarrow as pa
 import pytest
-from dagster import AssetKey, materialize
+from dagster import AssetKey, DagsterInstance, materialize
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.migrate import migrate
@@ -231,6 +231,9 @@ def lake(tmp_path: Path) -> SqliteLake:
     return resource
 
 
+NEW_CHAIN = {"ops": {"gold__storm_tracks": {"config": {"new_chain": True}}}}
+
+
 def scan(lake: SqliteLake, identifier: tuple[str, str]) -> pl.DataFrame:
     df = pl.from_arrow(lake.catalog().load_table(identifier).scan().to_arrow())
     assert isinstance(df, pl.DataFrame)
@@ -238,9 +241,14 @@ def scan(lake: SqliteLake, identifier: tuple[str, str]) -> pl.DataFrame:
 
 
 def test_materializes_hour_after_hour_idempotently(lake: SqliteLake) -> None:
+    instance = DagsterInstance.ephemeral()
     for key in ("2026-07-15-18:00", "2026-07-15-19:00", "2026-07-15-19:00", "2026-07-15-20:00"):
         result = materialize(
-            [storm_cells, storm_tracks, storms], partition_key=key, resources={"lake": lake}
+            [storm_cells, storm_tracks, storms],
+            partition_key=key,
+            resources={"lake": lake},
+            instance=instance,
+            run_config=NEW_CHAIN if key == "2026-07-15-18:00" else None,
         )
         assert result.success
         assert all(c.passed for c in result.get_asset_check_evaluations())
@@ -252,6 +260,16 @@ def test_materializes_hour_after_hour_idempotently(lake: SqliteLake) -> None:
     assert rows["flash_count"][0] == 200
     assert 0.95 * 900 <= rows["flash_count"][1] <= 900
     assert rows["params"][1] == "tracking max_speed_kmh=100 max_gap_minutes=30"
+
+
+def test_fails_when_the_previous_hour_is_not_tracked(lake: SqliteLake) -> None:
+    result = materialize(
+        [storm_cells, storm_tracks],
+        partition_key="2026-07-15-19:00",
+        resources={"lake": lake},
+        raise_on_error=False,
+    )
+    assert not result.success
 
 
 def test_registered_in_the_code_location() -> None:
