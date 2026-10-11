@@ -67,6 +67,7 @@ class CloudPublisher:
         self.archive = archive
         self.window = window
         self.frames: list[CloudFrameRef] = []
+        self.expired: set[str] = set()
 
     async def restore(self) -> None:
         data = await self.live.get("manifest.json")
@@ -84,13 +85,13 @@ class CloudPublisher:
         textures: dict[str, bytes],
         now: datetime,
     ) -> CloudFrameRef:
-        """Textures first, then the manifest, then live textures that left the window."""
+        """Textures, then the manifest, then the archive copies. Live textures that left the
+        window are deleted on the next publish, so cached manifests still resolve."""
         name = texture_name(time, product)
         refs = {}
         for tier, data in textures.items():
             path = f"{tier}/{name}"
             await self.live.put(path, data, TEXTURE_HEADERS)
-            await self.archive.put(archive_path(tier, time, name), data, TEXTURE_HEADERS)
             width = TIERS[tier]
             refs[tier] = CloudTexture(
                 path=path, width=width, height=width // 2, size_bytes=len(data)
@@ -106,10 +107,11 @@ class CloudPublisher:
             "manifest.json", self.manifest(now).model_dump_json().encode(), MANIFEST_HEADERS
         )
         kept = {t.path for f in self.frames for t in f.textures.values()}
-        for old in before:
-            for texture in old.textures.values():
-                if texture.path not in kept:
-                    await self._delete(texture.path)
+        for path in self.expired - kept:
+            await self._delete(path)
+        self.expired = {t.path for f in before for t in f.textures.values()} - kept
+        for tier, data in textures.items():
+            await self._archive(archive_path(tier, time, name), data)
         return frame
 
     def manifest(self, now: datetime) -> CloudManifest:
@@ -119,6 +121,12 @@ class CloudPublisher:
             attribution=ATTRIBUTION,
             frames=self.frames,
         )
+
+    async def _archive(self, path: str, data: bytes) -> None:
+        try:
+            await self.archive.put(path, data, TEXTURE_HEADERS)
+        except Exception:
+            log.exception("cloud archive write failed", extra={"fields": {"path": path}})
 
     async def _delete(self, path: str) -> None:
         try:
