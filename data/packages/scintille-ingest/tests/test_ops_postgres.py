@@ -39,8 +39,8 @@ def test_file_stats_match_ingest_files() -> None:
         == (4, expected[1])
     )
     assert stats.files_in_budget_window == 5
-    assert stats.first_file_time is not None
-    assert stats.first_file_time < datetime.now(UTC) - timedelta(minutes=110)
+    assert stats.monitoring_start is not None
+    assert stats.monitoring_start < datetime.now(UTC) - timedelta(minutes=110)
     state.close()
     ops.close()
 
