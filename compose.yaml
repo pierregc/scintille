@@ -48,7 +48,7 @@ services:
     entrypoint: /bin/sh
     command:
       - -c
-      - mc alias set local http://lake-s3:9000 scintille-local scintille-local-secret && mc mb --ignore-existing local/scintille-lake
+      - mc alias set local http://lake-s3:9000 scintille-local scintille-local-secret && mc mb --ignore-existing local/scintille-lake local/scintille-live
 
   lake-migrate:
     image: quay.io/lakekeeper/catalog:v0.14.0

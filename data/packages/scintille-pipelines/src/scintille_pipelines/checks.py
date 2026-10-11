@@ -16,10 +16,12 @@ from pyiceberg.catalog import Catalog
 from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 
 from . import quality
+from .lineage import RAW
 from .resources import LakeResource, PostgresResource
 
 SILVER = AssetSpec(
     key=AssetKey(["silver", "flashes"]),
+    deps=[RAW],
     group_name="silver",
     description="Written by lake-writer (hot path) and backfills; checked here.",
 )

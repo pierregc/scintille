@@ -7,14 +7,16 @@ import random
 import shutil
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
 import polars as pl
 
+from scintille_ingest.ownership import drop_owned_by
 from scintille_ingest.validate import quarantine_rows, validate
 
+from .heartbeat import Pinger
 from .identity import FileIdentity, batch_id
 from .metrics import Metrics
 from .sources import Product, Source
@@ -52,12 +54,15 @@ class DiskUsage(NamedTuple):
 
 @dataclass(frozen=True)
 class Settings:
-    parser_version: str = "glm-1"
+    parser_version: str = "glm-2"
     calibration_version: str = "none"
     initial_backoff: float = 5.0
     max_backoff: float = 300.0
     disk_warn: tuple[float, ...] = (0.5, 0.8)
     disk_pause_raw: float = 0.9
+    owner_stale_after: float = 300.0
+    """Seconds without a file before a source's zone takes the other sources' flashes live."""
+    heartbeat_every: float = 60.0
 
 
 class Crash(Exception):
@@ -73,6 +78,7 @@ class IngestLive:
         *,
         publisher: Publisher | None = None,
         raw_cache: RawCache | None = None,
+        heartbeat: Pinger | None = None,
         metrics: Metrics | None = None,
         settings: Settings | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -84,6 +90,7 @@ class IngestLive:
         self.spool = spool
         self.publisher = publisher or NullPublisher()
         self.raw_cache = raw_cache or NullRawCache()
+        self.heartbeat = heartbeat
         self.metrics = metrics or Metrics()
         self.settings = settings or Settings()
         self._clock = clock
@@ -93,6 +100,7 @@ class IngestLive:
         self._tasks: list[asyncio.Task[None]] = []
         self.raw_cache_paused = False
         self._disk_level = 0.0
+        self._last_file: dict[str, datetime] = {}
 
     async def poll(self, source: Source) -> int:
         """One listing of `source`; processes every file not spooled yet. Returns how many."""
@@ -132,8 +140,11 @@ class IngestLive:
                     "fields": {"source": source.name, "key": product.key, "error": parsed.log.error}
                 },
             )
-        if flashes.height and (record is None or ORDER[record.state] < ORDER["published_live"]):
-            await self.publisher.publish(source.name, flashes)
+        if record is None or ORDER[record.state] < ORDER["published_live"]:
+            live = drop_owned_by(flashes, self._live_sources())
+            await self.publisher.publish(source.name, live)
+            if excluded := flashes.height - live.height:
+                self.metrics.inc("ingest_live_excluded_total", excluded, source=source.name)
         self.state.advance(identity, source.name, "published_live", etag=product.etag)
         self._after_step("published_live", identity)
 
@@ -155,6 +166,7 @@ class IngestLive:
         self.state.advance(identity, source.name, "spooled", batch, etag=product.etag)
         self._after_step("spooled", identity)
 
+        self._last_file[source.name] = self._clock()
         lag = (self._clock() - product.start).total_seconds()
         self.metrics.inc("ingest_files_total", source=source.name)
         self.metrics.inc("ingest_flashes_total", flashes.height, source=source.name)
@@ -171,6 +183,10 @@ class IngestLive:
                 }
             },
         )
+
+    def _live_sources(self) -> set[str]:
+        limit = self._clock() - timedelta(seconds=self.settings.owner_stale_after)
+        return {name for name, at in self._last_file.items() if at >= limit}
 
     async def _cache_raw(self, source: str, identity: FileIdentity, data: bytes) -> None:
         """Best effort: an R2 outage must not stop the live feed."""
@@ -236,6 +252,16 @@ class IngestLive:
             self.check_disk()
             await self._sleep(every)
 
+    async def heartbeat_loop(self, heartbeat: Pinger) -> None:
+        """Pings while every loop runs, reports the stopped ones otherwise."""
+        while not self._stop.is_set():
+            stopped = sorted(t.get_name() for t in self._tasks if t.done())
+            with contextlib.suppress(Exception):
+                await heartbeat.ping(
+                    not stopped, "stopped: " + ", ".join(stopped) if stopped else ""
+                )
+            await self._sleep(self.settings.heartbeat_every)
+
     def healthy(self) -> bool:
         return bool(self._tasks) and not any(t.done() for t in self._tasks)
 
@@ -243,6 +269,10 @@ class IngestLive:
         """Runs until `stop()`; files in progress get `grace` seconds to finish."""
         self._tasks = [asyncio.create_task(self.source_loop(s), name=s.name) for s in self.sources]
         self._tasks.append(asyncio.create_task(self.disk_loop(), name="disk"))
+        if self.heartbeat:
+            self._tasks.append(
+                asyncio.create_task(self.heartbeat_loop(self.heartbeat), name="heartbeat")
+            )
         await self._stop.wait()
         _, late = await asyncio.wait(self._tasks, timeout=grace)
         for task in late:
