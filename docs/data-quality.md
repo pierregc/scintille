@@ -68,7 +68,7 @@ Reconciliation reads each side on its own (Postgres by the day encoded in the fi
 `product_start`, silver and quarantine by `product_file`) and lists the files missing from any side.
 
 Schedules: `silver_hourly_checks` at :10 every hour, `silver_daily_checks` at 02:00 UTC. Results show
-in the Dagster UI on the `silver/flashes` asset; their summary in `metrics.json` comes with #38.
+in the Dagster UI on the `silver/flashes` asset; their summary is in `live/metrics.json` ([SLOs](slo.md)).
 
 Cost of uniqueness on a large partition: 4 million rows (about one day of one source) scan the
 `flash_id` column and count distinct values in 0.15 s locally (0.05 s scan, 0.10 s count); on R2 the
