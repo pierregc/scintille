@@ -138,7 +138,8 @@ def test_summary_of_two_cells() -> None:
     assert abs(first["lat"]) < 0.1
     assert first["t_start"] == df["event_time"][:100].min()
     assert first["params"] == "st-dbscan eps_km=10 eps_minutes=10 min_pts=10"
-    assert first["cell_id"] == cell_id(T0, str(df["flash_id"][:100].min()))
+    earliest = df[:100].sort("event_time", "flash_id")["flash_id"][0]
+    assert first["cell_id"] == cell_id(T0, earliest)
     assert summarize(df.head(0), got[:0], T0, T0, PARAMS).height == 0
 
 
