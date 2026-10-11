@@ -162,6 +162,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 		color: var(--ink);
 		font: 300 12px/1 var(--mono);
 	}
+	.status :global(.sr-only) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
 	.status :global(.chart) {
 		position: relative;
 		margin: 30px 0 0;
