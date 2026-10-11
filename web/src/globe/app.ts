@@ -15,6 +15,7 @@ import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
+import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -33,6 +34,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	readonly thunder: Thunder;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
@@ -88,6 +90,7 @@ export function createGlobeApp(
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.lightMap);
+	const thunder = createThunder(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
 		: undefined;
@@ -143,6 +146,7 @@ export function createGlobeApp(
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
+		thunder.update(now);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer);
 		if (post) post.render();
@@ -166,6 +170,7 @@ export function createGlobeApp(
 		flyTo: controls.flyTo,
 		clock,
 		clouds,
+		thunder,
 		lightning,
 		feedStatus: () =>
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
@@ -185,6 +190,7 @@ export function createGlobeApp(
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
+			thunder.dispose();
 			renderer.dispose();
 		},
 	};
