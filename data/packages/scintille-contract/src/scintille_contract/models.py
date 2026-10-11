@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.1.0"]
-SCHEMA_VERSION: Final = "2.1.0"
+SchemaVersion = Literal["2.2.0"]
+SCHEMA_VERSION: Final = "2.2.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
