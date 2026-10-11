@@ -1,5 +1,6 @@
 """`gold/storm_cells`: flashes clustered into storm cells, one hourly window at a time."""
 
+import math
 from datetime import datetime, timedelta
 
 import polars as pl
@@ -33,6 +34,7 @@ from .clustering import Params, st_dbscan, summarize
 from .resources import LakeResource
 
 hourly = HourlyPartitionsDefinition(start_date="2026-07-01-00:00", timezone="UTC")
+CHUNK = timedelta(days=1)
 
 STORM_CELLS = gold_table(
     "storm_cells",
@@ -143,19 +145,25 @@ def storm_cells(
     overlap = timedelta(minutes=config.overlap_minutes)
     catalog = lake.catalog()
     sync_table(catalog, STORM_CELLS)
-    flashes = pl.from_arrow(
-        catalog.load_table(FLASHES.identifier)
-        .scan(
-            row_filter=(
-                f"event_time >= '{(start - overlap).isoformat()}' "
-                f"AND event_time < '{end.isoformat()}'"
-            ),
-            selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
+    source = catalog.load_table(FLASHES.identifier)
+    frames = []
+    read = 0
+    for chunk in range(math.ceil((end - start) / CHUNK)):
+        lo = start + chunk * CHUNK
+        hi = min(lo + CHUNK, end)
+        flashes = pl.from_arrow(
+            source.scan(
+                row_filter=(
+                    f"event_time >= '{(lo - overlap).isoformat()}' "
+                    f"AND event_time < '{hi.isoformat()}'"
+                ),
+                selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
+            ).to_arrow()
         )
-        .to_arrow()
-    )
-    assert isinstance(flashes, pl.DataFrame)
-    cells = range_cells(flashes, start, end, overlap, config.params)
+        assert isinstance(flashes, pl.DataFrame)
+        read += flashes.height
+        frames.append(range_cells(flashes, lo, hi, overlap, config.params))
+    cells = pl.concat(frames)
     table = catalog.load_table(STORM_CELLS.identifier)
     table.overwrite(
         cells.to_arrow().cast(table.schema().as_arrow()),
@@ -165,7 +173,7 @@ def storm_cells(
     )
     return MaterializeResult(
         metadata={
-            "flashes": flashes.height,
+            "flashes": read,
             "cells": cells.height,
             "clustered_flashes": int(cells["flash_count"].sum()),
         },
