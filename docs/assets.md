@@ -54,7 +54,8 @@ Each flash crossing the playhead may get a voice:
   (0.34 km/s) would delay thunder by hours when seen from orbit, so the delay only conveys "far" or "near".
   The methodology page (#87) should say so.
 
-At most six voices play at once, one new voice every 250 ms at most, the loudest flash winning. The mix
+At most six voices play at once, one new voice every 250 ms at most: once the gap has passed, the loudest
+flash crossed in the next frame gets the voice, and flashes crossed during the gap stay silent. The mix
 goes through a compressor used as a limiter, then a soft clipper that keeps the output below full scale.
 
 ## Cloud fixture
