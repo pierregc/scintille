@@ -13,7 +13,7 @@ export function framePosition(times: readonly number[], time: number): number {
 }
 
 /**
- * Eases the displayed position toward the target with time constant `tau` (seconds of wall time),
+ * Eases the displayed position toward the target with time constant `tau` (seconds of scene time),
  * so a new frame fades in instead of popping. Snaps on big jumps (seeks) or a missing position.
  */
 export function easePosition(current: number, target: number, dtSeconds: number, tau = 1.2, snap = 2): number {

@@ -13,3 +13,10 @@ export function formatUtcDate(utcMs: number): string {
 	const d = new Date(utcMs);
 	return `${pad(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
+
+/** Caption under the Clouds switch: the observation time shown, or why there is none. */
+export function cloudCaption(visible: boolean, frameTime: number | null, settled: boolean): string {
+	if (!visible) return '';
+	if (frameTime !== null) return `Observed ${formatUtcTime(frameTime).slice(0, 5)} UTC`;
+	return settled ? 'No cloud data' : '';
+}

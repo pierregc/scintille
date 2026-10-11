@@ -3,12 +3,13 @@ import { createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
+import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning, type Lightning } from './lightning';
-import { startLiveFeed } from './live';
+import { liveBaseUrl, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
@@ -34,6 +35,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
+	readonly cloudFeed: CloudFeed;
 	readonly thunder: Thunder;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
@@ -76,8 +78,18 @@ export function createGlobeApp(
 	scene.add(earth.mesh);
 	const atmosphere = createAtmosphere(RADIUS);
 	earth.mesh.add(atmosphere.mesh);
-	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), { radius: RADIUS, bicubic: preset.cloudBicubic });
+	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), {
+		radius: RADIUS,
+		bicubic: preset.cloudBicubic,
+		maxFrames: LIVE_CLOUD_FRAMES,
+	});
 	earth.mesh.add(clouds.mesh);
+	const cloudFeed = new CloudFeed({
+		baseUrl: liveBaseUrl(),
+		tier: preset.clouds,
+		onFrame: (frame) => clouds.setFrame(frame),
+		onError: (error) => console.warn('clouds:', error),
+	});
 	const detachDevClouds = import.meta.env.DEV ? attachDevClouds(clouds, window) : undefined;
 	const stars = createStarfield();
 	scene.add(stars.points);
@@ -143,6 +155,7 @@ export function createGlobeApp(
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
+		if (clouds.visible) cloudFeed.start();
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
@@ -170,6 +183,7 @@ export function createGlobeApp(
 		flyTo: controls.flyTo,
 		clock,
 		clouds,
+		cloudFeed,
 		thunder,
 		lightning,
 		feedStatus: () =>
@@ -181,6 +195,7 @@ export function createGlobeApp(
 			renderer.setAnimationLoop(null);
 			controls.dispose();
 			live.stop();
+			cloudFeed.stop();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();
