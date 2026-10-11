@@ -16,7 +16,7 @@ from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES, INGEST_LOG
 from scintille_pipelines.definitions import defs
-from scintille_pipelines.gold import models
+from scintille_pipelines.gold import assets, models
 from scintille_pipelines.gold.assets import GOLD, daily_stats_feed, feed_key
 from scintille_pipelines.gold.checks import (
     accepted_ranges,
@@ -31,7 +31,7 @@ from scintille_pipelines.gold.models import (
     REGION_DAILY,
     SOURCE_SLA_DAILY,
 )
-from scintille_pipelines.resources import LakeResource, R2Resource
+from scintille_pipelines.resources import FeedResource, LakeResource, R2Resource
 
 COUNTRIES = Path(__file__).parent / "fixtures" / "countries.geojson"
 DAY = datetime(2026, 7, 15, tzinfo=UTC)
@@ -69,16 +69,23 @@ BUCKET: list[ObjectStore] = []
 
 
 class MemoryR2(R2Resource):
-    """An in-memory bucket, fresh for each test."""
+    """The in-memory lake bucket, fresh for each test."""
 
     def store(self) -> ObjectStore:
         return BUCKET[0]
 
 
+class MemoryFeed(FeedResource):
+    """The in-memory public feed bucket, fresh for each test."""
+
+    def store(self) -> ObjectStore:
+        return BUCKET[1]
+
+
 @pytest.fixture
-def r2() -> MemoryR2:
-    BUCKET[:] = [MemoryStore()]
-    return MemoryR2()
+def r2() -> MemoryFeed:
+    BUCKET[:] = [MemoryStore(), MemoryStore()]
+    return MemoryFeed()
 
 
 def flash(source: str, when: datetime, lat: float, lon: float, i: int) -> dict[str, object]:
@@ -193,9 +200,11 @@ def rows_of(lake: LakeResource, model: models.Model) -> list[dict[str, object]]:
     return lake.catalog().load_table(model.table.identifier).scan().to_arrow().to_pylist()
 
 
-def materialize_day(lake: LakeResource, r2: R2Resource) -> None:
+def materialize_day(lake: LakeResource, r2: FeedResource) -> None:
     result = materialize(
-        [*GOLD, daily_stats_feed], partition_key=PARTITION, resources={"lake": lake, "r2": r2}
+        [*GOLD, daily_stats_feed],
+        partition_key=PARTITION,
+        resources={"lake": lake, "r2": MemoryR2(), "feed_bucket": r2},
     )
     assert result.success
     checks = result.get_asset_check_evaluations()
@@ -203,7 +212,7 @@ def materialize_day(lake: LakeResource, r2: R2Resource) -> None:
     assert all(c.passed for c in checks), [c.check_name for c in checks if not c.passed]
 
 
-def test_gold_day_end_to_end(lake: LakeResource, r2: R2Resource) -> None:
+def test_gold_day_end_to_end(lake: LakeResource, r2: FeedResource) -> None:
     materialize_day(lake, r2)
 
     stats = sorted(
@@ -223,7 +232,9 @@ def test_gold_day_end_to_end(lake: LakeResource, r2: R2Resource) -> None:
     assert regions == [("BR", "glm-east", 1), ("FR", "glm-east", 2), ("FR", "mtg-li", 1)]
 
     sla = {r["source"]: r for r in rows_of(lake, SOURCE_SLA_DAILY)}
-    assert sla.keys() == {"glm-east", "glm-west"}
+    assert sla.keys() == {"glm-east", "glm-west", "mtg-li"}
+    mtg = sla["mtg-li"]
+    assert (mtg["files"], mtg["completeness"], mtg["latency_p50_s"]) == (0, 0.0, None)
     east = sla["glm-east"]
     assert (east["files"], east["failed_files"], east["expected_files"]) == (4, 1, 4320)
     assert east["completeness"] == pytest.approx(3 / 4320)
@@ -235,11 +246,29 @@ def test_gold_day_end_to_end(lake: LakeResource, r2: R2Resource) -> None:
     assert by_source["glm-east"]["flashes"] == 3
     assert by_source["glm-east"]["hourly"][18:20] == [2, 1]
     assert by_source["glm-west"]["completeness"] == pytest.approx(1 / 4320)
-    assert "completeness" not in by_source["mtg-li"]
+    assert by_source["mtg-li"]["completeness"] == 0.0
+    assert obstore.list(BUCKET[0]).collect() == []
 
     materialize_day(lake, r2)
     assert len(rows_of(lake, FLASH_STATS_HOURLY)) == 4
     assert len(rows_of(lake, REGION_DAILY)) == 3
+
+
+def test_failed_check_does_not_overwrite_the_day(
+    lake: LakeResource, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert materialize([GOLD[0]], partition_key=PARTITION, resources={"lake": lake}).success
+    compute = models.compute
+    monkeypatch.setattr(
+        assets,
+        "compute",
+        lambda con, model, day: pa.concat_tables([compute(con, model, day)] * 2),
+    )
+    result = materialize(
+        [GOLD[0]], partition_key=PARTITION, resources={"lake": lake}, raise_on_error=False
+    )
+    assert not all(c.passed for c in result.get_asset_check_evaluations())
+    assert len(rows_of(lake, FLASH_STATS_HOURLY)) == 4
 
 
 def test_lineage_runs_from_raw_files_to_the_feed() -> None:

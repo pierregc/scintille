@@ -16,7 +16,7 @@ from scintille_lake.migrate import migrate, sync_table
 from scintille_lake.tables import FLASHES, INGEST_LOG, gold_table
 from scintille_pipelines.gold import models
 from scintille_pipelines.gold.assets import GOLD, daily_stats_feed, feed_key
-from scintille_pipelines.resources import LakeResource, PostgresResource, R2Resource
+from scintille_pipelines.resources import FeedResource, LakeResource, PostgresResource
 
 pytestmark = pytest.mark.lake
 
@@ -70,12 +70,12 @@ def seed(lake: LakeResource) -> None:
 
 def test_gold_and_feed_against_lakekeeper(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(models, "countries_file", lambda: COUNTRIES)
-    lake, r2 = LakeResource(), R2Resource()
+    lake, feed = LakeResource(), FeedResource()
     seed(lake)
     result = materialize(
         [*GOLD, daily_stats_feed],
         partition_key=DAY.isoformat(),
-        resources={"lake": lake, "r2": r2},
+        resources={"lake": lake, "feed_bucket": feed},
     )
     assert result.success
     assert all(c.passed for c in result.get_asset_check_evaluations())
@@ -85,7 +85,7 @@ def test_gold_and_feed_against_lakekeeper(monkeypatch: pytest.MonkeyPatch) -> No
             [DAY],
         ).fetchone()
     assert row == (1,)
-    assert obstore.head(r2.store(), feed_key(DAY))["size"] > 0
+    assert obstore.head(feed.store(), feed_key(DAY))["size"] > 0
 
 
 def test_duckdb_write_path_on_a_partitioned_gold_table() -> None:
