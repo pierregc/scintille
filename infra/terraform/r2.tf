@@ -78,3 +78,29 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
     },
   ]
 }
+
+resource "cloudflare_r2_bucket_lifecycle" "live" {
+  account_id  = var.account_id
+  bucket_name = cloudflare_r2_bucket.this["scintille-live"].name
+
+  rules = [
+    # Sorted by id, as the API returns them.
+    {
+      id         = "abort-multipart-7-days"
+      enabled    = true
+      conditions = { prefix = "" }
+      abort_multipart_uploads_transition = {
+        condition = { type = "Age", max_age = 7 * 86400 }
+      }
+    },
+    {
+      # Cloud frames for replay; 30 days pending the retention decision (#41).
+      id         = "archive-clouds-30-days"
+      enabled    = true
+      conditions = { prefix = "archive/clouds/" }
+      delete_objects_transition = {
+        condition = { type = "Age", max_age = 30 * 86400 }
+      }
+    },
+  ]
+}
