@@ -56,6 +56,7 @@ still bind production: review any change to `web/wrangler.jsonc` and `.github/wo
 | `CLOUDFLARE_API_TOKEN` | Actions secret | Account-owned token: Workers Scripts Edit, Workers R2 Storage Read ([secrets](secrets.md)) |
 | `CLOUDFLARE_ACCOUNT_ID` | Actions secret | Passed to every Wrangler call, so Wrangler never calls user-only endpoints |
 | `DEPLOY_ENABLED` | Actions variable | `true` turns on the `deploy`, `preview` and `preview-cleanup` jobs |
+| `CF_WEB_ANALYTICS_TOKEN` | Actions variable | Public Cloudflare Web Analytics site token, injected in production builds only; unset means no beacon |
 
 `DEPLOY_ENABLED` stays unset until the buckets exist: a deploy with an R2 binding to a missing bucket
 fails. Deploys pass `--x-auto-create=false` so Wrangler never tries to create a bucket from CI.
@@ -145,7 +146,9 @@ curl -sI https://pr-<number>-scintille.<account-subdomain>.workers.dev/ | grep -
 
 Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Docker Compose, from
 `infra/compose/compose.yaml`: `postgres` (Dagster storage and pipeline state), `dagster-webserver`,
-`dagster-daemon`, and `ingest` (opt-in until the hot path service, #35).
+`dagster-daemon`, and `ingest` (opt-in until the hot path service, #35), plus `live-probe`
+([operations](operations.md)). `clouds` (cloud textures, [hot path](hot-path.md)) only starts when
+`.env` sets `COMPOSE_PROFILES=clouds`.
 
 - **Images.** `data/Dockerfile` builds one image per package (uv, non-root user `10001`, pinned base
   digests, no secrets). The `images` workflow builds both on every data change; on `main` it pushes
