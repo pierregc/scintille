@@ -41,6 +41,38 @@ Refused by `migrate`, and needing a new table (for example `silver.flashes_v2`) 
 
 Tests in `test_migrate.py` cover each case.
 
+## Maintenance
+
+Per [ADR 0006](adr/0006-data-architecture.md), R2 Data Catalog runs compaction and snapshot
+expiration; we only configure and watch them. Values live in `MaintenancePolicy`
+(`scintille_lake.maintenance`), each overridable by an environment variable:
+
+| Setting | Default | Variable |
+|---|---|---|
+| Compaction target file size | 128 MB (R2 accepts 64 to 512) | `SCINTILLE_COMPACTION_TARGET_MB` |
+| Snapshot expiration | 3 days | `SCINTILLE_SNAPSHOT_RETENTION_DAYS` |
+| Snapshots always kept | 5 | `SCINTILLE_SNAPSHOTS_RETAINED_MIN` |
+| `raw/` lifecycle (checked, set in Terraform) | 30 days | `SCINTILLE_RAW_RETENTION_DAYS` |
+| Orphan inventory minimum file age | 7 days, must exceed snapshot expiration | `SCINTILLE_ORPHAN_MIN_AGE_DAYS` |
+
+The snapshot and `raw/` defaults are the ADR 0006 values; the retention decision (#41) may change
+them. The catalog token in Terraform has no catalog permission, so the policy is applied by hand:
+
+```sh
+cd data
+uv run scintille-lake maintenance     # prints the two wrangler commands below
+npx wrangler basin catalog compaction enable scintille-lake --token $R2_CATALOG_TOKEN --target-size 128
+npx wrangler basin catalog snapshot-expiration enable scintille-lake --token $R2_CATALOG_TOKEN --older-than-days 3 --retain-last 5
+```
+
+Runs show in the dashboard, under each table's Maintenance tab.
+
+Orphan files are **inventoried, never deleted**: `orphan_inventory` lists objects under a table's
+location that no metadata version, snapshot, manifest list or manifest entry (deleted entries
+included) references, and that are older than the minimum age. Deletion waits for a procedure tested
+with concurrent compaction and old snapshots. Dagster checks prove maintenance works
+([pipelines](pipelines.md)).
+
 ## Connections
 
 Both read the same environment:

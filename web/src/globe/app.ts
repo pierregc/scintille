@@ -8,12 +8,15 @@ import { createGlobeControls, type GlobeControls } from './controls';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
-import { createLightning } from './lightning';
+import { createLightning, type Lightning } from './lightning';
 import { liveBaseUrl, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
+import { createRenderHandle, type RenderHandle } from './render/mode';
+import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
+import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -33,25 +36,38 @@ export interface GlobeApp {
 	readonly clock: SceneClock;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
+	readonly thunder: Thunder;
+	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
+	/** Set in render mode only. */
+	readonly render?: RenderHandle;
 	dispose(): void;
 }
 
 const RADIUS = 1;
 const FOV = 35;
 
-export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2RenderingContext): GlobeApp {
+export interface GlobeAppOptions {
+	/** Offline rendering: fixed size and view, frames drawn on demand. */
+	render?: RenderParams;
+}
+
+export function createGlobeApp(
+	canvas: HTMLCanvasElement,
+	context: WebGL2RenderingContext,
+	{ render: renderParams }: GlobeAppOptions = {},
+): GlobeApp {
 	const renderer = new WebGLRenderer({ canvas, context, ...CONTEXT_ATTRIBUTES });
 	const scene = new Scene();
 	const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
 	const controls = createGlobeControls(camera, canvas, RADIUS);
 
-	let tier = tierFromSearch(location.search) ?? guessTier(deviceHints(context));
+	let tier = renderParams?.quality ?? tierFromSearch(location.search) ?? guessTier(deviceHints(context));
 	const preset = PRESETS[tier];
 	canvas.dataset.quality = tier;
 	const fps = new FpsMonitor();
@@ -86,6 +102,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.lightMap);
+	const thunder = createThunder(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
 		: undefined;
@@ -106,9 +123,11 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	};
 
 	const resize = () => {
-		const width = window.innerWidth;
-		const height = window.innerHeight;
-		renderer.setPixelRatio(cappedPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio));
+		const width = renderParams?.width ?? window.innerWidth;
+		const height = renderParams?.height ?? window.innerHeight;
+		renderer.setPixelRatio(
+			renderParams ? 1 : cappedPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio),
+		);
 		renderer.setSize(width, height, false);
 		post?.setSize(width, height, renderer.getPixelRatio());
 		camera.aspect = width / height;
@@ -131,8 +150,8 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 	watchPixelRatio();
 	window.addEventListener('resize', resize);
 
-	renderer.setAnimationLoop((time) => {
-		controls.update(time);
+	const draw = (time: number) => {
+		if (!renderParams) controls.update(time);
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
@@ -140,11 +159,23 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
-		if (fps.frame(time)) downgrade();
+		thunder.update(now);
+		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer);
 		if (post) post.render();
 		else renderer.render(scene, camera);
-	});
+	};
+	if (!renderParams) renderer.setAnimationLoop(draw);
+	const render = renderParams
+		? createRenderHandle(renderParams, {
+				clock,
+				camera,
+				radius: RADIUS,
+				feed: live,
+				loaded: () => earth.mesh.visible,
+				draw: () => draw(0),
+			})
+		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
 
@@ -153,10 +184,13 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 		clock,
 		clouds,
 		cloudFeed,
+		thunder,
+		lightning,
 		feedStatus: () =>
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
 		hasData: (time) => live.client.covers(time),
 		dataStart: () => live.client.coverageStart(),
+		render,
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
@@ -171,6 +205,7 @@ export function createGlobeApp(canvas: HTMLCanvasElement, context: WebGL2Renderi
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
+			thunder.dispose();
 			renderer.dispose();
 		},
 	};

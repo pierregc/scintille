@@ -12,8 +12,13 @@ spooled) through:
 1. **download**: file identity = object key + SHA-256 (a revised product is a new file); original
    uploaded to R2 under `raw/<source>/<key dir>/<checksum>_<name>` (`SCINTILLE_R2_*`, deleted after
    30 days by the bucket rule; best effort, paused past 90 % spool disk); state `downloaded`;
-2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`;
-   state `published_live`;
+2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`,
+   except those flagged `outside-owner-zone`: another satellite has the better view of their point
+   and publishes the same flash ([overlap](data-quality.md#overlap-between-satellites)); they are
+   counted in `ingest_live_excluded_total` and still spooled. While the owner has spooled no file
+   for 5 minutes (`owner_stale_after`), they stay in the live feed so its zone does not go dark. A
+   file with nothing left to publish still refreshes the source's `last_ingest_time`; state
+   `published_live`;
 3. **spool**: per batch, its flashes and its `bronze.ingest_log` rows as Parquet, each written to a
    temporary name, fsynced, then renamed (flashes last, so they mark a complete batch); `batch_id` =
    hash of the batch's file identities (one file per batch today), so a re-run writes the same batch
@@ -26,7 +31,9 @@ States live in Postgres (`ingest_files`) and only move forward, so a step replay
 changes nothing. It never calls the catalog. A failing source backs off exponentially (5 s to 5 min)
 without delaying the others. SIGTERM lets files in progress finish (30 s).
 
-- `GET :8080/healthz`: 200 while every loop runs (container healthcheck, #20).
+- `GET :8080/healthz`: 200 while every loop runs (container healthcheck).
+- Heartbeat: a Healthchecks.io ping every minute when `SCINTILLE_HEALTHCHECK_URL` is set
+  ([operations](operations.md)).
 - `GET :8080/metrics`: Prometheus text (files, flashes, errors, lag per source, spool size, disk use).
 - Logs: one JSON object per line.
 - Disk: warnings at 50 % and 80 %; past 90 %, raw cache uploads pause first.

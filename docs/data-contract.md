@@ -9,6 +9,7 @@ in [`data/contract/`](../data/contract/), and enforced by code:
 | Python models (pydantic) | `data/packages/scintille-contract/src/scintille_contract/models.py` | generated |
 | TypeScript types | `web/src/contract/types.ts` | generated |
 | Field reference (end of this doc) | `docs/data-contract.md` | generated section |
+| Ownership mask ([data quality](data-quality.md#overlap-between-satellites)) | `data/contract/ownership.geojson` | generated |
 
 ```sh
 cd data
@@ -37,7 +38,7 @@ source:
 | Source id | Instrument | Product |
 |---|---|---|
 | `glm-east` | GOES-East GLM (75.2° W) | NOAA GLM L2 LCFA (flash variables) |
-| `glm-west` | GOES-West GLM (137.2° W) | NOAA GLM L2 LCFA (flash variables) |
+| `glm-west` | GOES-West GLM (137.0° W) | NOAA GLM L2 LCFA (flash variables) |
 | `mtg-li` | MTG-I1 Lightning Imager (0°) | EUMETSAT LI L2 LFL (flashes) |
 
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
@@ -52,12 +53,15 @@ source:
   defined in #33.
 - **Quality** lists caveats: `degraded` (flagged by the source product), `coverage-edge` (close to
   the edge of the field of view, where detection efficiency drops), `overlap` (seen where two
-  instruments overlap, so it may be detected twice).
+  instruments overlap, so it may be detected twice), `outside-owner-zone` (another instrument has
+  the better view of this point and reports the same flash: kept in silver, in the live feed only
+  while that instrument is not delivering, see [data quality](data-quality.md#overlap-between-satellites)).
 
 ## Live feed on R2
 
 ```
 live/manifest.json                    Cache-Control: max-age=10
+live/metrics.json                     Cache-Control: max-age=30
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
 live/chunks/20260715T183030Z.bin.gz
 ...
@@ -78,6 +82,9 @@ live/chunks/20260715T183030Z.bin.gz
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
+- **`metrics.json`** (`OpsMetrics`) is rewritten every minute: freshness per layer, flashes per
+  minute, latency, completeness and error budget per source, data quality status and catalog usage.
+  Targets are in [SLOs](slo.md).
 
 ## Cloud frames on R2
 
@@ -193,6 +200,8 @@ America, south-east and central US, Europe), grow and decay over 30 to 120 minut
 the wind. Each flash is assigned to the instrument that covers it; product files of 20 s (GLM) or
 30 s (LI) arrive 12 to 35 s after they close. GOES-West stops 4 minutes before the end and is
 marked `delayed`, so clients can exercise the degraded state.
+`metrics.json` holds the matching `OpsMetrics` for the end of that hour (flash counts derived from
+the chunks) and feeds `/status` in development.
 `fixtures/live/clouds/` holds a cloud manifest with one real frame at 18:00 UTC.
 
 ```sh
@@ -207,7 +216,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.0.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.2.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -215,7 +224,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.0.0`.
+Value: `2.2.0`.
 
 ### UtcTimestamp
 
@@ -248,6 +257,7 @@ Quality caveat on a flash. The order is the bit index used in binary chunks.
 | 0 | `degraded` |
 | 1 | `coverage-edge` |
 | 2 | `overlap` |
+| 3 | `outside-owner-zone` |
 
 ### EnergyUnit
 
@@ -380,5 +390,86 @@ Decoded content of one live chunk: the display fields of its flashes, as columns
 | `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
 | `start` | [UtcTimestamp](#utctimestamp) | yes |  | Start of the ingest window; event offsets are relative to it. |
 | `columns` | [ChunkColumns](#chunkcolumns) | yes |  |  |
+
+### LayerFreshness
+
+Defined in `data/contract/metrics.schema.json`.
+
+Age of each layer, seconds; null when unknown.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `live_feed_age_seconds` | number or null | yes |  | Time since the live manifest was last written. |
+| `silver_lag_seconds` | number or null | yes |  | Age of the oldest spooled batch not yet in silver; 0 when the spool is drained. |
+| `gold_age_seconds` | number or null | yes |  | Time since the latest gold build; null before the first one. |
+
+### SourceMetrics
+
+Defined in `data/contract/metrics.schema.json`.
+
+Throughput, latency and completeness of one source.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `source` | [Source](#source) | yes |  |  |
+| `series_start` | [UtcTimestamp](#utctimestamp) | yes |  | Start of the first minute in flashes_per_minute, a whole minute. |
+| `flashes_per_minute` | array of integer | yes | minimum `0` | Flashes published per minute of ingest_time, oldest first, at most 60; the last minute is in progress. Starts later than 60 minutes ago after a restart. |
+| `latency_p50_seconds` | number or null | yes |  | Median time from event_time to publication in the live feed, last 60 minutes; null without flashes. |
+| `latency_p95_seconds` | number or null | yes |  | 95th percentile of the same latency; null without flashes. |
+| `completeness` | number or null | yes |  | Product files spooled in the last 60 minutes over the expected count, 0 to 1; null when the source has no file in 30 days. |
+| `last_file_time` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the latest product file of this source was spooled; null if never. |
+| `error_budget_remaining` | number or null | yes |  | Share of the 30-day completeness error budget left: 1 untouched, 0 spent, negative when overspent; null when the source has no file in 30 days. |
+
+### CheckStatus
+
+Defined in `data/contract/metrics.schema.json`.
+
+Overall check result: fail if an error check failed, warn if only warnings did.
+
+| Index | Value |
+|---|---|
+| 0 | `pass` |
+| 1 | `warn` |
+| 2 | `fail` |
+| 3 | `unknown` |
+
+### QualityStatus
+
+Defined in `data/contract/metrics.schema.json`.
+
+Latest results of the data quality checks on silver.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `status` | [CheckStatus](#checkstatus) | yes |  |  |
+| `checked_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the most recent check ran; null if none has. |
+| `failed` | array of string | yes |  | Names of the checks whose latest result failed. |
+
+### CatalogUsage
+
+Defined in `data/contract/metrics.schema.json`.
+
+Iceberg catalog operations this month against the free tier.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `month` | string | yes | pattern `^[0-9]{4}-[0-9]{2}$` | Calendar month in UTC, YYYY-MM. |
+| `operations` | integer | yes | minimum `0` | Catalog operations made by lake-writer this month. |
+| `free_tier` | integer | yes | minimum `0` | Operations included each month by the catalog provider. |
+
+### OpsMetrics
+
+Defined in `data/contract/metrics.schema.json`.
+
+live/metrics.json: operational metrics and freshness per layer, written every minute.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `generated_at` | [UtcTimestamp](#utctimestamp) | yes |  | When these metrics were computed. |
+| `freshness` | [LayerFreshness](#layerfreshness) | yes |  |  |
+| `sources` | array of [SourceMetrics](#sourcemetrics) | yes |  | One entry per source, in Source order. |
+| `quality` | [QualityStatus](#qualitystatus) | yes |  |  |
+| `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
 
 <!-- END GENERATED REFERENCE -->

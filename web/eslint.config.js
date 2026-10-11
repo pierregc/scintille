@@ -10,7 +10,7 @@ export default [
 	{
 		files: ['scripts/**/*.mjs'],
 		languageOptions: {
-			globals: { Buffer: 'readonly', console: 'readonly', fetch: 'readonly', process: 'readonly' },
+			globals: { Buffer: 'readonly', console: 'readonly', fetch: 'readonly', performance: 'readonly', process: 'readonly' },
 		},
 	},
 	{
