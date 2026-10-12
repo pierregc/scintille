@@ -29,5 +29,5 @@ node web/scripts/render.mjs --url https://scintille.app --start <ISO> --end <ISO
 It accepts the page parameters above as `--name value` and writes `frame-00000.png`, … `--gl swiftshader`
 (default) renders on the CPU and works anywhere; `--gl gpu` uses the machine's GPU when Chromium can.
 
-The `render` workflow builds the site against the fixture hour, renders 30 frames twice with SwiftShader
+The `render` workflow (manual) builds the site against the fixture hour, renders 30 frames twice with SwiftShader
 and requires identical files; it also times a few 1080p frames in the job summary.

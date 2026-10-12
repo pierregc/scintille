@@ -97,4 +97,4 @@ docker compose up -d --wait lakekeeper && docker compose run --rm lake-init
 cd data && uv run scintille-lake migrate && uv run pytest -m lake
 ```
 
-The `lake` CI job does the same on every data change. `docker compose down -v` resets everything.
+The `lake` job of the manual `images` workflow does the same. `docker compose down -v` resets everything.
