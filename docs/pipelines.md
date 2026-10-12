@@ -181,3 +181,39 @@ so its value never shows in the UI or the logs. Unset variables fall back to the
 `uv run pytest` materializes the gold assets and the feed in-process on a SQLite catalog and an
 in-memory bucket. `uv run pytest -m lake` materializes them against the local Lakekeeper and S3
 store, probes the DuckDB write path and tests the Postgres lock; the `lake` job of the manual `images` workflow runs the second.
+
+## Storm catalog publication
+
+`feeds/storm_catalog` exports `storms/<slug>.json`, immutable replay chunks, zero-based index pages
+of 50 summaries and XML sitemaps. `hourly_storm_catalog` materializes its upstream storm assets;
+`storm_catalog_schedule` targets the previous hour at minute 20 UTC and is **stopped by default**.
+A storm starting at the beginning of an hour therefore reaches publication after 80 minutes when
+silver is available and the run succeeds, within the two-hour target.
+
+Before activation, accept the public intensity decision in ADR 0009 (#71), merge classification
+#183 (#72), materialize missing `minute_counts` and levels, and bootstrap tracking sequentially
+through the hour before the schedule's first run. The publisher requires a name and persisted
+classification for every indexed storm; it never supplies classification defaults. A missing
+upstream partition stops the run rather than silently starting a new storm chain. Recovery runs
+should cover skipped hours in order; an hourly schedule alone does not repair missing partitions.
+
+Replay uses event-time hour chunks of at most 65,536 flashes, encoded with the live SCNT layout.
+Metadata is at most 256 KiB; a longer track that exceeds this cap fails before index publication.
+The current extraction selects each track step's spatial bounds in its own hour and deduplicates
+flash ids. `replay.selection = "track-bounds"` explicitly permits unrelated nearby flashes; its
+count is distinct from classified `storm.flashes`. It is not an exact cell membership export.
+No archive cloud manifest exists yet; historical cloud frame discovery remains #79's prerequisite.
+
+All replay chunks are written before their metadata, then all detail files before index pages,
+then sitemap parts before their sitemap index. A durable published-slug ledger avoids fetching every archived detail on each run. Old detail and
+chunk files are retained, so an
+interrupted update leaves old references readable. This job does not remove orphaned files.
+Regional sitemaps discover detail objects already published under `regions/` by #75, including
+covered countries with no storms. Indexes are rebuilt over the full catalog in the batch
+pipeline; a web request only reads the requested page.
+
+`SCINTILLE_PURGE_TOKEN` and `SCINTILLE_CF_ZONE_ID` enable batched cache tag purges. Changed closed
+storms queue `storm:<slug>`, affected `region:<CC>` tags and `storms-index` before detail writes.
+Pending tags are stored in `_pipeline/storms/purge.json` in the feed bucket. Failure or missing
+credentials leaves the queue intact and does not fail publication. One batch of at most 100 tags
+is attempted per hourly run; the remainder retries next run, below the Free request limit.

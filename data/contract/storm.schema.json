@@ -221,19 +221,23 @@
       "properties": {
         "storm_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 128
         },
         "slug": {
           "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]*$"
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "maxLength": 200
         },
         "name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 256
         },
         "label": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512
         },
         "country_code": {
           "anyOf": [
@@ -265,15 +269,17 @@
         },
         "level": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 1
         },
         "level_name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 80
         },
         "level_rule": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 2048
         },
         "sources": {
           "type": "array",
@@ -282,7 +288,7 @@
           }
         }
       },
-      "description": "Storm metrics and persisted classification; publication never chooses intensity thresholds."
+      "description": "Storm metrics and persisted classification."
     },
     "StormIndexPage": {
       "type": "object",
@@ -320,7 +326,7 @@
         },
         "page_size": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 1
         },
         "total_storms": {
           "type": "integer",
@@ -328,7 +334,7 @@
         },
         "total_pages": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 1
         },
         "storms": {
           "type": "array",
