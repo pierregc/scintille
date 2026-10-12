@@ -6,6 +6,7 @@ from pathlib import Path
 
 import netCDF4
 import polars as pl
+import pytest
 from scintille_contract.chunk import decode
 from scintille_contract.models import SOURCE_VALUES, LiveManifest
 from scintille_contract.ownership import SATELLITES
@@ -67,12 +68,13 @@ def frame(*rows: dict[str, object]) -> pl.DataFrame:
 
 
 class SeenByBoth:
-    """One source of a flash at 25° N 100° W (GOES-East side), seen by both GLMs."""
+    """One source of a flash seen by two satellites, by default at 25° N 100° W (GOES-East side)."""
 
     cadence = 0.01
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, lat: float = 25.0, lon: float = -100.0) -> None:
         self.name = name
+        self.lat, self.lon = lat, lon
         self.product = Product(f"{name}/file.nc", NOW - timedelta(seconds=60))
 
     async def list_recent(self, now: datetime) -> list[Product]:
@@ -95,14 +97,22 @@ class SeenByBoth:
             parse_duration_ms=1.0,
             error=None,
         )
-        return IngestedFile(flag_outside_owner(frame(flash(self.name, 25.0, -100.0))), log)
+        return IngestedFile(flag_outside_owner(frame(flash(self.name, self.lat, self.lon))), log)
 
 
-def test_a_flash_seen_by_two_sources_is_live_once_and_twice_in_silver(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("sources", "owner"),
+    [
+        ([SeenByBoth("glm-east"), SeenByBoth("glm-west")], "glm-east"),
+        ([SeenByBoth("mtg-li", 5.0, -30.0), SeenByBoth("glm-east", 5.0, -30.0)], "mtg-li"),
+    ],
+)
+def test_a_flash_seen_by_two_sources_is_live_once_and_twice_in_silver(
+    tmp_path: Path, sources: list[SeenByBoth], owner: str
+) -> None:
     store, spool, metrics = MemoryStore(), Spool(tmp_path / "spool"), Metrics()
     clock = {"now": NOW}
     feed = LiveFeed(store, outbox=tmp_path / "outbox", clock=lambda: clock["now"])
-    sources = [SeenByBoth("glm-east"), SeenByBoth("glm-west")]
     service = IngestLive(
         sources,  # type: ignore[arg-type]
         MemoryState(),
@@ -123,20 +133,26 @@ def test_a_flash_seen_by_two_sources_is_live_once_and_twice_in_silver(tmp_path: 
     manifest = LiveManifest.model_validate_json(store.objects["manifest.json"])
     chunks = [decode(gzip.decompress(store.objects[c.path])) for c in manifest.chunks]
     live_sources = [SOURCE_VALUES[i] for c in chunks for i in c.columns["source"].tolist()]
-    assert live_sources == ["glm-east"]
+    assert live_sources == [owner]
 
-    silver = to_silver(pl.concat(spool.read(b) for b in spool.pending())).sort("source")
-    assert silver["source"].to_list() == ["glm-east", "glm-west"]
-    assert silver["quality"].to_list() == [[], [OUTSIDE_OWNER_ZONE]]
-    assert 'ingest_live_excluded_total{source="glm-west"} 1' in metrics.render()
+    silver = to_silver(pl.concat(spool.read(b) for b in spool.pending()))
+    flags = dict(zip(silver["source"], silver["quality"].to_list(), strict=True))
+    other = next(s.name for s in sources if s.name != owner)
+    assert flags == {owner: [], other: [OUTSIDE_OWNER_ZONE]}
+    assert f'ingest_live_excluded_total{{source="{other}"}} 1' in metrics.render()
 
 
-def run_both(tmp_path: Path, owner_gap: timedelta) -> tuple[LiveManifest, list[str], Metrics]:
-    """East then West ingest the same flash, `owner_gap` apart; returns the live result."""
+def run_both(
+    tmp_path: Path,
+    owner_gap: timedelta,
+    east: SeenByBoth | None = None,
+    west: SeenByBoth | None = None,
+) -> tuple[LiveManifest, list[str], Metrics]:
+    """The owner (East) then the other source ingest the same flash, `owner_gap` apart."""
     store, metrics = MemoryStore(), Metrics()
     clock = {"now": NOW}
     feed = LiveFeed(store, outbox=tmp_path / "outbox", clock=lambda: clock["now"])
-    east, west = SeenByBoth("glm-east"), SeenByBoth("glm-west")
+    east, west = east or SeenByBoth("glm-east"), west or SeenByBoth("glm-west")
     service = IngestLive(
         [east, west],
         MemoryState(),
@@ -177,6 +193,15 @@ def test_flagged_flashes_stay_live_while_the_owner_is_down(tmp_path: Path) -> No
     assert "ingest_live_excluded_total" not in metrics.render()
 
 
+@pytest.mark.parametrize(("gap", "live"), [(8, ["mtg-li"]), (16, ["mtg-li", "glm-east"])])
+def test_mtg_stays_the_owner_between_its_10_min_files(
+    tmp_path: Path, gap: int, live: list[str]
+) -> None:
+    mtg, east = SeenByBoth("mtg-li", 5.0, -30.0), SeenByBoth("glm-east", 5.0, -30.0)
+    _, live_sources, _ = run_both(tmp_path, timedelta(minutes=gap), mtg, east)
+    assert live_sources == live
+
+
 def test_flags_only_flashes_owned_by_another_source() -> None:
     flagged = flag_outside_owner(
         frame(
@@ -186,6 +211,9 @@ def test_flags_only_flashes_owned_by_another_source() -> None:
             flash("glm-west", 30.0, -120.0),
             flash("glm-west", 0.0, 150.0),
             flash("mtg-li", 0.0, 10.0),
+            flash("glm-east", 5.0, -30.0),
+            flash("mtg-li", 5.0, -50.0),
+            flash("mtg-li", 66.0, -45.0),
         )
     )
     assert flagged["quality"].to_list() == [
@@ -194,6 +222,9 @@ def test_flags_only_flashes_owned_by_another_source() -> None:
         [OUTSIDE_OWNER_ZONE],
         [],
         [],
+        [],
+        [OUTSIDE_OWNER_ZONE],
+        [OUTSIDE_OWNER_ZONE],
         [],
     ]
 
