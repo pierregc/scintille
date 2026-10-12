@@ -3,8 +3,8 @@ import { glslFloat as f } from './profile';
 /** Thin lightning channel drawn over the glow while a flash flickers; see docs/flash-profile.md. */
 export const CHANNEL = {
 	/** Channel half-length relative to the flash radius, and its floor in pixels so shapes stay readable from far. */
-	lengthScale: 3.2,
-	minPixels: 9,
+	lengthScale: 2.2,
+	minPixels: 6,
 	/** Flash radii (km) over which shapes shift from I and zigzag to Y and branched. */
 	smallKm: 4,
 	largeKm: 14,

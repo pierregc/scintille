@@ -31,7 +31,7 @@ about 14 km to Y and branched, the horizontal spread of large intra-cloud flashe
 satellites cannot tell cloud-to-ground from intra-cloud flashes, so the shape is a rendering choice, not
 a measurement.
 
-The channel is 3.2 flash radii long, at least 9 px either way so it reads from far, with a random
+The channel is 2.2 flash radii long, at least 6 px either way so it reads from far, with a random
 orientation. Branches only light on the first pulse, later pulses follow the main channel, and the glow
 is held back to 40 % meanwhile so the cloud does not wash the channel out. It fades within 150 ms after
 the flicker phase, leaving only the glow.
