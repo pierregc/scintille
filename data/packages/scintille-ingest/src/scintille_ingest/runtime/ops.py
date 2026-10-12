@@ -33,8 +33,8 @@ METRICS_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public,
 WINDOW = timedelta(hours=1)
 BUDGET_WINDOW = timedelta(days=30)
 COMPLETENESS_TARGET = 0.99
-# Product files per hour: GLM writes one every 20 s, MTG LI one every 30 s.
-EXPECTED_FILES_PER_HOUR = {"glm-east": 180, "glm-west": 180, "mtg-li": 120}
+# Product files per hour: GLM writes one every 20 s, the Data Store one LI file per 10 min cycle.
+EXPECTED_FILES_PER_HOUR = {"glm-east": 180, "glm-west": 180, "mtg-li": 6}
 CATALOG_FREE_TIER = 1_000_000
 QUALITY_STATUS = "quality"
 GOLD_STATUS = "gold"
