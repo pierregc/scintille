@@ -1,8 +1,7 @@
 name: render
 
+# Manual: Actions > render > Run workflow.
 on:
-  pull_request:
-    paths: ["web/src/**", "web/scripts/render.mjs", "web/package.json", "web/pnpm-lock.yaml", "fixtures/live/**", ".github/workflows/render.yml"]
   workflow_dispatch:
 
 concurrency:

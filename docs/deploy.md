@@ -28,9 +28,8 @@ config there; `wrangler deploy` and `wrangler preview` pick it up through
 
 ## Production
 
-On every push to `main` that touches `web/`, the `web` workflow runs the checks (`check`, `lint`,
-`test`, `build`, `test:seo`, `wrangler deploy --dry-run`), then the `deploy` job runs
-`wrangler deploy`. Deploys never run in parallel. To redeploy without a change, run the workflow by
+On every push to `main` that touches `web/`, the `deploy` job of the `web` workflow builds and runs
+`wrangler deploy`. The checks already ran on the PR (`ci`) and are not repeated. Deploys never run in parallel. To redeploy without a change, run the workflow by
 hand: Actions > web > Run workflow on `main` (`gh workflow run web.yml --ref main`).
 
 ## Version
@@ -51,7 +50,7 @@ answers anonymous requests with its login page.
 
 ## Previews
 
-Each pull request that touches `web/` gets a Preview named `pr-<number>`:
+Each pull request labeled `preview` that touches `web/` gets a Preview named `pr-<number>`:
 
 - URL: `https://pr-<number>-scintille.<account-subdomain>.workers.dev`, posted as a comment on the PR
   and updated on each push.
@@ -101,7 +100,7 @@ fails. Deploys pass `--x-auto-create=false` so Wrangler never tries to create a 
    ```
 5. **Upload the Earth textures** to `scintille-live` (see [Textures](#textures)).
 6. **Turn deploys on**: `gh variable set DEPLOY_ENABLED --body true`.
-7. Re-run the `web` workflow of an open PR to check its Preview, then merge to deploy production.
+7. Add the `preview` label to an open PR to check its Preview, then merge to deploy production.
 
 ## Textures
 
@@ -170,14 +169,14 @@ Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Dock
 `.env` sets `COMPOSE_PROFILES=clouds`.
 
 - **Images.** `data/Dockerfile` builds one image per package (uv, non-root user `10001`, pinned base
-  digests, no secrets). The `images` workflow builds both on every data change; on `main` it pushes
+  digests, no secrets). The `images` workflow (manual) builds both; on `main` it pushes
   them to GHCR as `ghcr.io/pierregc/scintille-<package>:<sha>` and `:main`.
 - **Smoke test.** The same workflow starts the stack with the local lakehouse and checks the
   webserver, the daemon liveness and the non-root user.
-- **Deploy.** On `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
+- **Deploy.** On a manual run on `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
   and `deploy.sh` to `/srv/scintille`, then runs `deploy.sh <sha>`: pull, `up --wait`, and on a
   failed health check, back to the previous SHA with its own compose file. It only runs once the
-  repository variable `VPS_DEPLOY` is `true`. The `rollback` job tests that path on every change
+  repository variable `VPS_DEPLOY` is `true`. The `rollback` job tests that path on every run
   with a release that changes a command.
 - **Dagster UI.** Bound to the VPS loopback: `ssh -L 3000:localhost:3000 deploy@<host>`, then
   http://localhost:3000. Never published.
