@@ -3,6 +3,7 @@ import '@fontsource/ibm-plex-sans/latin-200.css';
 import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-200.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
+import { legendSteps } from './hud/legend';
 import Timeline from './Timeline.astro';
 import Version from './Version.astro';
 ---
@@ -84,6 +85,17 @@ import Version from './Version.astro';
 			<span class="cap" id="afterglow-label">Afterglow</span>
 			<div class="opts" role="radiogroup" aria-labelledby="afterglow-label" data-display></div>
 		</div>
+		<details class="legend" data-legend>
+			<summary><span class="cap">Legend</span><i aria-hidden="true"></i></summary>
+			<div class="key">
+				<div class="dots" aria-hidden="true">
+					{legendSteps().map((s) => <i style={`--d: ${s.size}px; --a: ${s.alpha}`} />)}
+				</div>
+				<p class="ends" aria-hidden="true"><span>Weak</span><span>Strong</span></p>
+				<p><strong>Brightness = measured optical energy.</strong> Stronger flashes also look larger.</p>
+				<a href="/methodology">Methodology</a>
+			</div>
+		</details>
 	</div>
 
 	<Timeline />
@@ -372,6 +384,89 @@ import Version from './Version.astro';
 		font: 300 9.5px/1 var(--mono);
 		letter-spacing: 0.14em;
 	}
+	.legend {
+		display: grid;
+		justify-items: end;
+		width: min(13rem, calc(100vw - 2 * var(--gut)));
+	}
+	.legend > summary {
+		display: inline-flex;
+		gap: 10px;
+		align-items: center;
+		min-height: 24px;
+		color: var(--dim);
+		list-style: none;
+		cursor: pointer;
+	}
+	.legend > summary::-webkit-details-marker {
+		display: none;
+	}
+	.legend > summary .cap {
+		color: inherit;
+	}
+	.legend > summary i {
+		width: 5px;
+		height: 5px;
+		border: solid currentcolor;
+		border-width: 0 1px 1px 0;
+		transform: translateY(-2px) rotate(45deg);
+	}
+	.legend[open] > summary i {
+		transform: translateY(1px) rotate(-135deg);
+	}
+	.legend > summary:hover,
+	.legend[open] > summary {
+		color: var(--soft);
+	}
+	.key {
+		display: grid;
+		gap: 8px;
+		justify-items: end;
+		margin-top: 8px;
+		color: var(--soft);
+		font: 300 12px/1.55 var(--sans);
+		text-align: right;
+	}
+	.key strong {
+		color: var(--ink);
+		font-weight: 300;
+	}
+	.dots {
+		display: flex;
+		gap: 0;
+		align-items: center;
+		justify-content: space-between;
+		width: 9rem;
+		height: 16px;
+	}
+	.dots i {
+		width: var(--d);
+		height: var(--d);
+		background: radial-gradient(circle, #e4ebff 0 30%, rgb(228 235 255 / 0.25) 60%, transparent 72%);
+		border-radius: 50%;
+		opacity: var(--a);
+	}
+	.ends {
+		display: flex;
+		justify-content: space-between;
+		width: 9rem;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	.key a {
+		padding: 4px 0;
+		color: var(--soft);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.2em;
+		text-decoration: none;
+		text-transform: uppercase;
+		border-bottom: 1px solid var(--hair);
+	}
+	.key a:hover {
+		color: var(--ink);
+	}
 
 	.info {
 		position: fixed;
@@ -596,6 +691,8 @@ import Version from './Version.astro';
 		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
 		const display = $('[data-display]');
+		const legend = $<HTMLDetailsElement>('[data-legend]');
+		if (legend) legend.open = matchMedia('(min-width: 641px)').matches;
 		let app: GlobeApp | undefined;
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
