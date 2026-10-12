@@ -1,3 +1,4 @@
+import { intensityGlsl } from './intensity';
 import { flashProfileGlsl } from './profile';
 
 export const lightningVertexShader = /* glsl */ `
@@ -12,19 +13,19 @@ uniform float kmToWorld;
 uniform float glowScale;
 uniform float minPixels;
 uniform float viewportHeight;
-uniform float intensityFloor;
 uniform float flicker;
 
 varying vec2 vCorner;
 varying float vBrightness;
 
 ${flashProfileGlsl}
+${intensityGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
 	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-	float brightness = flashProfile(time - flash.w, duration, flashShape.z, seed, flicker) * mix(intensityFloor, 1.0, flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float brightness = flashProfile(time - flash.w, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -34,7 +35,7 @@ void main() {
 	vec3 north = cross(normal, east);
 	float distance = length(cameraPosition - center);
 	float pixel = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight);
-	float size = max(flashShape.y * kmToWorld * glowScale, minPixels * pixel);
+	float size = max(flashShape.y * kmToWorld * glowScale, minPixels * pixel) * intensityScale(flashShape.x);
 
 	vec3 world = center + (east * position.x + north * position.y) * size;
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
