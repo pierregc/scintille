@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeChunk } from '../live/decode';
+import { NO_DELAY, SourceDelays } from '../live/delay';
 import { FlashRing } from '../live/ring';
 import { encodeChunk, type FakeFlash } from '../live/testing';
 import type { Vec3 } from '../sun';
@@ -19,13 +20,13 @@ function listenerAt(position: Vec3): Listener {
 }
 
 /** Plays `seconds` of scene time at 60 frames per second, real time. */
-function play(scheduler: ThunderScheduler, listener: Listener, seconds: number, from = START_S * 1000) {
+function play(scheduler: ThunderScheduler, listener: Listener, seconds: number, from = START_S * 1000, delays = NO_DELAY) {
 	const triggers: Trigger[] = [];
 	let maxActive = 0;
 	scheduler.skipTo(from);
 	for (let f = 1; f <= seconds * 60; f++) {
 		const audio = f / 60;
-		const t = scheduler.update(from + audio * 1000, audio, listener);
+		const t = scheduler.update(from + audio * 1000, audio, listener, delays);
 		if (t) triggers.push(t);
 		maxActive = Math.max(maxActive, scheduler.active(audio));
 	}
@@ -85,5 +86,18 @@ describe('ThunderScheduler', () => {
 		expect(scheduler.update(t0, 1, listener)).toBeNull();
 		scheduler.skipTo(t0 + 200_000);
 		expect(scheduler.update(t0 + 200_100, 2, listener)?.start).toBeGreaterThanOrEqual(2);
+	});
+
+	it('hears each source when its delay brings it to the playhead', () => {
+		const delays = new SourceDelays({ 'glm-east': 2_000, 'glm-west': 2_000, 'mtg-li': 10_000 });
+		const flashes = [0, 2].map((source) => ({ offsetMs: 500, lat: 0, lon: 0, source }));
+		const at = (from: number) => {
+			const scheduler = new ThunderScheduler(ringWith(flashes), { voiceSeconds: VOICE_S });
+			return play(scheduler, listenerAt([1.3, 0, 0]), 1, START_S * 1000 + from, delays).triggers.length;
+		};
+		expect(at(0)).toBe(0);
+		expect(at(2_000)).toBe(1);
+		expect(at(5_000)).toBe(0);
+		expect(at(10_000)).toBe(1);
 	});
 });

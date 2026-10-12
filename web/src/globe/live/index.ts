@@ -3,6 +3,7 @@ import { FlashRing } from './ring';
 
 export { FlashRing, type RingWatcher } from './ring';
 export { LiveClient } from './client';
+export { LIVE_DELAY_MS, LIVE_DELAYS, NO_DELAY, SourceDelays } from './delay';
 
 /** Feed root: `PUBLIC_LIVE_BASE_URL`, else the fixture server in dev and R2 in production. */
 export function liveBaseUrl(): string {

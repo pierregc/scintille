@@ -18,7 +18,7 @@ import {
 	type WebGLRenderer,
 } from 'three';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
-import type { FlashRing } from '../live';
+import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, minutesToMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
@@ -42,8 +42,8 @@ export interface LightningOptions {
 
 export interface Lightning {
 	mesh: Mesh;
-	/** Uploads new flashes and sets the scene time (UTC ms) flashes are aged against. */
-	setTime(utcMs: number): void;
+	/** Uploads new flashes and sets the scene time (UTC ms) flashes are aged against, each source `delays` behind. */
+	setTime(utcMs: number, delays?: SourceDelays): void;
 	/** Minutes of scene time a flash stays on screen. */
 	readonly displayMinutes: number;
 	/** Changes how long flashes stay on screen, from the data already loaded, and remembers the choice. */
@@ -128,8 +128,8 @@ export function createLightning(
 
 	return {
 		mesh,
-		setTime(utcMs) {
-			instances.sync(utcMs);
+		setTime(utcMs, delays) {
+			instances.sync(utcMs, delays);
 			geometry.instanceCount = instances.count;
 			time.value = (utcMs - instances.origin) / 1000;
 		},
