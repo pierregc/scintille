@@ -13,6 +13,7 @@ from typing import NamedTuple, Protocol
 
 import polars as pl
 
+from scintille_ingest.intensity import CURRENT
 from scintille_ingest.ownership import drop_owned_by
 from scintille_ingest.validate import quarantine_rows, validate
 
@@ -55,7 +56,7 @@ class DiskUsage(NamedTuple):
 @dataclass(frozen=True)
 class Settings:
     parser_version: str = "glm-2"
-    calibration_version: str = "none"
+    calibration_version: str = CURRENT.version
     initial_backoff: float = 5.0
     max_backoff: float = 300.0
     disk_warn: tuple[float, ...] = (0.5, 0.8)

@@ -5,7 +5,6 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 import pytest
 from scintille_contract import coverage
@@ -14,7 +13,6 @@ from scintille_contract.models import CoverageMap, LiveManifest
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
-from scintille_ingest.intensity import provisional_intensity
 from scintille_ingest.runtime.live_feed import (
     CHUNK_HEADERS,
     COVERAGE_HEADERS,
@@ -405,13 +403,3 @@ def test_publishes_the_coverage_map_once(tmp_path: Path) -> None:
     assert store.objects["coverage.geojson"][0] == b"stale"
     asyncio.run(LiveFeed(store, outbox=tmp_path, clock=clock).publish_coverage())
     assert store.objects["coverage.geojson"][0] == data
-
-
-def test_provisional_intensity_is_log_scaled_per_unit() -> None:
-    frame = pl.DataFrame(
-        {
-            "energy_raw": [10**-15.5, 10**-13.5, 10**-11.5, 100.0, 0.0],
-            "energy_unit": ["J", "J", "J", "mW m-2 sr-1", "J"],
-        }
-    )
-    assert np.allclose(provisional_intensity(frame), [0, 0.5, 1, 0.5, 0])

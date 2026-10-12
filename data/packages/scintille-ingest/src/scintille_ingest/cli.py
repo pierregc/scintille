@@ -1,4 +1,5 @@
-"""Command line: `glm --once`, `mtg --once`, `live`, `lake-writer`, `live-probe` and `clouds`."""
+"""Command line: `glm --once`, `mtg --once`, `live`, `lake-writer`, `live-probe`, `clouds` and
+`calibrate`."""
 
 import argparse
 import asyncio
@@ -9,13 +10,14 @@ import statistics
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+import duckdb
 import polars as pl
 from obstore.store import S3Store
 from scintille_lake.config import LakeConfig
-from scintille_lake.connect import pyiceberg_catalog
+from scintille_lake.connect import duckdb_attach, pyiceberg_catalog
 from scintille_lake.locks import partition_locks
 
 from scintille_ingest.clouds import gfs, gmgsi
@@ -24,6 +26,7 @@ from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
+from scintille_ingest.intensity import CALIBRATIONS, fit, next_version, quantiles_query
 from scintille_ingest.mtg import discovery as mtg_discovery
 from scintille_ingest.mtg.ingest import ingest_li_file
 from scintille_ingest.ownership import outside_owner_zone
@@ -76,7 +79,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     probe.add_argument("--once", action="store_true", help="check once; exit 1 if not fresh")
     clouds = commands.add_parser("clouds", help="publish GMGSI cloud textures to the live bucket")
     clouds.add_argument("--port", type=int, default=8081, help="/healthz and /metrics")
+    calibrate = commands.add_parser(
+        "calibrate", help="fit the intensity calibration on silver.flashes and write it"
+    )
+    calibrate.add_argument("--start", type=date.fromisoformat, required=True, help="first day")
+    calibrate.add_argument("--end", type=date.fromisoformat, required=True, help="day after last")
+    calibrate.add_argument("--out", type=Path, default=CALIBRATIONS)
     args = parser.parse_args(argv)
+    if args.command == "calibrate":
+        return run_calibrate(args.start, args.end, args.out)
     if args.command == "live-probe":
         return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "clouds":
@@ -99,6 +110,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         replace(sat, bucket=buckets[sat.source] or sat.bucket) for sat in satellites_from_env()
     ]
     return glm_once(satellites, args.rows)
+
+
+def run_calibrate(start: date, end: date, out: Path) -> int:
+    """Writes `cal-N.json` (next version) from the lake in `SCINTILLE_LAKE_*`."""
+    connection = duckdb.connect()
+    duckdb_attach(connection, LakeConfig.from_env())
+    rows = connection.execute(*quantiles_query(start, end)).fetchall()
+    quantiles = {source: (unit, count, values) for source, unit, count, values in rows}
+    calibration = fit(quantiles, next_version(), (start, end))
+    path = out / f"{calibration.version}.json"
+    path.write_text(calibration.to_json())
+    for source, knots in calibration.sources.items():
+        print(f"{source}: {knots.flashes} flashes, {knots.unit}")
+    print(f"wrote {path}")
+    return 0
 
 
 async def run_live(spool_dir: Path, port: int) -> int:
