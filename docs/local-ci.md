@@ -12,7 +12,6 @@ Without GitHub Actions, run the same checks and deploys from a Mac with `make` (
 | `make smoke` | `images` smoke job | Docker, several GB |
 | `make rollback` | `images` rollback job | Docker |
 | `make render` | `render` workflow | Playwright (installed by the script) |
-| `make terraform` | `terraform` fmt and validate | |
 
 `make data` compares the contract with `origin/main`; use `BASE=<ref>` to change it.
 
