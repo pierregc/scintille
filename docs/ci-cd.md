@@ -21,7 +21,7 @@ turn deploys on. Details live in [deploy](deploy.md), [secrets](secrets.md) and
 
 ```mermaid
 flowchart LR
-    pr["Pull request"] --> checks["ci / check<br/>gitleaks, data, web<br/>terraform plan"]
+    pr["Pull request"] --> checks["ci / check<br/>terraform / plan"]
     pr -- "label preview" --> preview["Preview<br/>pr-N on workers.dev"]
     checks --> merge["Merge into main"]
     merge --> webdeploy["web / deploy<br/>wrangler deploy"]
@@ -34,12 +34,12 @@ flowchart LR
 
 ## Workflows
 
-All workflows live in `.github/workflows/`. Typical durations are from recent runs.
+All workflows live in `.github/workflows/`. Typical durations are from recent runs; `ci` is estimated from the jobs it replaced.
 
 | Workflow | Runs on | Jobs | Typical time |
 |---|---|---|---|
 | `ci` | Every PR that is not a draft | `check` | 1 to 3 min |
-| `web` | Push to `main` touching `web/**`; PRs labeled `preview`; manual | `deploy`, `preview`, `preview-cleanup` | 1 min |
+| `web` | Push to `main` touching `web/**`; PRs labeled `preview`, and their close; manual | `deploy`, `preview`, `preview-cleanup` | 1 min |
 | `images` | Manual | `build` (matrix), `smoke`, `rollback`, `lake`, `deploy` | 4 to 6 min |
 | `render` | Manual | `determinism` | 5 min |
 | `terraform` | PR touching `infra/terraform/**`; manual | `plan`, `apply` | 15 s |
