@@ -1,4 +1,4 @@
-import type { FlashRing } from '../live';
+import type { FlashRing, RingWatcher } from '../live';
 
 /** Floats per flash: direction xyz, time (s from origin), intensity, radius (km), duration (ms). */
 export const FLASH_STRIDE = 7;
@@ -28,6 +28,7 @@ export class FlashInstances {
 	#start = 0;
 	#end = 0;
 	readonly #ring: FlashRing;
+	readonly #changes: RingWatcher;
 	readonly #onRange: RangeListener;
 	/** How long a flash stays visible, so the window keeps it behind the playhead. */
 	lookbackMs: number;
@@ -38,6 +39,7 @@ export class FlashInstances {
 		this.capacity = capacity;
 		this.data = new Float32Array(capacity * FLASH_STRIDE);
 		this.#ring = ring;
+		this.#changes = ring.watch();
 		this.#onRange = onRange;
 		this.lookbackMs = lookbackMs;
 	}
@@ -51,15 +53,27 @@ export class FlashInstances {
 	sync(sceneTime: number): void {
 		const ring = this.#ring;
 		const oldest = ring.written - ring.size;
+		const changed = this.#changes.from;
+		this.#changes.from = Number.POSITIVE_INFINITY;
 		// When the lookback holds more than fits, keep the flashes closest to the playhead.
 		const need = Math.max(this.#firstAt(sceneTime - this.lookbackMs), this.#firstAt(sceneTime + 1) - this.capacity);
 		const from = Math.max(oldest, Math.min(need, ring.written - this.capacity));
 		this.#start = Math.max(this.#start, oldest, this.#end - this.capacity);
-		if (!(Math.abs(sceneTime - this.origin) < REBASE_MS) || need < this.#start) {
+		if (
+			!(Math.abs(sceneTime - this.origin) < REBASE_MS) ||
+			need < this.#start ||
+			changed < Math.min(this.#end, Math.max(this.#start, from))
+		) {
 			this.origin = Math.round(sceneTime);
 			this.#count = 0;
 			this.#cursor = 0;
 			this.#start = this.#end = from;
+		} else if (changed < this.#end) {
+			// A late chunk was merged into the window: copy again from where it landed.
+			const back = this.#end - changed;
+			this.#cursor = (this.#cursor - back + this.capacity) % this.capacity;
+			this.#count -= back;
+			this.#end = changed;
 		} else if (this.#end < from) {
 			// Skip flashes the playhead has already passed.
 			this.#start = this.#end = from;
@@ -68,7 +82,7 @@ export class FlashInstances {
 		this.#copy(Math.min(ring.written - this.#end, room));
 	}
 
-	/** Written index of the first stored flash at or after `time`; assumes the ring is in time order. */
+	/** Written index of the first stored flash at or after `time`. */
 	#firstAt(time: number): number {
 		const ring = this.#ring;
 		let lo = 0;

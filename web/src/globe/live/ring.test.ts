@@ -8,6 +8,12 @@ function chunk(startSeconds: number, count: number) {
 	return decodeChunk(encodeChunk(startSeconds, flashes).buffer);
 }
 
+function offsets(startSeconds: number, values: number[]) {
+	return decodeChunk(encodeChunk(startSeconds, values.map((offsetMs) => ({ offsetMs, lat: offsetMs / 100, lon: 0 }))).buffer);
+}
+
+const times = (ring: FlashRing) => Array.from({ length: ring.size }, (_, i) => ring.time[ring.slot(i)]);
+
 describe('FlashRing', () => {
 	it('stores absolute event times and scaled values', () => {
 		const ring = new FlashRing(8);
@@ -43,5 +49,41 @@ describe('FlashRing', () => {
 		const ring = new FlashRing(4);
 		ring.push(chunk(1, 2));
 		expect([ring.slot(0), ring.slot(1)]).toEqual([0, 1]);
+	});
+
+	it('merges late and unsorted chunks in event time order', () => {
+		const ring = new FlashRing(16);
+		ring.push(offsets(10, [0, 5, 10]));
+		ring.push(offsets(10, [7, 2, 12, -1]));
+		expect(times(ring)).toEqual([9_999, 10_000, 10_002, 10_005, 10_007, 10_010, 10_012]);
+		expect(Array.from({ length: ring.size }, (_, i) => Math.round(ring.lat[ring.slot(i)] * 100))).toEqual([
+			-1, 0, 2, 5, 7, 10, 12,
+		]);
+	});
+
+	it('keeps arrival order for equal times', () => {
+		const ring = new FlashRing(8);
+		ring.push(offsets(1, [0, 0]));
+		ring.push(decodeChunk(encodeChunk(1, [{ offsetMs: 0, lat: 9, lon: 0 }]).buffer));
+		expect(Math.round(ring.lat[ring.slot(2)])).toBe(9);
+	});
+
+	it('drops the oldest flashes by event time when a late chunk overflows it', () => {
+		const ring = new FlashRing(4);
+		ring.push(offsets(1, [10, 20, 30, 40]));
+		ring.push(offsets(1, [5, 25]));
+		expect(times(ring)).toEqual([1020, 1025, 1030, 1040]);
+	});
+
+	it('tells watchers the lowest index a push changed', () => {
+		const ring = new FlashRing(16);
+		const watcher = ring.watch();
+		ring.push(offsets(1, [10, 20, 30]));
+		expect(watcher.from).toBe(0);
+		watcher.from = Infinity;
+		ring.push(offsets(1, [40]));
+		expect(watcher.from).toBe(3);
+		ring.push(offsets(1, [15]));
+		expect(watcher.from).toBe(1);
 	});
 });
