@@ -1,4 +1,4 @@
-import type { FlashRing } from '../live';
+import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import type { Vec3 } from '../sun';
 import { distanceKm, facesCamera, type Voicing, voicing } from './spatial';
 import { VoicePool } from './voices';
@@ -73,8 +73,8 @@ export class ThunderScheduler {
 		this.#lastStart = Number.NEGATIVE_INFINITY;
 	}
 
-	/** Returns the voice to start for flashes since the previous call, at most one per call. */
-	update(sceneTime: number, audioTime: number, listener: Listener): Trigger | null {
+	/** Returns the voice to start for flashes played since the previous call, at most one per call. */
+	update(sceneTime: number, audioTime: number, listener: Listener, delays: SourceDelays = NO_DELAY): Trigger | null {
 		const from = this.#last;
 		this.#last = sceneTime;
 		const step = sceneTime - from;
@@ -87,27 +87,30 @@ export class ThunderScheduler {
 		const point = this.#point;
 		let best: Voicing | null = null;
 		let bestSlot = -1;
-		const first = this.#firstAfter(from);
-		const last = Math.min(ring.size, first + MAX_SCAN);
-		for (let i = first; i < last; i++) {
-			const s = ring.slot(i);
-			if (ring.time[s] > sceneTime) break;
-			const lat = ring.lat[s] * DEG;
-			const lon = ring.lon[s] * DEG;
-			const cosLat = Math.cos(lat);
-			dir[0] = cosLat * Math.cos(lon);
-			dir[1] = Math.sin(lat);
-			dir[2] = -cosLat * Math.sin(lon);
-			if (!facesCamera(dir, listener.position, r)) continue;
-			point[0] = dir[0] * r;
-			point[1] = dir[1] * r;
-			point[2] = dir[2] * r;
-			const x = listener.screenX(point);
-			if (x === null) continue;
-			const v = voicing(ring.intensity[s], distanceKm(dir, listener.position, r), x);
-			if (v.gain >= MIN_GAIN && (!best || v.gain > best.gain)) {
-				best = v;
-				bestSlot = s;
+		for (const delay of delays.values) {
+			const first = this.#firstAfter(from - delay);
+			const last = Math.min(ring.size, first + MAX_SCAN);
+			for (let i = first; i < last; i++) {
+				const s = ring.slot(i);
+				if (ring.time[s] > sceneTime - delay) break;
+				if (delays.ms[ring.source[s]] !== delay) continue;
+				const lat = ring.lat[s] * DEG;
+				const lon = ring.lon[s] * DEG;
+				const cosLat = Math.cos(lat);
+				dir[0] = cosLat * Math.cos(lon);
+				dir[1] = Math.sin(lat);
+				dir[2] = -cosLat * Math.sin(lon);
+				if (!facesCamera(dir, listener.position, r)) continue;
+				point[0] = dir[0] * r;
+				point[1] = dir[1] * r;
+				point[2] = dir[2] * r;
+				const x = listener.screenX(point);
+				if (x === null) continue;
+				const v = voicing(ring.intensity[s], distanceKm(dir, listener.position, r), x);
+				if (v.gain >= MIN_GAIN && (!best || v.gain > best.gain)) {
+					best = v;
+					bestSlot = s;
+				}
 			}
 		}
 		if (!best) return null;
