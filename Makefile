@@ -13,7 +13,7 @@ VPS_KEY ?= $(HOME)/.ssh/scintille_deploy
 # Where the contract check diffs from; CI uses the PR base.
 BASE ?= origin/main
 
-.PHONY: help check data web lake smoke rollback render secrets terraform \
+.PHONY: help check data web lake smoke rollback render secrets \
 	deploy-web deploy-images deploy-vps deploy guard-main
 
 help:
@@ -45,8 +45,6 @@ secrets: ## gitleaks on the full history (brew install gitleaks)
 	gitleaks git --redact --no-banner
 render: ## two SwiftShader renders of the fixture hour must match frame for frame
 	scripts/local-render.sh
-terraform: ## fmt and validate
-	cd infra/terraform && terraform fmt -check -recursive -diff && terraform init -backend=false && terraform validate
 
 guard-main:
 	@test "$$(git rev-parse --abbrev-ref HEAD)" = main || { echo "deploy from main only" >&2; exit 1; }
