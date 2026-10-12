@@ -7,7 +7,7 @@ import logging
 import os
 import statistics
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,6 +17,7 @@ import numpy as np
 import obstore
 import polars as pl
 from obstore.store import ObjectStore
+from scintille_contract import coverage
 from scintille_contract.chunk import Chunk, chunk_name, compress, encode
 from scintille_contract.models import (
     QUALITY_FLAG_VALUES,
@@ -40,8 +41,33 @@ CHUNK_HEADERS = {
     "Cache-Control": "public, max-age=31536000, immutable",
 }
 MANIFEST_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public, max-age=10"}
-LIVE_AFTER = timedelta(minutes=2)
-DELAYED_AFTER = timedelta(minutes=10)
+COVERAGE_PATH = "coverage.geojson"
+COVERAGE_HEADERS = {"Content-Type": "application/geo+json", "Cache-Control": "public, max-age=3600"}
+
+
+@dataclass(frozen=True)
+class StateDelays:
+    """Time since a source's last file after which it turns `delayed`, then `offline` (down)."""
+
+    delayed_after: timedelta = timedelta(minutes=2)
+    offline_after: timedelta = timedelta(minutes=10)
+
+    def __post_init__(self) -> None:
+        if not timedelta(0) < self.delayed_after <= self.offline_after:
+            raise ValueError("expected 0 < delayed_after <= offline_after")
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] = os.environ) -> "StateDelays":
+        """`SCINTILLE_SOURCE_DELAYED_AFTER` and `SCINTILLE_SOURCE_OFFLINE_AFTER`, in seconds."""
+        default = cls()
+        return cls(
+            _seconds(env.get("SCINTILLE_SOURCE_DELAYED_AFTER"), default.delayed_after),
+            _seconds(env.get("SCINTILLE_SOURCE_OFFLINE_AFTER"), default.offline_after),
+        )
+
+
+def _seconds(value: str | None, default: timedelta) -> timedelta:
+    return timedelta(seconds=float(value)) if value else default
 
 
 class LiveStore(Protocol):
@@ -179,8 +205,10 @@ class LiveFeed:
         window: timedelta = timedelta(hours=1),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         metrics: Metrics | None = None,
+        delays: StateDelays | None = None,
     ) -> None:
         self.store = store
+        self.delays = delays or StateDelays()
         self.chunk_seconds = chunk_seconds
         self.window = window
         self._clock = clock
@@ -193,6 +221,7 @@ class LiveFeed:
         self._sources: dict[str, _SourceTimes] = {s: _SourceTimes() for s in SOURCE_VALUES}
         self.stats = LiveStats(clock())
         self.manifest_at: datetime | None = None
+        self._coverage_published = False
         self._stop = asyncio.Event()
 
     async def restore(self) -> None:
@@ -295,7 +324,22 @@ class LiveFeed:
         self._record_latency(flashes, now)
         if flashes is not None and flashes.height:
             self.stats.record(flashes, now)
+        await self.publish_coverage()
         return ref
+
+    async def publish_coverage(self) -> None:
+        """Writes `coverage.geojson` once per process when it changed; retried on the next chunk."""
+        if self._coverage_published:
+            return
+        body = (json.dumps(coverage.geojson(), separators=(",", ":")) + "\n").encode()
+        try:
+            if await self.store.get(COVERAGE_PATH) != body:
+                await self.store.put(COVERAGE_PATH, body, COVERAGE_HEADERS)
+        except Exception:
+            self.metrics.inc("live_feed_errors_total")
+            log.exception("coverage map write failed; retrying on the next chunk")
+            return
+        self._coverage_published = True
 
     def manifest(self, now: datetime) -> LiveManifest:
         return LiveManifest(
@@ -307,7 +351,7 @@ class LiveFeed:
             sources=[
                 SourceStatus(
                     source=source,
-                    state=source_state(self._sources[source].last_ingest, now),
+                    state=source_state(self._sources[source].last_ingest, now, self.delays),
                     last_event_time=self._sources[source].last_event,
                     last_ingest_time=self._sources[source].last_ingest,
                 )
@@ -375,10 +419,13 @@ def quality_mask(flags: list[str]) -> int:
     return mask
 
 
-def source_state(last_ingest: datetime | None, now: datetime) -> SourceState:
-    if last_ingest is None or now - last_ingest > DELAYED_AFTER:
+def source_state(
+    last_ingest: datetime | None, now: datetime, delays: StateDelays | None = None
+) -> SourceState:
+    delays = delays or StateDelays()
+    if last_ingest is None or now - last_ingest > delays.offline_after:
         return "offline"
-    return "live" if now - last_ingest <= LIVE_AFTER else "delayed"
+    return "live" if now - last_ingest <= delays.delayed_after else "delayed"
 
 
 def columns(flashes: pl.DataFrame | None, start: datetime) -> dict[str, np.ndarray]:
