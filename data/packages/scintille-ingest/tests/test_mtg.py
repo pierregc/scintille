@@ -224,6 +224,20 @@ def test_mtg_once_prints_the_latest_chunk_and_latencies(
     assert "received after newest flash" in caplog.text
 
 
+def test_mtg_once_saves_the_chunk(data: bytes, tmp_path: Path) -> None:
+    assert mtg_once(FakeStore(data), rows=0, save=tmp_path / "out") == 0
+    assert (tmp_path / "out" / LATER).read_bytes() == data
+
+
+def test_missing_attribute_fails_the_file(tmp_path: Path) -> None:
+    path = tmp_path / "li.nc"
+    li_chunk(path)
+    with netCDF4.Dataset(path, "a") as root:
+        root["data"]["flash_footprint"].delncattr("units")
+    ingested = ingest_li_file(path.read_bytes(), KEY, RECEIVED)
+    assert ingested.log.status == "failed"
+
+
 def test_mtg_once_without_chunks_fails(data: bytes) -> None:
     store = FakeStore(data)
     store.listed = []

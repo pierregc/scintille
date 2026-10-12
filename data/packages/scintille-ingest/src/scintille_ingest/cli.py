@@ -58,6 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     mtg = commands.add_parser("mtg", help="ingest EUMETSAT MTG LI L2 LFL chunks")
     mtg.add_argument("--once", action="store_true", help="ingest the latest chunk")
     mtg.add_argument("--rows", type=int, default=5, help="flashes to print")
+    mtg.add_argument("--save", type=Path, help="also write the chunk file into this directory")
     live = commands.add_parser("live", help="run ingest-live: sources to live feed and spool")
     live.add_argument(
         "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
@@ -92,7 +93,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if store is None:
             log.error("SCINTILLE_EUMETSAT_CONSUMER_KEY and _SECRET must be set")
             return 2
-        return mtg_once(store, args.rows)
+        return mtg_once(store, args.rows, args.save)
     buckets = {"glm-east": args.east_bucket, "glm-west": args.west_bucket}
     satellites = [
         replace(sat, bucket=buckets[sat.source] or sat.bucket) for sat in satellites_from_env()
@@ -257,7 +258,7 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
     return 1 if failed else 0
 
 
-def mtg_once(store: mtg_discovery.DataStore, rows: int) -> int:
+def mtg_once(store: mtg_discovery.DataStore, rows: int, save: Path | None = None) -> int:
     """Latest chunk of the last hour, with the latencies #32 asks to measure."""
     now = datetime.now(UTC)
     listed = store.search(now - timedelta(hours=1), now)
@@ -268,6 +269,10 @@ def mtg_once(store: mtg_discovery.DataStore, rows: int) -> int:
     chunk = found[-1]
     data = store.fetch(chunk.product_id, chunk.name)
     received = datetime.now(UTC)
+    if save:
+        save.mkdir(parents=True, exist_ok=True)
+        (save / chunk.name).write_bytes(data)
+        log.info("mtg-li chunk saved to %s", save / chunk.name)
     ingested = ingest_li_file(data, chunk.key, received)
     _print_summary("mtg-li", "EUMETSAT Data Store", ingested, rows)
     log.info("mtg-li ingest_log %s", ingested.log)
