@@ -5,10 +5,13 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from shapely import Polygon, box
+from shapely.geometry.base import BaseGeometry
+from shapely.geometry.polygon import orient
 
 from scintille_contract.models import Source
 
-MASK_VERSION = 1
+MASK_VERSION = 2
 """Bump whenever SATELLITES changes, then run `scintille-contract generate`."""
 
 
@@ -20,10 +23,12 @@ class Satellite:
     """Max central angle (deg) from the sub-satellite point where flashes are reported."""
 
 
-# Sub-points from `nominal_satellite_subpoint_lon` of the GLM files; coverage from 30 days of data.
+# GLM: sub-points from `nominal_satellite_subpoint_lon`, coverage from 30 days of data.
+# MTG LI: coverage from the committed 10 min sample (farthest flash at 79.95°).
 SATELLITES: tuple[Satellite, ...] = (
     Satellite("glm-east", -75.2, 67.0),
     Satellite("glm-west", -137.0, 67.0),
+    Satellite("mtg-li", 0.0, 80.0),
 )
 
 
@@ -55,25 +60,25 @@ def owners(
     return [names[i] if i >= 0 else None for i in owner_index(lat, lon, satellites).tolist()]
 
 
-def zone_ring(
-    satellite: int, satellites: tuple[Satellite, ...] = SATELLITES, step_deg: float = 0.5
-) -> list[tuple[float, float]]:
-    """Boundary of one owned zone as (lon, lat), longitudes unwrapped around the sub-point.
+def zone(satellite: int, satellites: tuple[Satellite, ...] = SATELLITES) -> list[Polygon]:
+    """Owned zone in the lon/lat plane, longitudes unwrapped around the sub-point.
 
-    Marches out from the sub-point along each azimuth; zones are star-shaped for equal coverages.
+    The field of view minus, for every other satellite, the part of its field of view on its side
+    of the meridian halfway between the two sub-points.
     """
     sat = satellites[satellite]
-    azimuths = np.radians(np.arange(0.0, 360.0, step_deg))
-    lo = np.zeros_like(azimuths)
-    hi = np.full_like(azimuths, sat.coverage_deg)
-    for _ in range(40):
-        mid = (lo + hi) / 2
-        lat, lon = _destination(sat.subpoint_lon, azimuths, mid)
-        owned = owner_index(lat, lon, satellites) == satellite
-        lo, hi = np.where(owned, mid, lo), np.where(owned, hi, mid)
-    lat, lon = _destination(sat.subpoint_lon, azimuths, lo)
-    ring = [(float(x), float(y)) for x, y in zip(lon, lat, strict=True)]
-    return [*ring, ring[0]]
+    owned: BaseGeometry = Polygon(_cap(sat.subpoint_lon, sat.coverage_deg))
+    for j, other in enumerate(satellites):
+        if j == satellite:
+            continue
+        lon = other.subpoint_lon - 360.0 * round((other.subpoint_lon - sat.subpoint_lon) / 360.0)
+        west = (lon + sat.subpoint_lon) / 2 - (0.0 if lon > sat.subpoint_lon else 180.0)
+        side = box(west, -90, west + 180, 90)
+        owned = owned.difference(Polygon(_cap(lon, other.coverage_deg)).intersection(side))
+    parts = [p for p in getattr(owned, "geoms", [owned]) if isinstance(p, Polygon) and p.area > 0]
+    if any(p.interiors for p in parts):
+        raise ValueError(f"{sat.source} zone has a hole, not supported")
+    return [orient(p) for p in parts]
 
 
 def geojson(satellites: tuple[Satellite, ...] = SATELLITES) -> dict[str, Any]:
@@ -90,13 +95,20 @@ def geojson(satellites: tuple[Satellite, ...] = SATELLITES) -> dict[str, Any]:
                 "type": "MultiPolygon",
                 "coordinates": [
                     [[[round(x, 3), round(y, 3)] for x, y in part]]
-                    for part in _split_antimeridian(zone_ring(i, satellites))
+                    for polygon in zone(i, satellites)
+                    for part in _split_antimeridian([(x, y) for x, y in polygon.exterior.coords])
                 ],
             },
         }
         for i, s in enumerate(satellites)
     ]
     return {"type": "FeatureCollection", "mask_version": MASK_VERSION, "features": features}
+
+
+def _cap(subpoint_lon: float, coverage_deg: float, step_deg: float = 0.5) -> NDArray[np.float64]:
+    azimuths = np.radians(np.arange(0.0, 360.0, step_deg))
+    lat, lon = _destination(subpoint_lon, azimuths, np.full_like(azimuths, coverage_deg))
+    return np.column_stack([lon, lat])
 
 
 def _destination(
