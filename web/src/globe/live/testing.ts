@@ -5,6 +5,8 @@ export interface FakeFlash {
 	offsetMs: number;
 	lat: number;
 	lon: number;
+	/** Binary source index; defaults to the flash index modulo 3. */
+	source?: number;
 }
 
 /** Encodes a chunk as the pipeline does, uncompressed. */
@@ -31,7 +33,7 @@ export function encodeChunk(startSeconds: number, flashes: FakeFlash[], major = 
 	column(Uint16Array, flashes.map(() => 100));
 	column(Uint16Array, flashes.map(() => 250));
 	column(Uint8Array, flashes.map(() => 255));
-	column(Uint8Array, flashes.map((_, i) => i % 3));
+	column(Uint8Array, flashes.map((f, i) => f.source ?? i % 3));
 	column(Uint8Array, flashes.map(() => 0));
 	return new Uint8Array(buffer);
 }
