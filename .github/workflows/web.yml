@@ -75,7 +75,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Off while scintille.app is behind the pre-launch Access gate (#142).
       - name: Check the live version
+        if: vars.SITE_PUBLIC == 'true'
         run: |
           for _ in $(seq 30); do
             curl -fsS -H 'Cache-Control: no-cache' https://scintille.app/version.json | jq -e --arg sha "$GITHUB_SHA" '.commit == $sha' && exit 0
