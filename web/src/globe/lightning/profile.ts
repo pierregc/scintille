@@ -6,8 +6,9 @@ export const PROFILE = {
 	/** One pulse per this much flicker, at most `maxPulses`. */
 	pulseEvery: 0.15,
 	maxPulses: 4,
-	/** Pulse decay constant, seconds; each later pulse is `pulseFade` times the previous one. */
+	/** Pulse decay constant, seconds, scaled per flash by up to `tauSpread` either way; each later pulse is `pulseFade` times the previous one. */
 	pulseTau: 0.04,
+	tauSpread: 1.6,
 	pulseFade: 0.7,
 	/** Afterglow level relative to the first pulse, for display windows up to `glowRef` seconds. */
 	afterglow: 0.12,
@@ -45,6 +46,11 @@ export function flickerLength(durationMs: number): number {
 	return Math.min(PROFILE.maxFlicker, Math.max(PROFILE.minFlicker, durationMs / 1000));
 }
 
+/** Pulse decay constant of a flash, from its `seed`, so blinks do not share one rhythm. */
+export function pulseTau(seed: number): number {
+	return PROFILE.pulseTau * PROFILE.tauSpread ** ((((seed * 3.7) % 1) - 0.5) * 2);
+}
+
 export function pulseCount(flicker: number): number {
 	return Math.min(PROFILE.maxPulses, 1 + Math.floor(flicker / PROFILE.pulseEvery));
 }
@@ -66,10 +72,11 @@ export function flashProfile(age: number, display: number, durationMs: number, s
 	if (!flicker) return smoothstep(0, Math.min(PROFILE.softRise, display * 0.04), age) * Math.max(Math.exp(-age / PROFILE.softFall), glow);
 	const length = Math.min(flickerLength(durationMs), display * 0.6);
 	const n = pulseCount(length);
+	const tau = pulseTau(seed);
 	let b = 0;
 	for (let k = 0; k < n; k++) {
 		const a = age - pulseStart(k, n, length, seed);
-		if (a >= 0) b = Math.max(b, PROFILE.pulseFade ** k * smoothstep(0, ATTACK, a) * Math.exp(-a / PROFILE.pulseTau));
+		if (a >= 0) b = Math.max(b, PROFILE.pulseFade ** k * smoothstep(0, ATTACK, a) * Math.exp(-a / tau));
 	}
 	return Math.max(b, glow * smoothstep(0, length, age));
 }
@@ -89,13 +96,14 @@ float flashProfile(float age, float display, float durationMs, float seed, float
 	if (flicker < 0.5) return smoothstep(0.0, min(${f(PROFILE.softRise)}, display * 0.04), age) * max(exp(-age / ${f(PROFILE.softFall)}), glow);
 	float len = min(clamp(durationMs / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), display * 0.6);
 	float n = min(${f(PROFILE.maxPulses)}, 1.0 + floor(len / ${f(PROFILE.pulseEvery)}));
+	float tau = ${f(PROFILE.pulseTau)} * pow(${f(PROFILE.tauSpread)}, (fract(seed * 3.7) - 0.5) * 2.0);
 	float b = 0.0;
 	for (int i = 0; i < ${PROFILE.maxPulses}; i++) {
 		float k = float(i);
 		if (k >= n) break;
 		float start = i == 0 ? 0.0 : len * (k + (fract(seed * (k + 1.0) * 7.13) - 0.5) * 0.4) / n;
 		float a = age - start;
-		if (a >= 0.0) b = max(b, pow(${f(PROFILE.pulseFade)}, k) * smoothstep(0.0, ${f(ATTACK)}, a) * exp(-a / ${f(PROFILE.pulseTau)}));
+		if (a >= 0.0) b = max(b, pow(${f(PROFILE.pulseFade)}, k) * smoothstep(0.0, ${f(ATTACK)}, a) * exp(-a / tau));
 	}
 	return max(b, glow * smoothstep(0.0, len, age));
 }
