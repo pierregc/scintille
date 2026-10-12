@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.3.0"]
-SCHEMA_VERSION: Final = "2.3.0"
+SchemaVersion = Literal["2.4.0"]
+SCHEMA_VERSION: Final = "2.4.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -74,16 +74,21 @@ class FlashRecord(BaseModel):
     )
     source: Source
     product_file: str = Field(
-        min_length=1, description="Base name of the L2 product file the flash was read from."
+        min_length=1,
+        description="Base name of the L2 product file the flash was read from.",
     )
-    native_flash_id: int = Field(ge=0, description="Flash id as written in the product file.")
+    native_flash_id: int = Field(
+        ge=0, description="Flash id as written in the product file."
+    )
     event_time: UtcTimestamp = Field(
         description="Flash start time as measured by the satellite (UTC, microseconds)."
     )
     ingest_time: UtcTimestamp = Field(
         description="When ingestion received the product file (UTC, microseconds)."
     )
-    lat: float = Field(ge=-90, le=90, description="Latitude of the flash centroid, degrees north.")
+    lat: float = Field(
+        ge=-90, le=90, description="Latitude of the flash centroid, degrees north."
+    )
     lon: float = Field(
         ge=-180, le=180, description="Longitude of the flash centroid, degrees east."
     )
@@ -95,10 +100,13 @@ class FlashRecord(BaseModel):
         ge=0,
         le=1,
         description=(
-            "Normalized optical intensity derived from energy_raw (mapping defined in #33)."
+            "Normalized optical intensity derived from energy_raw (mapping defined in "
+            "#33)."
         ),
     )
-    area_km2: float = Field(ge=0, description="Area covered by the flash, square kilometres.")
+    area_km2: float = Field(
+        ge=0, description="Area covered by the flash, square kilometres."
+    )
     duration_ms: float = Field(ge=0, description="Flash duration, milliseconds.")
     quality: list[QualityFlag] = Field(
         description="Quality caveats; empty when the flash is nominal."
@@ -122,11 +130,14 @@ class ChunkRef(BaseModel):
     path: str = Field(
         pattern="^chunks/[0-9A-Za-z_-]+\\.bin\\.gz$",
         description=(
-            "Path relative to the manifest, unique and opaque: never derive it from start."
+            "Path relative to the manifest, unique and opaque: never derive it from "
+            "start."
         ),
     )
     flash_count: int = Field(ge=0, description="Number of flashes in the chunk.")
-    size_bytes: int = Field(ge=0, description="Size of the chunk file as stored (gzip), bytes.")
+    size_bytes: int = Field(
+        ge=0, description="Size of the chunk file as stored (gzip), bytes."
+    )
     event_min: UtcTimestamp | None = Field(
         description="Earliest event_time in the chunk; null when empty."
     )
@@ -147,7 +158,8 @@ class SourceStatus(BaseModel):
     )
     last_ingest_time: UtcTimestamp | None = Field(
         description=(
-            "When the latest product file of this source was ingested; null if never seen."
+            "When the latest product file of this source was ingested; null if never "
+            "seen."
         )
     )
 
@@ -170,7 +182,9 @@ class LiveManifest(BaseModel):
         description="How far back the manifest lists chunks, seconds."
     )
     chunks: list[ChunkRef] = Field(description="Published chunks, oldest first.")
-    sources: list[SourceStatus] = Field(description="One entry per source, in Source order.")
+    sources: list[SourceStatus] = Field(
+        description="One entry per source, in Source order."
+    )
 
 
 class ChunkColumns(BaseModel):
@@ -236,7 +250,8 @@ class LayerFreshness(BaseModel):
     )
     silver_lag_seconds: float | None = Field(
         description=(
-            "Age of the oldest spooled batch not yet in silver; 0 when the spool is drained."
+            "Age of the oldest spooled batch not yet in silver; 0 when the spool is "
+            "drained."
         )
     )
     gold_age_seconds: float | None = Field(
@@ -305,7 +320,9 @@ class QualityStatus(BaseModel):
     checked_at: UtcTimestamp | None = Field(
         description="When the most recent check ran; null if none has."
     )
-    failed: list[str] = Field(description="Names of the checks whose latest result failed.")
+    failed: list[str] = Field(
+        description="Names of the checks whose latest result failed."
+    )
 
 
 class CatalogUsage(BaseModel):
@@ -313,8 +330,12 @@ class CatalogUsage(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    month: str = Field(pattern="^[0-9]{4}-[0-9]{2}$", description="Calendar month in UTC, YYYY-MM.")
-    operations: int = Field(ge=0, description="Catalog operations made by lake-writer this month.")
+    month: str = Field(
+        pattern="^[0-9]{4}-[0-9]{2}$", description="Calendar month in UTC, YYYY-MM."
+    )
+    operations: int = Field(
+        ge=0, description="Catalog operations made by lake-writer this month."
+    )
     free_tier: int = Field(
         ge=0, description="Operations included each month by the catalog provider."
     )
@@ -328,7 +349,9 @@ class OpsMetrics(BaseModel):
     schema_version: SchemaVersion
     generated_at: UtcTimestamp = Field(description="When these metrics were computed.")
     freshness: LayerFreshness
-    sources: list[SourceMetrics] = Field(description="One entry per source, in Source order.")
+    sources: list[SourceMetrics] = Field(
+        description="One entry per source, in Source order."
+    )
     quality: QualityStatus
     catalog: CatalogUsage
 
@@ -347,13 +370,16 @@ class CoverageProperties(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: CoverageKind
-    source: Source | None = Field(description="Source whose usable field of view this is.")
+    source: Source | None = Field(
+        description="Source whose usable field of view this is."
+    )
     subpoint_lon: float | None = Field(
         description="Longitude of the sub-satellite point, degrees east."
     )
     coverage_deg: float | None = Field(
         description=(
-            "Great-circle radius of the field of view around the sub-satellite point, degrees."
+            "Great-circle radius of the field of view around the sub-satellite point, "
+            "degrees."
         )
     )
 
@@ -369,7 +395,8 @@ class MultiPolygon(BaseModel):
     coordinates: list[
         list[
             Annotated[
-                list[Annotated[list[float], Field(min_length=2, max_length=2)]], Field(min_length=4)
+                list[Annotated[list[float], Field(min_length=2, max_length=2)]],
+                Field(min_length=4),
             ]
         ]
     ]
@@ -397,7 +424,8 @@ class CoverageMap(BaseModel):
     mask_version: int = Field(
         ge=1,
         description=(
-            "Version of the satellite list the footprints come from, as in ownership.geojson."
+            "Version of the satellite list the footprints come from, as in "
+            "ownership.geojson."
         ),
     )
     features: list[CoverageFeature] = Field(
@@ -406,3 +434,113 @@ class CoverageMap(BaseModel):
             "coverage area."
         )
     )
+
+
+class StormBounds(BaseModel):
+    """Bounds in degrees; west > east crosses the antimeridian."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    west: float = Field(ge=-180, le=180)
+    south: float = Field(ge=-90, le=90)
+    east: float = Field(ge=-180, le=180)
+    north: float = Field(ge=-90, le=90)
+
+
+class StormTrackPoint(BaseModel):
+    """One centroid sample per tracking window."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    time: UtcTimestamp
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    flash_count: int = Field(ge=0)
+    area_km2: float = Field(ge=0)
+
+
+class StormChunkRef(BaseModel):
+    """One replay chunk, partitioned by event time, using the live SCNT binary encoding."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    start: UtcTimestamp = Field(
+        description="Whole-second chunk origin; event offsets are relative to this time."
+    )
+    end: UtcTimestamp = Field(description="Exclusive end of this event-time window.")
+    path: str = Field(
+        pattern="^storms/chunks/[0-9A-Za-z_-]+\\.bin\\.gz$",
+        description="Opaque path relative to the public data root, never to the metadata URL.",
+    )
+    flash_count: int = Field(ge=0, description="Number of flashes in the chunk.")
+    size_bytes: int = Field(
+        ge=0, description="Size of the chunk file as stored (gzip), bytes."
+    )
+    event_min: UtcTimestamp | None = Field(
+        description="Earliest event_time in the chunk; null when empty."
+    )
+    event_max: UtcTimestamp | None = Field(
+        description="Latest event_time in the chunk; null when empty."
+    )
+
+
+class StormReplay(BaseModel):
+    """Replay selection provenance. track-bounds can include nearby unrelated flashes; its count is
+    separate from storm metrics.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    selection: Literal["cell-members", "track-bounds"]
+    flash_count: int = Field(ge=0)
+    chunks: list[StormChunkRef]
+
+
+class StormSummary(BaseModel):
+    """Storm metrics and persisted classification; publication never chooses intensity thresholds."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    storm_id: str = Field(min_length=1)
+    slug: str = Field(pattern="^[a-z0-9][a-z0-9-]*$")
+    name: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    country_code: str | None
+    t_start: UtcTimestamp
+    t_end: UtcTimestamp
+    closed: bool
+    flashes: int = Field(ge=0)
+    peak_rate: int = Field(ge=0)
+    level: int = Field(ge=0)
+    level_name: str = Field(min_length=1)
+    level_rule: str = Field(min_length=1)
+    sources: list[Source]
+
+
+class StormIndexPage(BaseModel):
+    """storms/index/<page>.json: zero-based pages, recent first, read one page per request."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    published_at: UtcTimestamp
+    last_observation_time: UtcTimestamp | None
+    page: int = Field(ge=0)
+    page_size: int = Field(ge=0)
+    total_storms: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+    storms: list[StormSummary]
+
+
+class StormDetail(BaseModel):
+    """storms/<slug>.json: bounded metadata and replay references."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    published_at: UtcTimestamp
+    last_observation_time: UtcTimestamp
+    storm: StormSummary
+    bounds: StormBounds
+    track: list[StormTrackPoint]
+    replay: StormReplay

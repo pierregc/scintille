@@ -264,7 +264,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.3.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.4.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -272,7 +272,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.3.0`.
+Value: `2.4.0`.
 
 ### UtcTimestamp
 
@@ -579,5 +579,116 @@ live/coverage.geojson: the usable field of view of each source and the area no s
 | `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
 | `mask_version` | integer | yes | minimum `1` | Version of the satellite list the footprints come from, as in ownership.geojson. |
 | `features` | array of [CoverageFeature](#coveragefeature) | yes |  | One footprint per source of the ownership mask, in mask order, then the no coverage area. |
+
+### StormBounds
+
+Defined in `data/contract/storm.schema.json`.
+
+Bounds in degrees; west > east crosses the antimeridian.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `west` | number | yes | minimum `-180`, maximum `180` |  |
+| `south` | number | yes | minimum `-90`, maximum `90` |  |
+| `east` | number | yes | minimum `-180`, maximum `180` |  |
+| `north` | number | yes | minimum `-90`, maximum `90` |  |
+
+### StormTrackPoint
+
+Defined in `data/contract/storm.schema.json`.
+
+One centroid sample per tracking window.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `time` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `flash_count` | integer | yes | minimum `0` |  |
+| `area_km2` | number | yes | minimum `0` |  |
+
+### StormChunkRef
+
+Defined in `data/contract/storm.schema.json`.
+
+One replay chunk, partitioned by event time, using the live SCNT binary encoding.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `start` | [UtcTimestamp](#utctimestamp) | yes |  | Whole-second chunk origin; event offsets are relative to this time. |
+| `end` | [UtcTimestamp](#utctimestamp) | yes |  | Exclusive end of this event-time window. |
+| `path` | string | yes | pattern `^storms/chunks/[0-9A-Za-z_-]+\.bin\.gz$` | Opaque path relative to the public data root, never to the metadata URL. |
+| `flash_count` | integer | yes | minimum `0` | Number of flashes in the chunk. |
+| `size_bytes` | integer | yes | minimum `0` | Size of the chunk file as stored (gzip), bytes. |
+| `event_min` | [UtcTimestamp](#utctimestamp) or null | yes |  | Earliest event_time in the chunk; null when empty. |
+| `event_max` | [UtcTimestamp](#utctimestamp) or null | yes |  | Latest event_time in the chunk; null when empty. |
+
+### StormReplay
+
+Defined in `data/contract/storm.schema.json`.
+
+Replay selection provenance. track-bounds can include nearby unrelated flashes; its count is separate from storm metrics.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `selection` | string | yes |  |  |
+| `flash_count` | integer | yes | minimum `0` |  |
+| `chunks` | array of [StormChunkRef](#stormchunkref) | yes |  |  |
+
+### StormSummary
+
+Defined in `data/contract/storm.schema.json`.
+
+Storm metrics and persisted classification; publication never chooses intensity thresholds.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `storm_id` | string | yes | minLength `1` |  |
+| `slug` | string | yes | pattern `^[a-z0-9][a-z0-9-]*$` |  |
+| `name` | string | yes | minLength `1` |  |
+| `label` | string | yes | minLength `1` |  |
+| `country_code` | string or null | yes |  |  |
+| `t_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `t_end` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `closed` | boolean | yes |  |  |
+| `flashes` | integer | yes | minimum `0` |  |
+| `peak_rate` | integer | yes | minimum `0` |  |
+| `level` | integer | yes | minimum `0` |  |
+| `level_name` | string | yes | minLength `1` |  |
+| `level_rule` | string | yes | minLength `1` |  |
+| `sources` | array of [Source](#source) | yes |  |  |
+
+### StormIndexPage
+
+Defined in `data/contract/storm.schema.json`.
+
+storms/index/<page>.json: zero-based pages, recent first, read one page per request.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `page` | integer | yes | minimum `0` |  |
+| `page_size` | integer | yes | minimum `0` |  |
+| `total_storms` | integer | yes | minimum `0` |  |
+| `total_pages` | integer | yes | minimum `0` |  |
+| `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
+
+### StormDetail
+
+Defined in `data/contract/storm.schema.json`.
+
+storms/<slug>.json: bounded metadata and replay references.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `bounds` | [StormBounds](#stormbounds) | yes |  |  |
+| `track` | array of [StormTrackPoint](#stormtrackpoint) | yes |  |  |
+| `replay` | [StormReplay](#stormreplay) | yes |  |  |
 
 <!-- END GENERATED REFERENCE -->
