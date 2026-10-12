@@ -41,6 +41,16 @@ source:
 | `glm-west` | GOES-West GLM (137.0° W) | NOAA GLM L2 LCFA (flash variables) |
 | `mtg-li` | MTG-I1 Lightning Imager (0°) | EUMETSAT LI L2 LFL (flashes) |
 
+MTG LI flashes come from the EUMETSAT Data Store, collection `EO:EUM:DAT:0691`, read with `eumdac` and
+the credentials listed in [secrets](secrets.md). The collection is Core data under the EUMETSAT Data
+Policy (CC BY 4.0): free, redistribution allowed, with this attribution shown wherever flashes from it
+are displayed:
+
+> Contains modified EUMETSAT Meteosat data 2026
+
+The year is the year of publication. GLM data is public domain (NOAA); we credit it as
+"GLM data courtesy of NOAA".
+
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
   in hex (`scintille_contract.ids.flash_id`). Re-ingesting the same file yields the same ids, so
   re-runs and replays are idempotent. 128 bits keep collisions negligible over decades of flashes.
