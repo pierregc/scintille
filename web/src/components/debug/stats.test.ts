@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { LiveManifest } from '../../contract/types';
 import { decodeChunk } from '../../globe/live/decode';
 import { NO_DELAY, SourceDelays } from '../../globe/live/delay';
 import { FlashRing } from '../../globe/live/ring';
@@ -26,29 +25,20 @@ describe('debugEnabled', () => {
 });
 
 describe('sourceStats', () => {
-	const delays = new SourceDelays({ 'glm-east': 0, 'glm-west': 0, 'mtg-li': 30_000 });
-	const r = ring([
-		{ offsetMs: 0, lat: 10, lon: 20, source: 0 },
-		{ offsetMs: 50_000, lat: 10, lon: 20, source: 0 },
-		{ offsetMs: 60_000, lat: 40, lon: 5, source: 2 },
-		{ offsetMs: 61_000, lat: 40, lon: 5, source: 7 },
-	]);
-	const manifest = {
-		sources: [{ source: 'glm-east', state: 'live', last_event_time: null, last_ingest_time: new Date(T0 + 50_000).toISOString() }],
-	} as unknown as LiveManifest;
-
 	it('counts held, played and pending flashes per source', () => {
-		const stats = sourceStats(r, delays, manifest, T0 + 70_000);
+		const delays = new SourceDelays({ 'glm-east': 0, 'glm-west': 0, 'mtg-li': 30_000 });
+		const r = ring([
+			{ offsetMs: 0, lat: 10, lon: 20, source: 0 },
+			{ offsetMs: 50_000, lat: 10, lon: 20, source: 0 },
+			{ offsetMs: 60_000, lat: 40, lon: 5, source: 2 },
+			{ offsetMs: 61_000, lat: 40, lon: 5, source: 7 },
+		]);
+		const stats = sourceStats(r, delays, T0 + 70_000);
 		expect(stats.map((s) => s.label)).toEqual(['GLM East', 'GLM West', 'MTG LI', '#7']);
-		expect(stats[0]).toMatchObject({ state: 'live', held: 2, lastMinute: 1, pending: 0, newestAgeMs: 20_000, ingestAgeMs: 20_000 });
-		expect(stats[1]).toMatchObject({ state: null, held: 0, newestAgeMs: null, ingestAgeMs: null });
-		expect(stats[2]).toMatchObject({ held: 1, lastMinute: 0, pending: 1, delayMs: 30_000 });
-		expect(stats[3]).toMatchObject({ held: 1, pending: 1, delayMs: 30_000 });
-	});
-
-	it('measures ages from the wall clock', () => {
-		const stats = sourceStats(r, delays, manifest, T0 + 70_000, T0 + 100_000);
-		expect(stats[0]).toMatchObject({ lastMinute: 1, newestAgeMs: 50_000, ingestAgeMs: 50_000 });
+		expect(stats[0]).toEqual({ label: 'GLM East', held: 2, lastMinute: 1, pending: 0 });
+		expect(stats[1]).toMatchObject({ held: 0, lastMinute: 0, pending: 0 });
+		expect(stats[2]).toMatchObject({ held: 1, lastMinute: 0, pending: 1 });
+		expect(stats[3]).toMatchObject({ held: 1, pending: 1 });
 	});
 });
 
