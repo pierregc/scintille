@@ -11,7 +11,7 @@ import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
 import { createLightning, type Lightning } from './lightning';
-import { LIVE_DELAYS, liveBaseUrl, NO_DELAY, startLiveFeed } from './live';
+import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
@@ -46,6 +46,8 @@ export interface GlobeApp {
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
+	/** Internals shown by the debug panel. */
+	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
 	dispose(): void;
@@ -160,6 +162,8 @@ export function createGlobeApp(
 	watchPixelRatio();
 	window.addEventListener('resize', resize);
 
+	const playbackDelays = () => (clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY);
+
 	const draw = (time: number) => {
 		if (!renderParams) controls.update(time);
 		const now = clock.time();
@@ -168,7 +172,7 @@ export function createGlobeApp(
 		if (clouds.visible && !renderParams) cloudFeed.start();
 		clouds.setTime(now);
 		stars.setTime(now);
-		const delays = clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY;
+		const delays = playbackDelays();
 		lightning.setTime(now, delays);
 		thunder.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
@@ -202,6 +206,12 @@ export function createGlobeApp(
 			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
 		hasData: (time) => live.client.covers(time),
 		dataStart: () => live.client.coverageStart(),
+		debug: {
+			ring: live.ring,
+			client: live.client,
+			delays: playbackDelays,
+			quality: () => tier,
+		},
 		render,
 		dispose() {
 			renderer.setAnimationLoop(null);

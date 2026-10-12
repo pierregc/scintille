@@ -3,6 +3,7 @@ import '@fontsource/ibm-plex-sans/latin-200.css';
 import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-200.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
+import DebugPanel from './DebugPanel.astro';
 import { legendSteps } from './hud/legend';
 import Timeline from './Timeline.astro';
 import Version from './Version.astro';
@@ -61,6 +62,8 @@ import Version from './Version.astro';
 			<Version />
 		</div>
 	</details>
+
+	<DebugPanel />
 
 	<section class="clock" aria-label="Time">
 		<p class="t"><time data-time>--:--:--</time><small data-zone></small></p>
@@ -516,6 +519,9 @@ import Version from './Version.astro';
 		pointer-events: none;
 		content: '';
 		background: linear-gradient(90deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent);
+	}
+	.info[open] ~ :global(.debug) {
+		display: none;
 	}
 	.sheet {
 		max-height: calc(100svh - 64px - 2 * var(--gut) - 150px);
