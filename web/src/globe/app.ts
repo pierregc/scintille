@@ -5,6 +5,8 @@ import { type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { createGlobeControls, type GlobeControls } from './controls';
+import { createCoverage } from './coverage';
+import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
@@ -55,12 +57,14 @@ const FOV = 35;
 export interface GlobeAppOptions {
 	/** Offline rendering: fixed size and view, frames drawn on demand. */
 	render?: RenderParams;
+	/** Label shown over areas without lightning data. */
+	coverageLabel?: HTMLElement;
 }
 
 export function createGlobeApp(
 	canvas: HTMLCanvasElement,
 	context: WebGL2RenderingContext,
-	{ render: renderParams }: GlobeAppOptions = {},
+	{ render: renderParams, coverageLabel }: GlobeAppOptions = {},
 ): GlobeApp {
 	const renderer = new WebGLRenderer({ canvas, context, ...CONTEXT_ATTRIBUTES });
 	const scene = new Scene();
@@ -94,7 +98,13 @@ export function createGlobeApp(
 	const stars = createStarfield();
 	scene.add(stars.points);
 
-	const live = startLiveFeed({ now: () => clock.wallTime() });
+	const coverage = createCoverage({ baseUrl: liveBaseUrl(), onError: (error) => console.warn('coverage:', error) });
+	earth.setCoverage(coverage.texture);
+	const detachCoverageLabel = coverageLabel
+		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
+		: undefined;
+
+	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: (manifest) => coverage.setManifest(manifest) });
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -173,7 +183,7 @@ export function createGlobeApp(
 				radius: RADIUS,
 				feed: live,
 				clouds: cloudFeed,
-				loaded: () => earth.mesh.visible,
+				loaded: () => earth.mesh.visible && coverage.settled,
 				draw: () => draw(0),
 			})
 		: undefined;
@@ -197,6 +207,8 @@ export function createGlobeApp(
 			controls.dispose();
 			live.stop();
 			cloudFeed.stop();
+			detachCoverageLabel?.();
+			coverage.dispose();
 			window.removeEventListener('resize', resize);
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();

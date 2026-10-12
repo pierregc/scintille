@@ -7,15 +7,18 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from scintille_contract import coverage
 from scintille_contract.chunk import decode
-from scintille_contract.models import LiveManifest
+from scintille_contract.models import CoverageMap, LiveManifest
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
 from scintille_ingest.runtime.live_feed import (
     CHUNK_HEADERS,
+    COVERAGE_HEADERS,
     MANIFEST_HEADERS,
     LiveFeed,
+    StateDelays,
     source_state,
 )
 from scintille_ingest.runtime.service import Crash, IngestLive
@@ -333,3 +336,70 @@ def test_source_states_age_out() -> None:
     assert source_state(T0 - timedelta(seconds=90), T0) == "live"
     assert source_state(T0 - timedelta(minutes=5), T0) == "delayed"
     assert source_state(T0 - timedelta(minutes=11), T0) == "offline"
+
+
+def test_state_delays_are_configurable() -> None:
+    delays = StateDelays.from_env(
+        {"SCINTILLE_SOURCE_DELAYED_AFTER": "30", "SCINTILLE_SOURCE_OFFLINE_AFTER": "90"}
+    )
+    assert delays == StateDelays(timedelta(seconds=30), timedelta(seconds=90))
+    assert StateDelays.from_env({}) == StateDelays()
+    assert source_state(T0 - timedelta(seconds=60), T0, delays) == "delayed"
+    assert source_state(T0 - timedelta(seconds=91), T0, delays) == "offline"
+    with pytest.raises(ValueError, match="delayed_after"):
+        StateDelays(timedelta(minutes=5), timedelta(minutes=1))
+
+
+def test_a_silent_source_turns_offline_after_the_configured_delay(tmp_path: Path) -> None:
+    store, clock = FakeStore(), Clock()
+    delays = StateDelays(timedelta(seconds=60), timedelta(seconds=120))
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock, delays=delays)
+    states: list[tuple[str, str]] = []
+
+    async def scenario() -> None:
+        for step in range(6):
+            await feed.publish("glm-east", flashes("glm-east", clock.now, 2, str(step)))
+            if step == 0:
+                await feed.publish("glm-west", flashes("glm-west", clock.now, 2))
+            clock.now += timedelta(seconds=30)
+            await feed.flush()
+            manifest = store.manifest()
+            assert manifest is not None
+            by_source = {s.source: s.state for s in manifest.sources}
+            states.append((by_source["glm-east"], by_source["glm-west"]))
+
+    asyncio.run(scenario())
+    assert [west for _, west in states] == [
+        "live",
+        "live",
+        "delayed",
+        "delayed",
+        "offline",
+        "offline",
+    ]
+    assert {east for east, _ in states} == {"live"}
+
+
+def test_publishes_the_coverage_map_once(tmp_path: Path) -> None:
+    store, clock = FakeStore(), Clock()
+    store.fail.add("coverage")
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+
+    async def flush() -> None:
+        clock.now += timedelta(seconds=30)
+        await feed.flush()
+
+    asyncio.run(flush())
+    assert "coverage.geojson" not in store.objects
+    assert store.manifest() is not None
+    assert feed.metrics.counters[("live_feed_errors_total", ())] == 1
+    store.fail.clear()
+    asyncio.run(flush())
+    data, headers = store.objects["coverage.geojson"]
+    assert headers == COVERAGE_HEADERS
+    assert CoverageMap.model_validate_json(data).model_dump(mode="json") == coverage.geojson()
+    store.objects["coverage.geojson"] = (b"stale", {})
+    asyncio.run(flush())
+    assert store.objects["coverage.geojson"][0] == b"stale"
+    asyncio.run(LiveFeed(store, outbox=tmp_path, clock=clock).publish_coverage())
+    assert store.objects["coverage.geojson"][0] == data
