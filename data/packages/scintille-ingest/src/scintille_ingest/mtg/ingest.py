@@ -19,7 +19,7 @@ def ingest_li_file(data: bytes, key: str, received_at: datetime) -> IngestedFile
     try:
         raw = read_li_flashes(data)
         flashes = flag_outside_owner(normalize_li_flashes(raw, "mtg-li", chunk.name, received_at))
-    except (OSError, KeyError, ValueError) as exc:
+    except (AttributeError, OSError, KeyError, ValueError) as exc:
         flashes, error = empty_flashes(), f"{type(exc).__name__}: {exc}"
     log = IngestLogRecord(
         key=key,
