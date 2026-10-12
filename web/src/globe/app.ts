@@ -155,7 +155,7 @@ export function createGlobeApp(
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
-		if (clouds.visible) cloudFeed.start();
+		if (clouds.visible && !renderParams) cloudFeed.start();
 		clouds.setTime(now);
 		stars.setTime(now);
 		lightning.setTime(now);
@@ -172,6 +172,7 @@ export function createGlobeApp(
 				camera,
 				radius: RADIUS,
 				feed: live,
+				clouds: cloudFeed,
 				loaded: () => earth.mesh.visible,
 				draw: () => draw(0),
 			})
