@@ -59,8 +59,12 @@ file (key `<product id>/<chunk file>`) and skips any `TRAIL` chunk. Radiance is 
 one LI pixel, 4.5 km square at the sub-satellite point (0°, 0°), grown by slant range and viewing
 obliquity (`scintille_ingest.mtg.parse.pixel_area_km2`).
 
-**MTG LI latency** (#32), from `scintille-ingest mtg --once` on the VPS: not measured yet. The
-command logs the Data Store publication delay and the reception delay after the chunk end.
+**MTG LI latency** (#32), measured on 2026-10-12 with `scintille-ingest mtg --once`: the Data
+Store published the 10 minute file 41 s after the end of its cycle. A flash therefore becomes
+available between about 40 s (seen at the end of the cycle) and 10 min 40 s (seen at its start)
+after it happened, around 5 min 40 s on average, plus up to 30 s of polling by `ingest-live`.
+GLM files arrive about 30 s after the flash, so the globe shows Europe and Africa several minutes
+behind the Americas. Lower latency needs another channel, such as EUMETCast (#204).
 
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
   in hex (`scintille_contract.ids.flash_id`). Re-ingesting the same file yields the same ids, so
