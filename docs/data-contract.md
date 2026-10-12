@@ -51,6 +51,14 @@ are displayed:
 The year is the year of publication. GLM data is public domain (NOAA); we credit it as
 "GLM data courtesy of NOAA".
 
+Each Data Store product holds the LFL chunks of one repeat cycle; ingestion treats every `BODY`
+chunk as one file (key `<product id>/<chunk file>`) and skips the `TRAIL` chunk. Radiance is kept in
+`mW m-2 sr-1`, `flash_footprint` becomes `area_km2`, and any L1b warning (missing, geolocation,
+radiometric) marks the flash `degraded`.
+
+**MTG LI latency** (#32), from `scintille-ingest mtg --once` on the VPS: not measured yet. The
+command logs the Data Store publication delay and the reception delay after the chunk end.
+
 - **`flash_id` is deterministic**: the first 128 bits of `sha256("<source>|<product_file>|<native_flash_id>")`
   in hex (`scintille_contract.ids.flash_id`). Re-ingesting the same file yields the same ids, so
   re-runs and replays are idempotent. 128 bits keep collisions negligible over decades of flashes.
