@@ -10,6 +10,9 @@ from obstore.store import ObjectStore
 from scintille_ingest.glm.discovery import fetch, list_products, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite
+from scintille_ingest.mtg.discovery import DataStore, chunks
+from scintille_ingest.mtg.ingest import ingest_li_file
+from scintille_ingest.mtg.products import parse_key
 
 
 @dataclass(frozen=True)
@@ -57,3 +60,25 @@ class GlmSource:
 
     def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
         return ingest_glm_file(data, product.key, self._source, received_at)
+
+
+class MtgSource:
+    """MTG-I1 Lightning Imager, from the EUMETSAT Data Store."""
+
+    name = "mtg-li"
+    cadence = 30.0
+    lookback = timedelta(minutes=30)
+
+    def __init__(self, store: DataStore) -> None:
+        self._store = store
+
+    async def list_recent(self, now: datetime) -> list[Product]:
+        listed = await asyncio.to_thread(self._store.search, now - self.lookback, now)
+        return [Product(c.key, c.start) for c in chunks(listed)]
+
+    async def fetch(self, product: Product) -> bytes:
+        chunk = parse_key(product.key)
+        return await asyncio.to_thread(self._store.fetch, chunk.product_id, chunk.name)
+
+    def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
+        return ingest_li_file(data, product.key, received_at)
