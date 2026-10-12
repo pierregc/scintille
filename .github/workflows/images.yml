@@ -51,6 +51,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # ingest-live pauses the raw cache above 90 % disk use, which the stock runner exceeds.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - name: Local stack from the VPS compose file
         run: |
           docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer clouds lakekeeper
