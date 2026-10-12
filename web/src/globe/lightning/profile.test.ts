@@ -54,8 +54,8 @@ describe('afterglow', () => {
 	it('keeps the total light comparable across long windows', () => {
 		const total = (minutes: number) => glowLevel(minutes * 60) * minutes;
 		expect(glowLevel(60)).toBe(PROFILE.afterglow);
-		expect(glowLevel(3600)).toBeLessThan(glowLevel(300) / 5);
-		expect(total(60) / total(5)).toBeLessThan(2);
+		expect(glowLevel(1800)).toBeCloseTo(glowLevel(300) / 6, 6);
+		expect(total(30) / total(5)).toBeCloseTo(1, 6);
 	});
 });
 
