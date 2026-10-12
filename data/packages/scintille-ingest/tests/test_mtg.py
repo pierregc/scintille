@@ -13,7 +13,13 @@ from scintille_ingest.cli import mtg_once
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.mtg.discovery import Listed, chunks
 from scintille_ingest.mtg.ingest import ingest_li_file
-from scintille_ingest.mtg.parse import RAW_SCHEMA, normalize_li_flashes, read_li_flashes
+from scintille_ingest.mtg.parse import (
+    NADIR_PIXEL_KM,
+    RAW_SCHEMA,
+    normalize_li_flashes,
+    pixel_area_km2,
+    read_li_flashes,
+)
 from scintille_ingest.mtg.products import is_flash_chunk, parse_key
 from scintille_ingest.runtime.sources import MtgSource
 from scintille_ingest.validate import validate
@@ -34,6 +40,11 @@ KEY = f"{PRODUCT_ID}/{BODY}"
 CHUNK_START = datetime(2026, 10, 12, 8, 0, 0, tzinfo=UTC)
 RECEIVED = datetime(2026, 10, 12, 8, 1, 5, tzinfo=UTC)
 EPOCH = datetime(2000, 1, 1, tzinfo=UTC)
+REAL = Path(__file__).parent / "fixtures" / "MTI1_LI-2-LFL_ARC_20261012083009_20261012084009.nc"
+REAL_NAME = (
+    f"{PREFIX}BODY--ARC-NC4E_C_EUMT_20261012084025_{OPE}"
+    "_20261012083009_20261012084009_N__O_0052_0001.nc"
+)
 
 LAT = [48.85, -1.29, 6.52, 35.2]
 LON = [2.35, 36.82, 3.38, -40.0]
@@ -44,15 +55,13 @@ def li_chunk(
     path: Path,
     *,
     duration_units: str = "ms",
-    footprint_units: str = "km2",
     geolocation_warning: int = 0,
     radiometric: list[int] | None = None,
 ) -> bytes:
-    """A small LFL chunk with the layout of the product user guide: variables in `data`, packed
-    coordinates, times in seconds since 2000."""
+    """A small chunk with the layout of a real LFL file: packed coordinates, times in seconds since
+    2000, footprint in pixels."""
     seconds = (CHUNK_START - EPOCH).total_seconds()
-    with netCDF4.Dataset(path, "w") as root:
-        ds = root.createGroup("data")
+    with netCDF4.Dataset(path, "w") as ds:
         ds.createDimension("flashes", len(LAT))
         ids = ds.createVariable("flash_id", "u4", ("flashes",))
         ids[:] = [101, 102, 103, 104]
@@ -68,9 +77,7 @@ def li_chunk(
         radiance = ds.createVariable("radiance", "f4", ("flashes",))
         radiance.units = "mW.m-2.sr-1"
         radiance[:] = RADIANCE
-        footprint = ds.createVariable("flash_footprint", "f4", ("flashes",))
-        footprint.units = footprint_units
-        footprint[:] = [210.0, 1500.0, 95.0, 400.0]
+        ds.createVariable("flash_footprint", "u2", ("flashes",))[:] = [10, 75, 4, 20]
         duration = ds.createVariable("flash_duration", "f4", ("flashes",))
         duration.units = duration_units
         duration[:] = [120.0, 350.0, 0.0, 80.0]
@@ -133,15 +140,20 @@ def test_read_li_flashes_unpacks_and_converts(data: bytes) -> None:
     assert np.allclose(raw["lat"].to_numpy(), LAT, atol=0.002)
     assert np.allclose(raw["lon"].to_numpy(), LON, atol=0.002)
     assert raw["radiance"].to_list() == RADIANCE
-    assert raw["footprint_km2"][1] == 1500.0
+    assert raw["footprint_px"][1] == 75.0
     assert raw["duration_ms"][1] == 350.0
     assert not raw["l1b_warning"].any()
 
 
 def test_units_are_converted(tmp_path: Path) -> None:
-    raw = read_li_flashes(li_chunk(tmp_path / "li.nc", duration_units="s", footprint_units="m2"))
+    raw = read_li_flashes(li_chunk(tmp_path / "li.nc", duration_units="s"))
     assert raw["duration_ms"][1] == 350_000.0
-    assert raw["footprint_km2"][1] == pytest.approx(1500e-6)
+
+
+def test_pixel_area_grows_away_from_the_sub_satellite_point() -> None:
+    area = pixel_area_km2(np.array([0.0, 45.0, 60.0]), np.array([0.0, 0.0, 0.0]))
+    assert area[0] == pytest.approx(NADIR_PIXEL_KM**2)
+    assert area[0] < area[1] < area[2]
 
 
 def test_unknown_units_fail_the_file(tmp_path: Path) -> None:
@@ -164,7 +176,8 @@ def test_normalize_maps_to_the_contract(data: bytes) -> None:
     assert flashes["flash_id"][0] == flash_id("mtg-li", BODY, 101)
     assert flashes["energy_unit"].cast(pl.String).unique().to_list() == ["mW m-2 sr-1"]
     assert flashes["energy_raw"].to_list() == RADIANCE
-    assert flashes["area_km2"][0] == 210.0
+    expected = 10 * pixel_area_km2(np.array([LAT[0]]), np.array([LON[0]]))[0]
+    assert flashes["area_km2"][0] == pytest.approx(expected, rel=1e-3)
     assert flashes["ingest_time"].unique().to_list() == [RECEIVED]
     for row in flashes.with_columns(pl.col(pl.Enum).cast(pl.String)).iter_rows(named=True):
         FlashRecord.model_validate(row | {"intensity": 0.5})
@@ -232,8 +245,8 @@ def test_mtg_once_saves_the_chunk(data: bytes, tmp_path: Path) -> None:
 def test_missing_attribute_fails_the_file(tmp_path: Path) -> None:
     path = tmp_path / "li.nc"
     li_chunk(path)
-    with netCDF4.Dataset(path, "a") as root:
-        root["data"]["flash_footprint"].delncattr("units")
+    with netCDF4.Dataset(path, "a") as ds:
+        ds["flash_duration"].delncattr("units")
     ingested = ingest_li_file(path.read_bytes(), KEY, RECEIVED)
     assert ingested.log.status == "failed"
 
@@ -242,3 +255,23 @@ def test_mtg_once_without_chunks_fails(data: bytes) -> None:
     store = FakeStore(data)
     store.listed = []
     assert mtg_once(store, rows=0) == 1
+
+
+def test_real_chunk_reads_and_validates() -> None:
+    key = f"{PRODUCT_ID}/{REAL_NAME}"
+    ingested = ingest_li_file(REAL.read_bytes(), key, RECEIVED)
+    entry, flashes = ingested.log, ingested.flashes
+    assert (entry.status, entry.row_count) == ("ok", 3722)
+    assert (entry.product_start, entry.product_end) == (
+        datetime(2026, 10, 12, 8, 30, 9, tzinfo=UTC),
+        datetime(2026, 10, 12, 8, 40, 9, tzinfo=UTC),
+    )
+    assert flashes["flash_id"].n_unique() == 3722
+    assert flashes["event_time"].min() == datetime(2026, 10, 12, 8, 30, 8, 484200, tzinfo=UTC)
+    assert flashes["lat"].is_between(-82, 82).all() and flashes["lon"].is_between(-82, 82).all()
+    assert (flashes["area_km2"] >= NADIR_PIXEL_KM**2).all()
+    assert flashes["duration_ms"].max() == 2017.0
+    assert not flashes["quality"].list.contains("degraded").any()
+    valid, rejected = validate(flashes, (entry.product_start, entry.product_end))
+    assert (valid.height, rejected.height) == (3720, 2)
+    assert rejected["reason"].str.contains("energy_raw").all()

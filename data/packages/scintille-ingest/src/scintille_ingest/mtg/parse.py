@@ -8,6 +8,7 @@ import polars as pl
 from numpy.typing import NDArray
 from scintille_contract.ids import flash_id
 from scintille_contract.models import Source
+from scintille_contract.ownership import central_angle
 
 from scintille_ingest.glm.parse import FLASH_SCHEMA, QUALITY, UTC_US
 
@@ -18,7 +19,7 @@ RAW_SCHEMA = pl.Schema(
         "lat": pl.Float64(),
         "lon": pl.Float64(),
         "radiance": pl.Float64(),
-        "footprint_km2": pl.Float64(),
+        "footprint_px": pl.Float64(),
         "duration_ms": pl.Float64(),
         "l1b_warning": pl.Boolean(),
     }
@@ -26,14 +27,17 @@ RAW_SCHEMA = pl.Schema(
 
 _TIME_UNITS_PREFIX = "seconds since "
 _DURATION_MS = {"ms": 1.0, "s": 1e3}
-_AREA_KM2 = {"km2": 1.0, "km^2": 1.0, "m2": 1e-6, "m^2": 1e-6}
+# MTG-I1 sub-satellite longitude, and LI sampling distance there (km).
+SUBPOINT_LON = 0.0
+NADIR_PIXEL_KM = 4.5
+_EARTH_KM = 6371.0
+_ORBIT_KM = 42164.0
 _WARNINGS = ("l1b_missing_warning", "l1b_geolocation_warning", "l1b_radiometric_warning")
 
 
 def read_li_flashes(data: bytes) -> pl.DataFrame:
     """Flash variables of one chunk, unpacked, with absolute times (RAW_SCHEMA)."""
-    with netCDF4.Dataset("li.nc", memory=data) as root:
-        ds = root.groups.get("data", root)
+    with netCDF4.Dataset("li.nc", memory=data) as ds:
         n = ds.variables["flash_id"].size
         time = ds.variables["flash_time"]
         reference = _time_reference(str(time.getncattr("units")))
@@ -43,8 +47,7 @@ def read_li_flashes(data: bytes) -> pl.DataFrame:
             "lat": _values(ds, "latitude"),
             "lon": _values(ds, "longitude"),
             "radiance": _values(ds, "radiance"),
-            "footprint_km2": _values(ds, "flash_footprint")
-            * _factor(ds, "flash_footprint", _AREA_KM2),
+            "footprint_px": _values(ds, "flash_footprint"),
             "duration_ms": _values(ds, "flash_duration")
             * _factor(ds, "flash_duration", _DURATION_MS),
             "l1b_warning": _warnings(ds, n),
@@ -73,7 +76,9 @@ def normalize_li_flashes(
         pl.col("radiance").alias("energy_raw"),
         pl.lit("mW m-2 sr-1").alias("energy_unit"),
         pl.lit(None).alias("intensity"),
-        pl.col("footprint_km2").alias("area_km2"),
+        (
+            pl.col("footprint_px") * pixel_area_km2(raw["lat"].to_numpy(), raw["lon"].to_numpy())
+        ).alias("area_km2"),
         pl.col("duration_ms").clip(lower_bound=0),
         pl.when(pl.col("l1b_warning"))
         .then(pl.lit(["degraded"], dtype=QUALITY))
@@ -81,6 +86,16 @@ def normalize_li_flashes(
         .alias("quality"),
     )
     return frame.cast(FLASH_SCHEMA)
+
+
+def pixel_area_km2(lat: NDArray[np.float64], lon: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Approximate ground area of one LI pixel: nadir area grown by slant range and obliquity."""
+    gamma = np.radians(central_angle(lat, lon, SUBPOINT_LON))
+    slant = np.sqrt(_EARTH_KM**2 + _ORBIT_KM**2 - 2 * _EARTH_KM * _ORBIT_KM * np.cos(gamma))
+    cos_zenith = np.clip((_ORBIT_KM * np.cos(gamma) - _EARTH_KM) / slant, 0.05, 1.0)
+    nadir = _ORBIT_KM - _EARTH_KM
+    area: NDArray[np.float64] = NADIR_PIXEL_KM**2 * (slant / nadir) ** 2 / cos_zenith
+    return area
 
 
 def _time_reference(units: str) -> datetime:
