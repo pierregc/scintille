@@ -9,7 +9,7 @@ from scintille_contract.models import CoverageMap
 from scintille_contract.ownership import SATELLITES, Satellite, central_angle
 
 COVERAGE = Path(__file__).parents[3] / "contract" / "coverage.geojson"
-WITH_MTG = (*SATELLITES, Satellite("mtg-li", 0.0, 67.0))
+GLM_ONLY = tuple(s for s in SATELLITES if s.source != "mtg-li")
 EQUATOR_SEEN = tuple(Satellite("glm-east", lon, 67.0) for lon in (-135.0, -45.0, 45.0, 135.0))
 
 
@@ -25,7 +25,7 @@ def test_coverage_matches_the_contract() -> None:
 
 
 def test_covered_spans_merge_overlaps_across_the_antimeridian() -> None:
-    assert coverage.covered_spans() == [pytest.approx((156.0, 351.8))]
+    assert coverage.covered_spans() == [pytest.approx((156.0, 440.0))]
     assert coverage.covered_spans(EQUATOR_SEEN) == []
 
 
@@ -48,7 +48,7 @@ def _signed_area(ring: list[list[float]]) -> float:
     return sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in pairwise(ring)) / 2
 
 
-@pytest.mark.parametrize("satellites", [SATELLITES, WITH_MTG, EQUATOR_SEEN])
+@pytest.mark.parametrize("satellites", [SATELLITES, GLM_ONLY, EQUATOR_SEEN])
 def test_polygons_agree_with_the_rule(satellites: tuple[Satellite, ...]) -> None:
     features = coverage.geojson(satellites)["features"]
     rng = np.random.default_rng(5)
@@ -63,7 +63,7 @@ def test_polygons_agree_with_the_rule(satellites: tuple[Satellite, ...]) -> None
     assert mismatches <= 3
 
 
-@pytest.mark.parametrize("satellites", [SATELLITES, WITH_MTG, EQUATOR_SEEN])
+@pytest.mark.parametrize("satellites", [SATELLITES, GLM_ONLY, EQUATOR_SEEN])
 def test_rings_follow_rfc_7946_winding(satellites: tuple[Satellite, ...]) -> None:
     for feature in coverage.geojson(satellites)["features"]:
         for outer, *holes in feature["geometry"]["coordinates"]:
@@ -78,11 +78,11 @@ def test_a_new_satellite_gets_a_footprint_and_shrinks_the_gap() -> None:
         polygons = coverage.geojson(satellites)["features"][-1]["geometry"]["coordinates"]
         return sum(_signed_area(ring) for polygon in polygons for ring in polygon)
 
-    features = coverage.geojson(WITH_MTG)["features"]
+    features = coverage.geojson(SATELLITES)["features"]
     assert [f["properties"]["source"] for f in features] == [
         "glm-east",
         "glm-west",
         "mtg-li",
         None,
     ]
-    assert gap_area(WITH_MTG) < gap_area(SATELLITES)
+    assert gap_area(SATELLITES) < gap_area(GLM_ONLY)
