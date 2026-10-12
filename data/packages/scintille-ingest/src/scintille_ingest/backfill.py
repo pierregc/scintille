@@ -15,6 +15,7 @@ from scintille_lake.locks import partition_key
 from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 
 from scintille_ingest.glm.ingest import IngestedFile
+from scintille_ingest.intensity import CURRENT
 from scintille_ingest.runtime.lake_commit import QUARANTINE_COLUMNS, to_ingest_log, to_silver
 from scintille_ingest.runtime.sources import Product
 from scintille_ingest.validate import quarantine_rows, validate
@@ -70,7 +71,7 @@ def backfill_partition(
     parse: Parser,
     catalog: Catalog,
     parser_version: str,
-    calibration_version: str = "none",
+    calibration_version: str = CURRENT.version,
     locker: Locker = no_lock,
     workers: int = 8,
     min_completeness: float = MIN_COMPLETENESS,

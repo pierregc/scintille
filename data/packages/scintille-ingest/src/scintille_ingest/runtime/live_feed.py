@@ -28,8 +28,6 @@ from scintille_contract.models import (
     SourceStatus,
 )
 
-from scintille_ingest.intensity import provisional_intensity
-
 from .metrics import Metrics
 from .ops import LiveStats
 
@@ -413,7 +411,7 @@ def columns(flashes: pl.DataFrame | None, start: datetime) -> dict[str, np.ndarr
         "lon": frame["lon"].to_numpy(),
         "area_km2": frame["area_km2"].to_numpy(),
         "duration_ms": frame["duration_ms"].to_numpy(),
-        "intensity": provisional_intensity(frame),
+        "intensity": frame["intensity"].fill_null(0).to_numpy(),
         "source": sources,
         "quality": quality,
     }

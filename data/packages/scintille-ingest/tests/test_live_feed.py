@@ -5,7 +5,6 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 import pytest
 from scintille_contract.chunk import decode
@@ -13,7 +12,6 @@ from scintille_contract.models import LiveManifest
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
-from scintille_ingest.intensity import provisional_intensity
 from scintille_ingest.runtime.live_feed import (
     CHUNK_HEADERS,
     MANIFEST_HEADERS,
@@ -335,13 +333,3 @@ def test_source_states_age_out() -> None:
     assert source_state(T0 - timedelta(seconds=90), T0) == "live"
     assert source_state(T0 - timedelta(minutes=5), T0) == "delayed"
     assert source_state(T0 - timedelta(minutes=11), T0) == "offline"
-
-
-def test_provisional_intensity_is_log_scaled_per_unit() -> None:
-    frame = pl.DataFrame(
-        {
-            "energy_raw": [10**-15.5, 10**-13.5, 10**-11.5, 100.0, 0.0],
-            "energy_unit": ["J", "J", "J", "mW m-2 sr-1", "J"],
-        }
-    )
-    assert np.allclose(provisional_intensity(frame), [0, 0.5, 1, 0.5, 0])

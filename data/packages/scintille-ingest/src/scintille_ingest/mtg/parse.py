@@ -62,7 +62,7 @@ def read_li_flashes(data: bytes) -> pl.DataFrame:
 def normalize_li_flashes(
     raw: pl.DataFrame, source: Source, product_file: str, ingest_time: datetime
 ) -> pl.DataFrame:
-    """Contract flash records (FLASH_SCHEMA); intensity stays null until it is normalized."""
+    """Contract flash records (FLASH_SCHEMA); intensity stays null until `with_intensity`."""
     ids = [flash_id(source, product_file, native) for native in raw["native_flash_id"]]
     frame = raw.select(
         pl.Series("flash_id", ids, dtype=pl.String),
