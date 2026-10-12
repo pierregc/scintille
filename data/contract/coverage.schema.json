@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:coverage",
+  "title": "CoverageMap",
+  "description": "live/coverage.geojson: the usable field of view of each source and the area no source sees (RFC 7946).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "schema_version",
+    "mask_version",
+    "features"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "FeatureCollection"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/SchemaVersion"
+    },
+    "mask_version": {
+      "description": "Version of the satellite list the footprints come from, as in ownership.geojson.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "features": {
+      "description": "One footprint per source of the ownership mask, in mask order, then the no coverage area.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CoverageFeature"
+      }
+    }
+  },
+  "$defs": {
+    "CoverageKind": {
+      "description": "What a coverage feature outlines.",
+      "type": "string",
+      "enum": [
+        "footprint",
+        "no-coverage"
+      ]
+    },
+    "CoverageProperties": {
+      "description": "Properties of a coverage feature; the source fields are null for the no coverage area.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "subpoint_lon",
+        "coverage_deg"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/CoverageKind"
+        },
+        "source": {
+          "description": "Source whose usable field of view this is.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subpoint_lon": {
+          "description": "Longitude of the sub-satellite point, degrees east.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage_deg": {
+          "description": "Great-circle radius of the field of view around the sub-satellite point, degrees.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "MultiPolygon": {
+      "description": "GeoJSON MultiPolygon: polygons of [lon, lat] rings, outer ring counterclockwise, holes clockwise, split at the antimeridian.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "MultiPolygon"
+        },
+        "coordinates": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "minItems": 4,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "CoverageFeature": {
+      "description": "One area of the coverage map.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "properties",
+        "geometry"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "Feature"
+        },
+        "properties": {
+          "$ref": "#/$defs/CoverageProperties"
+        },
+        "geometry": {
+          "$ref": "#/$defs/MultiPolygon"
+        }
+      }
+    }
+  }
+}

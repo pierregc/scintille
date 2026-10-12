@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.2.0"]
-SCHEMA_VERSION: Final = "2.2.0"
+SchemaVersion = Literal["2.3.0"]
+SCHEMA_VERSION: Final = "2.3.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -331,3 +331,78 @@ class OpsMetrics(BaseModel):
     sources: list[SourceMetrics] = Field(description="One entry per source, in Source order.")
     quality: QualityStatus
     catalog: CatalogUsage
+
+
+CoverageKind = Literal["footprint", "no-coverage"]
+COVERAGE_KIND_VALUES: Final[tuple[CoverageKind, ...]] = (
+    "footprint",
+    "no-coverage",
+)
+"""What a coverage feature outlines."""
+
+
+class CoverageProperties(BaseModel):
+    """Properties of a coverage feature; the source fields are null for the no coverage area."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: CoverageKind
+    source: Source | None = Field(description="Source whose usable field of view this is.")
+    subpoint_lon: float | None = Field(
+        description="Longitude of the sub-satellite point, degrees east."
+    )
+    coverage_deg: float | None = Field(
+        description=(
+            "Great-circle radius of the field of view around the sub-satellite point, degrees."
+        )
+    )
+
+
+class MultiPolygon(BaseModel):
+    """GeoJSON MultiPolygon: polygons of [lon, lat] rings, outer ring counterclockwise, holes
+    clockwise, split at the antimeridian.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["MultiPolygon"]
+    coordinates: list[
+        list[
+            Annotated[
+                list[Annotated[list[float], Field(min_length=2, max_length=2)]], Field(min_length=4)
+            ]
+        ]
+    ]
+
+
+class CoverageFeature(BaseModel):
+    """One area of the coverage map."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["Feature"]
+    properties: CoverageProperties
+    geometry: MultiPolygon
+
+
+class CoverageMap(BaseModel):
+    """live/coverage.geojson: the usable field of view of each source and the area no source sees
+    (RFC 7946).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["FeatureCollection"]
+    schema_version: SchemaVersion
+    mask_version: int = Field(
+        ge=1,
+        description=(
+            "Version of the satellite list the footprints come from, as in ownership.geojson."
+        ),
+    )
+    features: list[CoverageFeature] = Field(
+        description=(
+            "One footprint per source of the ownership mask, in mask order, then the no "
+            "coverage area."
+        )
+    )

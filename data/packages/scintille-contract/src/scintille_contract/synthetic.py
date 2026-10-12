@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from scintille_contract import chunk
+from scintille_contract import chunk, coverage
 from scintille_contract.models import (
     QUALITY_FLAG_VALUES,
     SCHEMA_VERSION,
@@ -226,7 +226,7 @@ def manifest(flashes: Flashes, refs: list[ChunkRef]) -> LiveManifest:
 
 
 def write_feed(out: Path) -> None:
-    """Write manifest.json and chunks/ for the fixture window."""
+    """Write manifest.json, coverage.geojson and chunks/ for the fixture window."""
     flashes = generate()
     (out / "chunks").mkdir(parents=True, exist_ok=True)
     for stale in (out / "chunks").glob("*.bin.gz"):
@@ -251,5 +251,7 @@ def write_feed(out: Path) -> None:
         )
     document = manifest(flashes, refs).model_dump(mode="json")
     (out / "manifest.json").write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    coverage_map = json.dumps(coverage.geojson(), separators=(",", ":"))
+    (out / "coverage.geojson").write_text(coverage_map + "\n", encoding="utf-8")
     flags = ", ".join(QUALITY_FLAG_VALUES)
     print(f"wrote {len(refs)} chunks, {len(flashes.event)} flashes (quality bits: {flags})")

@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scintille_contract import codegen, compat, ownership
+from scintille_contract import codegen, compat, coverage, ownership
 from scintille_contract.schema import SchemaSet, from_files, load_dir
 
 CONTRACT_DIR = Path("data/contract")
@@ -14,6 +14,7 @@ PYTHON_OUT = Path("data/packages/scintille-contract/src/scintille_contract/model
 TS_OUT = Path("web/src/contract/types.ts")
 DOC = Path("docs/data-contract.md")
 OWNERSHIP_OUT = Path("data/contract/ownership.geojson")
+COVERAGE_OUT = Path("data/contract/coverage.geojson")
 
 
 def _git(*args: str) -> str:
@@ -31,6 +32,7 @@ def expected_outputs(root: Path) -> dict[Path, str]:
         TS_OUT: codegen.typescript_module(schemas),
         DOC: codegen.render_doc((root / DOC).read_text(encoding="utf-8"), schemas),
         OWNERSHIP_OUT: json.dumps(ownership.geojson(), separators=(",", ":")) + "\n",
+        COVERAGE_OUT: json.dumps(coverage.geojson(), separators=(",", ":")) + "\n",
     }
 
 
@@ -84,7 +86,9 @@ def check(root: Path, base: str | None) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scintille-contract")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("generate", help="regenerate models, types, doc reference, ownership mask")
+    commands.add_parser(
+        "generate", help="regenerate models, types, doc reference, ownership and coverage maps"
+    )
     check_parser = commands.add_parser("check", help="fail if generated code is stale")
     check_parser.add_argument("--base", help="git ref to compare schemas against for SemVer")
     fixtures_parser = commands.add_parser("fixtures", help="write the synthetic live feed")
