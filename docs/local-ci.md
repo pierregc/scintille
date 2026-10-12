@@ -12,11 +12,19 @@ Without GitHub Actions, run the same checks and deploys from a Mac with `make` (
 | `make smoke` | `images` smoke job | Docker, several GB |
 | `make rollback` | `images` rollback job | Docker |
 | `make render` | `render` workflow | Playwright (installed by the script) |
+| `make preview` | `web` preview job | `wrangler login`, `gh` |
 
 `make data` compares the contract with `origin/main`; use `BASE=<ref>` to change it.
 
 If Docker hangs while pulling, a Keychain prompt is waiting for you. Or point `DOCKER_CONFIG` at a
 directory containing `{}` as `config.json`.
+
+## Preview
+
+Every PR touching `web/` gets a Preview: push the branch, open the PR, then run `make preview`. It
+deploys `pr-<n>` on workers.dev (noindex, bound to `scintille-live-preview`) and posts or updates the
+URL on the PR. Run it again after each push. `PR=<n>` overrides the PR found from the branch;
+`make preview-delete PR=<n>` removes it once the PR is closed.
 
 ## Deploy
 
