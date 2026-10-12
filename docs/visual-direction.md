@@ -68,7 +68,7 @@ These come from the mockup and are expected to change after real use:
 - Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default. Flash display and flicker are timed in scene
   time, so at 60× and above a flash lasts a frame or two; they need wall-time (or speed-scaled) timing before
   60× ships as the default.
-- Afterglow: **0, 1, 5, 30 minutes**, 5 by default; 0 shows the flash alone for 3 s.
+- Afterglow: **2 seconds, 1 minute, 30 minutes**, 2 seconds by default; 2 seconds shows the flash alone.
 - Timeline: one UTC day, ticks every 30 minutes, labels every 6 hours.
 - No flash counter and no activity histogram.
 

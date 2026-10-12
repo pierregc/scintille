@@ -383,6 +383,7 @@ import Version from './Version.astro';
 		border-bottom-color: var(--soft);
 	}
 	.opts :global(small) {
+		margin-left: 3px;
 		color: var(--dim);
 		font: 300 9.5px/1 var(--mono);
 		letter-spacing: 0.14em;
@@ -678,7 +679,7 @@ import Version from './Version.astro';
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { DISPLAY_MINUTES } from '../globe/lightning/display';
+	import { DISPLAY_MINUTES, FLASH_ONLY_MS } from '../globe/lightning/display';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
 	import { cloudCaption, formatDate, formatTime, zoneLabel } from './hud/format';
 
@@ -766,8 +767,11 @@ import Version from './Version.astro';
 			const button = document.createElement('button');
 			button.type = 'button';
 			button.setAttribute('role', 'radio');
-			button.setAttribute('aria-label', minutes === 0 ? 'None' : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
-			button.textContent = String(minutes);
+			const seconds = FLASH_ONLY_MS / 1000;
+			button.setAttribute('aria-label', minutes === 0 ? `${seconds} seconds` : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+			const unit = document.createElement('small');
+			unit.textContent = minutes === 0 ? 'S' : 'MIN';
+			button.append(String(minutes === 0 ? seconds : minutes), unit);
 			button.addEventListener('click', () => chooseDisplay(index));
 			button.addEventListener('keydown', (event) => {
 				const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
@@ -778,10 +782,6 @@ import Version from './Version.astro';
 			display?.append(button);
 			return { minutes, button };
 		});
-		const unit = document.createElement('small');
-		unit.setAttribute('aria-hidden', 'true');
-		unit.textContent = 'MIN';
-		display?.append(unit);
 		tick();
 		setInterval(tick, 250);
 

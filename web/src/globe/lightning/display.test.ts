@@ -39,10 +39,10 @@ describe('display duration preference', () => {
 		expect(readDisplayMinutes(memoryStorage())).toBe(DEFAULT_DISPLAY_MINUTES);
 	});
 
-	it('round-trips the flash only choice', () => {
+	it('round-trips the one minute choice', () => {
 		const storage = memoryStorage();
-		writeDisplayMinutes(storage, 0);
-		expect(readDisplayMinutes(storage)).toBe(0);
+		writeDisplayMinutes(storage, 1);
+		expect(readDisplayMinutes(storage)).toBe(1);
 	});
 
 	it('round-trips a saved choice', () => {
@@ -56,7 +56,7 @@ describe('display duration preference', () => {
 		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: '7' }))).toBe(DEFAULT_DISPLAY_MINUTES);
 		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: 'soon' }))).toBe(DEFAULT_DISPLAY_MINUTES);
 		expect(readDisplayMinutes(throwing)).toBe(DEFAULT_DISPLAY_MINUTES);
-		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: '60' }))).toBe(DEFAULT_DISPLAY_MINUTES);
+		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: '5' }))).toBe(DEFAULT_DISPLAY_MINUTES);
 		expect(() => writeDisplayMinutes(throwing, 30)).not.toThrow();
 	});
 
