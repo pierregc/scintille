@@ -1,4 +1,4 @@
-"""Command line: `scintille-ingest glm --once`, `live`, `lake-writer`, `live-probe` and `clouds`."""
+"""Command line: `glm --once`, `mtg --once`, `live`, `lake-writer`, `live-probe` and `clouds`."""
 
 import argparse
 import asyncio
@@ -9,7 +9,7 @@ import statistics
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import polars as pl
@@ -24,6 +24,8 @@ from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
+from scintille_ingest.mtg import discovery as mtg_discovery
+from scintille_ingest.mtg.ingest import ingest_li_file
 from scintille_ingest.ownership import outside_owner_zone
 from scintille_ingest.runtime import health
 from scintille_ingest.runtime.heartbeat import heartbeat_from_env
@@ -36,7 +38,7 @@ from scintille_ingest.runtime.metrics import Metrics
 from scintille_ingest.runtime.ops import OpsPublisher, PostgresOps
 from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
-from scintille_ingest.runtime.sources import GlmSource
+from scintille_ingest.runtime.sources import GlmSource, MtgSource, Source
 from scintille_ingest.runtime.spool import Spool
 from scintille_ingest.runtime.state import PostgresState
 
@@ -53,6 +55,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     glm.add_argument("--east-bucket", help="override the GOES-East bucket")
     glm.add_argument("--west-bucket", help="override the GOES-West bucket")
     glm.add_argument("--rows", type=int, default=5, help="flashes to print per file")
+    mtg = commands.add_parser("mtg", help="ingest EUMETSAT MTG LI L2 LFL chunks")
+    mtg.add_argument("--once", action="store_true", help="ingest the latest chunk")
+    mtg.add_argument("--rows", type=int, default=5, help="flashes to print")
+    mtg.add_argument("--save", type=Path, help="also write the chunk file into this directory")
     live = commands.add_parser("live", help="run ingest-live: sources to live feed and spool")
     live.add_argument(
         "--spool", type=Path, default=Path(os.environ.get("SCINTILLE_SPOOL_DIR", "spool"))
@@ -82,6 +88,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if not args.once:
         parser.error("only --once is supported for now")
+    if args.command == "mtg":
+        store = mtg_discovery.store_from_env()
+        if store is None:
+            log.error("SCINTILLE_EUMETSAT_CONSUMER_KEY and _SECRET must be set")
+            return 2
+        return mtg_once(store, args.rows, args.save)
     buckets = {"glm-east": args.east_bucket, "glm-west": args.west_bucket}
     satellites = [
         replace(sat, bucket=buckets[sat.source] or sat.bucket) for sat in satellites_from_env()
@@ -101,8 +113,13 @@ async def run_live(spool_dir: Path, port: int) -> int:
     feed = live_feed_from_env(metrics, spool_dir / "live-outbox")
     spool = Spool(spool_dir)
     ops = OpsPublisher(feed.store, feed, spool, PostgresOps(dsn), metrics=metrics) if feed else None
+    sources: list[Source] = [GlmSource(s) for s in satellites_from_env()]
+    if eumetsat := mtg_discovery.store_from_env():
+        sources.append(MtgSource(eumetsat))
+    else:
+        log.warning("EUMETSAT credentials are not set: no MTG LI")
     service = IngestLive(
-        [GlmSource(s) for s in satellites_from_env()],
+        sources,
         PostgresState(dsn),
         spool,
         publisher=feed,
@@ -233,7 +250,7 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
         lag = (datetime.now(UTC) - product.start).total_seconds()
         lags.append(lag)
         failed |= ingested.log.status != "ok"
-        _print_summary(satellite, ingested, rows)
+        _print_summary(satellite.source, f"s3://{satellite.bucket}", ingested, rows)
         log.info("%s ingest_log %s", satellite.source, ingested.log)
         log.info("%s lag from product start to parse completion: %.1f s", satellite.source, lag)
     if lags:
@@ -241,12 +258,43 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
     return 1 if failed else 0
 
 
-def _print_summary(satellite: Satellite, ingested: IngestedFile, rows: int) -> None:
+def mtg_once(store: mtg_discovery.DataStore, rows: int, save: Path | None = None) -> int:
+    """Latest chunk of the last hour, with the latencies #32 asks to measure."""
+    now = datetime.now(UTC)
+    listed = store.search(now - timedelta(hours=1), now)
+    found = mtg_discovery.chunks(listed)
+    if not found:
+        log.warning("mtg-li: no LFL chunk in the Data Store for the last hour")
+        return 1
+    chunk = found[-1]
+    data = store.fetch(chunk.product_id, chunk.name)
+    received = datetime.now(UTC)
+    if save:
+        save.mkdir(parents=True, exist_ok=True)
+        (save / chunk.name).write_bytes(data)
+        log.info("mtg-li chunk saved to %s", save / chunk.name)
+    ingested = ingest_li_file(data, chunk.key, received)
+    _print_summary("mtg-li", "EUMETSAT Data Store", ingested, rows)
+    log.info("mtg-li ingest_log %s", ingested.log)
+    published = next(p.published for p in listed if p.product_id == chunk.product_id)
+    if published:
+        log.info(
+            "mtg-li Data Store publication after chunk end: %.1f s",
+            (published - chunk.end).total_seconds(),
+        )
+    log.info("mtg-li received after chunk end: %.1f s", (received - chunk.end).total_seconds())
+    newest = ingested.flashes["event_time"].max()
+    if isinstance(newest, datetime):
+        log.info("mtg-li received after newest flash: %.1f s", (received - newest).total_seconds())
+    return 0 if ingested.log.status == "ok" else 1
+
+
+def _print_summary(source: str, origin: str, ingested: IngestedFile, rows: int) -> None:
     flashes, entry = ingested.flashes, ingested.log
     degraded = flashes.filter(pl.col("quality").list.contains("degraded")).height
     outside = flashes.filter(outside_owner_zone()).height
     print(
-        f"{satellite.source} ({entry.satellite}, s3://{satellite.bucket}) {entry.key}\n"
+        f"{source} ({entry.satellite}, {origin}) {entry.key}\n"
         f"  {entry.row_count} normalized flashes, {degraded} degraded, "
         f"{outside} outside owner zone, status {entry.status}, "
         f"parsed in {entry.parse_duration_ms:.1f} ms"
