@@ -100,7 +100,6 @@ export function createLightning(
 			glowScale: { value: 4 },
 			minPixels: { value: 5 },
 			viewportHeight: { value: 1 },
-			intensityFloor: { value: 0.15 },
 			flicker: { value: 1 },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
@@ -164,7 +163,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
-	const { time, duration, flicker, intensityFloor } = flashes.uniforms;
+	const { time, duration, flicker } = flashes.uniforms;
 	const scene = new Scene();
 	const camera = new OrthographicCamera();
 	const materials = [0, 1].map(
@@ -176,7 +175,6 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 					time,
 					duration,
 					flicker,
-					intensityFloor,
 					spreadKm: { value: 150 },
 					wrap: { value: wrap },
 					mapSize: { value: new Vector2(width, width / 2) },

@@ -1,0 +1,128 @@
+---
+import '@fontsource/ibm-plex-sans/latin-200.css';
+import '@fontsource/ibm-plex-sans/latin-300.css';
+import '@fontsource/ibm-plex-mono/latin-300.css';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { breadcrumbs, website } from '../seo/jsonld';
+---
+
+<BaseLayout
+	title="Methodology · Scintille"
+	description="What the dots on Scintille's globe are, where they come from, and what the globe cannot show."
+	jsonLd={[
+		website(),
+		breadcrumbs([
+			{ name: 'Scintille', path: '/' },
+			{ name: 'Methodology', path: '/methodology/' },
+		]),
+	]}
+>
+	<main class="method">
+		<a class="name" href="/">Scintille</a>
+		<h1>Methodology</h1>
+		<p class="lead">Lightning as satellites measure it, with its gaps.</p>
+
+		<h2>What you see</h2>
+		<p>
+			One dot is one flash, seen from orbit by its light: inside a cloud, between clouds or down to the ground.
+		</p>
+
+		<h2>Sources</h2>
+		<ul>
+			<li>NOAA GOES-East and GOES-West lightning mappers: the Americas and nearby oceans.</li>
+			<li>EUMETSAT MTG Lightning Imager: Europe, Africa and the Atlantic, being connected.</li>
+		</ul>
+		<p>Where two satellites overlap, each flash is drawn once.</p>
+
+		<h2>Coverage</h2>
+		<p>
+			Asia, Oceania and the poles are not covered, and detection weakens towards the edge of each view. An empty
+			region is not a region without lightning.
+		</p>
+
+		<h2>Brightness</h2>
+		<p>Follows the light energy measured for each flash, on a relative scale that is still provisional.</p>
+
+		<h2>Delay</h2>
+		<p>Flashes aim to appear within two minutes. The live delay is on the <a href="/status/">status page</a>.</p>
+
+		<h2>Limits</h2>
+		<ul>
+			<li>Satellites miss some flashes.</li>
+			<li>A few faulty detector pixels can show a dot that keeps flashing in place.</li>
+			<li>Clouds are hourly and lag the lightning.</li>
+			<li>Thunder timing is stylized: it only says near or far.</li>
+		</ul>
+
+		<h2>Credits</h2>
+		<p class="credits">
+			GLM data courtesy of NOAA.<br />
+			Contains modified EUMETSAT Meteosat data 2026.<br />
+			Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).<br />
+			Earth imagery: NASA Earth Observatory.
+		</p>
+	</main>
+</BaseLayout>
+
+<style>
+	.method {
+		--ink: rgb(238 242 247 / 0.9);
+		--soft: rgb(238 242 247 / 0.62);
+		--dim: rgb(238 242 247 / 0.4);
+		--hair: rgb(238 242 247 / 0.14);
+		--mono: 'IBM Plex Mono', ui-monospace, monospace;
+		--sans: 'IBM Plex Sans', system-ui, sans-serif;
+		max-width: 32rem;
+		margin: 0 auto;
+		padding: clamp(24px, 6vw, 72px) 16px 96px;
+		color: var(--soft);
+		font: 300 15px/1.75 var(--sans);
+		-webkit-font-smoothing: antialiased;
+	}
+	.name {
+		color: var(--ink);
+		font: 200 18px/1 var(--sans);
+		letter-spacing: 0.5em;
+		text-transform: uppercase;
+		text-decoration: none;
+	}
+	h1 {
+		margin: 56px 0 0;
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+	}
+	.lead {
+		margin: 16px 0 0;
+		color: var(--ink);
+		font: 200 22px/1.5 var(--sans);
+	}
+	h2 {
+		margin: 48px 0 10px;
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+	}
+	p,
+	ul {
+		margin: 0 0 10px;
+	}
+	ul {
+		padding-left: 14px;
+	}
+	a {
+		color: var(--ink);
+		text-decoration-color: var(--hair);
+		text-underline-offset: 4px;
+	}
+	.credits {
+		color: var(--dim);
+		font: 300 11px/1.8 var(--mono);
+	}
+	:focus-visible {
+		outline: 1px solid var(--soft);
+		outline-offset: 5px;
+	}
+</style>

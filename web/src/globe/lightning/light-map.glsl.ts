@@ -1,3 +1,4 @@
+import { intensityGlsl } from './intensity';
 import { flashProfileGlsl } from './profile';
 
 /** Splats each flash as a soft point sprite in equirectangular UV space, matching SphereGeometry UVs. */
@@ -8,7 +9,6 @@ attribute vec3 flashShape;
 uniform float time;
 uniform float duration;
 uniform float flicker;
-uniform float intensityFloor;
 uniform float spreadKm;
 uniform float wrap;
 uniform vec2 mapSize;
@@ -17,6 +17,7 @@ varying vec2 vScale;
 varying float vBrightness;
 
 ${flashProfileGlsl}
+${intensityGlsl}
 void main() {
 	float age = time - flash.w;
 	if (age < 0.0 || age > duration) {
@@ -32,7 +33,7 @@ void main() {
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2) {
 		float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-		brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * mix(intensityFloor, 1.0, flashShape.x);
+		brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
