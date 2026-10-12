@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git config commit.gpgsign false && git config user.name 'Pierre Gunet-Caplain' && git config user.email '72442115+pierregc@users.noreply.github.com'"
+          }
+        ]
+      }
+    ]
+  }
+}
