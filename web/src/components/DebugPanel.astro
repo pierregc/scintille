@@ -8,7 +8,7 @@
 			</thead>
 			<tbody data-debug-sources></tbody>
 		</table>
-		<p class="head"><span>UTC</span><span>Src</span><span>Lat</span><span>Lon</span><span>Int</span><span>km²</span><span>ms</span><span>Flags</span></p>
+		<p class="head"><span>UTC</span><span>Src</span><span>Int</span><span>km²</span><span>ms</span><span>Flags</span></p>
 		<ol class="flashes" data-debug-flashes></ol>
 	</div>
 </details>
@@ -18,7 +18,7 @@
 		position: fixed;
 		top: calc(var(--gut) + 104px);
 		left: var(--gut);
-		width: min(24rem, calc(100vw - 2 * var(--gut)));
+		width: min(20rem, calc(100vw - 2 * var(--gut)));
 		color: var(--soft);
 		font: 300 10px/1.5 var(--mono);
 		font-variant-numeric: tabular-nums;
@@ -94,7 +94,7 @@
 	.head,
 	.flashes :global(li) {
 		display: grid;
-		grid-template-columns: 12ch 8ch 6ch 7ch 4ch 5ch 4ch 1fr;
+		grid-template-columns: 8ch 6ch 4ch 5ch 4ch 1fr;
 		gap: 1ch;
 		white-space: nowrap;
 	}
@@ -104,8 +104,8 @@
 		color: var(--dim);
 		border-bottom: 1px solid var(--hair);
 	}
-	.head span:nth-child(n + 3):nth-child(-n + 7),
-	.flashes :global(li span:nth-child(n + 3):nth-child(-n + 7)) {
+	.head span:nth-child(n + 3):nth-child(-n + 5),
+	.flashes :global(li span:nth-child(n + 3):nth-child(-n + 5)) {
 		text-align: right;
 	}
 	.flashes {
@@ -146,11 +146,10 @@
 		import {
 		debugEnabled,
 		type FlashRow,
-		formatCoord,
 		formatDuration,
 		playedFlashes,
 		qualityFlags,
-		sourceLabel,
+		shortSourceLabel,
 		sourceStats,
 	} from './debug/stats';
 
@@ -218,10 +217,8 @@
 			const li = document.createElement('li');
 			if (fresh) li.className = 'new';
 			for (const text of [
-				utc(f.time),
-				sourceLabel(f.source),
-				formatCoord(f.lat, 'N', 'S'),
-				formatCoord(f.lon, 'E', 'W'),
+				utc(f.time).slice(0, 8),
+				shortSourceLabel(f.source),
 				f.intensity.toFixed(2),
 				String(Math.round(f.areaKm2)),
 				String(Math.round(f.durationMs)),

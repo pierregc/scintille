@@ -3,7 +3,7 @@ import { decodeChunk } from '../../globe/live/decode';
 import { NO_DELAY, SourceDelays } from '../../globe/live/delay';
 import { FlashRing } from '../../globe/live/ring';
 import { encodeChunk, type FakeFlash } from '../../globe/live/testing';
-import { debugEnabled, formatCoord, formatDuration, playedFlashes, qualityFlags, sourceStats } from './stats';
+import { debugEnabled, formatDuration, playedFlashes, qualityFlags, shortSourceLabel, sourceStats } from './stats';
 
 const START = 1_800_000_000;
 const T0 = START * 1000;
@@ -34,8 +34,8 @@ describe('sourceStats', () => {
 			{ offsetMs: 61_000, lat: 40, lon: 5, source: 7 },
 		]);
 		const stats = sourceStats(r, delays, T0 + 70_000);
-		expect(stats.map((s) => s.label)).toEqual(['GLM East', 'GLM West', 'MTG LI', '#7']);
-		expect(stats[0]).toEqual({ label: 'GLM East', held: 2, lastMinute: 1, pending: 0 });
+		expect(stats.map((s) => s.label)).toEqual(['GLM E', 'GLM W', 'MTG LI', '#7']);
+		expect(stats[0]).toEqual({ label: 'GLM E', held: 2, lastMinute: 1, pending: 0 });
 		expect(stats[1]).toMatchObject({ held: 0, lastMinute: 0, pending: 0 });
 		expect(stats[2]).toMatchObject({ held: 1, lastMinute: 0, pending: 1 });
 		expect(stats[3]).toMatchObject({ held: 1, pending: 1 });
@@ -65,8 +65,8 @@ describe('format', () => {
 		expect(qualityFlags(0b101)).toEqual(['degraded', 'overlap']);
 	});
 
-	it('writes coordinates and durations', () => {
-		expect(formatCoord(-12.34, 'N', 'S')).toBe('12.3°S');
+	it('writes short source labels and durations', () => {
+		expect([0, 1, 2, 7].map(shortSourceLabel)).toEqual(['GLM E', 'GLM W', 'MTG LI', '#7']);
 		expect(formatDuration(null)).toBe('-');
 		expect(formatDuration(850)).toBe('850ms');
 		expect(formatDuration(12_400)).toBe('12.4s');

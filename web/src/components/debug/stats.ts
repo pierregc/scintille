@@ -1,6 +1,5 @@
 import { QUALITY_FLAG_VALUES, SOURCE_VALUES } from '../../contract/types';
 import type { SourceDelays } from '../../globe/live/delay';
-import { SOURCE_LABELS } from '../../globe/live/freshness';
 import type { FlashRing } from '../../globe/live/ring';
 
 /** Whether to show the debug panel: on dev and PR Previews, or with `?debug`; `?debug=0` hides it. */
@@ -10,9 +9,10 @@ export function debugEnabled(search: string, devOrPreview: boolean): boolean {
 	return param !== '0' && param !== 'false';
 }
 
-export function sourceLabel(index: number): string {
-	const source = SOURCE_VALUES[index];
-	return source ? SOURCE_LABELS[source] : `#${index}`;
+const SHORT_LABELS = ['GLM E', 'GLM W', 'MTG LI'];
+
+export function shortSourceLabel(index: number): string {
+	return SHORT_LABELS[index] ?? `#${index}`;
 }
 
 export interface SourceStats {
@@ -43,7 +43,7 @@ export function sourceStats(ring: FlashRing, delays: SourceDelays, now: number):
 	return [...indices]
 		.sort((a, b) => a - b)
 		.map((index) => ({
-			label: sourceLabel(index),
+			label: shortSourceLabel(index),
 			held: held.get(index) ?? 0,
 			lastMinute: lastMinute.get(index) ?? 0,
 			pending: pending.get(index) ?? 0,
@@ -94,11 +94,6 @@ export function playedFlashes(ring: FlashRing, delays: SourceDelays, now: number
 /** Names of the quality bits set in `bits`. */
 export function qualityFlags(bits: number): string[] {
 	return QUALITY_FLAG_VALUES.filter((_, i) => bits & (1 << i));
-}
-
-/** `12.3°N`, `45.0°W`. */
-export function formatCoord(value: number, positive: string, negative: string): string {
-	return `${Math.abs(value).toFixed(1)}°${value < 0 ? negative : positive}`;
 }
 
 /** `850ms`, `12.4s`, `3.2m`, `5.0h`, `-` when unknown. */
