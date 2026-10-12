@@ -7,6 +7,7 @@ from datetime import datetime
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import empty_flashes
 from scintille_ingest.ingest_log import IngestLogRecord
+from scintille_ingest.intensity import with_intensity
 from scintille_ingest.mtg.parse import normalize_li_flashes, read_li_flashes
 from scintille_ingest.mtg.products import parse_key
 from scintille_ingest.ownership import flag_outside_owner
@@ -18,7 +19,8 @@ def ingest_li_file(data: bytes, key: str, received_at: datetime) -> IngestedFile
     error: str | None = None
     try:
         raw = read_li_flashes(data)
-        flashes = flag_outside_owner(normalize_li_flashes(raw, "mtg-li", chunk.name, received_at))
+        flashes = normalize_li_flashes(raw, "mtg-li", chunk.name, received_at)
+        flashes = with_intensity(flag_outside_owner(flashes))
     except (AttributeError, OSError, KeyError, ValueError) as exc:
         flashes, error = empty_flashes(), f"{type(exc).__name__}: {exc}"
     log = IngestLogRecord(

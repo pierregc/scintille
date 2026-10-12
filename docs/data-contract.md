@@ -75,7 +75,7 @@ behind the Americas. Lower latency needs another channel, such as EUMETCast (#20
   `ingest_time`.
 - **Energy** is kept as reported (`energy_raw` + `energy_unit`), because GLM and LI do not measure
   the same quantity. `intensity` (0 to 1) is the normalized value the globe renders; its mapping is
-  defined in #33.
+  in the [methodology](methodology.md#flash-intensity).
 - **Quality** lists caveats: `degraded` (flagged by the source product), `coverage-edge` (close to
   the edge of the field of view, where detection efficiency drops), `overlap` (seen where two
   instruments overlap, so it may be detected twice), `outside-owner-zone` (another instrument has
