@@ -180,4 +180,4 @@ so its value never shows in the UI or the logs. Unset variables fall back to the
 
 `uv run pytest` materializes the gold assets and the feed in-process on a SQLite catalog and an
 in-memory bucket. `uv run pytest -m lake` materializes them against the local Lakekeeper and S3
-store, probes the DuckDB write path and tests the Postgres lock; the `lake` CI job runs both.
+store, probes the DuckDB write path and tests the Postgres lock; the `lake` job of the manual `images` workflow runs the second.
