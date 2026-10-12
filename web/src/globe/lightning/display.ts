@@ -7,7 +7,7 @@ export const DISPLAY_KEY = 'scintille.display.minutes';
 
 const MINUTE_MS = 60_000;
 /** How long a flash lasts without afterglow: its flicker, then a short fade. */
-export const FLASH_ONLY_MS = 2_000;
+export const FLASH_ONLY_MS = 1_000;
 
 export const displayMs = (minutes: number): number => (minutes === 0 ? FLASH_ONLY_MS : minutes * MINUTE_MS);
 

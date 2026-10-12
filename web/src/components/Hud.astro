@@ -768,7 +768,7 @@ import Version from './Version.astro';
 			button.type = 'button';
 			button.setAttribute('role', 'radio');
 			const seconds = FLASH_ONLY_MS / 1000;
-			button.setAttribute('aria-label', minutes === 0 ? `${seconds} seconds` : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+			button.setAttribute('aria-label', minutes === 0 ? `${seconds} ${seconds === 1 ? 'second' : 'seconds'}` : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
 			const unit = document.createElement('small');
 			unit.textContent = minutes === 0 ? 'S' : 'MIN';
 			button.append(String(minutes === 0 ? seconds : minutes), unit);
