@@ -5,6 +5,8 @@ Actions ([ADR 0005](adr/0005-hosting-and-dynamic-pages.md)). Every page is prere
 Worker only serves static assets; the R2 binding is ready for the on-demand storm and region pages
 (#88, #90).
 
+For the map of every workflow, check and switch, start with [CI/CD](ci-cd.md).
+
 ## Configuration
 
 `web/wrangler.jsonc`, read by `@astrojs/cloudflare` at build time:
