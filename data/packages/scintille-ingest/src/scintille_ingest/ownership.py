@@ -15,7 +15,7 @@ def flag_outside_owner(flashes: pl.DataFrame) -> pl.DataFrame:
     """Adds the flag where the mask gives the point to another source; no owner, no flag."""
     names = np.array([s.source for s in SATELLITES] + [None], dtype=object)
     index = owner_index(flashes["lat"].to_numpy(), flashes["lon"].to_numpy())
-    owner = pl.Series(names[index], dtype=pl.String)
+    owner = pl.Series(names[index].tolist(), dtype=pl.String)
     outside = owner.is_not_null() & (owner != flashes["source"].cast(pl.String))
     return flashes.with_columns(
         pl.when(outside)
