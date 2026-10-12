@@ -45,7 +45,9 @@ curl https://scintille.app/version.json   # {"commit":"5c470ef…","pr":null,"bu
 ```
 
 On `main`, the commit is the merge commit GitHub shows on the merged PR. After `wrangler deploy`, the
-`deploy` job waits until `version.json` reports the commit it deployed and fails otherwise.
+`deploy` job waits until `version.json` reports the commit it deployed and fails otherwise. This check
+only runs when the repository variable `SITE_PUBLIC` is `true`: until launch, the Access gate (#142)
+answers anonymous requests with its login page.
 
 ## Previews
 
@@ -72,6 +74,7 @@ still bind production: review any change to `web/wrangler.jsonc` and `.github/wo
 | `CLOUDFLARE_API_TOKEN` | Actions secret | Account-owned token: Workers Scripts Edit, Workers R2 Storage Read ([secrets](secrets.md)) |
 | `CLOUDFLARE_ACCOUNT_ID` | Actions secret | Passed to every Wrangler call, so Wrangler never calls user-only endpoints |
 | `DEPLOY_ENABLED` | Actions variable | `true` turns on the `deploy`, `preview` and `preview-cleanup` jobs |
+| `SITE_PUBLIC` | Actions variable | `true` turns on the post-deploy version check; set it when the Access gate is removed (#142) |
 | `CF_WEB_ANALYTICS_TOKEN` | Actions variable | Public Cloudflare Web Analytics site token, injected in production builds only; unset means no beacon |
 
 `DEPLOY_ENABLED` stays unset until the buckets exist: a deploy with an R2 binding to a missing bucket

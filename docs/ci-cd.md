@@ -62,6 +62,8 @@ The three other jobs need Cloudflare and only run when the repository variable `
 - **`deploy`** (push to `main` or a manual run on `main`): rebuilds with the production-only
   variables (Web Analytics token), runs `wrangler deploy --message <sha>`, then polls
   `https://scintille.app/version.json` until it reports the commit just deployed (up to 5 minutes).
+  That last check only runs when `SITE_PUBLIC` is `true`, since the pre-launch Access gate hides
+  the site from CI.
   Deploys are serialized by the `web-deploy-production` concurrency group and never cancelled.
 
 To redeploy `main` without a change: Actions > web > Run workflow, or
@@ -153,6 +155,7 @@ fails the job. It keeps the last five releases. Settings and secrets of the serv
 | Name | Kind | Used by | Effect |
 |---|---|---|---|
 | `DEPLOY_ENABLED` | Variable | `web` | `true` turns on `deploy`, `preview` and `preview-cleanup` |
+| `SITE_PUBLIC` | Variable | `web` | `true` turns on the post-deploy version check (after #142) |
 | `VPS_DEPLOY` | Variable | `images` | `true` turns on the VPS `deploy` job |
 | `VPS_HOST` | Variable | `images` | VPS address |
 | `CF_WEB_ANALYTICS_TOKEN` | Variable | `web` | Public Web Analytics token, production builds only |
@@ -209,7 +212,6 @@ it.
 
 Found during the CI/CD review of October 2026, each tracked in its own ticket:
 
-- #186: the post-deploy version check fails behind the pre-launch Access gate.
 - #187: Dagster webserver and daemon race to create their storage on a fresh Postgres (flaky
   `smoke`).
 - #188: merged commits on `main` can skip the `data` and `secrets` checks, and the VPS deploy does
