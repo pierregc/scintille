@@ -10,9 +10,14 @@ speed compresses them.
    time). It holds one pulse per 150 ms, from 1 to 4. Each pulse rises in 4 ms and decays with a 40 ms time
    constant; each later pulse is 0.7× the previous one. Pulses after the first are jittered per flash, so
    neighbouring flashes do not blink in step.
-2. **Afterglow.** A dim glow, at most 18 % of the first pulse, rises over the flicker phase and fades as
-   `(1 − t)²` until the end of the display duration, chosen in the HUD ("Afterglow": 1, 5, 15, 30 or
-   60 minutes, 5 by default, saved in `localStorage`).
+2. **Afterglow.** A dim glow rises over the flicker phase, then decays exponentially with a time constant
+   of a quarter of the display duration, shifted to reach exactly zero at its end. The eye reads brightness
+   on a log scale, so this looks like a steady fade. The display duration is chosen in the HUD
+   ("Afterglow": 1, 5, 15, 30 or 60 minutes, 5 by default, saved in `localStorage`).
+
+   Its level is 12 % of the first pulse up to 5 minutes, then `0.12 × (5 / minutes)^0.75`: a longer window
+   keeps more flashes on screen, so each one glows dimmer. Light on screen grows less than 2× from 5 to
+   60 minutes, instead of 12×, and storms stay distinct.
 
 The result is the maximum of the two. A short flash is a single blink with a faint tail; a long one
 stutters three or four times before settling into the glow.
@@ -20,4 +25,4 @@ stutters three or four times before settling into the glow.
 ## Reduced motion
 
 With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms (at most 4 %
-of the display duration) and decaying as `(1 − t)²`.
+of the display duration), falling with a 250 ms time constant, then following the same afterglow.

@@ -9,8 +9,15 @@ export const PROFILE = {
 	/** Pulse decay constant, seconds; each later pulse is `pulseFade` times the previous one. */
 	pulseTau: 0.04,
 	pulseFade: 0.7,
-	/** Afterglow level relative to the first pulse. */
-	afterglow: 0.18,
+	/** Afterglow level relative to the first pulse, for display windows up to `glowRef` seconds. */
+	afterglow: 0.12,
+	/** Longer windows dim the afterglow as `(glowRef / display) ^ glowScale`, so more flashes on screen stay readable. */
+	glowRef: 300,
+	glowScale: 0.75,
+	/** Afterglow decay time constant, as a fraction of the display window. */
+	glowTau: 0.25,
+	/** Fall of the reduced-motion fade down to the afterglow, seconds. */
+	softFall: 0.25,
 	/** Rise of the reduced-motion fade, seconds, at most 4 % of the display time. */
 	softRise: 0.06,
 } as const;
@@ -20,6 +27,17 @@ const ATTACK = 0.004;
 function smoothstep(a: number, b: number, x: number): number {
 	const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
 	return t * t * (3 - 2 * t);
+}
+
+/** Afterglow level for a display window of `display` seconds. */
+export function glowLevel(display: number): number {
+	return PROFILE.afterglow * Math.min(1, (PROFILE.glowRef / display) ** PROFILE.glowScale);
+}
+
+/** Exponential fade over the display window, from 1 at `t` = 0 to exactly 0 at `t` = 1. */
+export function glowDecay(t: number): number {
+	const end = Math.exp(-1 / PROFILE.glowTau);
+	return (Math.exp(-t / PROFILE.glowTau) - end) / (1 - end);
 }
 
 /** Flicker phase length in seconds for a measured flash duration in milliseconds. */
@@ -44,8 +62,8 @@ export function pulseStart(k: number, n: number, flicker: number, seed: number):
  */
 export function flashProfile(age: number, display: number, durationMs: number, seed: number, flicker = true): number {
 	if (age < 0 || age > display) return 0;
-	const t = age / display;
-	if (!flicker) return smoothstep(0, Math.min(PROFILE.softRise, display * 0.04), age) * (1 - t) * (1 - t);
+	const glow = glowLevel(display) * glowDecay(age / display);
+	if (!flicker) return smoothstep(0, Math.min(PROFILE.softRise, display * 0.04), age) * Math.max(Math.exp(-age / PROFILE.softFall), glow);
 	const length = Math.min(flickerLength(durationMs), display * 0.6);
 	const n = pulseCount(length);
 	let b = 0;
@@ -53,8 +71,7 @@ export function flashProfile(age: number, display: number, durationMs: number, s
 		const a = age - pulseStart(k, n, length, seed);
 		if (a >= 0) b = Math.max(b, PROFILE.pulseFade ** k * smoothstep(0, ATTACK, a) * Math.exp(-a / PROFILE.pulseTau));
 	}
-	const glow = PROFILE.afterglow * smoothstep(0, length, age) * (1 - t) * (1 - t);
-	return Math.max(b, glow);
+	return Math.max(b, glow * smoothstep(0, length, age));
 }
 
 /** GLSL float literal: GLSL ES has no implicit int to float conversion. */
@@ -66,9 +83,10 @@ const f = glslFloat;
 export const flashProfileGlsl = /* glsl */ `
 float flashProfile(float age, float display, float durationMs, float seed, float flicker) {
 	if (age < 0.0 || age > display) return 0.0;
-	float t = age / display;
-	float fade = (1.0 - t) * (1.0 - t);
-	if (flicker < 0.5) return smoothstep(0.0, min(${f(PROFILE.softRise)}, display * 0.04), age) * fade;
+	float end = exp(${f(-1 / PROFILE.glowTau)});
+	float glow = ${f(PROFILE.afterglow)} * min(1.0, pow(${f(PROFILE.glowRef)} / display, ${f(PROFILE.glowScale)}))
+		* (exp(-age / display / ${f(PROFILE.glowTau)}) - end) / (1.0 - end);
+	if (flicker < 0.5) return smoothstep(0.0, min(${f(PROFILE.softRise)}, display * 0.04), age) * max(exp(-age / ${f(PROFILE.softFall)}), glow);
 	float len = min(clamp(durationMs / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), display * 0.6);
 	float n = min(${f(PROFILE.maxPulses)}, 1.0 + floor(len / ${f(PROFILE.pulseEvery)}));
 	float b = 0.0;
@@ -79,6 +97,6 @@ float flashProfile(float age, float display, float durationMs, float seed, float
 		float a = age - start;
 		if (a >= 0.0) b = max(b, pow(${f(PROFILE.pulseFade)}, k) * smoothstep(0.0, ${f(ATTACK)}, a) * exp(-a / ${f(PROFILE.pulseTau)}));
 	}
-	return max(b, ${f(PROFILE.afterglow)} * smoothstep(0.0, len, age) * fade);
+	return max(b, glow * smoothstep(0.0, len, age));
 }
 `;
