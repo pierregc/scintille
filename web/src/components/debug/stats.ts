@@ -1,4 +1,4 @@
-import { QUALITY_FLAG_VALUES, SOURCE_VALUES, type LiveManifest, type SourceState } from '../../contract/types';
+import { QUALITY_FLAG_VALUES, SOURCE_VALUES } from '../../contract/types';
 import type { SourceDelays } from '../../globe/live/delay';
 import { SOURCE_LABELS } from '../../globe/live/freshness';
 import type { FlashRing } from '../../globe/live/ring';
@@ -17,60 +17,37 @@ export function sourceLabel(index: number): string {
 
 export interface SourceStats {
 	label: string;
-	state: SourceState | null;
 	/** Flashes held in the ring. */
 	held: number;
 	/** Flashes played in the last minute. */
 	lastMinute: number;
 	/** Flashes loaded but still waiting for their playback delay. */
 	pending: number;
-	/** Age of the newest flash held, ms; null if none. */
-	newestAgeMs: number | null;
-	delayMs: number;
-	/** Since the latest product file was ingested, ms; null if unknown. */
-	ingestAgeMs: number | null;
 }
 
-/** Per source counts over the whole ring at playback time `now`; ages are measured from `wallNow`. */
-export function sourceStats(
-	ring: FlashRing,
-	delays: SourceDelays,
-	manifest: LiveManifest | null,
-	now: number,
-	wallNow = now,
-): SourceStats[] {
+/** Per source counts over the whole ring at playback time `now`. */
+export function sourceStats(ring: FlashRing, delays: SourceDelays, now: number): SourceStats[] {
 	const held = new Map<number, number>();
 	const lastMinute = new Map<number, number>();
 	const pending = new Map<number, number>();
-	const newest = new Map<number, number>();
 	const add = (map: Map<number, number>, key: number) => map.set(key, (map.get(key) ?? 0) + 1);
 	for (let i = 0; i < ring.size; i++) {
 		const s = ring.slot(i);
 		const src = ring.source[s];
-		const t = ring.time[s];
-		const due = t + delays.ms[src];
+		const due = ring.time[s] + delays.ms[src];
 		add(held, src);
 		if (due > now) add(pending, src);
 		else if (due > now - 60_000) add(lastMinute, src);
-		newest.set(src, Math.max(newest.get(src) ?? t, t));
 	}
 	const indices = new Set([...SOURCE_VALUES.keys(), ...held.keys()]);
 	return [...indices]
 		.sort((a, b) => a - b)
-		.map((index) => {
-			const status = manifest?.sources?.find((s) => s.source === SOURCE_VALUES[index]);
-			const t = newest.get(index);
-			return {
-				label: sourceLabel(index),
-				state: status?.state ?? null,
-				held: held.get(index) ?? 0,
-				lastMinute: lastMinute.get(index) ?? 0,
-				pending: pending.get(index) ?? 0,
-				newestAgeMs: t === undefined ? null : wallNow - t,
-				delayMs: delays.ms[index],
-				ingestAgeMs: status?.last_ingest_time ? wallNow - Date.parse(status.last_ingest_time) : null,
-			};
-		});
+		.map((index) => ({
+			label: sourceLabel(index),
+			held: held.get(index) ?? 0,
+			lastMinute: lastMinute.get(index) ?? 0,
+			pending: pending.get(index) ?? 0,
+		}));
 }
 
 export interface FlashRow {
