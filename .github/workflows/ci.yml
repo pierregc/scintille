@@ -1,0 +1,79 @@
+name: ci
+
+# One job per PR to fit the 2,000 free minutes: each job is billed rounded up to the minute.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Changed areas
+        id: changes
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          files=$(git diff --name-only "$BASE"...HEAD)
+          printf '%s\n' "$files"
+          has() { grep -qE "$1" <<< "$files" && echo true || echo false; }
+          echo "data=$(has '^(data/|fixtures/|web/src/contract/|docs/data-contract\.md|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
+          echo "web=$(has '^(web/|fixtures/live/|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
+
+      - if: steps.changes.outputs.data == 'true'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: data/uv.lock
+      - name: Data checks
+        if: steps.changes.outputs.data == 'true'
+        working-directory: data
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          uv sync --frozen
+          uv run ruff check
+          uv run ruff format --check
+          uv run mypy
+          uv run scintille-contract check --base "$BASE"
+          uv run pytest
+
+      - if: steps.changes.outputs.web == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: web/package.json
+      - if: steps.changes.outputs.web == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Web checks
+        if: steps.changes.outputs.web == 'true'
+        working-directory: web
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm lint
+          pnpm test
+          pnpm build
+          pnpm test:seo
+          pnpm exec wrangler deploy --dry-run --x-auto-create=false

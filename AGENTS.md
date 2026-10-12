@@ -60,6 +60,7 @@ Before opening a PR, every command of the area you touched must pass.
 ## Workflow
 
 - **One ticket = one branch = one PR.** Never push to `main`.
+- CI is billed by the minute on a free quota: open the PR as a draft while iterating and mark it ready for review once the local commands pass. Only ready PRs run `ci`; add the `preview` label for a site Preview, and run `images` or `render` by hand when needed ([CI/CD](docs/ci-cd.md)).
 - Branch name: `<type>/<issue-number>-<short-slug>`, e.g. `feat/46-sun-position`.
 - Commit messages are one simple, clear line following [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`). No body.
 - The PR description starts with `Closes #<issue>` and lists how each acceptance criterion was verified. Visual changes include screenshots or a short video.
