@@ -63,7 +63,7 @@ import Version from './Version.astro';
 	</details>
 
 	<section class="clock" aria-label="Time">
-		<p class="t"><time data-time>--:--:--</time><small>UTC</small></p>
+		<p class="t"><time data-time>--:--:--</time><small data-zone></small></p>
 		<p class="d" data-date></p>
 		<div class="state">
 			<span class="pulse" aria-hidden="true"></span>
@@ -674,13 +674,14 @@ import Version from './Version.astro';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
-	import { cloudCaption, formatUtcDate, formatUtcTime } from './hud/format';
+	import { cloudCaption, formatDate, formatTime, zoneLabel } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
 		const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector);
 		const time = $<HTMLTimeElement>('[data-time]');
 		const date = $('[data-date]');
+		const zone = $('[data-zone]');
 		const state = $('[data-state]');
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
@@ -719,13 +720,15 @@ import Version from './Version.astro';
 
 		const tick = () => {
 			const now = app?.clock.time() ?? Date.now();
-			const text = formatUtcTime(now);
+			const text = formatTime(now);
 			if (time && time.textContent !== text) {
 				time.textContent = text;
 				time.dateTime = new Date(now).toISOString();
 			}
-			const day = formatUtcDate(now);
+			const day = formatDate(now);
 			if (date && date.textContent !== day) date.textContent = day;
+			const place = zoneLabel(undefined, now);
+			if (zone && zone.textContent !== place) zone.textContent = place;
 			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');

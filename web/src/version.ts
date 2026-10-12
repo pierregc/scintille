@@ -1,4 +1,4 @@
-import { formatUtcDate, formatUtcTime } from './components/hud/format';
+import { formatDate } from './components/hud/format';
 
 export interface BuildInfo {
 	/** Full commit SHA, or null when unknown (local build without git). */
@@ -17,13 +17,13 @@ export const BUILD: BuildInfo =
 
 const REPO = 'https://github.com/pierregc/scintille';
 
-/** `Build 5c470ef · PR 183 · 11 Oct 2026 19:30 UTC`. */
+/** `Build 5c470ef · PR 183 · 11 Oct 2026`. */
 export function versionLabel(info: BuildInfo): string {
 	const t = Date.parse(info.builtAt);
 	return [
 		`Build ${info.commit?.slice(0, 7) ?? 'dev'}`,
 		info.pr === null ? null : `PR ${info.pr}`,
-		`${formatUtcDate(t)} ${formatUtcTime(t).slice(0, 5)} UTC`,
+		formatDate(t, 'UTC'),
 	]
 		.filter(Boolean)
 		.join(' · ');

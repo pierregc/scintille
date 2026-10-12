@@ -22,7 +22,7 @@
 		class="scale replay-only"
 		role="slider"
 		tabindex="0"
-		aria-label="Time of day, UTC"
+		aria-label="Time of day"
 		aria-valuemin="0"
 		aria-valuemax="1439"
 		aria-valuenow="0"
@@ -191,17 +191,18 @@
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { formatUtcTime } from './hud/format';
+	import { formatTime, zoneLabel } from './hud/format';
 	import {
 		DEFAULT_SPEED,
+		dateInputValue,
 		dayFraction,
+		dayStart,
 		keyStep,
 		parseDateInput,
 		REPLAY_LOOKBACK_MS,
 		SPEEDS,
 		speedLabel,
 		timeAtFraction,
-		utcDayStart,
 	} from './hud/timeline';
 
 	const strip = document.querySelector<HTMLElement>('[data-strip]');
@@ -241,11 +242,11 @@
 			const t = clock.time();
 			const fraction = dayFraction(t);
 			if (head) head.style.left = `${(fraction * 100).toFixed(3)}%`;
-			const label = formatUtcTime(t).slice(0, 5);
+			const label = formatTime(t).slice(0, 5);
 			if (headTime && headTime.textContent !== label) headTime.textContent = label;
 			scale?.setAttribute('aria-valuenow', String(Math.floor(fraction * 1440)));
-			scale?.setAttribute('aria-valuetext', `${label} UTC`);
-			const iso = new Date(t).toISOString().slice(0, 10);
+			scale?.setAttribute('aria-valuetext', `${label} ${zoneLabel(undefined, t)}`);
+			const iso = dateInputValue(t);
 			if (day && document.activeElement !== day && day.value !== iso) day.value = iso;
 			if (play) {
 				play.toggleAttribute('data-paused', !clock.playing);
@@ -281,13 +282,13 @@
 		play?.addEventListener('click', togglePlay);
 		day?.addEventListener('change', () => {
 			const start = parseDateInput(day.value);
-			if (start !== null) seek(start + (now() - utcDayStart(now())));
+			if (start !== null) seek(start + (now() - dayStart(now())));
 		});
 
 		const seekToPointer = (event: PointerEvent) => {
 			if (!scale) return;
 			const rect = scale.getBoundingClientRect();
-			seek(timeAtFraction(utcDayStart(now()), (event.clientX - rect.left) / rect.width));
+			seek(timeAtFraction(dayStart(now()), (event.clientX - rect.left) / rect.width));
 		};
 		scale?.addEventListener('pointerdown', (event) => {
 			scale.setPointerCapture(event.pointerId);
@@ -297,7 +298,7 @@
 			if (scale.hasPointerCapture(event.pointerId)) seekToPointer(event);
 		});
 		scale?.addEventListener('keydown', (event) => {
-			const start = utcDayStart(now());
+			const start = dayStart(now());
 			let target: number | undefined;
 			if (event.key === ' ') {
 				event.preventDefault();
