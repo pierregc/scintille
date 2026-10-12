@@ -1,0 +1,296 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { breadcrumbs, website } from '../seo/jsonld';
+---
+
+<BaseLayout
+	title="Methodology and sources · Scintille"
+	description="Where Scintille's lightning comes from, what the satellites measure, how fast it arrives, how brightness is set, and what the globe cannot show."
+	type="article"
+	jsonLd={[
+		website(),
+		breadcrumbs([
+			{ name: 'Scintille', path: '/' },
+			{ name: 'Methodology and sources', path: '/methodology/' },
+		]),
+	]}
+>
+	<main>
+		<p><a href="/">← Scintille</a></p>
+		<h1>Methodology and sources</h1>
+		<p class="lead">
+			What the globe shows, where it comes from, and where it falls short. Everything here describes what the
+			pipeline does today; parts that are still being built say so.
+		</p>
+
+		<nav aria-label="On this page">
+			<a href="#measured">What is measured</a>
+			<a href="#sources">Sources</a>
+			<a href="#coverage">Coverage</a>
+			<a href="#latency">Latency</a>
+			<a href="#brightness">Brightness</a>
+			<a href="#overlap">Overlap</a>
+			<a href="#quality">Quality</a>
+			<a href="#rendering">On screen</a>
+			<a href="#data">Open data</a>
+			<a href="#limits">Limits</a>
+			<a href="#attribution">Attribution</a>
+		</nav>
+
+		<h2 id="measured">What is measured</h2>
+		<p>
+			The instruments behind Scintille are lightning imagers on geostationary satellites. They stare at the same
+			disc of the Earth day and night and record the brief optical pulses that lightning makes at the top of the
+			clouds. They see flashes inside a cloud and between clouds as well as those that reach the ground, and the
+			products used here do not tell them apart. Scintille is therefore not a map of ground strikes.
+		</p>
+		<p>
+			One dot on the globe is one <strong>flash</strong> as defined by the source product: built by the source's own
+			processing from the optical events it detected, from the first to the last. For each flash Scintille keeps:
+		</p>
+		<ul>
+			<li>the time the satellite saw it start, to the microsecond;</li>
+			<li>the latitude and longitude of its centroid;</li>
+			<li>its optical energy, exactly as the source reports it, with its unit;</li>
+			<li>the area it covered and its duration;</li>
+			<li>quality caveats, such as a flash the source itself marks as degraded.</li>
+		</ul>
+		<p>
+			Every flash gets a stable identifier derived from its source, its product file and its id in that file, so
+			reprocessing the same file never creates a second copy.
+		</p>
+
+		<h2 id="sources">Sources</h2>
+		<table>
+			<thead>
+				<tr><th scope="col">Instrument</th><th scope="col">Position</th><th scope="col">Product</th><th scope="col">Access</th></tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>GLM on GOES-East</td>
+					<td>75.2° W</td>
+					<td>NOAA GLM L2 LCFA, one file every 20 s</td>
+					<td>NOAA open data bucket on AWS</td>
+				</tr>
+				<tr>
+					<td>GLM on GOES-West</td>
+					<td>137.0° W</td>
+					<td>NOAA GLM L2 LCFA, one file every 20 s</td>
+					<td>NOAA open data bucket on AWS</td>
+				</tr>
+				<tr>
+					<td>Lightning Imager on MTG-I1</td>
+					<td>0°</td>
+					<td>EUMETSAT LI L2 LFL, one file every 30 s</td>
+					<td>EUMETSAT Data Store, collection EO:EUM:DAT:0691</td>
+				</tr>
+			</tbody>
+		</table>
+		<p>
+			The <a href="https://www.goes-r.gov/spacesegment/glm.html">Geostationary Lightning Mapper</a> (GLM) flies on
+			NOAA's GOES-East and GOES-West satellites and covers the Americas and the surrounding oceans.
+			The <a href="https://www.eumetsat.int/meteosat-third-generation">MTG Lightning Imager</a> (LI) flies on
+			EUMETSAT's Meteosat Third Generation and covers Europe, Africa and most of the Atlantic Ocean.
+		</p>
+		<p class="pending">
+			The MTG Lightning Imager feed is still being connected. This section will describe its ingestion once it
+			runs in production.
+		</p>
+
+		<h2 id="coverage">Coverage</h2>
+		<p>
+			Each instrument sees one side of the planet from its fixed point above the equator. Together, GOES-East,
+			GOES-West and MTG span the Americas, the eastern Pacific, the Atlantic, Europe and Africa. Asia, Oceania and
+			the polar regions are seen by none of them.
+			An empty region on the globe can mean that no lightning occurred, or that no satellite here was looking: read
+			it with this map in mind.
+		</p>
+		<p>
+			Detection is not uniform inside a field of view either. Towards the edge of the disc, the satellite sees the
+			clouds at a grazing angle and its detection efficiency drops, so weak flashes are missed more often there.
+			Over the last 30 days measured, GLM recorded flashes up to 67° of arc from the point below each satellite.
+		</p>
+		<p class="pending">
+			A coverage map, drawn from the published footprint of each source, will be added here.
+		</p>
+
+		<h2 id="latency">Latency</h2>
+		<p>
+			A flash reaches the globe in three steps. The satellite operator turns raw observations into a product file
+			and publishes it: on GLM this was measured at about 30 s. Scintille's ingestion service picks the file up,
+			parses it and adds its flashes to the live feed, which is published as one chunk every 30 s. The browser then
+			reads the newest chunks. The target is that 95 % of flashes are published within 120 s of the time the
+			satellite saw them.
+		</p>
+		<p>
+			Latency is measured continuously, per source, from the flash time to its publication, and shown on
+			the <a href="/status/">status page</a> with the median and 95th percentile over the last hour.
+		</p>
+		<p>
+			A source is shown as <em>live</em> while its files keep arriving, <em>delayed</em> when none has arrived for
+			2 minutes, and <em>offline</em> after 10. If the feed as a whole is more than 3 minutes old, the globe stops
+			calling itself live.
+		</p>
+		<p class="pending">
+			The latency of the MTG Lightning Imager will be given here once it has been measured in production.
+		</p>
+
+		<h2 id="brightness">Brightness</h2>
+		<p>
+			The brightness of a dot follows the optical energy the satellite measured for that flash. The two instruments
+			do not report the same quantity: GLM gives an energy in joules, the Lightning Imager a radiance in
+			mW m⁻² sr⁻¹. Scintille stores both values as reported and derives from them a
+			common <em>intensity</em> between 0 and 1, which is what the globe draws.
+		</p>
+		<p>
+			Today that intensity is a provisional mapping on a logarithmic scale: for GLM, 10⁻¹⁵·⁵ J maps to 0 and
+			10⁻¹¹·⁵ J to 1; for the Lightning Imager, 1 to 10,000 mW m⁻² sr⁻¹. On screen, the faintest flash is drawn at
+			15 % of the brightness of the strongest so that it stays visible.
+		</p>
+		<p class="pending">
+			A calibration between the two instruments, based on their measured distributions, will replace this mapping.
+			Its method and limits will be described here.
+		</p>
+
+		<h2 id="overlap">Overlap between satellites</h2>
+		<p>
+			GOES-East and GOES-West both see the Americas between about 140° W and 70° W, so most flashes there are
+			recorded twice, a few kilometres apart. To draw each flash once, every point on the globe is assigned to the
+			instrument with the best viewing angle, the one whose point below the satellite is closest. Between the two
+			GOES satellites the boundary is the meridian at 106.1° W.
+		</p>
+		<p>
+			A flash seen by an instrument outside its own zone is kept in the archive with a flag and left out of the
+			live globe. Over 30 days of GLM data (September to October 2026, 64.2 million flashes), 20.9 % were flagged
+			this way. If the owner of a zone delivers no file for 5 minutes, the other satellite's flashes there come
+			back on the globe, so an outage does not leave the zone dark.
+		</p>
+		<p class="pending">
+			The overlap between GOES-East and the MTG Lightning Imager over the Atlantic will be handled the same way;
+			this section will be completed when it is.
+		</p>
+
+		<h2 id="quality">Quality checks</h2>
+		<p>
+			Every file is checked against the data contract when it is read: positions, times, energies and flags must
+			be in range. Rows that fail are not silently dropped; they are set aside with the reason, and a file that
+			cannot be read is logged as failed. Each hour, the archive is checked for freshness, for completeness
+			(at least 99 % of the expected product files), for value ranges and for unusual volumes; each day, for
+			duplicates and for an exact match between files received, flashes parsed and flashes stored.
+		</p>
+		<p>
+			Some GLM detector pixels fire at a fixed position with no storm around, sometimes tens of thousands of times a
+			day. Since late September 2026 the strongest one sits off West Africa, near 21.3° N 28.7° W.
+			These <em>hot spots</em> are kept in the data, faithful to the source, and can appear on the globe as a dot that
+			keeps flashing in the same place. Storm detection leaves them out: flashes within 10 km of a detected hot spot do not count
+			towards storms, so storm statistics exclude them.
+		</p>
+
+		<h2 id="rendering">On screen</h2>
+		<p>
+			The globe animates flashes by the time the satellite saw them, not the time they arrived. Each flash
+			flickers for its measured duration, held between 60 and 600 ms, then leaves an afterglow whose length you
+			choose (1 to 60 minutes). The size of its halo follows the area it covered. The day and night sides follow
+			the position of the Sun at the time shown.
+		</p>
+		<p>
+			The cloud layer comes from NOAA's hourly global infrared mosaic. It lags the lightning by 40 to 100 minutes,
+			so a storm that grows fast can flash before its cloud appears.
+		</p>
+		<p>
+			The optional thunder is synthesized in the browser. Its delay uses a stylized speed of sound of 6000 km/s,
+			capped at 4 s: at the real 0.34 km/s, thunder seen from orbit would arrive hours later. The delay only says
+			whether a flash is near or far.
+		</p>
+
+		<h2 id="data">Open data</h2>
+		<p>
+			The live feed is public: <a href="https://data.scintille.app/live/manifest.json">a manifest</a> lists the
+			chunks of the last hour, each holding the flashes received during 30 s with their time, position, intensity,
+			area, duration, source and quality flags. Its format is versioned and documented in the project's data
+			contract.
+		</p>
+
+		<h2 id="limits">Limits</h2>
+		<ul>
+			<li>Large parts of the planet have no coverage; an empty region is not proof that there was no lightning.</li>
+			<li>Optical imagers miss some flashes, more so near the edge of their view, and do not separate cloud flashes from ground strikes.</li>
+			<li>Brightness is a relative scale, not a physical unit, and the scale is still provisional.</li>
+			<li>A few fixed GLM pixels produce false flashes that stay on the globe.</li>
+			<li>Near the boundary between two satellites, a flash can occasionally be drawn twice or not at all, in a band a few kilometres wide.</li>
+			<li>The live feed covers the last hour; older flashes are kept in the archive only.</li>
+		</ul>
+
+		<h2 id="attribution">Attribution</h2>
+		<ul class="credits">
+			<li>GLM data courtesy of NOAA.</li>
+			<li>Contains modified EUMETSAT Meteosat data 2026.</li>
+			<li>Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).</li>
+			<li>Earth imagery: NASA Earth Observatory (Blue Marble and Black Marble).</li>
+			<li>Land and water mask: Natural Earth.</li>
+		</ul>
+		<p>
+			GLM data is public domain. EUMETSAT Lightning Imager data is distributed under the EUMETSAT Data Policy
+			(<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>). Anyone reusing the live feed must keep
+			these credits.
+		</p>
+	</main>
+</BaseLayout>
+
+<style>
+	main {
+		max-width: 42rem;
+		margin: 0 auto;
+		padding: 3rem 1rem 4rem;
+		font-family: system-ui, sans-serif;
+		line-height: 1.6;
+	}
+	a {
+		color: #9fc3ff;
+	}
+	.lead {
+		font-size: 1.1rem;
+	}
+	nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1rem;
+		margin: 1.5rem 0;
+		font-size: 0.9rem;
+	}
+	h2 {
+		margin-top: 2.5rem;
+		font-size: 1.15rem;
+		scroll-margin-top: 1rem;
+	}
+	ul {
+		padding-left: 1.2rem;
+	}
+	li {
+		margin: 0.25rem 0;
+	}
+	table {
+		display: block;
+		width: 100%;
+		overflow-x: auto;
+		border-collapse: collapse;
+		font-size: 0.9rem;
+	}
+	th,
+	td {
+		padding: 0.4rem 0.6rem 0.4rem 0;
+		text-align: left;
+		vertical-align: top;
+		border-bottom: 1px solid rgb(216 220 230 / 0.2);
+	}
+	.pending {
+		padding-left: 0.8rem;
+		opacity: 0.7;
+		font-style: italic;
+		border-left: 2px solid rgb(216 220 230 / 0.3);
+	}
+	.credits {
+		font-family: ui-monospace, monospace;
+		font-size: 0.85rem;
+	}
+</style>
