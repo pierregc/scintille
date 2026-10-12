@@ -1,4 +1,5 @@
 import {
+	DataTexture,
 	Mesh,
 	NoColorSpace,
 	RepeatWrapping,
@@ -19,6 +20,8 @@ export interface Earth {
 	mesh: Mesh;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
+	/** Equirectangular mask of the areas without lightning data (red channel), shaded on the surface. */
+	setCoverage(mask: Texture): void;
 	dispose(): void;
 }
 
@@ -37,6 +40,8 @@ export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot(
 export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTier = '4k'): Earth {
 	const geometry = new SphereGeometry(radius, 128, 64);
 	const twilight = twilightUniforms();
+	const noGaps = new DataTexture(new Uint8Array(4), 1, 1);
+	noGaps.needsUpdate = true;
 	const material = new ShaderMaterial({
 		vertexShader: earthVertexShader,
 		fragmentShader: earthFragmentShader,
@@ -54,6 +59,8 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 			seaRoughness: { value: 0.02 },
 			glintCap: { value: 0.3 },
 			terminatorTint: { value: 0.5 },
+			coverageMap: { value: noGaps },
+			coverageShade: { value: 1 },
 		},
 	});
 	const mesh = new Mesh(geometry, material);
@@ -89,8 +96,12 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 		setTime(utcMs) {
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
 		},
+		setCoverage(mask) {
+			material.uniforms.coverageMap.value = mask;
+		},
 		dispose() {
 			disposed = true;
+			noGaps.dispose();
 			textures.forEach((t) => t.dispose());
 			geometry.dispose();
 			material.dispose();
