@@ -1,5 +1,5 @@
 import type { OpsMetrics } from '../contract/types';
-import { formatUtcDate, formatUtcTime } from '../components/hud/format';
+import { formatDate, formatTime } from '../components/hud/format';
 import { backoffDelay, DEFAULT_BACKOFF } from '../globe/live/client';
 import { liveBaseUrl } from '../globe/live';
 import { indexAt, niceMax, paths, SLOTS, type Frame } from './chart';
@@ -68,7 +68,7 @@ function chart(s: SourceView, max: number): HTMLElement {
 		cursor.setAttribute('x2', String(slotX));
 		cursor.setAttribute('visibility', 'visible');
 		const inProgress = i === s.flashesPerMinute.length - 1 ? ' · in progress' : '';
-		tip.textContent = `${formatUtcTime(s.seriesStartMs + i * 60_000).slice(0, 5)} UTC · ${formatCount(s.flashesPerMinute[i] ?? 0)}${inProgress}`;
+		tip.textContent = `${formatTime(s.seriesStartMs + i * 60_000).slice(0, 5)} · ${formatCount(s.flashesPerMinute[i] ?? 0)}${inProgress}`;
 		const at = slotX / W;
 		tip.style.left = `${at * 100}%`;
 		tip.style.transform = `translateX(${at < 0.2 ? 0 : at > 0.8 ? -100 : -50}%)`;
@@ -128,7 +128,7 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	setText(q('[data-state]'), view.state);
 	setText(
 		q('[data-asof]'),
-		view.generatedAtMs === null ? '' : `as of ${formatUtcDate(view.generatedAtMs)} ${formatUtcTime(view.generatedAtMs)} UTC`,
+		view.generatedAtMs === null ? '' : `as of ${formatDate(view.generatedAtMs)} ${formatTime(view.generatedAtMs)}`,
 	);
 	const banner = q<HTMLElement>('[data-banner]');
 	setText(banner, view.banner);
