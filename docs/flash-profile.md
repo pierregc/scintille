@@ -13,8 +13,8 @@ speed compresses them.
 2. **Afterglow.** A dim glow rises over the flicker phase, then decays exponentially with a time constant
    of a quarter of the display duration, shifted to reach exactly zero at its end. The eye reads brightness
    on a log scale, so this looks like a steady fade. The display duration is chosen in the HUD
-   ("Afterglow": 1 second, 1 or 30 minutes, 1 second by default, saved in `localStorage`). At 1 second
-   the flash leaves no trace: its flicker, then a short fade.
+   ("Afterglow": 0, 1 or 30 minutes, 0 by default, saved in `localStorage`). At 0 the flash leaves no
+   trace: its flicker, then a 1 s fade.
 
    Its level is 12 % of the first pulse up to 5 minutes, then `0.12 × 5 / minutes`: a longer window keeps
    more flashes on screen, so each one glows dimmer and the light on screen at 30 minutes stays that of
