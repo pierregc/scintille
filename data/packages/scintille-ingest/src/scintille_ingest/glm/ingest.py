@@ -11,6 +11,7 @@ from scintille_contract.models import Source
 from scintille_ingest.glm.parse import empty_flashes, normalize_glm_flashes, read_glm_flashes
 from scintille_ingest.glm.products import parse_key
 from scintille_ingest.ingest_log import IngestLogRecord
+from scintille_ingest.intensity import with_intensity
 from scintille_ingest.ownership import flag_outside_owner
 
 
@@ -26,7 +27,8 @@ def ingest_glm_file(data: bytes, key: str, source: Source, received_at: datetime
     error: str | None = None
     try:
         raw = read_glm_flashes(data)
-        flashes = flag_outside_owner(normalize_glm_flashes(raw, source, product.name, received_at))
+        flashes = normalize_glm_flashes(raw, source, product.name, received_at)
+        flashes = with_intensity(flag_outside_owner(flashes))
     except (OSError, KeyError, ValueError) as exc:
         flashes, error = empty_flashes(), f"{type(exc).__name__}: {exc}"
     log = IngestLogRecord(

@@ -52,7 +52,8 @@ nothing. Source state: `live` if a file arrived in the last 2 minutes, `delayed`
 `SCINTILLE_SOURCE_OFFLINE_AFTER`. After its first chunk the process writes `live/coverage.geojson`
 ([coverage map](data-contract.md#coverage-map)) if the stored copy differs, retrying on the next
 chunk after a failure. `live_latency_seconds` (event time → manifest) is logged and exported per source.
-Intensity uses a provisional log-energy mapping until #33.
+Intensity is computed at parse time by the current calibration
+([methodology](methodology.md#flash-intensity)).
 
 `publish()` returns only once the flashes are in the outbox (`<spool>/live-outbox/`, fsynced), so
 the file state can advance safely. A chunk's flashes leave the outbox only after a manifest lists
@@ -74,7 +75,7 @@ Drains the spool every 5 minutes, up to 200 batches per commit:
 A crash anywhere replays the drain: batches found in a table's snapshots are skipped, so nothing is
 appended twice, and a batch committed to silver but not bronze completes bronze only. If the catalog
 is down, the batches stay in the spool and the next drain retries; `ingest-live` never notices.
-`intensity` stays null until the cross-source calibration (#33). Catalog operations are counted in
+Rows carry the `intensity` and `calibration_version` of the calibration they were parsed with. Catalog operations are counted in
 `catalog_operations_total`.
 
 ## `clouds` (`scintille-ingest clouds`)

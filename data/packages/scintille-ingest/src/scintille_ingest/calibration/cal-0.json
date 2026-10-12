@@ -1,0 +1,12 @@
+{
+  "version": "cal-0",
+  "intensity": [0.0, 1.0],
+  "sources": {
+    "glm-east": {"unit": "J", "flashes": 0, "log10_energy": [-15.5, -11.5]},
+    "glm-west": {"unit": "J", "flashes": 0, "log10_energy": [-15.5, -11.5]},
+    "mtg-li": {"unit": "mW m-2 sr-1", "flashes": 0, "log10_energy": [0.0, 4.0]}
+  },
+  "percentiles": null,
+  "reference": null,
+  "window": null
+}
