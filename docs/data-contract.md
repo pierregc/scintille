@@ -639,23 +639,23 @@ Replay selection provenance. track-bounds can include nearby unrelated flashes; 
 
 Defined in `data/contract/storm.schema.json`.
 
-Storm metrics and persisted classification; publication never chooses intensity thresholds.
+Storm metrics and persisted classification.
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
-| `storm_id` | string | yes | minLength `1` |  |
-| `slug` | string | yes | pattern `^[a-z0-9][a-z0-9-]*$` |  |
-| `name` | string | yes | minLength `1` |  |
-| `label` | string | yes | minLength `1` |  |
+| `storm_id` | string | yes | minLength `1`, maxLength `128` |  |
+| `slug` | string | yes | pattern `^[a-z0-9][a-z0-9-]*$`, maxLength `200` |  |
+| `name` | string | yes | minLength `1`, maxLength `256` |  |
+| `label` | string | yes | minLength `1`, maxLength `512` |  |
 | `country_code` | string or null | yes |  |  |
 | `t_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
 | `t_end` | [UtcTimestamp](#utctimestamp) | yes |  |  |
 | `closed` | boolean | yes |  |  |
 | `flashes` | integer | yes | minimum `0` |  |
 | `peak_rate` | integer | yes | minimum `0` |  |
-| `level` | integer | yes | minimum `0` |  |
-| `level_name` | string | yes | minLength `1` |  |
-| `level_rule` | string | yes | minLength `1` |  |
+| `level` | integer | yes | minimum `1` |  |
+| `level_name` | string | yes | minLength `1`, maxLength `80` |  |
+| `level_rule` | string | yes | minLength `1`, maxLength `2048` |  |
 | `sources` | array of [Source](#source) | yes |  |  |
 
 ### StormIndexPage
@@ -670,9 +670,9 @@ storms/index/<page>.json: zero-based pages, recent first, read one page per requ
 | `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
 | `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
 | `page` | integer | yes | minimum `0` |  |
-| `page_size` | integer | yes | minimum `0` |  |
+| `page_size` | integer | yes | minimum `1` |  |
 | `total_storms` | integer | yes | minimum `0` |  |
-| `total_pages` | integer | yes | minimum `0` |  |
+| `total_pages` | integer | yes | minimum `1` |  |
 | `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
 
 ### StormDetail
@@ -692,3 +692,25 @@ storms/<slug>.json: bounded metadata and replay references.
 | `replay` | [StormReplay](#stormreplay) | yes |  |  |
 
 <!-- END GENERATED REFERENCE -->
+
+## Storm catalog on R2
+
+The versioned schema is `data/contract/storm.schema.json`. `storms/<slug>.json` contains the
+persisted summary, bbox, centroid track, publication time, last observation time and replay
+references. Slugs come from `gold/storm_names` and never change. Bounds with west greater than east
+cross the antimeridian. All timestamps represent UTC instants. Intensity names and rules are read
+from `gold/storm_levels`; the publication contract does not approve ADR 0009's proposed thresholds.
+
+Replay chunk paths are relative to the public data root, not the metadata URL. Each immutable
+`storms/chunks/<sha256>.bin.gz` uses the existing live binary layout with an event-hour origin;
+its schema version is in the binary header, and publication/observation timestamps are carried by
+its enclosing detail document. This clarifies #74's singular extract filename and its requirement
+for timestamps on every file without changing the live encoding. The replay selection provenance
+is mandatory: `track-bounds` may include nearby unrelated flashes, so its count is separate from
+the storm's classified count. No cloud archive discovery is implied by this contract.
+
+`storms/index/<page>.json` uses zero-based pages of 50 summaries ordered by start descending, then
+storm id descending. Page zero exists for an empty catalog. The total page count is authoritative;
+old pages can remain after a catalog shrinks and must not be exposed beyond that count. Sitemap
+files include schema and freshness metadata in XML comments, preserve the sitemap protocol, and
+stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #75 detail file.

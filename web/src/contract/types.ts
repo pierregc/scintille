@@ -279,7 +279,7 @@ export interface StormReplay {
   chunks: StormChunkRef[];
 }
 
-/** Storm metrics and persisted classification; publication never chooses intensity thresholds. */
+/** Storm metrics and persisted classification. */
 export interface StormSummary {
   storm_id: string;
   slug: string;

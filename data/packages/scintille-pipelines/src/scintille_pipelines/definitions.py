@@ -20,6 +20,7 @@ from .resources import resources
 from .storm_cells import storm_cells
 from .storm_levels import storm_levels
 from .storm_names import storm_names
+from .storm_publication import hourly_storm_catalog, storm_catalog, storm_catalog_schedule
 from .storms import storm_tracks, storms
 
 RUNNING = DefaultScheduleStatus.RUNNING
@@ -42,15 +43,17 @@ defs = Definitions(
         storms,
         storm_levels,
         storm_names,
+        storm_catalog,
         SILVER,
         silver_flashes_backfill,
         *GOLD,
         daily_stats_feed,
     ],
     asset_checks=[*HOURLY, *DAILY, *DAILY_MAINTENANCE, *WEEKLY_MAINTENANCE],
-    jobs=[daily_gold, hourly_checks, daily_checks, weekly_maintenance],
+    jobs=[daily_gold, hourly_checks, daily_checks, weekly_maintenance, hourly_storm_catalog],
     schedules=[
         daily_gold_schedule,
+        storm_catalog_schedule,
         ScheduleDefinition(
             job=hourly_checks,
             cron_schedule="10 * * * *",
