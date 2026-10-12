@@ -51,10 +51,13 @@ are displayed:
 The year is the year of publication. GLM data is public domain (NOAA); we credit it as
 "GLM data courtesy of NOAA".
 
-Each Data Store product holds the LFL chunks of one repeat cycle; ingestion treats every `BODY`
-chunk as one file (key `<product id>/<chunk file>`) and skips the `TRAIL` chunk. Radiance is kept in
-`mW m-2 sr-1`, `flash_footprint` becomes `area_km2`, and any L1b warning (missing, geolocation,
-radiometric) marks the flash `degraded`.
+The Data Store publishes LI L2 LFL as one `BODY` file per 10 minute repeat cycle (`--ARC-`
+products, 3,722 flashes and 124 kB in the committed sample); ingestion treats every `BODY` chunk of a product as one
+file (key `<product id>/<chunk file>`) and skips any `TRAIL` chunk. Radiance is kept in
+`mW m-2 sr-1` and any L1b warning (missing, geolocation, radiometric) marks the flash `degraded`.
+`flash_footprint` is a pixel count, so `area_km2` is approximate: pixels times the ground area of
+one LI pixel, 4.5 km square at the sub-satellite point (0°, 0°), grown by slant range and viewing
+obliquity (`scintille_ingest.mtg.parse.pixel_area_km2`).
 
 **MTG LI latency** (#32), from `scintille-ingest mtg --once` on the VPS: not measured yet. The
 command logs the Data Store publication delay and the reception delay after the chunk end.
