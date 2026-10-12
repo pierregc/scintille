@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashProfile, flickerLength, glslFloat, PROFILE, pulseCount } from './profile';
+import { flashProfile, flickerLength, glowDecay, glowLevel, glslFloat, PROFILE, pulseCount } from './profile';
 
 const DISPLAY = 1.5;
 
@@ -25,7 +25,7 @@ describe('flashProfile', () => {
 
 	it('peaks near full brightness then leaves a dim afterglow', () => {
 		expect(flashProfile(0.004, DISPLAY, 250, 0.5)).toBeGreaterThan(0.85);
-		const glow = flashProfile(0.8, DISPLAY, 250, 0.5);
+		const glow = flashProfile(0.5, DISPLAY, 250, 0.5);
 		expect(glow).toBeGreaterThan(0.01);
 		expect(glow).toBeLessThan(PROFILE.afterglow);
 	});
@@ -39,8 +39,23 @@ describe('flashProfile', () => {
 	it('keeps the same blink and lingers in the afterglow over a minutes-long display', () => {
 		const display = 15 * 60;
 		expect(flashProfile(0.004, display, 250, 0.5)).toBeCloseTo(flashProfile(0.004, DISPLAY, 250, 0.5), 6);
-		expect(flashProfile(60, display, 250, 0.5)).toBeCloseTo(PROFILE.afterglow * (1 - 60 / display) ** 2, 6);
-		expect(flashProfile(PROFILE.softRise, display, 250, 0.5, false)).toBeGreaterThan(0.99);
+		expect(flashProfile(60, display, 250, 0.5)).toBeCloseTo(glowLevel(display) * glowDecay(60 / display), 6);
+		expect(flashProfile(PROFILE.softRise, display, 250, 0.5, false)).toBeGreaterThan(0.75);
+		expect(flashProfile(60, display, 250, 0.5, false)).toBeCloseTo(flashProfile(60, display, 250, 0.5), 6);
+	});
+});
+
+describe('afterglow', () => {
+	it('decays exponentially to exactly zero at the end of the window', () => {
+		expect(glowDecay(0)).toBeCloseTo(1, 6);
+		expect(glowDecay(1)).toBeCloseTo(0, 6);
+	});
+
+	it('keeps the total light comparable across long windows', () => {
+		const total = (minutes: number) => glowLevel(minutes * 60) * minutes;
+		expect(glowLevel(60)).toBe(PROFILE.afterglow);
+		expect(glowLevel(3600)).toBeLessThan(glowLevel(300) / 5);
+		expect(total(60) / total(5)).toBeLessThan(2);
 	});
 });
 
