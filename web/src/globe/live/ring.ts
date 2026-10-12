@@ -3,9 +3,14 @@ import { CHUNK_SCALES, type DecodedChunk } from './decode';
 /** About 1.6 hours at the fixture rate of 44 flashes per second. */
 export const DEFAULT_CAPACITY = 1 << 18;
 
+/** Lowest `written` index whose flash changed since the watcher last reset `from`. */
+export interface RingWatcher {
+	from: number;
+}
+
 /**
- * Fixed-size columnar store of flashes. When full, the oldest flashes are overwritten.
- * Slot `i` of every column describes the same flash.
+ * Fixed-size columnar store of flashes, kept in event time order whatever the arrival order.
+ * When full, the oldest flashes are overwritten. Slot `i` of every column describes the same flash.
  */
 export class FlashRing {
 	readonly capacity: number;
@@ -18,8 +23,8 @@ export class FlashRing {
 	readonly durationMs: Float32Array;
 	readonly source: Uint8Array;
 	readonly quality: Uint8Array;
-	#head = 0;
 	#written = 0;
+	readonly #watchers: RingWatcher[] = [];
 
 	constructor(capacity = DEFAULT_CAPACITY) {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
@@ -41,34 +46,108 @@ export class FlashRing {
 
 	/** Slot the next flash goes to. */
 	get head(): number {
-		return this.#head;
+		return this.#written % this.capacity;
 	}
 
-	/** Flashes pushed since creation; lets a consumer find what is new since its last read. */
+	/** Flashes pushed since creation; with `size`, maps `written` indices to stored flashes. */
 	get written(): number {
 		return this.#written;
 	}
 
 	/** Slot of the `i`-th oldest flash still stored. */
 	slot(i: number): number {
-		return (this.#head - this.size + i + this.capacity) % this.capacity;
+		return (this.#written - this.size + i) % this.capacity;
 	}
 
+	/** Returns a watcher told where each push changed the ring, so a copy can refresh from there. */
+	watch(): RingWatcher {
+		const watcher = { from: Number.POSITIVE_INFINITY };
+		this.#watchers.push(watcher);
+		return watcher;
+	}
+
+	/** Merges the chunk in event time order; flashes later than every stored one are a plain append. */
 	push(chunk: DecodedChunk): void {
 		const { count, start, columns: c } = chunk;
-		const skip = Math.max(0, count - this.capacity);
-		for (let i = skip; i < count; i++) {
-			const s = this.#head;
-			this.time[s] = start + c.event_offset_ms[i];
-			this.lat[s] = c.lat[i] * CHUNK_SCALES.lat;
-			this.lon[s] = c.lon[i] * CHUNK_SCALES.lon;
-			this.intensity[s] = c.intensity[i] * CHUNK_SCALES.intensity;
-			this.areaKm2[s] = c.area_km2[i] * CHUNK_SCALES.area_km2;
-			this.durationMs[s] = c.duration_ms[i] * CHUNK_SCALES.duration_ms;
-			this.source[s] = c.source[i];
-			this.quality[s] = c.quality[i];
-			this.#head = (s + 1) % this.capacity;
+		if (count === 0) return;
+		const offsets = c.event_offset_ms;
+		const order = Uint32Array.from({ length: count }, (_, i) => i);
+		for (let i = 1; i < count; i++) {
+			if (offsets[i] < offsets[i - 1]) {
+				order.sort((a, b) => offsets[a] - offsets[b] || a - b);
+				break;
+			}
+		}
+		const end = this.#written;
+		const at = this.#firstAfter(start + offsets[order[0]]);
+		const tail = this.#copyOut(at, end);
+		let t = 0;
+		let k = 0;
+		for (let w = at; w < end + count; w++) {
+			const s = w % this.capacity;
+			if (k < count && (t === tail.length || start + offsets[order[k]] < tail.time[t])) {
+				const i = order[k++];
+				this.time[s] = start + offsets[i];
+				this.lat[s] = c.lat[i] * CHUNK_SCALES.lat;
+				this.lon[s] = c.lon[i] * CHUNK_SCALES.lon;
+				this.intensity[s] = c.intensity[i] * CHUNK_SCALES.intensity;
+				this.areaKm2[s] = c.area_km2[i] * CHUNK_SCALES.area_km2;
+				this.durationMs[s] = c.duration_ms[i] * CHUNK_SCALES.duration_ms;
+				this.source[s] = c.source[i];
+				this.quality[s] = c.quality[i];
+			} else {
+				this.time[s] = tail.time[t];
+				this.lat[s] = tail.lat[t];
+				this.lon[s] = tail.lon[t];
+				this.intensity[s] = tail.intensity[t];
+				this.areaKm2[s] = tail.areaKm2[t];
+				this.durationMs[s] = tail.durationMs[t];
+				this.source[s] = tail.source[t];
+				this.quality[s] = tail.quality[t];
+				t++;
+			}
 		}
 		this.#written += count;
+		for (const watcher of this.#watchers) watcher.from = Math.min(watcher.from, at);
+	}
+
+	/** Written index of the first stored flash strictly after `time`. */
+	#firstAfter(time: number): number {
+		let lo = 0;
+		let hi = this.size;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (this.time[this.slot(mid)] <= time) lo = mid + 1;
+			else hi = mid;
+		}
+		return this.#written - this.size + lo;
+	}
+
+	/** Copies stored flashes [from, to), in `written` indices, out of the ring. */
+	#copyOut(from: number, to: number) {
+		const n = to - from;
+		const out = {
+			length: n,
+			time: new Float64Array(n),
+			lat: new Float32Array(n),
+			lon: new Float32Array(n),
+			intensity: new Float32Array(n),
+			areaKm2: new Float32Array(n),
+			durationMs: new Float32Array(n),
+			source: new Uint8Array(n),
+			quality: new Uint8Array(n),
+		};
+		for (let j = 0; j < n; j++) {
+			const s = (from + j) % this.capacity;
+			out.time[j] = this.time[s];
+			out.lat[j] = this.lat[s];
+			out.lon[j] = this.lon[s];
+			out.intensity[j] = this.intensity[s];
+			out.areaKm2[j] = this.areaKm2[s];
+			out.durationMs[j] = this.durationMs[s];
+			out.source[j] = this.source[s];
+			out.quality[j] = this.quality[s];
+		}
+		return out;
 	}
 }

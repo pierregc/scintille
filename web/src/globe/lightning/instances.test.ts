@@ -123,4 +123,30 @@ describe('FlashInstances', () => {
 		expect(ranges.at(-1)).toEqual([0, 2]);
 		expect(instances.data[3]).toBeCloseTo((1000 - later) / 1000, 2);
 	});
+
+	it('shows the same flashes for late and overlapping chunks as for the same data in order', () => {
+		const flashes = Array.from({ length: 40 }, (_, i) => ({ offsetMs: i * 10, lat: i, lon: -i }));
+		const late = [flashes.slice(0, 10), flashes.slice(25, 40), flashes.slice(10, 25).reverse()];
+		const visible = (ringCapacity: number, capacity: number, chunks: (typeof flashes)[], playhead: number) => {
+			const { ring, instances } = setup(ringCapacity, capacity, 50);
+			for (const flashesInChunk of chunks) {
+				instances.sync(playhead);
+				ring.push(decodeChunk(encodeChunk(1, flashesInChunk).buffer));
+			}
+			instances.sync(playhead);
+			const rows = Array.from({ length: instances.count }, (_, i) =>
+				Array.from(instances.data.subarray(i * FLASH_STRIDE, (i + 1) * FLASH_STRIDE), (v) => v.toFixed(4)).join(),
+			);
+			return rows.sort();
+		};
+		for (const [ringCapacity, capacity, playhead] of [
+			[64, 64, 1400],
+			[64, 8, 1200],
+			[32, 32, 1400],
+		]) {
+			expect(visible(ringCapacity, capacity, late, playhead)).toEqual(
+				visible(ringCapacity, capacity, [flashes], playhead),
+			);
+		}
+	});
 });
