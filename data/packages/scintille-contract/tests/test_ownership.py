@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from scintille_contract import ownership
 from scintille_contract.ownership import SATELLITES, Satellite, owner_index, owners
+from shapely import Point
 
 MASK = Path(__file__).parents[3] / "contract" / "ownership.geojson"
 
@@ -19,18 +20,33 @@ def test_each_point_belongs_to_the_nearest_subpoint() -> None:
 
 
 def test_points_no_satellite_sees_have_no_owner() -> None:
-    assert owners([0, 80, 0], [10.0, -100.0, 90.0]) == [None, None, None]
+    assert owners([0, 80, 0], [120.0, -100.0, 90.0]) == [None, None, None]
 
 
 def test_the_antimeridian_side_belongs_to_goes_west() -> None:
     assert owners([0, 0], [179.0, -179.0]) == ["glm-west", "glm-west"]
 
 
-def test_a_new_satellite_takes_its_share_without_other_changes() -> None:
-    with_mtg = (*SATELLITES, Satellite("mtg-li", 0.0, 67.0))
+def test_mtg_takes_the_atlantic_east_of_the_halfway_meridian() -> None:
     boundary = (-75.2 + 0.0) / 2
-    assert owners([10, 10], [boundary - 0.1, boundary + 0.1], with_mtg) == ["glm-east", "mtg-li"]
-    assert owners([10], [-120.0], with_mtg) == ["glm-west"]
+    assert owners([10, 10, -20], [boundary - 0.1, boundary + 0.1, 30.0]) == [
+        "glm-east",
+        "mtg-li",
+        "mtg-li",
+    ]
+    assert owners([10], [-120.0]) == ["glm-west"]
+
+
+def test_mtg_keeps_the_far_north_west_glm_east_does_not_see() -> None:
+    assert owners([62, 66], [-45.0, -45.0]) == ["glm-east", "mtg-li"]
+
+
+def test_the_mtg_zone_wraps_around_the_edge_of_glm_east() -> None:
+    mtg = [s.source for s in SATELLITES].index("mtg-li")
+    (polygon,) = ownership.zone(mtg)
+    assert not polygon.contains(Point(-45.0, 62.0))
+    assert polygon.contains(Point(-45.0, 66.0))
+    assert polygon.contains(Point(-30.0, 62.0))
 
 
 def test_a_smaller_coverage_hands_its_far_points_to_the_other_satellite() -> None:
