@@ -5,8 +5,8 @@ import contextlib
 import logging
 import random
 import shutil
-from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple, Protocol
@@ -63,6 +63,10 @@ class Settings:
     disk_pause_raw: float = 0.9
     owner_stale_after: float = 300.0
     """Seconds without a file before a source's zone takes the other sources' flashes live."""
+    owner_stale_after_by_source: Mapping[str, float] = field(
+        default_factory=lambda: {"mtg-li": 900.0}
+    )
+    """Overrides for sources slower than that: MTG LI delivers one file per 10 min."""
     heartbeat_every: float = 60.0
 
 
@@ -186,8 +190,13 @@ class IngestLive:
         )
 
     def _live_sources(self) -> set[str]:
-        limit = self._clock() - timedelta(seconds=self.settings.owner_stale_after)
-        return {name for name, at in self._last_file.items() if at >= limit}
+        now = self._clock()
+        return {name for name, at in self._last_file.items() if now - at <= self._stale_after(name)}
+
+    def _stale_after(self, source: str) -> timedelta:
+        settings = self.settings
+        seconds = settings.owner_stale_after_by_source.get(source, settings.owner_stale_after)
+        return timedelta(seconds=seconds)
 
     async def _cache_raw(self, source: str, identity: FileIdentity, data: bytes) -> None:
         """Best effort: an R2 outage must not stop the live feed."""
