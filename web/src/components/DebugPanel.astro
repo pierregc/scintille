@@ -1,0 +1,285 @@
+<details class="debug" data-debug open hidden>
+	<summary><span class="cap">Debug</span><i aria-hidden="true"></i></summary>
+	<div class="body">
+		<dl class="feed" data-debug-feed></dl>
+		<table>
+			<thead>
+				<tr><th>Source</th><th>State</th><th>Held</th><th>1 min</th><th>Wait</th><th>Newest</th><th>Delay</th><th>Ingest</th></tr>
+			</thead>
+			<tbody data-debug-sources></tbody>
+		</table>
+		<p class="head"><span>UTC</span><span>Src</span><span>Lat</span><span>Lon</span><span>Int</span><span>km²</span><span>ms</span><span>Flags</span></p>
+		<ol class="flashes" data-debug-flashes></ol>
+	</div>
+</details>
+
+<style>
+	.debug {
+		position: fixed;
+		top: calc(var(--gut) + 104px);
+		left: var(--gut);
+		width: min(27rem, calc(100vw - 2 * var(--gut)));
+		color: var(--soft);
+		font: 300 10px/1.5 var(--mono);
+		font-variant-numeric: tabular-nums;
+	}
+	.body {
+		display: flex;
+		flex-direction: column;
+		height: calc(100svh - 2 * var(--gut) - 104px - 24px - 130px);
+	}
+	.debug > summary {
+		display: inline-flex;
+		gap: 10px;
+		align-items: center;
+		min-height: 24px;
+		color: var(--dim);
+		list-style: none;
+		cursor: pointer;
+	}
+	.debug > summary::-webkit-details-marker {
+		display: none;
+	}
+	.debug > summary .cap {
+		color: inherit;
+	}
+	.debug > summary i {
+		width: 5px;
+		height: 5px;
+		border: solid currentcolor;
+		border-width: 0 1px 1px 0;
+		transform: translateY(-2px) rotate(45deg);
+	}
+	.debug[open] > summary i {
+		transform: translateY(1px) rotate(-135deg);
+	}
+	.feed {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0 12px;
+		margin: 8px 0 10px;
+	}
+	.feed :global(dt) {
+		color: var(--dim);
+	}
+	.feed :global(dd) {
+		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+	th {
+		color: var(--dim);
+		font-weight: 300;
+		text-align: right;
+	}
+	th:first-child,
+	table :global(td:first-child),
+	table :global(td:nth-child(2)) {
+		text-align: left;
+	}
+	th:nth-child(2) {
+		text-align: left;
+	}
+	table :global(td) {
+		padding: 1px 0 1px 8px;
+		text-align: right;
+		white-space: nowrap;
+	}
+	table :global(td:first-child) {
+		padding-left: 0;
+	}
+	table :global(tr[data-state='delayed'] td:nth-child(2)),
+	table :global(tr[data-state='offline'] td:nth-child(2)) {
+		color: var(--glow);
+	}
+	.head,
+	.flashes :global(li) {
+		display: grid;
+		grid-template-columns: 12ch 8ch 6ch 7ch 4ch 5ch 4ch 1fr;
+		gap: 1ch;
+		white-space: nowrap;
+	}
+	.head {
+		margin-top: 12px;
+		padding-bottom: 3px;
+		color: var(--dim);
+		border-bottom: 1px solid var(--hair);
+	}
+	.head span:nth-child(n + 3):nth-child(-n + 7),
+	.flashes :global(li span:nth-child(n + 3):nth-child(-n + 7)) {
+		text-align: right;
+	}
+	.flashes {
+		flex: 1;
+		min-height: 0;
+		margin: 0;
+		padding: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		list-style: none;
+		scrollbar-color: var(--hair) transparent;
+		scrollbar-width: thin;
+	}
+	.flashes :global(li span:last-child) {
+		overflow: hidden;
+		color: var(--dim);
+		text-overflow: ellipsis;
+	}
+	.flashes :global(li.new) {
+		animation: arrive 1.2s ease-out;
+	}
+	@keyframes arrive {
+		from {
+			color: var(--glow);
+		}
+	}
+	@media (max-width: 640px) {
+		.debug {
+			display: none;
+		}
+	}
+</style>
+
+<script>
+	import { BUILD } from '../version';
+	import type { GlobeApp } from '../globe/app';
+	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { feedStatus } from '../globe/live/freshness';
+	import {
+		debugEnabled,
+		type FlashRow,
+		formatCoord,
+		formatDuration,
+		playedFlashes,
+		qualityFlags,
+		sourceLabel,
+		sourceStats,
+	} from './debug/stats';
+
+	const ROWS = 80;
+	const panel = document.querySelector<HTMLDetailsElement>('[data-debug]');
+	if (panel && debugEnabled(location.search, import.meta.env.DEV || BUILD.pr !== null)) {
+		panel.hidden = false;
+		const feed = panel.querySelector<HTMLElement>('[data-debug-feed]');
+		const sources = panel.querySelector<HTMLElement>('[data-debug-sources]');
+		const list = panel.querySelector<HTMLOListElement>('[data-debug-flashes]');
+		const rows = new Map<string, HTMLLIElement>();
+		const key = (f: FlashRow) => `${f.id}/${f.time}/${f.lat}/${f.lon}`;
+		let app: GlobeApp | undefined;
+		let topTime = Number.NEGATIVE_INFINITY;
+
+		const utc = (ms: number) => new Date(ms).toISOString().slice(11, 23);
+		const cell = (text: string) => {
+			const td = document.createElement('td');
+			td.textContent = text;
+			return td;
+		};
+
+		const showFeed = () => {
+			if (!app || !feed) return;
+			const { ring, client, quality } = app.debug;
+			const now = app.clock.wallTime();
+			const manifest = client.manifest;
+			const status = feedStatus(manifest, client.loadedAt, now, client.failures > 0);
+			const start = client.coverageStart();
+			const items: [string, string][] = [
+				['Feed', client.manifestUrl.host],
+				['Mode', app.clock.mode === 'live' ? 'live' : `replay ${utc(app.clock.time()).slice(0, 8)}`],
+				['Manifest', manifest ? `${formatDuration(now - Date.parse(manifest.generated_at))} old · ${manifest.chunks.length} chunks of ${manifest.chunk_seconds}s` : 'none yet'],
+				['Loaded', `${formatDuration(client.loadedAt === null ? null : now - client.loadedAt)} ago · ${client.failures} failed polls · ${status.stale ? 'stale' : 'fresh'}`],
+				['Ring', `${ring.size.toLocaleString('en')} / ${ring.capacity.toLocaleString('en')} · since ${start === null ? '-' : utc(start).slice(0, 8)}`],
+				['Quality', quality()],
+			];
+			feed.replaceChildren(
+				...items.flatMap(([k, v]) => {
+					const dt = document.createElement('dt');
+					const dd = document.createElement('dd');
+					dt.textContent = k;
+					dd.textContent = v;
+					return [dt, dd];
+				}),
+			);
+		};
+
+		const showSources = () => {
+			if (!app || !sources) return;
+			const { ring, client, delays } = app.debug;
+			const stats = sourceStats(ring, delays(), client.manifest, app.clock.time(), app.clock.wallTime());
+			sources.replaceChildren(
+				...stats.map((s) => {
+					const tr = document.createElement('tr');
+					tr.dataset.state = s.state ?? '';
+					tr.append(
+						cell(s.label),
+						cell(s.state ?? '-'),
+						cell(s.held.toLocaleString('en')),
+						cell(s.lastMinute.toLocaleString('en')),
+						cell(s.pending.toLocaleString('en')),
+						cell(formatDuration(s.newestAgeMs)),
+						cell(formatDuration(s.delayMs)),
+						cell(formatDuration(s.ingestAgeMs)),
+					);
+					return tr;
+				}),
+			);
+		};
+
+		const row = (f: FlashRow, fresh: boolean) => {
+			const li = document.createElement('li');
+			if (fresh) li.className = 'new';
+			for (const text of [
+				utc(f.time),
+				sourceLabel(f.source),
+				formatCoord(f.lat, 'N', 'S'),
+				formatCoord(f.lon, 'E', 'W'),
+				f.intensity.toFixed(2),
+				String(Math.round(f.areaKm2)),
+				String(Math.round(f.durationMs)),
+				qualityFlags(f.quality).join(' '),
+			]) {
+				const span = document.createElement('span');
+				span.textContent = text;
+				li.append(span);
+			}
+			return li;
+		};
+
+		const showFlashes = () => {
+			if (!app || !list || !panel.open || document.hidden) return;
+			const { ring, delays } = app.debug;
+			const flashes = playedFlashes(ring, delays(), app.clock.time(), ROWS);
+			const next = flashes.map((f) => rows.get(key(f)) ?? row(f, f.time > topTime && topTime > 0));
+			rows.clear();
+			flashes.forEach((f, i) => rows.set(key(f), next[i]));
+			topTime = flashes[0]?.time ?? Number.NEGATIVE_INFINITY;
+			if (next.some((li, i) => list.children[i] !== li) || list.children.length !== next.length) {
+				list.replaceChildren(...next);
+			}
+		};
+
+		const slow = () => {
+			if (!panel.open || document.hidden) return;
+			showFeed();
+			showSources();
+		};
+		setInterval(slow, 1000);
+		setInterval(showFlashes, 200);
+		panel.addEventListener('toggle', () => {
+			slow();
+			showFlashes();
+		});
+
+		window.addEventListener(GLOBE_READY, (event) => {
+			app = (event as CustomEvent<GlobeApp>).detail;
+			slow();
+		});
+		window.addEventListener(GLOBE_GONE, () => {
+			app = undefined;
+		});
+	}
+</script>
