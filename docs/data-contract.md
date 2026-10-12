@@ -19,7 +19,7 @@ uv run scintille-contract check --base origin/main
 ```
 
 `check` fails when a generated file is stale, and when the schemas differ from `--base` without the
-matching bump of `SchemaVersion` (CI runs it on every pull request, see `.github/workflows/data.yml`):
+matching bump of `SchemaVersion` (CI runs it on every pull request ready for review, see `.github/workflows/ci.yml`):
 
 | Change | Bump |
 |---|---|
