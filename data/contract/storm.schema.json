@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:storm",
+  "title": "StormDetail",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "published_at",
+    "last_observation_time",
+    "storm",
+    "bounds",
+    "track",
+    "replay"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/SchemaVersion"
+    },
+    "published_at": {
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "last_observation_time": {
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "storm": {
+      "$ref": "#/$defs/StormSummary"
+    },
+    "bounds": {
+      "$ref": "#/$defs/StormBounds"
+    },
+    "track": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/StormTrackPoint"
+      }
+    },
+    "replay": {
+      "$ref": "#/$defs/StormReplay"
+    }
+  },
+  "description": "storms/<slug>.json: bounded metadata and replay references.",
+  "$defs": {
+    "StormBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "west",
+        "south",
+        "east",
+        "north"
+      ],
+      "properties": {
+        "west": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "south": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "east": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "north": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      },
+      "description": "Bounds in degrees; west > east crosses the antimeridian."
+    },
+    "StormTrackPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "lat",
+        "lon",
+        "flash_count",
+        "area_km2"
+      ],
+      "properties": {
+        "time": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "flash_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "area_km2": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "description": "One centroid sample per tracking window."
+    },
+    "StormChunkRef": {
+      "description": "One replay chunk, partitioned by event time, using the live SCNT binary encoding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "path",
+        "flash_count",
+        "size_bytes",
+        "event_min",
+        "event_max"
+      ],
+      "properties": {
+        "start": {
+          "description": "Whole-second chunk origin; event offsets are relative to this time.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "end": {
+          "description": "Exclusive end of this event-time window.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^storms/chunks/[0-9A-Za-z_-]+\\.bin\\.gz$",
+          "description": "Opaque path relative to the public data root, never to the metadata URL."
+        },
+        "flash_count": {
+          "description": "Number of flashes in the chunk.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "size_bytes": {
+          "description": "Size of the chunk file as stored (gzip), bytes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_min": {
+          "description": "Earliest event_time in the chunk; null when empty.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "event_max": {
+          "description": "Latest event_time in the chunk; null when empty.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "StormReplay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "flash_count",
+        "chunks"
+      ],
+      "properties": {
+        "selection": {
+          "type": "string",
+          "enum": [
+            "cell-members",
+            "track-bounds"
+          ]
+        },
+        "flash_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "chunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StormChunkRef"
+          }
+        }
+      },
+      "description": "Replay selection provenance. track-bounds can include nearby unrelated flashes; its count is separate from storm metrics."
+    },
+    "StormSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storm_id",
+        "slug",
+        "name",
+        "label",
+        "country_code",
+        "t_start",
+        "t_end",
+        "closed",
+        "flashes",
+        "peak_rate",
+        "level",
+        "level_name",
+        "level_rule",
+        "sources"
+      ],
+      "properties": {
+        "storm_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "country_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "t_start": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "t_end": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "closed": {
+          "type": "boolean"
+        },
+        "flashes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peak_rate": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "level_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "level_rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Source"
+          }
+        }
+      },
+      "description": "Storm metrics and persisted classification; publication never chooses intensity thresholds."
+    },
+    "StormIndexPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "published_at",
+        "last_observation_time",
+        "page",
+        "page_size",
+        "total_storms",
+        "total_pages",
+        "storms"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/SchemaVersion"
+        },
+        "published_at": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "last_observation_time": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_storms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "storms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StormSummary"
+          }
+        }
+      },
+      "description": "storms/index/<page>.json: zero-based pages, recent first, read one page per request."
+    }
+  }
+}

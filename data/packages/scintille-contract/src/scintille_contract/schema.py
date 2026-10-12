@@ -16,6 +16,7 @@ SCHEMA_FILES = (
     "chunk.schema.json",
     "metrics.schema.json",
     "coverage.schema.json",
+    "storm.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 
