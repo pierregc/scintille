@@ -1,7 +1,7 @@
 import { LiveClient, type LiveClientOptions } from './client';
 import { FlashRing } from './ring';
 
-export { FlashRing } from './ring';
+export { FlashRing, type RingWatcher } from './ring';
 export { LiveClient } from './client';
 
 /** Feed root: `PUBLIC_LIVE_BASE_URL`, else the fixture server in dev and R2 in production. */
