@@ -30,6 +30,8 @@ uniform float specular;
 uniform float seaRoughness;
 uniform float glintCap;
 uniform float terminatorTint;
+uniform sampler2D coverageMap;
+uniform float coverageShade;
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -72,6 +74,13 @@ void main() {
 
 	vec3 view = normalize(cameraPosition - vWorldPosition);
 	color += vec3(0.92, 0.95, 1.0) * specular * water * glint(n, sun, view) * smoothstep(0.0, 0.2, s);
+
+	// No lightning data here: desaturated, dimmed and finely hatched, visible by day and by night.
+	float gap = texture2D(coverageMap, vUv).r * coverageShade;
+	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	color = mix(color, vec3(luma) * 0.55, 0.8 * gap);
+	float hatch = smoothstep(2.3, 3.5, abs(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0) - 3.5));
+	color += vec3(0.58, 0.64, 0.74) * 0.07 * hatch * gap;
 
 	gl_FragColor = vec4(color, 1.0);
 	#include <tonemapping_fragment>
