@@ -1,5 +1,5 @@
 import { type Camera, Vector3 } from 'three';
-import type { FlashRing } from '../live';
+import type { FlashRing, SourceDelays } from '../live';
 import type { Vec3 } from '../sun';
 import { type Listener, MAX_VOICES, ThunderScheduler, type Trigger } from './schedule';
 import { CLAP_SECONDS, softClipCurve, thunderClap } from './synth';
@@ -14,8 +14,8 @@ export interface Thunder {
 	readonly enabled: boolean;
 	/** Turns sound on or off; call from a user gesture so the browser lets audio start. */
 	setEnabled(on: boolean): void;
-	/** Schedules thunder for flashes the playhead crossed since the last frame. */
-	update(sceneTime: number): void;
+	/** Schedules thunder for flashes the playhead crossed since the last frame, each source `delays` behind. */
+	update(sceneTime: number, delays?: SourceDelays): void;
 	dispose(): void;
 }
 
@@ -124,7 +124,7 @@ export function createThunder(ring: FlashRing, camera: Camera, radius = 1): Thun
 				}, 500);
 			}
 		},
-		update(sceneTime) {
+		update(sceneTime, delays) {
 			if (!enabled || !graph || graph.context.state !== 'running') {
 				scheduler.skipTo(sceneTime);
 				return;
@@ -133,7 +133,7 @@ export function createThunder(ring: FlashRing, camera: Camera, radius = 1): Thun
 			position[0] = camera.position.x;
 			position[1] = camera.position.y;
 			position[2] = camera.position.z;
-			const trigger = scheduler.update(sceneTime, graph.context.currentTime, listener);
+			const trigger = scheduler.update(sceneTime, graph.context.currentTime, listener, delays);
 			if (trigger) play(graph, trigger);
 		},
 		dispose() {

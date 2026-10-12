@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeChunk } from '../live/decode';
+import { SourceDelays } from '../live/delay';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { latLonToVector } from '../sun';
@@ -148,5 +149,15 @@ describe('FlashInstances', () => {
 				visible(ringCapacity, capacity, [flashes], playhead),
 			);
 		}
+	});
+
+	it('plays each source its delay after its event time', () => {
+		const { ring, instances, times } = setup(16, 8, 10);
+		const flashes = [0, 1, 2].map((source) => ({ offsetMs: 0, lat: 0, lon: 0, source }));
+		ring.push(decodeChunk(encodeChunk(1, flashes).buffer));
+		instances.sync(1005);
+		expect(times()).toEqual([1000, 1000, 1000]);
+		instances.sync(1505, new SourceDelays({ 'glm-east': 100, 'glm-west': 100, 'mtg-li': 500 }));
+		expect(times().sort()).toEqual([1100, 1100, 1500]);
 	});
 });
