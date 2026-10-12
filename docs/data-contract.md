@@ -10,6 +10,7 @@ in [`data/contract/`](../data/contract/), and enforced by code:
 | TypeScript types | `web/src/contract/types.ts` | generated |
 | Field reference (end of this doc) | `docs/data-contract.md` | generated section |
 | Ownership mask ([data quality](data-quality.md#overlap-between-satellites)) | `data/contract/ownership.geojson` | generated |
+| Coverage map ([below](#coverage-map)) | `data/contract/coverage.geojson` | generated |
 
 ```sh
 cd data
@@ -72,6 +73,7 @@ The year is the year of publication. GLM data is public domain (NOAA); we credit
 ```
 live/manifest.json                    Cache-Control: max-age=10
 live/metrics.json                     Cache-Control: max-age=30
+live/coverage.geojson                 Cache-Control: max-age=3600
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
 live/chunks/20260715T183030Z.bin.gz
 ...
@@ -89,12 +91,33 @@ live/chunks/20260715T183030Z.bin.gz
 - The **manifest** lists the chunks of the last 60 minutes (oldest first, with window, flash count,
   size and event time span) and, per source, its state (`live`, `delayed`, `offline`) and last event
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
+- A source's **state** comes from the time since its last product file: `live` up to
+  `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
+  `offline`, which is the "down" of the coverage overlay: the globe greys out that source's footprint
+  where no other live source sees. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
 - **`metrics.json`** (`OpsMetrics`) is rewritten every minute: freshness per layer, flashes per
   minute, latency, completeness and error budget per source, data quality status and catalog usage.
   Targets are in [SLOs](slo.md).
+
+## Coverage map
+
+`live/coverage.geojson` (`CoverageMap`, RFC 7946) says where flashes can come from. It is generated
+from the satellite list of the ownership mask (`scintille_contract.ownership.SATELLITES`), so a new
+source gets its footprint without other changes, and published by `ingest-live` when it changes:
+
+- one `footprint` feature per satellite, in mask order: its usable field of view, the points within
+  `coverage_deg` of the sub-satellite point;
+- one `no-coverage` feature: the area no footprint covers (today the poles beyond about 67°, Asia,
+  Oceania, Europe and Africa until MTG LI joins the mask in #34).
+
+Geometries are MultiPolygons split at the antimeridian, outer rings counterclockwise and holes
+clockwise; together the features tile the globe. `mask_version` follows `ownership.geojson`. The
+globe combines this file with the manifest: the no coverage area is always marked, and the footprint
+of an `offline` source is marked too, minus what the live footprints still cover. A copy is committed
+in `data/contract/coverage.geojson` and in the fixtures.
 
 ## Cloud frames on R2
 
@@ -203,7 +226,7 @@ See [ADR 0004](adr/0004-live-chunk-encoding.md).
 
 ## Fixtures
 
-`fixtures/live/` holds a synthetic hour (2026-07-15 18:00 to 19:00 UTC): a manifest and 120 chunks,
+`fixtures/live/` holds a synthetic hour (2026-07-15 18:00 to 19:00 UTC): a manifest, the coverage map and 120 chunks,
 about 159,000 flashes (44 per second), 1.65 MB in total. Storm cells are placed in the regions that
 are convectively active at that time of a July day (Central and West Africa, Amazon, Central
 America, south-east and central US, Europe), grow and decay over 30 to 120 minutes and drift with
@@ -226,7 +249,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.2.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.3.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -234,7 +257,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.2.0`.
+Value: `2.3.0`.
 
 ### UtcTimestamp
 
@@ -481,5 +504,65 @@ live/metrics.json: operational metrics and freshness per layer, written every mi
 | `sources` | array of [SourceMetrics](#sourcemetrics) | yes |  | One entry per source, in Source order. |
 | `quality` | [QualityStatus](#qualitystatus) | yes |  |  |
 | `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
+
+### CoverageKind
+
+Defined in `data/contract/coverage.schema.json`.
+
+What a coverage feature outlines.
+
+| Index | Value |
+|---|---|
+| 0 | `footprint` |
+| 1 | `no-coverage` |
+
+### CoverageProperties
+
+Defined in `data/contract/coverage.schema.json`.
+
+Properties of a coverage feature; the source fields are null for the no coverage area.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `kind` | [CoverageKind](#coveragekind) | yes |  |  |
+| `source` | [Source](#source) or null | yes |  | Source whose usable field of view this is. |
+| `subpoint_lon` | number or null | yes |  | Longitude of the sub-satellite point, degrees east. |
+| `coverage_deg` | number or null | yes |  | Great-circle radius of the field of view around the sub-satellite point, degrees. |
+
+### MultiPolygon
+
+Defined in `data/contract/coverage.schema.json`.
+
+GeoJSON MultiPolygon: polygons of [lon, lat] rings, outer ring counterclockwise, holes clockwise, split at the antimeridian.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `type` | `"MultiPolygon"` | yes |  |  |
+| `coordinates` | array of array of array of array of number | yes |  |  |
+
+### CoverageFeature
+
+Defined in `data/contract/coverage.schema.json`.
+
+One area of the coverage map.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `type` | `"Feature"` | yes |  |  |
+| `properties` | [CoverageProperties](#coverageproperties) | yes |  |  |
+| `geometry` | [MultiPolygon](#multipolygon) | yes |  |  |
+
+### CoverageMap
+
+Defined in `data/contract/coverage.schema.json`.
+
+live/coverage.geojson: the usable field of view of each source and the area no source sees (RFC 7946).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `type` | `"FeatureCollection"` | yes |  |  |
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `mask_version` | integer | yes | minimum `1` | Version of the satellite list the footprints come from, as in ownership.geojson. |
+| `features` | array of [CoverageFeature](#coveragefeature) | yes |  | One footprint per source of the ownership mask, in mask order, then the no coverage area. |
 
 <!-- END GENERATED REFERENCE -->

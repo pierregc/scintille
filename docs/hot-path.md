@@ -47,7 +47,10 @@ received since the previous chunk become one gzip chunk under `live/chunks/`, th
 to upload keeps its flashes for the next one, and the manifest only lists chunks already stored.
 Flashes are deduplicated by `flash_id` over the hour, so a file published again after a crash adds
 nothing. Source state: `live` if a file arrived in the last 2 minutes, `delayed` up to 10, then
-`offline`. `live_latency_seconds` (event time → manifest) is logged and exported per source.
+`offline`; the delays are set in seconds by `SCINTILLE_SOURCE_DELAYED_AFTER` and
+`SCINTILLE_SOURCE_OFFLINE_AFTER`. After its first chunk the process writes `live/coverage.geojson`
+([coverage map](data-contract.md#coverage-map)) if the stored copy differs, retrying on the next
+chunk after a failure. `live_latency_seconds` (event time → manifest) is logged and exported per source.
 Intensity uses a provisional log-energy mapping until #33.
 
 `publish()` returns only once the flashes are in the outbox (`<spool>/live-outbox/`, fsynced), so

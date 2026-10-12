@@ -29,7 +29,7 @@ from scintille_ingest.runtime import health
 from scintille_ingest.runtime.heartbeat import heartbeat_from_env
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
-from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore
+from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore, StateDelays
 from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
@@ -128,12 +128,18 @@ async def run_live(spool_dir: Path, port: int) -> int:
 
 
 def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
-    """Publishes to `SCINTILLE_LIVE_BUCKET`, with the R2 credentials used elsewhere, when set."""
+    """Publishes to `SCINTILLE_LIVE_BUCKET`, with the R2 credentials used elsewhere, when set;
+    source state delays from `StateDelays.from_env`."""
     bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
     if not bucket:
         log.warning("SCINTILLE_LIVE_BUCKET is not set: no live feed, spool only")
         return None
-    return LiveFeed(ObjectLiveStore(live_store(bucket)), outbox=outbox, metrics=metrics)
+    return LiveFeed(
+        ObjectLiveStore(live_store(bucket)),
+        outbox=outbox,
+        metrics=metrics,
+        delays=StateDelays.from_env(),
+    )
 
 
 async def run_clouds(port: int) -> int:

@@ -15,6 +15,7 @@ SCHEMA_FILES = (
     "manifest.schema.json",
     "chunk.schema.json",
     "metrics.schema.json",
+    "coverage.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 
