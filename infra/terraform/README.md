@@ -7,6 +7,7 @@ The VPS is not here: it is ordered by hand and configured by [`infra/vps/bootstr
 |---|---|
 | `r2.tf` | Buckets `scintille-live`, `scintille-live-preview`, `scintille-lake` (ENAM, Standard, `prevent_destroy`); `r2.dev` URL off on all three; `data.scintille.app` custom domain on `scintille-live`; CORS on `scintille-live`; lifecycle on `scintille-lake` |
 | `zone.tf` | Proxied `www` record, `www` → apex 301 redirect rule, Always Use HTTPS, HSTS |
+| `edge.tf` | Cache rule on `data.scintille.app`, WAF rule blocking query strings and writes there, per-IP rate limit |
 
 Ownership:
 
@@ -26,6 +27,10 @@ Choices:
   uploads are aborted after 7 days (the rule R2 adds by default, kept because the lifecycle resource
   replaces all rules). R2 Data Catalog is enabled once by hand (the token has no catalog
   permission), see below; compaction and snapshot expiration are not managed here.
+- `data.scintille.app` is cached at the edge with the `Cache-Control` the publishers set, so reads
+  rarely reach R2 (billed per read). Query strings are blocked there since they would bypass the
+  cache. The rate limit (Free plan: path only, 10 s) is a backstop for random paths; R2 has no
+  spending cap.
 - HSTS: 6 months, `includeSubDomains`, no preload, `nosniff`. Every subdomain must stay HTTPS-only.
 
 ## Inputs
