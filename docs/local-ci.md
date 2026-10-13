@@ -38,6 +38,6 @@ make deploy-images                # linux/amd64 images, tagged with the commit a
 make deploy-vps                   # uploads the compose file, runs deploy.sh, rolls back on failure
 ```
 
-`deploy-vps` uses `~/.ssh/scintille_deploy` and `deploy@VPS_HOST` (override with `VPS_KEY`,
-`VPS_USER`, `VPS_HOST`). The first VPS deploy also needs the `.env` and the GHCR login on the VPS
-([deploy](deploy.md)).
+`deploy-vps` uses `~/.ssh/scintille_deploy` and `deploy@$VPS_HOST`, where `VPS_HOST` defaults to the
+repository variable of the same name (override with `VPS_KEY`, `VPS_USER`, `VPS_HOST`). The first VPS
+deploy also needs the `.env` and the GHCR login on the VPS ([deploy](deploy.md)).

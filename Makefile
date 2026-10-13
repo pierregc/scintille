@@ -7,7 +7,8 @@ SHA := $(shell git rev-parse HEAD)
 OWNER := pierregc
 PACKAGES := scintille-ingest scintille-pipelines
 COMPOSE_LOCAL := docker compose -f infra/compose/compose.local.yaml
-VPS_HOST ?= VPS_HOST
+# Defaults to the VPS_HOST repository variable, kept out of the repo.
+VPS_HOST ?= $(shell gh variable get VPS_HOST)
 VPS_USER ?= deploy
 VPS_KEY ?= $(HOME)/.ssh/scintille_deploy
 # Where the contract check diffs from; CI uses the PR base.
@@ -65,6 +66,7 @@ deploy-images: guard-main ## build linux/amd64 images and push to GHCR (docker l
 			-t ghcr.io/$(OWNER)/$$p:$(SHA) -t ghcr.io/$(OWNER)/$$p:main data || exit 1; \
 	done
 deploy-vps: guard-main ## roll the pushed images out on the VPS, with rollback
+	@test -n "$(VPS_HOST)" || { echo "VPS_HOST is not set"; exit 1; }
 	ssh -i $(VPS_KEY) $(VPS_USER)@$(VPS_HOST) "mkdir -p /srv/scintille/releases/$(SHA)"
 	scp -i $(VPS_KEY) infra/compose/compose.yaml $(VPS_USER)@$(VPS_HOST):/srv/scintille/releases/$(SHA)/
 	scp -i $(VPS_KEY) infra/compose/deploy.sh $(VPS_USER)@$(VPS_HOST):/srv/scintille/
