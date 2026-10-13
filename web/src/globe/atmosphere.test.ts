@@ -23,7 +23,7 @@ describe('atmosphereParameters', () => {
 		expect(atmosphereRadius).toBeGreaterThan(1);
 		expect(atmosphereRadius).toBeLessThan(1.05);
 		for (const aspect of [0.5, 1, 2]) {
-			expect(zoomLimits(1, 35, aspect, 0.1, 100).min).toBeGreaterThan(atmosphereRadius);
+			expect(zoomLimits(1, 35, aspect).min).toBeGreaterThan(atmosphereRadius);
 		}
 	});
 });
