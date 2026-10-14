@@ -3,6 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 from dagster import (
+    DefaultScheduleStatus,
+    DefaultSensorStatus,
     RunRequest,
     ScheduleEvaluationContext,
     SensorEvaluationContext,
@@ -31,14 +33,19 @@ def closed_day(now: datetime) -> str:
     return (now.astimezone(UTC).date() - timedelta(days=1)).isoformat()
 
 
-@schedule(job=daily_gold, cron_schedule="30 1 * * *", execution_timezone="UTC")
+@schedule(
+    job=daily_gold,
+    cron_schedule="30 1 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
 def daily_gold_schedule(context: ScheduleEvaluationContext) -> RunRequest:
     """Yesterday's partition, once late files have landed."""
     day = closed_day(context.scheduled_execution_time or utc_now())
     return RunRequest(run_key=day, partition_key=day)
 
 
-@sensor(job=daily_gold, minimum_interval_seconds=600)
+@sensor(job=daily_gold, minimum_interval_seconds=600, default_status=DefaultSensorStatus.RUNNING)
 def silver_changed(context: SensorEvaluationContext, lake: LakeResource) -> RunRequest | SkipReason:
     """Rebuilds today's gold and feed when silver.flashes gets a new snapshot."""
     snapshot = lake.catalog().load_table(FLASHES.identifier).current_snapshot()
