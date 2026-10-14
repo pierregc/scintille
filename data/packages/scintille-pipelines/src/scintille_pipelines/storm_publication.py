@@ -32,6 +32,7 @@ from .storm_catalog import (
     selected_flashes,
 )
 from .storm_cells import hourly
+from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
@@ -97,7 +98,7 @@ def storm_catalog(
     catalog = lake.catalog()
     storms = _scan(catalog.load_table(STORMS.identifier), "true")
     names = _scan(catalog.load_table(STORM_NAMES.identifier), "true")
-    levels = _scan(catalog.load_table(("gold", "storm_levels")), "true")
+    levels = _scan(catalog.load_table(STORM_LEVELS.identifier), "true")
     summary = summaries(storms, names, levels)
     tracks_table = catalog.load_table(STORM_TRACKS.identifier)
     touched = _scan(tracks_table, _between("window_start", start - timedelta(hours=1), end))
