@@ -5,7 +5,7 @@ import os
 import urllib.request
 from typing import Any
 
-from dagster import RunFailureSensorContext, run_failure_sensor
+from dagster import DefaultSensorStatus, RunFailureSensorContext, run_failure_sensor
 
 
 def failure_payload(job: str, run_id: str, message: str) -> dict[str, Any]:
@@ -24,7 +24,8 @@ def post_json(url: str, payload: dict[str, Any]) -> None:
 
 
 @run_failure_sensor(
-    description="Posts failed runs, including blocking check failures, to a webhook."
+    default_status=DefaultSensorStatus.RUNNING,
+    description="Posts failed runs, including blocking check failures, to a webhook.",
 )
 def alert_on_failure(context: RunFailureSensorContext) -> None:
     url = os.environ.get("SCINTILLE_ALERT_WEBHOOK")

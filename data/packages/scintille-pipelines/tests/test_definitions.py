@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
-from dagster import EnvVar, RunRequest, build_schedule_context, build_sensor_context
+from dagster import (
+    DefaultScheduleStatus,
+    DefaultSensorStatus,
+    EnvVar,
+    RunRequest,
+    build_schedule_context,
+    build_sensor_context,
+)
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.migrate import migrate
@@ -108,3 +115,13 @@ def test_schedule_requests_the_last_closed_day() -> None:
     request = automation.daily_gold_schedule(build_schedule_context(scheduled_execution_time=tick))
     assert isinstance(request, RunRequest)
     assert request.partition_key == "2026-07-15"
+
+
+def test_schedules_and_sensors_start_running() -> None:
+    repo = defs.get_repository_def()
+    assert {
+        s.name for s in repo.schedule_defs if s.default_status != DefaultScheduleStatus.RUNNING
+    } == set()
+    assert {
+        s.name for s in repo.sensor_defs if s.default_status != DefaultSensorStatus.RUNNING
+    } == set()
