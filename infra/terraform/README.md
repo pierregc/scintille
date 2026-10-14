@@ -54,6 +54,18 @@ with a conditional `If-None-Match` PUT, which R2 supports). No DynamoDB. Keep th
 and versioning-free; never edit the state by hand. If a run dies holding the lock, check that
 nothing else runs, then `terraform force-unlock <lock id>`.
 
+## Day to day (from a Mac)
+
+Store the six values of the table above once in the Keychain (prompts for each value):
+
+```sh
+for n in CLOUDFLARE_API_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TF_VAR_account_id TF_VAR_zone_id TF_VAR_workers_subdomain; do
+  echo "$n"; security add-generic-password -U -s scintille-terraform -a "$n" -w
+done
+```
+
+Then `make tf-plan` and `make tf-apply`.
+
 ## First run (from a Mac)
 
 From the repository root. `read -rs` keeps values out of shell history.
