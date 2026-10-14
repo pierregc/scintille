@@ -26,10 +26,11 @@ flowchart LR
   Lakekeeper locally). Tables are declared in code and `migrate` only applies safe schema changes.
 - **Dagster** builds the daily gold tables from SQL files run by DuckDB, checks silver every hour
   and every day (freshness, completeness, ranges, volume, duplicates, and a file-by-file
-  reconciliation from spool to silver), tracks storm cells with Polars and backfills GLM days from the NOAA archives.
+  reconciliation from spool to silver), tracks storm cells with Polars and backfills GLM days from
+  the NOAA archives.
 - **A versioned data contract** in Python, with TypeScript types generated from it; CI fails on any
-  drift or unversioned schema change. The live feed is gzip columnar binary chunks, read in the browser as typed
-  arrays, served from the edge.
+  drift or unversioned schema change. The live feed is gzip columnar binary chunks, read in the
+  browser as typed arrays and served from the edge.
 - **Operations**: Terraform for Cloudflare, Docker Compose on one VPS, deploys that roll back on
   failure, a public status page fed by live metrics.
 
