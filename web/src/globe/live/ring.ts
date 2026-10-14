@@ -24,6 +24,7 @@ export class FlashRing {
 	readonly source: Uint8Array;
 	readonly quality: Uint8Array;
 	#written = 0;
+	#generation = 0;
 	readonly #watchers: RingWatcher[] = [];
 
 	constructor(capacity = DEFAULT_CAPACITY) {
@@ -39,6 +40,37 @@ export class FlashRing {
 		this.quality = new Uint8Array(capacity);
 	}
 
+	/** Changes when the observations are replaced, including an empty replacement. */
+	get generation(): number {
+		return this.#generation;
+	}
+
+	clear(): void {
+		this.#written = 0;
+		this.#generation++;
+		for (const watcher of this.#watchers) watcher.from = 0;
+	}
+
+	/** Replaces observations with a bounded, ordered window of another ring. */
+	replace(source: FlashRing, from: number, count: number): void {
+		if (source === this || !Number.isInteger(from) || !Number.isInteger(count) || from < 0 || count < 0 || from + count > source.size || count > this.capacity) {
+			throw new RangeError('invalid ring window');
+		}
+		this.clear();
+		for (let i = 0; i < count; i++) {
+			const slot = source.slot(from + i);
+			this.time[i] = source.time[slot];
+			this.lat[i] = source.lat[slot];
+			this.lon[i] = source.lon[slot];
+			this.intensity[i] = source.intensity[slot];
+			this.areaKm2[i] = source.areaKm2[slot];
+			this.durationMs[i] = source.durationMs[slot];
+			this.source[i] = source.source[slot];
+			this.quality[i] = source.quality[slot];
+		}
+		this.#written = count;
+	}
+
 	/** Number of valid slots. */
 	get size(): number {
 		return Math.min(this.#written, this.capacity);
@@ -49,7 +81,7 @@ export class FlashRing {
 		return this.#written % this.capacity;
 	}
 
-	/** Flashes pushed since creation; with `size`, maps `written` indices to stored flashes. */
+	/** Flashes pushed since the last clear; with `size`, maps `written` indices to stored flashes. */
 	get written(): number {
 		return this.#written;
 	}

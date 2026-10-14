@@ -46,6 +46,7 @@ export function createThunder(ring: FlashRing, camera: Camera, radius = 1): Thun
 	};
 	let graph: Graph | undefined;
 	let enabled = false;
+	let generation = ring.generation;
 
 	const build = (): Graph => {
 		const context = new AudioContext({ latencyHint: 'playback' });
@@ -125,6 +126,12 @@ export function createThunder(ring: FlashRing, camera: Camera, radius = 1): Thun
 			}
 		},
 		update(sceneTime, delays) {
+			if (generation !== ring.generation) {
+				generation = ring.generation;
+				if (graph) for (let i = 0; i < graph.voices.length; i++) stop(graph, i);
+				scheduler.reset();
+				scheduler.skipTo(sceneTime);
+			}
 			if (!enabled || !graph || graph.context.state !== 'running') {
 				scheduler.skipTo(sceneTime);
 				return;
