@@ -298,22 +298,32 @@ def two_sources(tmp_path: Path) -> SqliteLake:
     return resource
 
 
-def run(lake: SqliteLake, key: str, config: dict[str, object] | None = None) -> None:
+def run(
+    lake: SqliteLake,
+    instance: DagsterInstance,
+    key: str,
+    config: dict[str, object] | None = None,
+) -> None:
+    ops: dict[str, object] = {"gold__storm_levels": {"config": config or {}}}
+    if key == "2026-07-15-18:00":
+        ops |= NEW_CHAIN["ops"]
     result = materialize(
         [storm_cells, storm_tracks, storms, storm_levels],
         partition_key=key,
         resources={"lake": lake},
-        run_config={"ops": {"gold__storm_levels": {"config": config or {}}}},
+        instance=instance,
+        run_config={"ops": ops},
     )
     assert result.success
     assert all(c.passed for c in result.get_asset_check_evaluations())
 
 
 def test_materializes_levels_hour_after_hour(two_sources: SqliteLake) -> None:
-    run(two_sources, "2026-07-15-18:00")
+    instance = DagsterInstance.ephemeral()
+    run(two_sources, instance, "2026-07-15-18:00")
     first = scan(two_sources, STORM_LEVELS.identifier).sort("flashes")
     for key in ("2026-07-15-19:00", "2026-07-15-19:00", "2026-07-15-20:00"):
-        run(two_sources, key)
+        run(two_sources, instance, key)
     rows = scan(two_sources, STORM_LEVELS.identifier).sort("flashes")
     assert rows["storm_id"].to_list() == first["storm_id"].to_list()
     assert rows["closed"].to_list() == [True, True]
@@ -325,6 +335,7 @@ def test_materializes_levels_hour_after_hour(two_sources: SqliteLake) -> None:
 
     run(
         two_sources,
+        instance,
         "2026-07-15-20:00",
         {"score": "flashes", "thresholds": [100, 1000], "names": ["Light", "Moderate", "Strong"]},
     )
