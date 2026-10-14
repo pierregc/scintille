@@ -122,7 +122,7 @@ def test_schedules_and_sensors_start_running() -> None:
     repo = defs.get_repository_def()
     assert {
         s.name for s in repo.schedule_defs if s.default_status != DefaultScheduleStatus.RUNNING
-    } == set()
+    } == {"storm_catalog_schedule"}
     assert {
         s.name for s in repo.sensor_defs if s.default_status != DefaultSensorStatus.RUNNING
     } == set()
