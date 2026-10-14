@@ -2,47 +2,68 @@
 
 import json
 from collections.abc import Iterable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TypedDict, cast
 
+from pyiceberg.manifest import DataFileContent, ManifestEntry, ManifestEntryStatus
 from pyiceberg.table import Table
+from pyiceberg.transforms import DayTransform
 
-from .maintenance import StoredObject, object_key, referenced_keys
+from .maintenance import StoredObject, object_key
 
 
-def table_measurement(table: Table) -> dict[str, object]:
+def table_measurement(table: Table, objects: list[StoredObject] | None = None) -> dict[str, object]:
     current = table.current_snapshot()
+    metadata = table.metadata
+    referenced = {table.metadata_location, *(e.metadata_file for e in metadata.metadata_log)}
+    referenced |= {s.statistics_path for s in metadata.statistics}
+    referenced |= {s.statistics_path for s in metadata.partition_statistics}
     partitions: dict[str, dict[str, object]] = {}
-    if current:
-        for file in table.inspect.data_files().to_pylist():
-            partition = file["partition"]
-            key = ",".join(f"{k}={v}" for k, v in partition.items())
-            stats = partitions.setdefault(
-                key,
-                {
-                    "partition": {
-                        k: v.isoformat() if isinstance(v, date) else v for k, v in partition.items()
-                    },
-                    "files": 0,
-                    "bytes": 0,
-                    "rows": 0,
-                },
-            )
-            for target, source in (
-                ("files", None),
-                ("bytes", "file_size_in_bytes"),
-                ("rows", "record_count"),
-            ):
-                stats[target] = cast(int, stats[target]) + (file[source] if source else 1)
     retained: dict[str, int] = {}
-    for snapshot in table.metadata.snapshots:
+    entries: dict[str, list[ManifestEntry]] = {}
+    current_files: set[str] = set()
+    for snapshot in metadata.snapshots:
+        referenced.add(snapshot.manifest_list)
         for manifest in snapshot.manifests(table.io):
-            for entry in manifest.fetch_manifest_entry(table.io, discard_deleted=False):
-                data_file = entry.data_file
-                retained[data_file.file_path] = data_file.file_size_in_bytes
-    times = [s.timestamp_ms for s in table.metadata.snapshots]
-    return {
+            path = manifest.manifest_path
+            referenced.add(path)
+            if path not in entries:
+                entries[path] = manifest.fetch_manifest_entry(table.io, discard_deleted=False)
+                for entry in entries[path]:
+                    file = entry.data_file
+                    referenced.add(file.file_path)
+                    retained[file.file_path] = file.file_size_in_bytes
+            if current is None or snapshot.snapshot_id != current.snapshot_id:
+                continue
+            for entry in entries[path]:
+                file = entry.data_file
+                if (
+                    entry.status == ManifestEntryStatus.DELETED
+                    or file.content != DataFileContent.DATA
+                    or file.file_path in current_files
+                ):
+                    continue
+                current_files.add(file.file_path)
+                partition: dict[str, object] = {}
+                for index, field in enumerate(table.specs()[manifest.partition_spec_id].fields):
+                    value = file.partition[index]
+                    if value is not None and isinstance(field.transform, DayTransform):
+                        value = (date(1970, 1, 1) + timedelta(days=value)).isoformat()
+                    partition[field.name] = value
+                key = ",".join(f"{k}={v}" for k, v in partition.items())
+                stats = partitions.setdefault(
+                    key, {"partition": partition, "files": 0, "bytes": 0, "rows": 0}
+                )
+                for target, amount in (
+                    ("files", 1),
+                    ("bytes", file.file_size_in_bytes),
+                    ("rows", file.record_count),
+                ):
+                    stats[target] = cast(int, stats[target]) + amount
+    keys = {object_key(uri) for uri in referenced}
+    times = [s.timestamp_ms for s in metadata.snapshots]
+    measured: dict[str, object] = {
         "snapshot_id": current.snapshot_id if current else None,
         "snapshots": len(times),
         "oldest_snapshot_at": _timestamp(min(times)) if times else None,
@@ -50,8 +71,11 @@ def table_measurement(table: Table) -> dict[str, object]:
         "current_partitions": [partitions[k] for k in sorted(partitions)],
         "retained_manifest_file_count": len(retained),
         "retained_manifest_file_bytes": sum(retained.values()),
-        "referenced_object_count": len(referenced_keys(table)),
+        "referenced_object_count": len(keys),
     }
+    if objects is not None:
+        measured["inventory_coverage"] = inventory_coverage(table.location(), keys, objects)
+    return measured
 
 
 def _timestamp(milliseconds: int) -> str:
@@ -93,7 +117,8 @@ def inventory_measurement(objects: Iterable[StoredObject]) -> dict[str, Inventor
         if item.key.startswith("raw/"):
             group = "raw/"
         elif item.key.startswith(("archive/clouds/", "live/clouds/")):
-            group = "/".join(item.key.split("/")[:3]) + "/"
+            parts = item.key.split("/")
+            group = "/".join(parts[:3] if len(parts) > 3 else parts[:2]) + "/"
         else:
             group = "other/"
         groups.setdefault(group, []).append(item)
@@ -114,15 +139,16 @@ def inventory_measurement(objects: Iterable[StoredObject]) -> dict[str, Inventor
     }
 
 
-def inventory_coverage(table: Table, objects: list[StoredObject]) -> dict[str, int]:
+def inventory_coverage(
+    location: str, keys: set[str], objects: list[StoredObject]
+) -> dict[str, int]:
     """Match all referenced metadata/manifest/data keys; never classify unmatched files as safe."""
     sizes = {item.key: item.size for item in objects}
-    keys = referenced_keys(table)
     return {
         "matched_referenced_objects": len(keys & sizes.keys()),
         "missing_referenced_objects": len(keys - sizes.keys()),
         "matched_referenced_bytes": sum(sizes[key] for key in keys & sizes.keys()),
         "table_location_objects": sum(
-            key.startswith(object_key(table.location()).rstrip("/") + "/") for key in sizes
+            key.startswith(object_key(location).rstrip("/") + "/") for key in sizes
         ),
     }

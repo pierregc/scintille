@@ -5,55 +5,40 @@
 
 ## Context
 
-Issue #41 asks for a retention decision confirmed by measured volumes. ADR 0006 already accepts
-3-day Iceberg snapshot expiration and a 30-day raw cache. #27 implements these defaults, with at
-least 5 snapshots retained, but its merged PR #167 leaves production enablement and verification
-to the maintainer. This proposal does not assert those steps were completed.
+Issue #41 requires a retention decision confirmed by measured volumes. ADR 0006 already accepts
+3-day snapshots and a 30-day raw cache. #27 implements these defaults with at least 5 snapshots,
+but PR #167 leaves production enablement/verification to the maintainer; completion is not proven here.
 
-The 65 to 100 GB/year silver estimate in ADR 0006 combines assumed flash rates with 45 to 70
-bytes per synthetic Parquet row. It is not a production measurement. ADR 0007's cloud archive
-estimate concerns 2048-pixel frames; ingestion now stores both 2k and 4k copies in the live and
-archive prefixes. Raw product sizes and MTG LI contribution need separate measurements.
-
-No production retention report has been collected for this proposal. The collection method and
-required evidence are in [the retention runbook](../retention.md). Prices and yearly cost figures
-must be checked against current provider pricing when that evidence is reviewed.
+The 65 to 100 GB/year silver estimate combines assumed flash rates with synthetic Parquet rows.
+It is not a production measurement. ADR 0007's cloud estimate covers 2048-pixel frames; ingestion
+now stores both 2k/4k and live/archive copies. No production report is supplied by this proposal.
+See [the measurement runbook](../retention.md); review prices using current official pricing.
 
 ## Options
 
-- Keep silver flashes indefinitely: preserves replay, recalibration inputs, and historical storm
-  analysis; storage grows with coverage and time, including overlapping observations.
-- Expire silver by age: bounds storage but makes older replay depend on upstream archives and
-  availability of the historical parser/calibration inputs. It needs a new deletion mechanism.
-- Keep every cloud frame indefinitely: preserves global cloud replay, with predictable growth
-  once both tiers and duplicate live/archive storage are measured.
-- Keep all cloud frames for 30 days, then only frames around detected storms: follows #41's
-  recommendation, but requires a definition of the selection window and a protected archive.
-- Keep cloud frames only 30 days: matches today's declared lifecycle; older storms lose cloud
-  context even when their flashes remain available.
+- Permanent silver: preserves replay, recalibration, and historical analysis; storage grows with
+  coverage/time and overlapping observations. Age limits bound storage but require deletion logic
+  and make older replay depend on upstream archives and historical parser/calibration inputs.
+- Permanent full cloud archive: preserves global cloud replay; growth needs both tiers/copies measured.
+- Full cloud frames for 30 days, then storm-related frames: follows #41, but needs selection criteria
+  and protected storage. Only 30 days matches today's lifecycle and loses older cloud context.
 
 ## Decision
 
-Proposed, awaiting measured evidence and maintainer acceptance: keep silver flashes indefinitely,
-retain Iceberg snapshots for 3 days with at least 5 snapshots, and cache raw products for 30 days.
-Keep all cloud frames for 30 days; longer storm-related cloud retention remains unresolved until
-the maintainer chooses the selection criteria and retained tiers.
-
-This proposal does not change the accepted policy or authorize production changes. Orphan files
-remain inventory-only, with a minimum age of 7 days, as implemented in #27.
+Proposed: keep silver indefinitely, snapshots for 3 days with at least 5, and raw products for 30 days.
+Keep all cloud frames for 30 days; longer storm-related retention awaits maintainer selection criteria
+and tier choices. This does not change accepted policy or authorize production changes. Orphans remain
+inventory-only with a minimum age of 7 days, as implemented in #27.
 
 ## Consequences
 
-Snapshot expiration removes rollback history, not current silver rows. Permanent silver retention
-therefore does not require permanent snapshots. Current data bytes, files referenced by retained
-manifests, and total object-storage bytes must be measured separately; retained files are counted
-once even when multiple snapshots reference them.
+Snapshot expiration removes rollback history, not current silver rows. Measure current data,
+unique retained-file references, metadata, and billed storage separately; shared files count once.
 
-Keeping selected cloud frames past 30 days requires copying them to a prefix outside the current
-`archive/clouds/` lifecycle or revising that rule. The time padding, geographic/source relationship,
-2k/4k choice, treatment of late or rebuilt storm detections, and historical replay promise must be
-settled before implementing selection. Storm selection is not implemented by this proposal.
+Storm frames surviving 30 days need storage outside `archive/clouds/` or a revised lifecycle rule.
+Time padding, geographic/source association, tiers, late/rebuilt detections, and historical replay
+promises remain undecided. This proposal implements no selection.
 
-Production acceptance requires representative complete days per source, compaction evidence,
-complete object inventories, confirmation of actual lifecycle/snapshot settings, and a cost review.
-Until then #41 remains open. Accepting this ADR and applying its values are separate steps.
+Acceptance needs representative complete days per source, compaction evidence, complete inventories,
+verified production expiry settings, cost review, and maintainer agreement. #41 stays open until the
+ADR is accepted and its values applied; merging preparation alone satisfies neither requirement.

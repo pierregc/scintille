@@ -10,7 +10,7 @@ from .config import LakeConfig
 from .connect import pyiceberg_catalog
 from .maintenance import MaintenancePolicy
 from .migrate import IncompatibleChange, migrate
-from .retention import inventory_coverage, inventory_measurement, read_inventory, table_measurement
+from .retention import inventory_measurement, read_inventory, table_measurement
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,9 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         tables: dict[str, object] = {}
         for name in args.table or ["silver.flashes"]:
             table = catalog.load_table(name)
-            measured = table_measurement(table)
-            if lake_objects is not None:
-                measured["inventory_coverage"] = inventory_coverage(table, lake_objects)
+            measured = table_measurement(table, lake_objects)
             tables[name] = measured
         inventories: dict[str, object] = {}
         if lake_objects is not None:

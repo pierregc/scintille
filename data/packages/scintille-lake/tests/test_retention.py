@@ -6,12 +6,12 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 from pyiceberg.catalog import Catalog
+from pyiceberg.manifest import ManifestEntry, ManifestFile
 from pyiceberg.table import Table
 from scintille_lake.cli import main
 from scintille_lake.maintenance import StoredObject, object_key
 from scintille_lake.migrate import migrate
 from scintille_lake.retention import (
-    inventory_coverage,
     inventory_measurement,
     read_inventory,
     table_measurement,
@@ -38,9 +38,10 @@ def test_current_and_retained_bytes_are_distinct_and_files_deduplicated(
     assert sum(p["files"] for p in partitions) == 1
     assert measured["retained_manifest_file_bytes"] > sum(p["bytes"] for p in partitions)
     assert table.metadata_location == before
-    coverage = inventory_coverage(
+    coverage = table_measurement(
         table, [StoredObject(object_key(table.metadata_location), 123, datetime.now(UTC))]
-    )
+    )["inventory_coverage"]
+    assert isinstance(coverage, dict)
     assert coverage["matched_referenced_objects"] == 1
     assert coverage["matched_referenced_bytes"] == 123
     assert coverage["missing_referenced_objects"] > 0
@@ -97,3 +98,39 @@ def test_cli_reports_without_migration(
     assert report["label"] == "local-empty-test"
     assert report["tables"]["silver.flashes"]["snapshot_id"] is None
     assert report["inventories"] == {}
+
+
+def test_manifest_entries_read_once_with_inventory(
+    catalog: Catalog, flash_rows: Callable[[str, Table], pa.Table], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    migrate(catalog)
+    table = catalog.load_table(FLASHES.identifier)
+    for name in ("a.nc", "b.nc", "c.nc"):
+        table.append(flash_rows(name, table))
+    reads: list[str] = []
+    original = ManifestFile.fetch_manifest_entry
+
+    def counted(self: ManifestFile, *args: object, **kwargs: object) -> list[ManifestEntry]:
+        reads.append(self.manifest_path)
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ManifestFile, "fetch_manifest_entry", counted)
+    measured = table_measurement(table, [])
+    assert len(reads) == len(set(reads)) == 3
+    assert measured["retained_manifest_file_count"] == 3
+    partitions = measured["current_partitions"]
+    assert isinstance(partitions, list)
+    assert sum(p["rows"] for p in partitions) == 9
+    assert partitions[0]["partition"] == {"event_day": "2026-07-15", "source": "glm-east"}
+
+
+def test_cloud_manifest_uses_prefix_group() -> None:
+    report = inventory_measurement(
+        [
+            StoredObject("live/clouds/manifest.json", 42, datetime.now(UTC)),
+            StoredObject("live/clouds/2k/a.webp", 100, datetime.now(UTC)),
+        ]
+    )
+    assert report["live/clouds/"]["bytes"] == 42
+    assert report["live/clouds/2k/"]["bytes"] == 100
+    assert "live/clouds/manifest.json/" not in report

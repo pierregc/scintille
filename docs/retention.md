@@ -1,26 +1,20 @@
 # Retention measurements
 
-Issue #41 remains a proposed decision ([ADR 0012](adr/0012-retention-policy.md)). This runbook
-collects evidence without migrating tables, writing lake data, changing maintenance, or deleting
-objects. Use credentials limited to catalog reads and bucket listing; do not run `migrate`,
-`maintenance` output commands, Terraform apply, or expiration commands during measurement.
+Issue #41 remains a proposed decision ([ADR 0012](adr/0012-retention-policy.md)). Use read-only
+catalog/listing credentials. The report reads metadata and manifests; it never scans Parquet,
+migrates tables, changes maintenance, writes data, or deletes objects. Keep exports outside Git.
 
-## Collect
+## Commands
 
-From `data/`, with the existing `SCINTILLE_LAKE_*` connection configured by the maintainer:
+From `data/`, with the maintainer's existing `SCINTILLE_LAKE_*` connection:
 
 ```sh
 uv run scintille-lake retention-report --label production-YYYY-MM-DD > /tmp/retention.json
 ```
 
-The default table is `silver.flashes`. Repeat `--table` to include `bronze.ingest_log`,
-`silver.flashes_quarantine`, and existing gold tables. Missing tables fail the collection rather
-than silently reporting zero. The command reads Iceberg metadata and manifests, never Parquet
-contents. It does not print connection settings or tokens. It emits JSON to stdout; keep exports
-outside the repository and inspect them before sharing.
-
-For physical storage measurements, export complete bucket listings using an already configured
-S3-compatible CLI profile. Replace the endpoint and profile with the maintainer's existing values:
+Default: `silver.flashes`. Repeat `--table` for bronze, quarantine, or existing gold tables.
+Missing tables fail rather than report zero. Connection settings and tokens are not printed.
+For physical storage, use the maintainer's existing S3 profile/endpoint:
 
 ```sh
 aws --profile scintille-readonly --endpoint-url https://ACCOUNT.r2.cloudflarestorage.com s3api list-objects-v2 --bucket scintille-lake --output json > /tmp/retention-lake.json
@@ -28,68 +22,43 @@ aws --profile scintille-readonly --endpoint-url https://ACCOUNT.r2.cloudflaresto
 uv run scintille-lake retention-report --label production-YYYY-MM-DD --lake-inventory /tmp/retention-lake.json --live-inventory /tmp/retention-live.json > /tmp/retention.json
 ```
 
-Keep automatic CLI pagination enabled: do not use `--no-paginate`, `--max-items`, or a prefix filter.
-The reader rejects explicit truncation tokens and duplicate keys, but cannot detect an export whose
-operator removed pages or filtered keys. Record the bucket, listing start/end, command, and whether
-pagination completed separately. Empty inventories are valid observations only after checking the
-bucket and export scope. Bucket listings contain object names; do not commit the raw exports.
+Keep automatic pagination enabled; omit prefix filters, `--no-paginate`, and `--max-items`.
+Record bucket, command, listing start/end, and completed pagination. Explicit truncation and duplicate
+keys are rejected; filtered exports or removed pages cannot be detected. Verify empty bucket results.
+Reads incur provider operations. Each unique manifest's entries are read once; each retained snapshot's
+manifest list is read. Inventories are held in memory. Concurrent writes/compaction can invalidate
+reads or leave missing referenced keys; recollect after failures and record snapshot IDs/timestamps.
 
-Listing and manifest reads incur provider operations. The collector holds each inventory in memory;
-large raw inventories may need to run on a machine with more memory. Concurrent writers or managed
-maintenance can change files during collection. Collection start/end and each table snapshot ID
-identify the observation; failed reads or missing referenced keys require a fresh collection.
-
-## Interpret
-
-The JSON separates observations without deriving growth forecasts:
+## Fields
 
 | Field | Meaning and limitation |
 |---|---|
-| `current_partitions` | Current snapshot file bytes, file count, and physical row counts by day/source; includes today's partial partitions and flagged observations |
-| `retained_manifest_file_bytes` | Unique data/delete files mentioned by retained manifests, including deleted entries; conservative referenced-file footprint, not additional bytes to add to current data |
-| `referenced_object_count` | Current metadata, logged metadata versions, statistics, manifest lists, manifests, and their file entries as used by the existing orphan inventory |
-| `inventory_coverage` | Matched referenced bytes and missing key count in the exported lake listing; a missing key can reflect concurrency, a partial export, or wrong bucket |
-| `inventories` | Object counts/bytes by raw prefix, cloud prefix/tier, and other objects; physical duplicates in live/archive each count |
-| `bytes_by_upload_day` | Bytes grouped by UTC last-modified date; upload cohorts, not source event days or total historic ingress |
+| `current_partitions` | Current data files/bytes and physical rows by partition; includes partial days and flagged observations |
+| `retained_manifest_file_bytes` | Unique data/delete files mentioned by retained manifests, including deleted entries; overlaps current data, do not add the totals |
+| `referenced_object_count` | Current/logged metadata, statistics, manifest lists/manifests, and their file entries; older metadata versions are not recursively reconstructed |
+| `inventory_coverage` | Referenced bytes matched to the listing and missing keys; not a complete billed footprint or deletion-candidate report |
+| `inventories` | Raw/cloud prefix and tier totals, plus `other/`; live/archive copies each count, top-level cloud files stay in their prefix group |
+| `bytes_by_upload_day` | UTC last-modified cohorts; not source event days or historical ingress |
 
-Object counts unmatched to references are not a deletion candidate report. Current metadata may
-retain older metadata versions; this command does not recursively reconstruct every older version.
-Objects in `other/` include Iceberg files and unrelated bucket content. For a table's billed storage,
-join the complete inventory to its location prefix and review metadata/manifest/data objects;
-matched referenced bytes alone are not its full billed footprint.
+For billed table storage, also total inventory objects under its location, including unreferenced
+files and metadata. `other/` includes Iceberg files and unrelated bucket content.
 
-## Evidence needed for acceptance
+## Evidence and decisions needed for #41
 
-Collect at least seven complete UTC days for every deployed source, after compaction settles,
-and extend the window if it misses active/quiet weather or a new source's commissioning period.
-Record source coverage, completeness checks, calibration/parser versions, deployment interruptions,
-and any backfill/overwrite. Use daily `lake_file_sizes` results to establish compaction state.
-A small fixture or a single live manifest is not a representative storage measurement.
+- [ ] Measure at least seven complete UTC days per deployed source after compaction settles;
+  extend for missing weather regimes or source commissioning. Record coverage, completeness,
+  parser/calibration versions, outages, and backfills; include daily `lake_file_sizes` evidence.
+- [ ] Publish aggregate per-source date ranges, rows/bytes, complete days, compaction state,
+  min/median/max daily bytes, and bytes per row. Separate flagged/overlapping rows from display counts.
+- [ ] Measure raw files, retained files/metadata, and both cloud tiers/copies. Repeat inventories;
+  account for lifecycle deletions/reuploads before interpreting changes as ingress. Verify live cleanup.
+- [ ] Separate observations from yearly/cache/cost estimates; state assumptions and current official
+  pricing URL/date. Include metadata, orphans, retained files, operations, and cloud copies.
+- [ ] Verify actual managed snapshot settings (3 days, minimum 5), `raw/` and `archive/clouds/` 30-day
+  lifecycle rules through read-only views. Defaults/checks alone do not prove configured thresholds.
+- [ ] Maintainer accepts or revises permanent silver retention and budget; defines older storm cloud
+  replay, time padding, geographic/source association, tiers, late/rebuilt detections, and a protected
+  prefix outside the existing 30-day rule. Bronze/quarantine/gold age limits remain separate choices.
+- [ ] Accept the ADR and apply/verify chosen values through the #27 procedure, separately from measurement.
 
-Calculate daily current-silver bytes and rows per source from complete partitions; report the
-window's min/median/max and observed bytes per row. Separate overlapped/flagged rows from display
-flash counts. Record snapshot count/age and the gap between referenced file bytes and current data.
-Inventory `raw/` and both cloud tiers separately; repeat inventories over the observation window
-and identify lifecycle deletions/reuploads before treating byte differences as ingress. Cloud
-`live/` and `archive/` copies both consume storage; their cleanup behavior must be verified.
-
-Publish a small aggregated table with date range, source, complete days, rows, bytes, and compaction
-state, plus bucket-prefix totals and the exact observation timestamp. No such production values
-are supplied by this PR. Keep yearly growth, 30-day cache sizes, and prices in a separate **estimate**
-table, showing the assumptions and current official pricing link/date; seasonal extrapolation from
-one week is uncertain. Account for metadata, retained files, orphan accumulation, operations, and
-both tiers rather than pricing current silver alone.
-
-Finally verify actual managed snapshot settings (3 days, minimum 5), the active `raw/` 30-day rule,
-and `archive/clouds/` 30-day rule through read-only dashboard/CLI views. Declared defaults do not
-prove production settings. The existing maintenance checks are evidence of behavior, not proof of
-the configured expiry threshold.
-
-## Maintainer decisions still required
-
-Accept or revise permanent silver retention and its budget after reviewing the observations.
-Choose whether older storms promise cloud replay, then define frame time padding, geographic/source
-association, tiers, late/rebuilt storm behavior, and where preserved frames live outside the current
-30-day lifecycle. Decide separately whether bronze logs, quarantine records, and gold tables need
-age limits; no expiry for those is added here. Once accepted, apply/verify the chosen values using
-the existing #27 maintenance procedure. This preparation does not close #41.
+This preparation supplies no production measurements and does not close #41.
