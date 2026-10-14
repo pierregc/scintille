@@ -132,8 +132,8 @@ gives 5,524 storms, 903 of them over three hours or more; every clustered flash 
 ## Storm levels
 
 `gold/storm_levels` gives each storm an intensity level for the public, as analysed in
-[ADR 0009](adr/0009-storm-intensity-levels.md). That ADR is still proposed (#71): the defaults below
-are its proposal, and each of its options is a run config change, with no code change.
+[ADR 0009](adr/0009-storm-intensity-levels.md). The defaults are the accepted thresholds; its
+variants remain a run config change, with no code change.
 
 - **One satellite.** Where the GLM East and West views overlap, most flashes are in silver twice.
   Per storm, the flashes per source and minute are summed from the `minute_counts` of its cells;
@@ -153,12 +153,12 @@ are its proposal, and each of its options is a run config change, with no code c
 
 | Option | `score` | `thresholds` | `names` |
 |---|---|---|---|
-| Proposal (default) | `flashes_x_peak` | 8, 25, 120, 450 | Light, Moderate, Strong, Intense, Exceptional |
+| Accepted (default) | `flashes_x_peak` | 8, 25, 120, 450 | Light, Moderate, Strong, Intense, Exceptional |
 | Variant A | `flashes_x_peak` | 10, 50, 450 | Light, Moderate, Strong, Exceptional |
 | Variant B | `flashes` | 25, 100, 750, 4000 | Light, Moderate, Strong, Intense, Exceptional |
 
-`count` defaults to `best_source`. Over the 29 days of the ADR (159,412 closed storms), the proposal
-gives 50.5 %, 29.7 %, 15.1 %, 3.8 % and 1.0 % from Light to Exceptional, within 30 storms per level
+`count` defaults to `best_source`. Over the 29 days of the ADR (159,412 closed storms), the defaults
+give 50.5 %, 29.7 %, 15.1 %, 3.8 % and 1.0 % from Light to Exceptional, within 30 storms per level
 of the ADR table.
 
 ## Storm names
