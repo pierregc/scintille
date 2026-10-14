@@ -25,7 +25,7 @@ stutters three or four times before settling into the glow.
 
 ## Channel
 
-While a flash flickers, a screen-space ribbon follows a 3D random walk in the cloud layer. The
+While a flash flickers, a screen-space ribbon follows a 3D random walk. The
 vertex shader generates its main channel and three branches from a seed derived from the event
 time and location. Revisiting a flash or rebasing GPU times preserves its shape.
 
@@ -34,6 +34,13 @@ Horizontal size has a pixel floor; altitude stays in kilometres so distant chann
 above the globe. Branches only light on the first pulse, later pulses follow the main channel.
 The channel fades over 150 ms after the flicker phase, leaving the round afterglow. The glow
 is held back to 40 % during the channel phase so the cloud does not wash it out.
+
+A seed selects about 25 % cloud-to-ground looks: a downward channel from a nominal 7 km cloud
+base to the surface, with downward branches. Its height alone is exaggerated by 2.5× (17.5 km
+on screen), so it reads in a grazing view. The other 75 % spread horizontally at 8–11.5 km,
+just below the 12 km cloud tops; those heights are not exaggerated. Both use the same horizontal
+walk, width, energy and timing, preserving their footprint from above. Satellites cannot classify
+these two kinds: their allocation and exaggerated drops are rendering choices, not measurements.
 
 Only flashes still in that phase enter the channel buffer, capped at 2,048 instances. If a burst
 exceeds this budget, the newest channels remain; all flashes retain their glow and cloud lighting.
