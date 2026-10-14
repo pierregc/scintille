@@ -7,6 +7,7 @@ SHA := $(shell git rev-parse HEAD)
 OWNER := pierregc
 PACKAGES := scintille-ingest scintille-pipelines
 COMPOSE_LOCAL := docker compose -f infra/compose/compose.local.yaml
+TF := terraform -chdir=infra/terraform
 # Defaults to the VPS_HOST repository variable, kept out of the repo.
 VPS_HOST ?= $(shell gh variable get VPS_HOST)
 VPS_USER ?= deploy
@@ -15,7 +16,8 @@ VPS_KEY ?= $(HOME)/.ssh/scintille_deploy
 BASE ?= origin/main
 
 .PHONY: help check data web lake smoke rollback render secrets \
-	preview preview-delete deploy-web deploy-images deploy-vps deploy guard-main
+	preview preview-delete deploy-web deploy-images deploy-vps deploy guard-main \
+	tf-plan tf-apply
 
 help:
 	@awk -F':.*## ' '/^[a-z-]+:.*## /{printf "  make %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -72,3 +74,8 @@ deploy-vps: guard-main ## roll the pushed images out on the VPS, with rollback
 	scp -i $(VPS_KEY) infra/compose/deploy.sh $(VPS_USER)@$(VPS_HOST):/srv/scintille/
 	ssh -i $(VPS_KEY) $(VPS_USER)@$(VPS_HOST) "/srv/scintille/deploy.sh $(SHA)"
 deploy: deploy-web deploy-images deploy-vps ## all three
+
+tf-plan: ## terraform plan, credentials from the macOS Keychain (scripts/tf-env.sh)
+	source scripts/tf-env.sh && $(TF) init -input=false >/dev/null && $(TF) plan -out=tf.tfplan
+tf-apply: ## apply the plan saved by tf-plan
+	source scripts/tf-env.sh && $(TF) apply tf.tfplan
