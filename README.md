@@ -2,41 +2,50 @@
 
 **[scintille.app](https://scintille.app)**
 
-A cinematic 3D globe of lightning across the planet in near real time, built on open satellite data
-(NOAA GOES GLM, EUMETSAT MTG Lightning Imager). The day/night terminator and city lights are computed
-live, flash brightness reflects the measured optical energy, and past storms are detected
-automatically so they can be replayed.
+Lightning across the whole planet, live, on a cinematic 3D globe. Every flash seen by the NOAA GOES
+and EUMETSAT MTG weather satellites lands on the globe within minutes, as bright as the satellites
+measured it.
 
-## Repository layout
+## Under the hood
 
-| Path | What lives there |
-|---|---|
-| `web/` | Astro site and the Three.js globe |
-| `data/` | Python `uv` workspace: data contract, ingestion service, Dagster pipelines and gold SQL models |
-| `docs/` | Documentation and architecture decision records (`docs/adr/`) |
+Behind the globe runs a small but real lakehouse, fed around the clock by geostationary satellites.
+
+```mermaid
+flowchart LR
+    sat["Satellites<br/>GOES GLM<br/>MTG LI"] --> ingest["ingest-live"]
+    ingest -->|30 s chunks| live[("Live feed<br/>custom binary format<br/>R2 + CDN")] --> globe["Three.js globe"]
+    ingest --> spool[("Spool<br/>Parquet<br/>VPS disk")] --> writer["lake-writer"]
+    writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver<br/>Parquet on R2")]
+    lake --> dagster["Dagster"] --> gold[("Iceberg<br/>gold<br/>Parquet on R2")]
+```
+
+- **Two paths.** `ingest-live` publishes the live feed in 30-second chunks and writes every batch to
+  a durable spool; `lake-writer` commits the spool to Iceberg every five minutes, so a catalog
+  outage never slows the live globe.
+- **Apache Iceberg on Cloudflare R2**, through a REST catalog (R2 Data Catalog in production,
+  Lakekeeper locally). Tables are declared in code and `migrate` only applies safe schema changes.
+- **Dagster** builds the daily gold tables from SQL files run by DuckDB, checks silver every hour
+  and every day (freshness, completeness, ranges, volume, duplicates, and a file-by-file
+  reconciliation from spool to silver), tracks storm cells with Polars and backfills GLM days from
+  the NOAA archives.
+- **A versioned data contract** in Python, with TypeScript types generated from it; CI fails on any
+  drift or unversioned schema change. The live feed uses a
+  [custom binary format](docs/data-contract.md#chunk-encoding), read in the browser as typed arrays
+  and served from the edge.
+- **Operations**: Terraform for Cloudflare, Docker Compose on one VPS, deploys that roll back on
+  failure, a public status page fed by live metrics.
+
+Every significant choice is an [ADR](docs/adr/); the full picture is in
+[architecture](docs/architecture.md).
 
 ## Running locally
 
-Web (Node ≥ 22.12, pnpm):
-
 ```sh
-pnpm -C web install
-pnpm -C web dev      # dev server
-pnpm -C web check    # type check
-pnpm -C web lint     # lint
-pnpm -C web build    # production build
-pnpm -C web test     # unit tests (Vitest)
+pnpm -C web install && pnpm -C web dev    # site and globe
+cd data && uv sync && uv run pytest       # data stack
 ```
 
-Data (uv, Python 3.13 is installed automatically by uv):
-
-```sh
-cd data
-uv sync
-uv run pytest
-uv run ruff check && uv run ruff format --check
-uv run mypy
-```
+`make` lists every check and deploy.
 
 ## Data & attribution
 
