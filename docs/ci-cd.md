@@ -9,7 +9,8 @@ turn deploys on. Details live in [deploy](deploy.md), [secrets](secrets.md) and
 ## The short version
 
 - Every change goes through a PR into `main` ([AGENTS.md](../AGENTS.md)). A PR that is ready for
-  review gets one `ci / check` job: gitleaks, then the data and web checks of the areas it touches.
+  review gets the `ci` jobs: gitleaks, then the data and web checks of the areas it touches, in
+  parallel.
   Draft PRs run nothing; run the local commands instead.
 - A merge into `main` deploys `web/` to `scintille.app`. Checks are not run again on `main`.
 - The heavy jobs (images, stack smoke test, lakehouse, render determinism, VPS deploy) are manual
@@ -20,7 +21,7 @@ turn deploys on. Details live in [deploy](deploy.md), [secrets](secrets.md) and
 
 ```mermaid
 flowchart LR
-    pr["Pull request"] --> checks["ci / check<br/>terraform / plan"]
+    pr["Pull request"] --> checks["ci<br/>terraform / plan"]
     pr -- "label preview" --> preview["Preview<br/>pr-N on workers.dev"]
     checks --> merge["Merge into main"]
     merge --> webdeploy["web / deploy<br/>wrangler deploy"]
@@ -37,7 +38,7 @@ All workflows live in `.github/workflows/`. Typical durations are from recent ru
 
 | Workflow | Runs on | Jobs | Typical time |
 |---|---|---|---|
-| `ci` | Every PR that is not a draft | `check` | 1 to 3 min |
+| `ci` | Every PR that is not a draft | `secrets`, `changes`, `data`, `web` | 1 to 3 min |
 | `web` | Push to `main` touching `web/**`; PRs labeled `preview`, and their close; manual | `deploy`, `preview`, `preview-cleanup` | 1 min |
 | `images` | Manual | `build` (matrix), `smoke`, `rollback`, `lake`, `deploy` | 4 to 6 min |
 | `render` | Manual | `determinism` | 5 min |
@@ -47,18 +48,18 @@ Run a manual workflow from Actions > <workflow> > Run workflow, or `gh workflow 
 
 ### `ci`: checks on pull requests
 
-One job, so the PR pays for one rounded minute instead of one per area. It runs when a PR is
-opened, pushed or reopened while not a draft, and when a draft is marked ready for review:
+One job per area, in parallel; the repository is public, so runner minutes are free. It runs when
+a PR is opened, pushed or reopened while not a draft, and when a draft is marked ready for review:
 
-1. **gitleaks** scans the commits of the PR. A finding fails the check; never "fix" it by
+1. **`secrets`**: gitleaks scans the commits of the PR. A finding fails the check; never "fix" it by
    rewriting the check, rotate the secret ([secrets](secrets.md#rotation)).
-2. **Changed areas**: compares the PR with its base. Data checks run when `data/`, `fixtures/`,
+2. **`changes`**: compares the PR with its base. Data checks run when `data/`, `fixtures/`,
    `web/src/contract/` or `docs/data-contract.md` change, web checks when `web/` or `fixtures/live/`
-   change, both when `ci.yml` changes.
-3. **Data checks**, from `data/`: `uv sync --frozen`, `ruff check`, `ruff format --check`, `mypy`
+   change, both when `ci.yml` changes. An area that did not change shows as skipped.
+3. **`data`**, from `data/`: `uv sync --frozen`, `ruff check`, `ruff format --check`, `mypy`
    (strict), the contract check, then `pytest` (unit tests; `network` and `lake` tests are excluded
    by default).
-4. **Web checks**, from `web/`: the same commands a contributor runs locally (`check`, `lint`,
+4. **`web`**, from `web/`: the same commands a contributor runs locally (`check`, `lint`,
    `test`, `build`), plus `test:seo` (unique title, description and canonical URL per page, valid
    JSON-LD, robots.txt, llms.txt and sitemap built) and `wrangler deploy --dry-run`, which validates
    the generated Wrangler config without uploading anything.
@@ -66,7 +67,7 @@ opened, pushed or reopened while not a draft, and when a draft is marked ready f
 The contract check (`scintille-contract check --base <ref>`) regenerates the TypeScript contract in
 `web/src/contract/` and fails if it differs from what is committed, or if the schema changed without
 a `SchemaVersion` bump ([data contract](data-contract.md)). It compares against the PR base, which is
-why the job checks out the full history.
+why the `data` job checks out the full history.
 
 ### `web`: the site
 
