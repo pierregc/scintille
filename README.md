@@ -13,7 +13,7 @@ Behind the globe runs a small but real lakehouse, fed around the clock by geosta
 ```mermaid
 flowchart LR
     sat["Satellites<br/>GOES GLM<br/>MTG LI"] --> ingest["ingest-live"]
-    ingest -->|30 s chunks| live[("Live feed<br/>gzip columnar binary<br/>R2 + CDN")] --> globe["Three.js globe"]
+    ingest -->|30 s chunks| live[("Live feed<br/>custom binary format<br/>R2 + CDN")] --> globe["Three.js globe"]
     ingest --> spool[("Spool<br/>Parquet<br/>VPS disk")] --> writer["lake-writer"]
     writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver<br/>Parquet on R2")]
     lake --> dagster["Dagster"] --> gold[("Iceberg<br/>gold<br/>Parquet on R2")]
@@ -29,8 +29,9 @@ flowchart LR
   reconciliation from spool to silver), tracks storm cells with Polars and backfills GLM days from
   the NOAA archives.
 - **A versioned data contract** in Python, with TypeScript types generated from it; CI fails on any
-  drift or unversioned schema change. The live feed is gzip columnar binary chunks, read in the
-  browser as typed arrays and served from the edge.
+  drift or unversioned schema change. The live feed uses a
+  [custom binary format](docs/data-contract.md#chunk-encoding), read in the browser as typed arrays
+  and served from the edge.
 - **Operations**: Terraform for Cloudflare, Docker Compose on one VPS, deploys that roll back on
   failure, a public status page fed by live metrics.
 
