@@ -1,6 +1,6 @@
 # Local checks and deploys
 
-Without GitHub Actions, run the same checks and deploys from a Mac with `make` (list: `make`).
+GitHub Actions runs the checks and deploys ([CI/CD](ci-cd.md)). `make` runs the same ones from a Mac, before pushing or as a fallback (list: `make`).
 
 | Command | Same as | Needs |
 |---|---|---|
@@ -21,14 +21,15 @@ directory containing `{}` as `config.json`.
 
 ## Preview
 
-Every PR touching `web/` gets a Preview: push the branch, open the PR, then run `make preview`. It
+The `preview` label on a PR does this in CI. `make preview` is the fallback: it
 deploys `pr-<n>` on workers.dev (noindex, bound to `scintille-live-preview`) and posts or updates the
 URL on the PR. Run it again after each push. `PR=<n>` overrides the PR found from the branch;
 `make preview-delete PR=<n>` removes it once the PR is closed.
 
 ## Deploy
 
-From a clean `main` equal to `origin/main`, in this order (or `make deploy`):
+A merge into `main` deploys the site, and `images` deploys the VPS. By hand, from a clean `main` equal
+to `origin/main`, in this order (or `make deploy`):
 
 ```sh
 pnpm -C web exec wrangler login   # once
