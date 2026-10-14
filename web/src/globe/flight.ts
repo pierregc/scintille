@@ -21,7 +21,7 @@ export const FLIGHT = {
 	durationPerRadianMs: 1600,
 	/** Extra height at mid-flight, as a fraction of the radius per radian travelled. */
 	arcPerRadian: 0.45,
-	maxTiltDeg: 75,
+	maxTiltDeg: 80,
 };
 
 /** Where the camera is and what it looks at. */
