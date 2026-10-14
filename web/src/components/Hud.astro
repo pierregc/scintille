@@ -765,7 +765,7 @@ import Version from './Version.astro';
 			const button = document.createElement('button');
 			button.type = 'button';
 			button.setAttribute('role', 'radio');
-			button.setAttribute('aria-label', `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+			button.setAttribute('aria-label', minutes === 0 ? 'No afterglow' : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
 			button.textContent = String(minutes);
 			button.addEventListener('click', () => chooseDisplay(index));
 			button.addEventListener('keydown', (event) => {

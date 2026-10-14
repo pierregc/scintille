@@ -13,7 +13,7 @@ export const PROFILE = {
 	afterglow: 0.12,
 	/** Longer windows dim the afterglow as `(glowRef / display) ^ glowScale`, so more flashes on screen stay readable. */
 	glowRef: 300,
-	glowScale: 0.75,
+	glowScale: 1,
 	/** Afterglow decay time constant, as a fraction of the display window. */
 	glowTau: 0.25,
 	/** Fall of the reduced-motion fade down to the afterglow, seconds. */

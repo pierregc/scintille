@@ -19,7 +19,7 @@ import {
 } from 'three';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import type { FlashRing, SourceDelays } from '../live';
-import { assertDisplayMinutes, minutesToMs, readDisplayMinutes, writeDisplayMinutes } from './display';
+import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
@@ -80,7 +80,7 @@ export function createLightning(
 			buffer.addUpdateRange(start * FLASH_STRIDE, count * FLASH_STRIDE);
 			buffer.needsUpdate = true;
 		},
-		minutesToMs(displayMinutes),
+		displayMs(displayMinutes),
 	);
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
@@ -93,7 +93,7 @@ export function createLightning(
 		fragmentShader: lightningFragmentShader,
 		uniforms: {
 			time,
-			duration: { value: minutesToMs(displayMinutes) / 1000 },
+			duration: { value: displayMs(displayMinutes) / 1000 },
 			radius: { value: radius },
 			lift: { value: CLOUD_TOP_KM / EARTH_RADIUS_KM },
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
@@ -139,8 +139,8 @@ export function createLightning(
 		setDisplayMinutes(minutes) {
 			assertDisplayMinutes(minutes);
 			displayMinutes = minutes;
-			instances.lookbackMs = minutesToMs(minutes);
-			material.uniforms.duration.value = minutesToMs(minutes) / 1000;
+			instances.lookbackMs = displayMs(minutes);
+			material.uniforms.duration.value = displayMs(minutes) / 1000;
 			writeDisplayMinutes(storage, minutes);
 		},
 		lightMap: lightMap?.target.texture ?? null,

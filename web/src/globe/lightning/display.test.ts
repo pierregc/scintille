@@ -5,7 +5,8 @@ import {
 	DEFAULT_DISPLAY_MINUTES,
 	DISPLAY_KEY,
 	DISPLAY_MINUTES,
-	minutesToMs,
+	FLASH_ONLY_MS,
+	displayMs,
 	readDisplayMinutes,
 	writeDisplayMinutes,
 } from './display';
@@ -38,6 +39,12 @@ describe('display duration preference', () => {
 		expect(readDisplayMinutes(memoryStorage())).toBe(DEFAULT_DISPLAY_MINUTES);
 	});
 
+	it('round-trips the one minute choice', () => {
+		const storage = memoryStorage();
+		writeDisplayMinutes(storage, 1);
+		expect(readDisplayMinutes(storage)).toBe(1);
+	});
+
 	it('round-trips a saved choice', () => {
 		const storage = memoryStorage();
 		writeDisplayMinutes(storage, 30);
@@ -49,12 +56,14 @@ describe('display duration preference', () => {
 		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: '7' }))).toBe(DEFAULT_DISPLAY_MINUTES);
 		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: 'soon' }))).toBe(DEFAULT_DISPLAY_MINUTES);
 		expect(readDisplayMinutes(throwing)).toBe(DEFAULT_DISPLAY_MINUTES);
-		expect(() => writeDisplayMinutes(throwing, 15)).not.toThrow();
+		expect(readDisplayMinutes(memoryStorage({ [DISPLAY_KEY]: '5' }))).toBe(DEFAULT_DISPLAY_MINUTES);
+		expect(() => writeDisplayMinutes(throwing, 30)).not.toThrow();
 	});
 
 	it('accepts only the offered choices', () => {
-		expect(() => assertDisplayMinutes(15)).not.toThrow();
-		expect(() => assertDisplayMinutes(2)).toThrow(RangeError);
-		expect(minutesToMs(5)).toBe(300_000);
+		expect(() => assertDisplayMinutes(0)).not.toThrow();
+		expect(() => assertDisplayMinutes(15)).toThrow(RangeError);
+		expect(displayMs(5)).toBe(300_000);
+		expect(displayMs(0)).toBe(FLASH_ONLY_MS);
 	});
 });
