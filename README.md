@@ -12,11 +12,11 @@ Behind the globe runs a small but real lakehouse, fed around the clock by geosta
 
 ```mermaid
 flowchart LR
-    sat["Satellites<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
+    sat["Satellites<br/>GOES GLM<br/>MTG LI"] --> ingest["ingest-live"]
     ingest -->|30 s chunks| live[("Live feed<br/>R2 + CDN")] --> globe["Three.js globe"]
-    ingest --> spool[("Spool")] --> writer["lake-writer"]
-    writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver")]
-    lake --> dagster["Dagster"] --> gold[("Iceberg gold<br/>stats · storms")]
+    ingest --> spool[("Spool<br/>Parquet<br/>VPS disk")] --> writer["lake-writer"]
+    writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver<br/>Parquet on R2")]
+    lake --> dagster["Dagster"] --> gold[("Iceberg<br/>gold<br/>Parquet on R2")]
 ```
 
 - **Two paths.** `ingest-live` publishes the live feed in 30-second chunks and writes every batch to
