@@ -1,7 +1,7 @@
 # 0009 · Storm intensity levels
 
-- Status: proposed
-- Date: 2026-10-11
+- Status: accepted
+- Date: 2026-10-14
 
 ## Context
 
@@ -99,8 +99,10 @@ one level; it ranks long, slow storms higher and short bursts lower.
 
 ## Decision
 
-Left to the maintainer: pick one option (or adjust names, descriptions or thresholds). This
-record becomes accepted with the chosen table.
+The proposal: `score = sqrt(flashes × peak_rate)` on the best satellite, 5 levels from 8, 25, 120
+and 450, with the names and descriptions of its table. It separates short violent bursts from long
+slow storms, uses only measures that grow during a storm's life, and leaves out energy, area and
+duration, which do not compare across satellites or clustering settings.
 
 ## Consequences
 

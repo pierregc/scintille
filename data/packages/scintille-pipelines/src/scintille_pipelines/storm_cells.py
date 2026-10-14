@@ -26,6 +26,7 @@ from pyiceberg.types import (
     LongType,
     NestedField,
     StringType,
+    StructType,
     TimestamptzType,
 )
 from scintille_lake.migrate import sync_table
@@ -70,6 +71,21 @@ STORM_CELLS = gold_table(
             required=False,
             doc="Flashes inside the window's own hour; sums over windows count each flash once.",
         ),
+        NestedField(
+            19,
+            "minute_counts",
+            ListType(
+                20,
+                StructType(
+                    NestedField(21, "minute", TimestamptzType(), required=True),
+                    NestedField(22, "source", StringType(), required=True),
+                    NestedField(23, "flashes", LongType(), required=True),
+                ),
+                element_required=True,
+            ),
+            required=False,
+            doc="Flashes inside the window's own hour per source and minute.",
+        ),
     ),
     PartitionSpec(PartitionField(2, 1000, DayTransform(), "window_day")),
 )
@@ -111,6 +127,29 @@ class StormCellsConfig(Config):
         )
 
 
+MINUTE_COUNT = pl.List(
+    pl.Struct({"minute": pl.Datetime("us", "UTC"), "source": pl.String(), "flashes": pl.Int64()})
+)
+
+
+def minute_counts(flashes: pl.DataFrame, labels: pl.Series, cells: int) -> pl.Series:
+    """Flashes per source and minute of each cell, from its counted flashes."""
+    counts = (
+        flashes.select(
+            label=labels, minute=pl.col("event_time").dt.truncate("1m"), source=pl.col("source")
+        )
+        .group_by("label", "minute", "source")
+        .agg(pl.len().cast(pl.Int64).alias("flashes"))
+        .sort("label", "minute", "source")
+        .group_by("label", maintain_order=True)
+        .agg(pl.struct("minute", "source", "flashes").alias("minute_counts"))
+    )
+    out = pl.DataFrame({"label": pl.int_range(cells, eager=True)}).join(
+        counts, on="label", how="left"
+    )
+    return out["minute_counts"].fill_null(pl.lit([], MINUTE_COUNT)).cast(MINUTE_COUNT)
+
+
 def hour_cells(
     flashes: pl.DataFrame,
     hour: datetime,
@@ -130,11 +169,14 @@ def hour_cells(
     t = window["event_time"].dt.epoch("us").to_numpy() / 1e6
     labels = st_dbscan(window["lat"].to_numpy(), window["lon"].to_numpy(), t, params)
     cells = summarize(window, labels, hour, end, params)
-    in_hour = labels[(labels >= 0) & (t >= hour.timestamp())]
-    own = np.bincount(in_hour, minlength=cells.height)
-    return cells.with_columns(hour_flash_count=pl.Series(own, dtype=pl.Int64)).filter(
-        pl.col("t_end") >= hour
+    counted = (labels >= 0) & (t >= hour.timestamp())
+    own = np.bincount(labels[counted], minlength=cells.height)
+    minutes = minute_counts(
+        window.filter(pl.Series(counted)), pl.Series(labels[counted]), cells.height
     )
+    return cells.with_columns(
+        hour_flash_count=pl.Series(own, dtype=pl.Int64), minute_counts=minutes
+    ).filter(pl.col("t_end") >= hour)
 
 
 def range_cells(

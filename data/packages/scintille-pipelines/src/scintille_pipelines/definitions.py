@@ -18,6 +18,7 @@ from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
 from .ops_status import ops_status
 from .resources import resources
 from .storm_cells import storm_cells
+from .storm_levels import storm_levels
 from .storm_names import storm_names
 from .storms import storm_tracks, storms
 
@@ -39,6 +40,7 @@ defs = Definitions(
         storm_cells,
         storm_tracks,
         storms,
+        storm_levels,
         storm_names,
         SILVER,
         silver_flashes_backfill,

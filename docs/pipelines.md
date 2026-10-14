@@ -33,6 +33,8 @@ production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_h
 | Asset check | `valid_tracks` | Blocking: every cell once, at most one cell per storm and window |
 | Asset | `gold/storms` | One row per storm with its track, rebuilt for the storms active in the hours |
 | Asset check | `valid_storms` | Blocking: unique ids, one track point per step, positive flash counts |
+| Asset | `gold/storm_levels` | Intensity level of each storm, updated while it is active ([below](#storm-levels)) |
+| Asset check | `valid_levels` | Blocking: one level per storm, within the rule, from positive counts |
 | Asset | `gold/storm_names` | Place name and slug of each new storm, from embedded open data ([below](#storm-names)) |
 | Asset check | `unique_slugs` | Blocking: one name per storm, no slug used twice |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
@@ -71,7 +73,8 @@ dropped as noise.
 - **Rows.** One row per cell and window: `cell_id` (window and earliest flash, by time then id),
   window, first and last flash, flash count, centroid, bbox (`west > east` crosses 180°), convex hull
   as WKT with its area, sources, and the parameters used. Bbox and time range are the query bounds
-  of the cell's flashes.
+  of the cell's flashes. `minute_counts` holds the in-hour flashes per source and minute, for
+  [storm levels](#storm-levels).
 - **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range that
   reads one day at a time, and the `storm-cells` pool keeps one run at a time. No schedule
   or sensor yet; they come with storm tracking.
@@ -125,6 +128,38 @@ previous partition (a self-dependency), so storms carry over hours and days.
 
 On GLM data of 2026-10-08 (9,791 cells), tracking takes about 13 s for the day in a single run and
 gives 5,524 storms, 903 of them over three hours or more; every clustered flash is counted once.
+
+## Storm levels
+
+`gold/storm_levels` gives each storm an intensity level for the public, as analysed in
+[ADR 0009](adr/0009-storm-intensity-levels.md). The defaults are the accepted thresholds; its
+variants remain a run config change, with no code change.
+
+- **One satellite.** Where the GLM East and West views overlap, most flashes are in silver twice.
+  Per storm, the flashes per source and minute are summed from the `minute_counts` of its cells;
+  each source gets `flashes` (its total) and `peak_rate` (its busiest minute), and the source with
+  the highest score is kept as `level_source`. With `count: all_sources`, sources are summed
+  instead, for flashes already deduplicated upstream (for example by dropping silver rows flagged
+  `outside-owner-zone` before counting the cells).
+- **Score and level.** `flashes_x_peak` scores `sqrt(flashes × peak_rate)`, `flashes` scores the
+  count alone. A storm is at level `k + 1` once its score reaches the `k`-th threshold; levels start
+  at 1 and `level_name` comes from `names`. `level_rule` records the score, count and thresholds.
+- **Live storms.** Both measures only grow with each hour, so a level rises and never drops. As a
+  guard against re-run hours, a storm that was still active keeps its previous level when the new
+  score is lower under the same `level_rule`. A rule change recomputes every storm it touches.
+- **Writes.** Same range as `gold/storms` (every storm since the earliest start among the active
+  ones), overwritten, so runs are idempotent. Cells written before `minute_counts` existed give no
+  level until their hours are re-materialized; the run metadata counts them as `unclassified`.
+
+| Option | `score` | `thresholds` | `names` |
+|---|---|---|---|
+| Accepted (default) | `flashes_x_peak` | 8, 25, 120, 450 | Light, Moderate, Strong, Intense, Exceptional |
+| Variant A | `flashes_x_peak` | 10, 50, 450 | Light, Moderate, Strong, Exceptional |
+| Variant B | `flashes` | 25, 100, 750, 4000 | Light, Moderate, Strong, Intense, Exceptional |
+
+`count` defaults to `best_source`. Over the 29 days of the ADR (159,412 closed storms), the defaults
+give 50.5 %, 29.7 %, 15.1 %, 3.8 % and 1.0 % from Light to Exceptional, within 30 storms per level
+of the ADR table.
 
 ## Storm names
 
