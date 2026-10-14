@@ -7,8 +7,15 @@ mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({ channel: 'chromium', args: ['--ignore-gpu-blocklist', '--enable-gpu', '--use-angle=metal'] });
 try {
 	const page = await browser.newPage();
-	page.on('console', (m) => console.error('page:', m.text()));
-	page.on('pageerror', (e) => console.error('pageerror:', e.message));
+	const errors = [];
+	page.on('console', (m) => {
+		console.error('page:', m.text());
+		if (m.type() === 'error') errors.push(m.text());
+	});
+	page.on('pageerror', (e) => errors.push(e.message));
+	const assertPage = () => {
+		if (errors.length) throw new Error(errors.join('\n'));
+	};
 	await page.goto(new URL('../dist/spike/index.html', import.meta.url).href);
 	await page.waitForFunction(() => globalThis.bench);
 	console.log(await page.evaluate(() => ({ gpu: bench.gpu, timer: bench.timer })));
@@ -24,6 +31,7 @@ try {
 			for (const mode of ['flat', 'ribbon']) {
 				const c = { mode, active: name === 'far' ? 300 : 25, glowing: name === 'far' ? 3000 : 150, altitudeKm, tilt, width: 960, height: 540 };
 				const url = await page.evaluate((c) => bench.shot(c), c);
+				assertPage();
 				writeFileSync(`${outDir}/${name}-${mode}.png`, Buffer.from(url.split(',')[1], 'base64'));
 			}
 		}
@@ -48,6 +56,7 @@ try {
 					for (const mode of ['none', 'flat', 'ribbon']) {
 						const c = { mode, active, glowing: 20000, altitudeKm, tilt, width, height };
 						const r = await page.evaluate((c) => bench.measure(c), c);
+						assertPage();
 						rows.push({ size: `${width}x${height}`, view, active, mode, ...r });
 						console.log(JSON.stringify(rows.at(-1)));
 					}

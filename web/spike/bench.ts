@@ -197,13 +197,17 @@ async function gpuMs(draw: () => void): Promise<number | null> {
 	draw();
 	gl.endQuery(timer.TIME_ELAPSED_EXT);
 	sync();
+	let available = false;
 	for (let i = 0; i < 200; i++) {
-		if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+		if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+			available = true;
+			break;
+		}
 		await new Promise((r) => setTimeout(r, 5));
 	}
-	const ns = gl.getQueryParameter(q, gl.QUERY_RESULT) as number;
+	const ns: unknown = available ? gl.getQueryParameter(q, gl.QUERY_RESULT) : null;
 	gl.deleteQuery(q);
-	return gl.getParameter(timer.GPU_DISJOINT_EXT) ? null : ns / 1e6;
+	return gl.getParameter(timer.GPU_DISJOINT_EXT) || typeof ns !== 'number' ? null : ns / 1e6;
 }
 
 /** Median wall time of a synced frame, and GPU time when the timer query exists. */
