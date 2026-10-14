@@ -2,6 +2,9 @@ import {
 	AdditiveBlending,
 	BufferAttribute,
 	Color,
+	CustomBlending,
+	MaxEquation,
+	OneFactor,
 	DynamicDrawUsage,
 	HalfFloatType,
 	InstancedBufferGeometry,
@@ -20,6 +23,9 @@ import {
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
+import { CHANNEL_CAPACITY, CHANNEL_STRIDE, ChannelInstances } from './channel-instances';
+import { ribbonGeometry } from './ribbon';
+import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
@@ -109,6 +115,35 @@ export function createLightning(
 		depthWrite: false,
 	});
 
+	const channels = new ChannelInstances(ring, Math.min(capacity, CHANNEL_CAPACITY));
+	const channelGeometry = ribbonGeometry(3, 16);
+	const channelBuffer = new InstancedInterleavedBuffer(channels.data, CHANNEL_STRIDE).setUsage(DynamicDrawUsage);
+	channelGeometry.setAttribute('flash', new InterleavedBufferAttribute(channelBuffer, 4, 0));
+	channelGeometry.setAttribute('flashShape', new InterleavedBufferAttribute(channelBuffer, 3, 4));
+	channelGeometry.setAttribute('channelSeed', new InterleavedBufferAttribute(channelBuffer, 1, 7));
+	channelGeometry.instanceCount = 0;
+	const channelMaterial = new ShaderMaterial({
+		vertexShader: ribbonVertex(16),
+		fragmentShader: ribbonFragment,
+		uniforms: {
+			...material.uniforms,
+			viewport: { value: new Vector2(1, 1) },
+			widthPx: { value: 1.6 },
+		},
+		transparent: true,
+		depthWrite: false,
+		blending: CustomBlending,
+		blendEquation: MaxEquation,
+		blendSrc: OneFactor,
+		blendDst: OneFactor,
+	});
+	const channelMesh = new Mesh(channelGeometry, channelMaterial);
+	channelMesh.frustumCulled = false;
+	channelMesh.renderOrder = 2;
+	channelMesh.onBeforeRender = (renderer) => {
+		renderer.getSize(channelMaterial.uniforms.viewport.value).multiplyScalar(0.5);
+	};
+
 	const lightMap = lightMapWidth > 0 ? createLightMap(geometry, material, lightMapWidth) : null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
@@ -121,6 +156,8 @@ export function createLightning(
 	const mesh = new Mesh(geometry, material);
 	mesh.frustumCulled = false;
 	mesh.renderOrder = 1;
+	mesh.add(channelMesh);
+	channelMesh.layers = mesh.layers;
 	const size = new Vector2();
 	mesh.onBeforeRender = (renderer) => {
 		material.uniforms.viewportHeight.value = renderer.getSize(size).y;
@@ -132,6 +169,13 @@ export function createLightning(
 			instances.sync(utcMs, delays);
 			geometry.instanceCount = instances.count;
 			time.value = (utcMs - instances.origin) / 1000;
+			channels.sync(utcMs, instances.origin, displayMs(displayMinutes) / 1000, delays);
+			channelGeometry.instanceCount = channels.count;
+			if (channels.count > 0) {
+				channelBuffer.clearUpdateRanges();
+				channelBuffer.addUpdateRange(0, channels.count * CHANNEL_STRIDE);
+				channelBuffer.needsUpdate = true;
+			}
 		},
 		get displayMinutes() {
 			return displayMinutes;
@@ -150,6 +194,8 @@ export function createLightning(
 		dispose() {
 			lightMap?.dispose();
 			reducedMotion?.removeEventListener('change', applyMotion);
+			channelGeometry.dispose();
+			channelMaterial.dispose();
 			geometry.dispose();
 			material.dispose();
 		},
