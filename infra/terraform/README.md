@@ -56,15 +56,22 @@ nothing else runs, then `terraform force-unlock <lock id>`.
 
 ## Day to day (from a Mac)
 
-Store the six values of the table above once in the Keychain (prompts for each value):
+Put the six values of the table above once in `~/.config/scintille/terraform.env`, readable by you
+only, then run `make tf-plan` and `make tf-apply`:
 
 ```sh
-for n in CLOUDFLARE_API_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TF_VAR_account_id TF_VAR_zone_id TF_VAR_workers_subdomain; do
-  echo "$n"; security add-generic-password -U -s scintille-terraform -a "$n" -w
-done
+mkdir -p ~/.config/scintille && install -m 600 /dev/null ~/.config/scintille/terraform.env
+open -e ~/.config/scintille/terraform.env
 ```
 
-Then `make tf-plan` and `make tf-apply`.
+```sh
+CLOUDFLARE_API_TOKEN=...
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+TF_VAR_account_id=...
+TF_VAR_zone_id=...
+TF_VAR_workers_subdomain=...
+```
 
 ## First run (from a Mac)
 

@@ -75,7 +75,7 @@ deploy-vps: guard-main ## roll the pushed images out on the VPS, with rollback
 	ssh -i $(VPS_KEY) $(VPS_USER)@$(VPS_HOST) "/srv/scintille/deploy.sh $(SHA)"
 deploy: deploy-web deploy-images deploy-vps ## all three
 
-tf-plan: ## terraform plan, credentials from the macOS Keychain (scripts/tf-env.sh)
+tf-plan: ## terraform plan, credentials from ~/.config/scintille/terraform.env
 	source scripts/tf-env.sh && $(TF) init -input=false >/dev/null && $(TF) plan -out=tf.tfplan
 tf-apply: ## apply the plan saved by tf-plan
 	source scripts/tf-env.sh && $(TF) apply tf.tfplan
