@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
-import { createAtmosphere } from './atmosphere';
+import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
-import { type Clouds, createClouds } from './clouds';
+import { cloudShellRadius, type Clouds, createClouds } from './clouds';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { createGlobeControls, type GlobeControls } from './controls';
@@ -10,9 +10,11 @@ import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { createEarth } from './earth';
-import { createLightning, type Lightning } from './lightning';
+import { kmToWorld } from './flight';
+import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
+import { clipPlanes } from './orbit';
 import { createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
@@ -55,6 +57,11 @@ export interface GlobeApp {
 
 const RADIUS = 1;
 const FOV = 35;
+const SHELLS = [
+	cloudShellRadius(RADIUS),
+	RADIUS + kmToWorld(CLOUD_TOP_KM, RADIUS),
+	atmosphereParameters(RADIUS).atmosphereRadius,
+];
 
 export interface GlobeAppOptions {
 	/** Offline rendering: fixed size and view, frames drawn on demand. */
@@ -164,8 +171,17 @@ export function createGlobeApp(
 
 	const playbackDelays = () => (clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY);
 
+	const fitClipPlanes = () => {
+		const { near, far } = clipPlanes(camera.position.length(), RADIUS, SHELLS);
+		if (near === camera.near && far === camera.far) return;
+		camera.near = near;
+		camera.far = far;
+		camera.updateProjectionMatrix();
+	};
+
 	const draw = (time: number) => {
 		if (!renderParams) controls.update(time);
+		fitClipPlanes();
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);

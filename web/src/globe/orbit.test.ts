@@ -1,33 +1,61 @@
 import { describe, expect, it } from 'vitest';
-import { clampDistance, rescaleDistance, rotateSpeedFor, zoomLimits } from './orbit';
+import { clampDistance, clipPlanes, rescaleDistance, rotateSpeedFor, zoomLimits } from './orbit';
 import { fitDistance } from './viewport';
-
-const NEAR = 0.1;
-const FAR = 100;
 
 describe('zoomLimits', () => {
 	it.each([16 / 9, 1, 9 / 16, 9 / 21])('keeps the fitted view within bounds at aspect %s', (aspect) => {
-		const limits = zoomLimits(1, 35, aspect, NEAR, FAR);
+		const limits = zoomLimits(1, 35, aspect);
 		expect(limits.fit).toBe(fitDistance(1, 35, aspect));
 		expect(limits.min).toBeLessThanOrEqual(limits.fit);
 		expect(limits.max).toBeGreaterThanOrEqual(limits.fit);
 	});
 
-	it('never lets the near plane reach the globe', () => {
-		const { min } = zoomLimits(1, 35, 16 / 9, NEAR, FAR);
-		expect(min - 1).toBeGreaterThan(NEAR);
+	it('scales with the globe radius', () => {
+		const small = zoomLimits(1, 35, 1);
+		const big = zoomLimits(2, 35, 1);
+		expect(big.min).toBeCloseTo(2 * small.min, 6);
+		expect(big.max).toBeCloseTo(2 * small.max, 6);
+	});
+});
+
+describe('clipPlanes', () => {
+	const km = (value: number) => value / 6371;
+	const shells = [1 + km(10), 1 + km(12), 1 + km(150)];
+	const horizon = (distance: number) => Math.sqrt(distance * distance - 1) + Math.sqrt(shells[2] ** 2 - 1);
+
+	it.each([4, 1.2, 1 + km(250), 1 + km(65), 1 + km(11), 1 + km(3)])('keeps every shell between the planes at %s', (distance) => {
+		const { near, far } = clipPlanes(distance, 1, shells);
+		for (const r of [1, ...shells]) {
+			if (distance > r) expect(distance - r).toBeGreaterThan(near);
+			else expect(r - distance).toBeGreaterThan(near);
+		}
+		expect(far).toBeGreaterThan(horizon(distance));
+		expect(far).toBeLessThan(horizon(distance) * 1.05);
 	});
 
-	it('keeps the globe in front of the far plane', () => {
-		const { max } = zoomLimits(1, 35, 1, NEAR, 8);
-		expect(max + 1).toBeLessThanOrEqual(8);
+	it('brings the near plane closer as the camera descends', () => {
+		const high = clipPlanes(1 + km(20_000), 1, shells);
+		const low = clipPlanes(1 + km(250), 1, shells);
+		expect(low.near).toBeLessThan(km(70));
+		expect(low.near).toBeLessThan(high.near / 100);
+	});
+
+	it('keeps depth precision at the closest tilted view', () => {
+		const { near, far } = clipPlanes(1 + km(65), 1, shells);
+		expect(far / near).toBeLessThan(1000);
+	});
+
+	it('keeps a floor when the camera sits on a shell', () => {
+		const { near, far } = clipPlanes(shells[0], 1, shells);
+		expect(near).toBeGreaterThan(0);
+		expect(far).toBeGreaterThan(near);
 	});
 
 	it('scales with the globe radius', () => {
-		const small = zoomLimits(1, 35, 1, NEAR, FAR);
-		const big = zoomLimits(2, 35, 1, NEAR, FAR);
-		expect(big.min).toBeCloseTo(2 * small.min, 6);
-		expect(big.max).toBeCloseTo(2 * small.max, 6);
+		const small = clipPlanes(4, 1, shells);
+		const big = clipPlanes(8, 2, shells.map((r) => 2 * r));
+		expect(big.near).toBeCloseTo(2 * small.near, 9);
+		expect(big.far).toBeCloseTo(2 * small.far, 9);
 	});
 });
 

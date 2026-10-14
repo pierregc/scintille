@@ -49,7 +49,7 @@ describe('cloud shell', () => {
 		expect(shell).toBeGreaterThan(1.001);
 		expect(shell).toBeLessThan(lightningTop);
 		expect(shell).toBeLessThan(atmosphereParameters(1).atmosphereRadius);
-		expect(zoomLimits(1, 35, 1, 0.1, 100).min).toBeGreaterThan(shell);
+		expect(zoomLimits(1, 35, 1).min).toBeGreaterThan(shell);
 	});
 
 	it('draws before the atmosphere and the lightning', () => {

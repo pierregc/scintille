@@ -92,7 +92,7 @@ export function createGlobeControls(
 
 	return {
 		resize() {
-			const next = zoomLimits(radius, camera.fov, camera.aspect, camera.near, camera.far);
+			const next = zoomLimits(radius, camera.fov, camera.aspect);
 			const distance = limits ? rescaleDistance(camera.position.length(), limits, next) : next.fit;
 			limits = next;
 			controls.minDistance = next.min;
