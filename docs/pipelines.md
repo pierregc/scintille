@@ -233,7 +233,8 @@ upstream partition stops the run rather than silently starting a new storm chain
 should cover skipped hours in order; an hourly schedule alone does not repair missing partitions.
 
 Replay uses event-time hour chunks of at most 65,536 flashes, encoded with the live SCNT layout.
-Metadata is at most 256 KiB; a longer track that exceeds this cap fails before index publication.
+Metadata is at most 256 KiB. An oversized export is logged and skipped, retaining its previous
+detail and summary when available.
 The current extraction selects each track step's spatial bounds in its own hour and deduplicates
 flash ids. `replay.selection = "track-bounds"` explicitly permits unrelated nearby flashes; its
 count is distinct from classified `storm.flashes`. It is not an exact cell membership export.
@@ -252,3 +253,10 @@ storms queue `storm:<slug>`, affected `region:<CC>` tags and `storms-index` befo
 Pending tags are stored in `_pipeline/storms/purge.json` in the feed bucket. Failure or missing
 credentials leaves the queue intact and does not fail publication. One batch of at most 100 tags
 is attempted per hourly run; the remainder retries next run, below the Free request limit.
+
+Historical bootstrap exports at most 100 previously unpublished storms per run, oldest first.
+Storms touched in the current and previous hour always take priority and are not counted against
+that cap. The public index includes only storms whose detail exists; history drains incrementally.
+Invalid exports are logged and counted in run metadata. Oversized or invalid updates retain their
+previous public detail and summary; invalid new storms stay out of the index and sitemap.
+Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.

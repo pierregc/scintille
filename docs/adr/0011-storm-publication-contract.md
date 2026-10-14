@@ -28,7 +28,8 @@ part of this change. Use zero-based `storms/index/<page>.json` pages of 50 summa
 
 ## Consequences
 
-Metadata is capped at 256 KiB; exceeding the cap aborts before publishing an index. Replay chunks
+Metadata is capped at 256 KiB. Oversized exports are logged and excluded; existing details and
+summaries remain available. Replay chunks
 are published before metadata, then index pages, then sitemaps; published objects are never removed
 by this job. Re-running preserves stable slugs and unchanged detail bytes. Sitemaps include regions
 only after their detail file exists. XML comments carry schema and freshness metadata without

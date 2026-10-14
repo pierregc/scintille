@@ -11,6 +11,7 @@ from scintille_contract.chunk import decode
 from scintille_contract.models import StormDetail
 from scintille_pipelines.storm_catalog import (
     DETAIL_MAX_BYTES,
+    PUBLISHED_PATH,
     PURGE_PATH,
     XMLNS,
     index_pages,
@@ -19,7 +20,11 @@ from scintille_pipelines.storm_catalog import (
     selected_flashes,
     sitemaps,
 )
-from scintille_pipelines.storm_publication import storm_catalog_schedule
+from scintille_pipelines.storm_publication import (
+    BOOTSTRAP_STORMS,
+    export_candidates,
+    storm_catalog_schedule,
+)
 
 ROOT = Path(__file__).parents[4]
 NOW = datetime(2026, 7, 15, 20, tzinfo=UTC)
@@ -45,6 +50,9 @@ class Store:
 
     def get(self, path: str) -> bytes | None:
         return self.files.get(path)
+
+    def exists(self, path: str) -> bool:
+        return path in self.files
 
 
 def chunks(document: StormDetail) -> dict[str, bytes]:
@@ -99,19 +107,102 @@ def test_idempotent_details_and_retryable_purge() -> None:
     assert json.loads(store.get(PURGE_PATH) or b"[]") == []
 
 
-def test_missing_references_and_oversize_abort_before_writes() -> None:
+def test_missing_references_abort_before_writes() -> None:
     store, document = Store(), detail()
     with pytest.raises(ValueError, match="missing replay"):
         publish_catalog(store, [document], {}, [document.storm], NOW, lambda _: True)
     assert not store.files
+
+
+def test_oversized_storm_does_not_block_new_storm(caplog: pytest.LogCaptureFixture) -> None:
+    store, document = Store(), detail()
     oversized = document.model_copy(
         update={"storm": document.storm.model_copy(update={"label": "x" * DETAIL_MAX_BYTES})}
     )
-    with pytest.raises(ValueError, match="256 KiB"):
-        publish_catalog(
-            store, [oversized], chunks(document), [oversized.storm], NOW, lambda _: True
-        )
-    assert not store.files
+    fresh = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"slug": "new-storm", "storm_id": "new"})}
+    )
+    result = publish_catalog(
+        store,
+        [oversized, fresh],
+        chunks(document),
+        [oversized.storm, fresh.storm],
+        NOW,
+        lambda _: True,
+    )
+    assert result["skipped_storms"] == 1
+    assert "Skipping oversized" in caplog.text
+    assert store.get(f"storms/{oversized.storm.slug}.json") is None
+    assert json.loads(store.files[PUBLISHED_PATH]) == [fresh.storm.slug]
+    assert [s["slug"] for s in json.loads(store.files["storms/index/0.json"])["storms"]] == [
+        fresh.storm.slug
+    ]
+    assert oversized.storm.slug.encode() not in store.files["sitemaps/pages-0.xml"]
+
+
+def test_oversized_update_keeps_previous_detail_and_index() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, lambda _: True)
+    original = store.files[f"storms/{document.storm.slug}.json"]
+    oversized = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"label": "x" * DETAIL_MAX_BYTES})}
+    )
+    publish_catalog(store, [oversized], chunks(document), [oversized.storm], NOW, lambda _: True)
+    assert store.files[f"storms/{document.storm.slug}.json"] == original
+    assert (
+        json.loads(store.files["storms/index/0.json"])["storms"][0]["label"] == document.storm.label
+    )
+
+
+def test_bootstrap_is_bounded_but_current_storms_are_always_selected() -> None:
+    base = detail().storm
+    storms = [
+        base.model_copy(update={"storm_id": str(n), "slug": f"storm-{n}"})
+        for n in range(BOOTSTRAP_STORMS + 20)
+    ]
+    touched = {storms[-1].storm_id}
+    candidates = export_candidates(storms, {storms[0].slug}, touched)
+    assert len(candidates) == BOOTSTRAP_STORMS + 1
+    assert touched <= candidates
+    assert storms[0].storm_id not in candidates
+
+
+def test_regions_use_existence_checks_without_downloading_bodies() -> None:
+    class HeadStore(Store):
+        def get(self, path: str) -> bytes | None:
+            assert not path.startswith("regions/")
+            return super().get(path)
+
+    store = HeadStore()
+    store.files["regions/FR.json"] = b"{}"
+    publish_catalog(store, [], {}, [], NOW, lambda _: True, ["FR", "US"])
+    body = store.files["sitemaps/pages-0.xml"]
+    assert b"https://scintille.app/live/fr" in body
+    assert b"https://scintille.app/live/us" not in body
+
+
+def test_purge_programming_errors_are_not_hidden() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, lambda _: True)
+    changed = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"flashes": 4})}
+    )
+
+    def broken(tags: list[str]) -> bool:
+        raise TypeError("incorrect callback")
+
+    with pytest.raises(TypeError, match="incorrect callback"):
+        publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, broken)
+    assert json.loads(store.files[PURGE_PATH])
+
+
+def test_hourly_job_materializes_classification_before_publication() -> None:
+    from dagster import AssetKey
+    from scintille_pipelines.definitions import defs
+
+    job = defs.get_repository_def().get_job("hourly_storm_catalog")
+    assert AssetKey(["gold", "storm_levels"]) in job.asset_layer.executable_asset_keys
+    assert AssetKey(["feeds", "storm_catalog"]) in job.asset_layer.executable_asset_keys
 
 
 def test_recent_first_stable_pages() -> None:
@@ -131,7 +222,7 @@ def test_sitemap_splits_and_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     maps = sitemaps([base.model_copy(update={"slug": f"storm-{n}"}) for n in range(5)], NOW)
     assert len(maps) == 4
     assert all(b"published_at=" in body and b"schema_version=" in body for body in maps.values())
-    assert len(list(ET.fromstring(maps["sitemaps/storms-0.xml"]))) == 2
+    assert len(list(ET.fromstring(maps["sitemaps/pages-0.xml"]))) == 2
 
 
 def test_track_bounds_cross_antimeridian_without_double_counting() -> None:

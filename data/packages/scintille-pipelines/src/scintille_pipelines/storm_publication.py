@@ -35,6 +35,18 @@ from .storm_cells import hourly
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
+BOOTSTRAP_STORMS = 100
+
+
+def export_candidates(
+    summary: list[StormSummary], published: set[str], touched: set[str]
+) -> set[str]:
+    historical = sorted(
+        (s for s in summary if s.slug not in published and s.storm_id not in touched),
+        key=lambda storm: (storm.t_start, storm.storm_id),
+    )
+    return touched | {storm.storm_id for storm in historical[:BOOTSTRAP_STORMS]}
+
 
 def purge_tags(tags: list[str]) -> bool:
     token, zone = os.environ.get("SCINTILLE_PURGE_TOKEN"), os.environ.get("SCINTILLE_CF_ZONE_ID")
@@ -89,12 +101,13 @@ def storm_catalog(
     summary = summaries(storms, names, levels)
     tracks_table = catalog.load_table(STORM_TRACKS.identifier)
     touched = _scan(tracks_table, _between("window_start", start - timedelta(hours=1), end))
-    ids = set(touched["storm_id"].to_list())
+    touched_ids = set(touched["storm_id"].to_list())
     store = ObjectCatalogStore(feed_bucket.store())
     # Bootstrap omitted history too, without exposing references before their details exist.
     published = published_slugs(store)
-    ids.update(s.storm_id for s in summary if s.slug not in published)
+    ids = export_candidates(summary, published, touched_ids)
     details = []
+    rejected: dict[str, StormSummary | None] = {}
     objects: dict[str, bytes] = {}
     flash_table = catalog.load_table(FLASHES.identifier)
     for storm in summary:
@@ -103,12 +116,17 @@ def storm_catalog(
         row = storms.filter(pl.col("storm_id") == storm.storm_id).row(0, named=True)
         tracks = _scan(tracks_table, f"storm_id == '{storm.storm_id}'")
         first, last = tracks["window_start"].min(), tracks["window_end"].max()
-        assert isinstance(first, datetime) and isinstance(last, datetime)
+        if not isinstance(first, datetime) or not isinstance(last, datetime):
+            context.log.error("Skipping storm without a valid track: %s", storm.slug)
+            previous = store.get(f"storms/{storm.slug}.json")
+            rejected[storm.slug] = (
+                StormDetail.model_validate_json(previous).storm if previous is not None else None
+            )
+            continue
         flashes = _scan(flash_table, _between("event_time", first, last))
-        replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
-        objects.update(chunks)
-        details.append(
-            StormDetail(
+        try:
+            replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
+            detail = StormDetail(
                 schema_version=SCHEMA_VERSION,
                 published_at=now,
                 last_observation_time=storm.t_end,
@@ -119,7 +137,21 @@ def storm_catalog(
                 track=row["track"],
                 replay=replay,
             )
-        )
+        except ValueError:
+            context.log.exception("Skipping invalid storm export: %s", storm.slug)
+            previous = store.get(f"storms/{storm.slug}.json")
+            rejected[storm.slug] = (
+                StormDetail.model_validate_json(previous).storm if previous is not None else None
+            )
+            continue
+        objects.update(chunks)
+        details.append(detail)
+    visible = [
+        rejected.get(storm.slug) or storm
+        for storm in summary
+        if (storm.slug in published or storm.storm_id in ids)
+        and (storm.slug not in rejected or rejected[storm.slug] is not None)
+    ]
     regions: list[str] = []
     for batch in obstore.list(feed_bucket.store(), prefix="regions/", chunk_size=1000):
         regions.extend(
@@ -127,7 +159,11 @@ def storm_catalog(
             for item in batch
             if item["path"].endswith(".json") and item["path"].count("/") == 1
         )
-    metrics = publish_catalog(store, details, objects, summary, now, purge_tags, regions)
+    metrics = publish_catalog(store, details, objects, visible, now, purge_tags, regions)
+    metrics["invalid_exports"] = len(rejected)
+    metrics["bootstrap_remaining"] = sum(
+        storm.slug not in published and storm.storm_id not in ids for storm in summary
+    )
     context.log.info("Storm catalog published; pending purge tags retry on the next run")
     return MaterializeResult(metadata=metrics)
 
