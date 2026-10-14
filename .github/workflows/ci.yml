@@ -1,6 +1,6 @@
 name: ci
 
-# One job per PR to fit the 2,000 free minutes: each job is billed rounded up to the minute.
+# One job per PR, running only the checks of the areas it touches.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]

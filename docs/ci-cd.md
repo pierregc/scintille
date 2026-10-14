@@ -16,8 +16,7 @@ turn deploys on. Details live in [deploy](deploy.md), [secrets](secrets.md) and
   runs.
 - A PR labeled `preview` gets its own Preview of the site, with a URL posted on the PR.
 - Terraform is never applied automatically: PRs get a plan, `apply` is a manual run.
-- **Budget.** The repository is private, with 2,000 free Actions minutes a month, and every job is
-  billed rounded up to the minute. Few jobs, run only when needed.
+- **Budget.** Few jobs, run only when needed.
 
 ```mermaid
 flowchart LR
