@@ -1,9 +1,11 @@
 # Scintille
 
+**[scintille.app](https://scintille.app)**
+
 A cinematic 3D globe of lightning across the planet in near real time, built on open satellite data
 (NOAA GOES GLM, EUMETSAT MTG Lightning Imager). The day/night terminator and city lights are computed
 live, flash brightness reflects the measured optical energy, and past storms are detected
-automatically so they can be replayed. Live at [scintille.app](https://scintille.app).
+automatically so they can be replayed.
 
 ## Repository layout
 
