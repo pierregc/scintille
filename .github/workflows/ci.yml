@@ -1,6 +1,6 @@
 name: ci
 
-# One job per PR, running only the checks of the areas it touches.
+# Checks of the areas a ready PR touches, one job per area so they run in parallel.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -14,10 +14,10 @@ permissions:
   pull-requests: read
 
 jobs:
-  check:
+  secrets:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -25,6 +25,18 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  changes:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      data: ${{ steps.changes.outputs.data }}
+      web: ${{ steps.changes.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Changed areas
         id: changes
         env:
@@ -36,13 +48,20 @@ jobs:
           echo "data=$(has '^(data/|fixtures/|web/src/contract/|docs/data-contract\.md|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
           echo "web=$(has '^(web/|fixtures/live/|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
 
-      - if: steps.changes.outputs.data == 'true'
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+  data:
+    needs: changes
+    if: needs.changes.outputs.data == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: data/uv.lock
       - name: Data checks
-        if: steps.changes.outputs.data == 'true'
         working-directory: data
         env:
           BASE: origin/${{ github.base_ref }}
@@ -54,18 +73,22 @@ jobs:
           uv run scintille-contract check --base "$BASE"
           uv run pytest
 
-      - if: steps.changes.outputs.web == 'true'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: web/package.json
-      - if: steps.changes.outputs.web == 'true'
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: lts/*
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Web checks
-        if: steps.changes.outputs.web == 'true'
         working-directory: web
         env:
           WRANGLER_SEND_METRICS: "false"
