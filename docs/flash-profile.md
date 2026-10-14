@@ -25,16 +25,19 @@ stutters three or four times before settling into the glow.
 
 ## Channel
 
-While a flash flickers, a thin channel is drawn over its glow (`web/src/globe/lightning/channel.ts`). Its
-shape is picked per flash: I, zigzag, Y or branched. Small flashes lean to I and zigzag, flashes wider than
-about 14 km to Y and branched, the horizontal spread of large intra-cloud flashes seen from orbit. The
-satellites cannot tell cloud-to-ground from intra-cloud flashes, so the shape is a rendering choice, not
-a measurement.
+While a flash flickers, a screen-space ribbon follows a 3D random walk in the cloud layer. The
+vertex shader generates its main channel and three branches from a seed derived from the event
+time and location. Revisiting a flash or rebasing GPU times preserves its shape.
 
-The channel is 2.2 flash radii long, at least 6 px either way so it reads from far, with a random
-orientation. Branches only light on the first pulse, later pulses follow the main channel, and the glow
-is held back to 40 % meanwhile so the cloud does not wash the channel out. It fades within 150 ms after
-the flicker phase, leaving only the glow.
+The channel is 2.2 flash radii long in either direction, at least 6 px, with a 1.6 px width.
+Horizontal size has a pixel floor; altitude stays in kilometres so distant channels do not float
+above the globe. Branches only light on the first pulse, later pulses follow the main channel.
+The channel fades over 150 ms after the flicker phase, leaving the round afterglow. The glow
+is held back to 40 % during the channel phase so the cloud does not wash it out.
+
+Only flashes still in that phase enter the channel buffer, capped at 2,048 instances. If a burst
+exceeds this budget, the newest channels remain; all flashes retain their glow and cloud lighting.
+The light map continues to use the full flash buffer.
 
 ## Reduced motion
 
