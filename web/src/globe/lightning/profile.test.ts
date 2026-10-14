@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashProfile, flickerLength, glowDecay, glowLevel, glslFloat, PROFILE, pulseCount } from './profile';
+import { flashProfile, flickerLength, glowDecay, glowLevel, glslFloat, PROFILE, pulseCount, pulseTau } from './profile';
 
 const DISPLAY = 1.5;
 
@@ -21,6 +21,14 @@ describe('flashProfile', () => {
 		expect(pulseCount(flickerLength(2000))).toBe(PROFILE.maxPulses);
 		expect(peaks(50, 0.5)).toBe(1);
 		expect(peaks(700, 0.5)).toBe(PROFILE.maxPulses);
+	});
+
+	it('varies the pulse decay per flash', () => {
+		const taus = Array.from({ length: 100 }, (_, i) => pulseTau(i / 100));
+		expect(Math.min(...taus)).toBeGreaterThanOrEqual(PROFILE.pulseTau / PROFILE.tauSpread);
+		expect(Math.max(...taus)).toBeLessThanOrEqual(PROFILE.pulseTau * PROFILE.tauSpread);
+		expect(Math.max(...taus) / Math.min(...taus)).toBeGreaterThan(2);
+		expect(flashProfile(0.05, DISPLAY, 50, 0.1)).not.toBeCloseTo(flashProfile(0.05, DISPLAY, 50, 0.2), 2);
 	});
 
 	it('peaks near full brightness then leaves a dim afterglow', () => {
