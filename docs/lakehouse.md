@@ -56,7 +56,8 @@ expiration; we only configure and watch them. Values live in `MaintenancePolicy`
 | Orphan inventory minimum file age | 7 days, must exceed snapshot expiration | `SCINTILLE_ORPHAN_MIN_AGE_DAYS` |
 
 The snapshot and `raw/` defaults are the ADR 0006 values; the retention decision (#41) may change
-them. The catalog token in Terraform has no catalog permission, so the policy is applied by hand:
+them. A read-only `scintille-lake retention-report` command and the
+[retention measurement runbook](retention.md) collect evidence for the proposed policy. The catalog token in Terraform has no catalog permission, so the policy is applied by hand:
 
 ```sh
 cd data
