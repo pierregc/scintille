@@ -17,7 +17,9 @@ import {
 	WebGLRenderer,
 } from 'three';
 import { lookRotation, northTangent } from '../src/globe/flight';
+import { CHANNEL } from '../src/globe/lightning/channel';
 import { ribbonGeometry } from '../src/globe/lightning/ribbon';
+import { ribbonVertex as ribbon232Vertex } from './ribbon-232.glsl';
 import { ribbonVertex, ribbonFragment } from '../src/globe/lightning/ribbon.glsl';
 import { lightningFragmentShader, lightningVertexShader } from '../src/globe/lightning/lightning.glsl';
 import { lightningFragmentShader as flatFragment, lightningVertexShader as flatVertex } from './baseline';
@@ -75,7 +77,7 @@ function quad(): InstancedBufferGeometry {
 
 export interface Case {
 	/** flat: production shader; ribbon: 3D channel over the production glow; halo: ribbon plus a wide glow along it. */
-	mode: 'none' | 'flat' | 'ribbon' ;
+	mode: 'none' | 'flat' | 'ribbon' | 'halo' | 'ribbon232';
 	active: number;
 	glowing: number;
 	altitudeKm: number;
@@ -114,18 +116,21 @@ const timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
 
 function build(c: Case) {
 	const scene = new Scene();
-	scene.add(new Mesh(new SphereGeometry(RADIUS, 256, 128), new MeshBasicMaterial({ color: '#0d1426' })));
+	const globeGeometry = new SphereGeometry(RADIUS, 256, 128);
+	const globeMaterial = new MeshBasicMaterial({ color: '#0d1426' });
+	scene.add(new Mesh(globeGeometry, globeMaterial));
 	const fl = makeFlashes(c.active, c.glowing, TIME, DISPLAY, c.altitudeKm > 5000 ? 30 : 6);
 	const common = {
 		time: { value: TIME },
 		duration: { value: DISPLAY },
 		flicker: { value: 1 },
+		haloStrength: { value: c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? 1 : 0 },
 		radius: { value: RADIUS },
 		kmToWorld: { value: KM },
 		exposure: { value: 1.6 },
 		color: { value: new Color('#e4ebff') },
 	};
-	const disposables: { dispose(): void }[] = [];
+	const disposables: { dispose(): void }[] = [globeGeometry, globeMaterial];
 	if (c.mode !== 'none') {
 		const fragment = c.mode === 'flat' ? flatFragment : lightningFragmentShader;
 		// The 3D modes keep the production glow but draw the channel themselves.
@@ -150,15 +155,16 @@ function build(c: Case) {
 		scene.add(mesh);
 		disposables.push(g, m);
 	}
-	if (c.mode === 'ribbon') {
+	if (c.mode === 'ribbon' || c.mode === 'halo' || c.mode === 'ribbon232') {
 		const segments = c.segments ?? 16;
 		// Only flashes in their flicker phase need a channel: draw the first `active` instances.
 		const active: Flashes = { flash: fl.flash.slice(0, c.active * 4), shape: fl.shape.slice(0, c.active * 3), count: c.active };
-		const passes = [0];
+		const passes = c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? [1, 0] : [0];
 		for (const halo of passes) {
-			const g = flashGeometry(ribbonGeometry(c.branches ?? 3, segments), active);
+			const passSegments = halo ? 8 : segments;
+			const g = flashGeometry(ribbonGeometry(halo ? 0 : c.branches ?? 3, passSegments), active);
 			const m = new ShaderMaterial({
-				vertexShader: ribbonVertex(segments),
+				vertexShader: c.mode === 'ribbon232' ? ribbon232Vertex(passSegments) : ribbonVertex(passSegments),
 				fragmentShader: ribbonFragment,
 				uniforms: {
 					...common,
