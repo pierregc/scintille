@@ -2,6 +2,10 @@
 export const CHANNEL = {
 	/** Channel half-length relative to the flash radius, and its floor in pixels so shapes stay readable from far. */
 	lengthScale: 2.2,
+	/** Rendering choices, not satellite classifications. */
+	groundShare: 0.25,
+	cloudBaseKm: 7,
+	heightExaggeration: 2.5,
 	minPixels: 6,
 	/** The channel fades out this long after the flicker phase, seconds. */
 	fade: 0.15,

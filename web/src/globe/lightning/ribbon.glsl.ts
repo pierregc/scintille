@@ -24,14 +24,15 @@ ${intensityGlsl}
 ${channelGlsl}
 const float S = ${f(segments)};
 
-// Random walk in the local cloud plane, with small variations in altitude.
+// Both kinds keep the same horizontal walk; only their altitude differs.
 vec3 walk(float b, float i, float seed, float L) {
 	float heading = channelHash(seed, 1.0) * 6.2831853;
 	vec3 dir = vec3(cos(heading), sin(heading), 0.0);
 	vec3 p = vec3(-dir.xy * L, 10.0);
 	float stepLen = L * 2.0 / S;
+	float origin = 0.0;
 	if (b > 0.5) {
-		float origin = floor(S * (0.15 + 0.6 * channelHash(seed, 10.0 + b)));
+		origin = floor(S * (0.15 + 0.6 * channelHash(seed, 10.0 + b)));
 		for (float j = 0.0; j < S; j++) {
 			if (j >= origin) break;
 			p += dir * stepLen + (vec3(channelHash(seed, 100.0 + j), channelHash(seed, 200.0 + j), channelHash(seed, 300.0 + j)) - 0.5) * stepLen * vec3(1.6, 1.6, 0.4);
@@ -45,7 +46,13 @@ vec3 walk(float b, float i, float seed, float L) {
 		float k = b * 1000.0 + j;
 		p += dir * stepLen + (vec3(channelHash(seed, 100.0 + k), channelHash(seed, 200.0 + k), channelHash(seed, 300.0 + k)) - 0.5) * stepLen * vec3(1.6, 1.6, 0.4);
 	}
-	p.z = clamp(p.z, 8.0, 11.5);
+	bool ground = channelHash(seed, 2.0) < ${f(CHANNEL.groundShare)};
+	if (ground) {
+		float progress = (origin + i * (1.0 - origin / S)) / S;
+		p.z = ${f(CHANNEL.cloudBaseKm * CHANNEL.heightExaggeration)} * max(0.0, 1.0 - progress);
+	} else {
+		p.z = clamp(p.z, 8.0, 11.5);
+	}
 	return p;
 }
 
