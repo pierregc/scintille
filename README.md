@@ -2,41 +2,45 @@
 
 **[scintille.app](https://scintille.app)**
 
-A cinematic 3D globe of lightning across the planet in near real time, built on open satellite data
-(NOAA GOES GLM, EUMETSAT MTG Lightning Imager). The day/night terminator and city lights are computed
-live, flash brightness reflects the measured optical energy, and past storms are detected
-automatically so they can be replayed.
+Lightning across the whole planet, live, on a cinematic 3D globe. Every flash seen by the NOAA GOES
+and EUMETSAT MTG weather satellites lands on the globe within minutes, as bright as the satellites
+measured it. Storms are detected and tracked automatically.
 
-## Repository layout
+## Under the hood
 
-| Path | What lives there |
-|---|---|
-| `web/` | Astro site and the Three.js globe |
-| `data/` | Python `uv` workspace: data contract, ingestion service, Dagster pipelines and gold SQL models |
-| `docs/` | Documentation and architecture decision records (`docs/adr/`) |
+Behind the globe runs a small but real lakehouse, fed around the clock by geostationary satellites.
+
+```mermaid
+flowchart LR
+    sat["Satellites<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
+    ingest -->|seconds| live[("Live feed<br/>R2 + CDN")] --> globe["Three.js globe"]
+    ingest --> spool[("Spool")] --> writer["lake-writer"]
+    writer --> lake[("Iceberg<br/>bronze · silver")]
+    lake --> dagster["Dagster + DuckDB"] --> gold[("Iceberg gold<br/>storms, regions")]
+```
+
+- **Two paths.** A hot path publishes flashes in seconds; a durable spool feeds the lakehouse
+  separately, so a catalog outage never slows the live globe.
+- **Apache Iceberg on Cloudflare R2**, behind R2 Data Catalog. Tables are defined in code, with a
+  strict schema evolution policy.
+- **Dagster** turns silver into gold with plain SQL run by DuckDB, checks the data (stuck detector
+  pixels, satellite overlap, freshness) and backfills from the upstream archives.
+- **A versioned data contract** shared by Python and TypeScript, checked in CI against breaking
+  changes. The live feed is gzip binary chunks served from the edge.
+- **Run like a product**: freshness SLOs, a public status page, Terraform for Cloudflare, Docker
+  Compose on one VPS, deploys with automatic rollback.
+
+Every significant choice is an [ADR](docs/adr/); the full picture is in
+[architecture](docs/architecture.md).
 
 ## Running locally
 
-Web (Node ≥ 22.12, pnpm):
-
 ```sh
-pnpm -C web install
-pnpm -C web dev      # dev server
-pnpm -C web check    # type check
-pnpm -C web lint     # lint
-pnpm -C web build    # production build
-pnpm -C web test     # unit tests (Vitest)
+pnpm -C web install && pnpm -C web dev    # site and globe
+cd data && uv sync && uv run pytest       # data stack
 ```
 
-Data (uv, Python 3.13 is installed automatically by uv):
-
-```sh
-cd data
-uv sync
-uv run pytest
-uv run ruff check && uv run ruff format --check
-uv run mypy
-```
+`make` lists every check and deploy.
 
 ## Data & attribution
 
