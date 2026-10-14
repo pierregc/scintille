@@ -13,6 +13,10 @@ export const CHANNEL = {
 	branchTau: 0.06,
 	/** Share of the glow held back while the channel shows, so the cloud does not wash it out. */
 	glowDip: 0.6,
+	haloGlowDip: 0.9,
+	haloCapacity: 512,
+	haloFadeStartKm: 1500,
+	haloFadeEndKm: 6000,
 } as const;
 
 /** Per-flash hash in [0, 1) for draw `k`, so each shape detail is independent. */

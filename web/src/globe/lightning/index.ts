@@ -23,6 +23,7 @@ import {
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
+import { CHANNEL } from './channel';
 import { CHANNEL_CAPACITY, CHANNEL_STRIDE, ChannelInstances } from './channel-instances';
 import { ribbonGeometry } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
@@ -107,6 +108,7 @@ export function createLightning(
 			minPixels: { value: 5 },
 			viewportHeight: { value: 1 },
 			flicker: { value: 1 },
+			haloStrength: { value: 1 },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
 		},
@@ -129,6 +131,7 @@ export function createLightning(
 			...material.uniforms,
 			viewport: { value: new Vector2(1, 1) },
 			widthPx: { value: 1.6 },
+			halo: { value: 0 },
 		},
 		transparent: true,
 		depthWrite: false,
@@ -144,6 +147,28 @@ export function createLightning(
 		renderer.getSize(channelMaterial.uniforms.viewport.value).multiplyScalar(0.5);
 	};
 
+	const haloGeometry = ribbonGeometry(0, 8);
+	for (const name of ['flash', 'flashShape', 'channelSeed']) {
+		haloGeometry.setAttribute(name, channelGeometry.getAttribute(name));
+	}
+	haloGeometry.instanceCount = 0;
+	const haloMaterial = new ShaderMaterial({
+		vertexShader: ribbonVertex(8),
+		fragmentShader: ribbonFragment,
+		uniforms: { ...channelMaterial.uniforms, halo: { value: 1 } },
+		transparent: true,
+		depthWrite: false,
+		blending: CustomBlending,
+		blendEquation: MaxEquation,
+		blendSrc: OneFactor,
+		blendDst: OneFactor,
+	});
+	const haloMesh = new Mesh(haloGeometry, haloMaterial);
+	haloMesh.frustumCulled = false;
+	haloMesh.renderOrder = 2;
+	channelMesh.renderOrder = 3;
+	haloMesh.onBeforeRender = channelMesh.onBeforeRender;
+
 	const lightMap = lightMapWidth > 0 ? createLightMap(geometry, material, lightMapWidth) : null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
@@ -156,7 +181,8 @@ export function createLightning(
 	const mesh = new Mesh(geometry, material);
 	mesh.frustumCulled = false;
 	mesh.renderOrder = 1;
-	mesh.add(channelMesh);
+	mesh.add(channelMesh, haloMesh);
+	haloMesh.layers = mesh.layers;
 	channelMesh.layers = mesh.layers;
 	const size = new Vector2();
 	mesh.onBeforeRender = (renderer) => {
@@ -171,6 +197,9 @@ export function createLightning(
 			time.value = (utcMs - instances.origin) / 1000;
 			channels.sync(utcMs, instances.origin, displayMs(displayMinutes) / 1000, delays);
 			channelGeometry.instanceCount = channels.count;
+			const haloEnabled = channels.count <= CHANNEL.haloCapacity;
+			haloGeometry.instanceCount = haloEnabled ? channels.count : 0;
+			material.uniforms.haloStrength.value = haloEnabled ? 1 : 0;
 			if (channels.count > 0) {
 				channelBuffer.clearUpdateRanges();
 				channelBuffer.addUpdateRange(0, channels.count * CHANNEL_STRIDE);
@@ -194,6 +223,8 @@ export function createLightning(
 		dispose() {
 			lightMap?.dispose();
 			reducedMotion?.removeEventListener('change', applyMotion);
+			haloGeometry.dispose();
+			haloMaterial.dispose();
 			channelGeometry.dispose();
 			channelMaterial.dispose();
 			geometry.dispose();

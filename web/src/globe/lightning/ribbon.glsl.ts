@@ -14,6 +14,8 @@ uniform float kmToWorld;
 attribute float channelSeed;
 uniform vec2 viewport;
 uniform float widthPx;
+uniform float halo;
+uniform float haloStrength;
 
 varying vec2 vLocal;
 varying float vLength;
@@ -22,7 +24,8 @@ varying float vLight;
 ${flashProfileGlsl}
 ${intensityGlsl}
 ${channelGlsl}
-const float S = ${f(segments)};
+const float S = 16.0;
+const float SAMPLE = ${f(16 / segments)};
 
 // Both kinds keep the same horizontal walk; only their altitude differs.
 vec3 walk(float b, float i, float seed, float L) {
@@ -67,6 +70,10 @@ void main() {
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 	float branchLevel = rib.x > 0.5 ? exp(-age / ${f(CHANNEL.branchTau)}) * 0.7 : 1.0;
 	float light = brightness * fade * branchLevel;
+	if (halo > 0.5) {
+		float distanceKm = length(cameraPosition - base) / kmToWorld;
+		light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distanceKm));
+	}
 	if (light < 0.002) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -77,8 +84,8 @@ void main() {
 	float distance = length(cameraPosition - base);
 	float pixel = distance / (projectionMatrix[1][1] * viewport.y);
 	float scale = max(kmToWorld, ${f(CHANNEL.minPixels)} * pixel / L);
-	vec3 a = walk(rib.x, rib.y, channelSeed, L);
-	vec3 b = walk(rib.x, rib.y + 1.0, channelSeed, L);
+	vec3 a = walk(rib.x, rib.y * SAMPLE, channelSeed, L);
+	vec3 b = walk(rib.x, (rib.y + 1.0) * SAMPLE, channelSeed, L);
 	mat3 frame = mat3(east * scale, north * scale, normal * kmToWorld);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);
 	vec4 cb = projectionMatrix * viewMatrix * vec4(base + frame * b, 1.0);
@@ -88,7 +95,7 @@ void main() {
 	t = dot(t, t) > 1e-8 ? normalize(t) : vec2(1.0, 0.0);
 	vec4 c = rib.z > 0.5 ? cb : ca;
 	float taper = rib.x > 0.5 ? 1.0 - 0.7 * (rib.y + rib.z) / S : 1.0;
-	float w = widthPx * max(taper, 0.5);
+	float w = widthPx * (halo > 0.5 ? 8.0 : 1.0) * max(taper, 0.5);
 	float along = rib.z > 0.5 ? 1.0 : -1.0;
 	c.xy += (vec2(-t.y, t.x) * rib.w + t * along) * w / viewport * c.w;
 	gl_Position = c;
@@ -101,6 +108,7 @@ void main() {
 export const ribbonFragment = /* glsl */ `
 uniform vec3 color;
 uniform float exposure;
+uniform float halo;
 
 varying vec2 vLocal;
 varying float vLength;
@@ -108,7 +116,7 @@ varying float vLight;
 void main() {
 	vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
 	float x2 = min(dot(d, d), 1.0);
-	float light = exp(-x2 * 3.0) * (1.0 - x2);
+	float light = halo > 0.5 ? 0.3 * exp(-x2 * 5.0) * (1.0 - x2) : exp(-x2 * 3.0) * (1.0 - x2);
 	gl_FragColor = vec4(color * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>

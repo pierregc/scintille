@@ -28,7 +28,7 @@ try {
 			['tilt80', 120, 80],
 		];
 		for (const [name, altitudeKm, tilt] of views) {
-			for (const mode of ['flat', 'ribbon']) {
+			for (const mode of ['flat', 'ribbon', 'halo']) {
 				const c = { mode, active: name === 'far' ? 300 : 25, glowing: name === 'far' ? 3000 : 150, altitudeKm, tilt, width: 960, height: 540 };
 				const url = await page.evaluate((c) => bench.shot(c), c);
 				assertPage();
@@ -53,7 +53,7 @@ try {
 		for (const [width, height] of sizes) {
 			for (const [view, altitudeKm, tilt] of views) {
 				for (const active of [50, 500, 5000]) {
-					for (const mode of ['none', 'flat', 'ribbon']) {
+					for (const mode of ['none', 'flat', 'ribbon232', 'ribbon', 'halo']) {
 						const c = { mode, active, glowing: 20000, altitudeKm, tilt, width, height };
 						const r = await page.evaluate((c) => bench.measure(c), c);
 						assertPage();
@@ -63,7 +63,7 @@ try {
 				}
 			}
 		}
-		for (const segments of [8, 16, 32]) {
+		for (const segments of [8, 16]) {
 			const c = { mode: 'ribbon', active: 5000, glowing: 0, altitudeKm: 250, tilt: 60, width: 1920, height: 1080, segments };
 			const r = await page.evaluate((c) => bench.measure(c), c);
 			rows.push({ size: '1920x1080', view: 'tilt 60', active: 5000, mode: `ribbon s${segments}`, ...r });

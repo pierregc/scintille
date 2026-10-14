@@ -15,10 +15,12 @@ uniform float glowScale;
 uniform float minPixels;
 uniform float viewportHeight;
 uniform float flicker;
+uniform float haloStrength;
 
 varying vec2 vCorner;
 varying float vBrightness;
 varying float vFade;
+varying float vHalo;
 
 ${flashProfileGlsl}
 ${intensityGlsl}
@@ -41,7 +43,10 @@ void main() {
 	float size = max(flashShape.y * kmToWorld * glowScale, minPixels * pixel) * intensityScale(flashShape.x);
 
 	float flickerEnd = clamp(flashShape.z / 1000.0, ${f(CHANNEL.fade)}, ${f(PROFILE.maxFlicker)}) + ${f(CHANNEL.fade)};
+	vHalo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	vFade = 1.0 - smoothstep(0.0, flickerEnd, age);
+	float channelEnd = min(clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), duration * 0.6);
+	vFade = mix(vFade, 1.0 - smoothstep(channelEnd, channelEnd + ${f(CHANNEL.fade)}, age), vHalo);
 	vec3 world = center + (east * position.x + north * position.y) * size;
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;
@@ -57,12 +62,13 @@ uniform float exposure;
 varying vec2 vCorner;
 varying float vBrightness;
 varying float vFade;
+varying float vHalo;
 
 void main() {
 	vec2 g = vCorner;
 	float r2 = dot(g, g);
 	float glow = r2 < 1.0 ? (exp(-r2 * 12.0) + 0.25 * exp(-r2 * 3.0)) * (1.0 - r2) : 0.0;
-	float light = vBrightness * glow * (1.0 - ${f(CHANNEL.glowDip)} * vFade);
+	float light = vBrightness * glow * (1.0 - mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, vHalo) * vFade);
 	if (light <= 0.0) discard;
 	gl_FragColor = vec4(color * exposure * light, 1.0);
 	#include <tonemapping_fragment>

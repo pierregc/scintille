@@ -19,6 +19,10 @@ describe('3D channel integration', () => {
 		expect(child.layers.mask).toBe(lightning.mesh.layers.mask);
 		lightning.setTime(100_100);
 		expect(child.geometry.instanceCount).toBe(1);
+		const halo = lightning.mesh.children[1];
+		if (!(halo instanceof Mesh) || !(halo.geometry instanceof InstancedBufferGeometry)) throw new Error('missing halo');
+		expect(halo.geometry.instanceCount).toBe(1);
+		expect(halo.layers.mask).toBe(lightning.mesh.layers.mask);
 		lightning.setTime(101_000);
 		expect(child.geometry.instanceCount).toBe(0);
 		if (!(lightning.mesh.geometry instanceof InstancedBufferGeometry)) throw new Error('missing glow geometry');
@@ -27,6 +31,20 @@ describe('3D channel integration', () => {
 		child.geometry.addEventListener('dispose', disposed);
 		lightning.dispose();
 		expect(disposed).toHaveBeenCalledOnce();
+	});
+
+	it('budgets the halo and restores the round glow during a burst', () => {
+		const ring = new FlashRing(1024);
+		ring.push(decodeChunk(encodeChunk(100, Array.from({ length: 513 }, () => ({ offsetMs: 0, lat: 0, lon: 0 }))).buffer));
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		lightning.setTime(100_100);
+		const halo = lightning.mesh.children[1];
+		if (!(halo instanceof Mesh) || !(halo.geometry instanceof InstancedBufferGeometry)) throw new Error('missing halo');
+		expect(halo.geometry.instanceCount).toBe(0);
+		expect(halo.geometry.index?.count).toBe(8 * 6);
+		if (!(halo.material instanceof ShaderMaterial)) throw new Error('missing halo material');
+		expect(halo.material.uniforms.haloStrength.value).toBe(0);
+		lightning.dispose();
 	});
 
 	it('shares the reduced-motion profile uniform and cleans up its listener', () => {

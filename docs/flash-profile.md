@@ -46,6 +46,18 @@ Only flashes still in that phase enter the channel buffer, capped at 2,048 insta
 exceeds this budget, the newest channels remain; all flashes retain their glow and cloud lighting.
 The light map continues to use the full flash buffer.
 
+## Channel halo
+
+A second, soft ribbon follows the main channel only, sampling every other core vertex (8 segments
+instead of 16). Branches retain their thin core. The halo is eight times wider and at 30 % of the
+core level. It shares the same profile and fade. Nearby, the round glow falls to 10 % during flicker;
+the round afterglow is unchanged. The halo fades with camera distance from 1,500 to 6,000 km,
+returning the flicker glow to 40 % at globe scale.
+
+The halo pass is omitted above 512 active channels; the round glow then returns to its previous
+level. This bounds its instance and fill cost during bursts. The benchmark must still establish
+the 500-channel GPU delta at 1080p before this change is ready for review.
+
 ## Reduced motion
 
 With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms (at most 4 %
