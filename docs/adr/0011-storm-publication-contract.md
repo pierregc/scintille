@@ -6,7 +6,7 @@
 ## Context
 
 #74 publishes bounded storm pages and replay data for #76 and #88. Classification in #183 is
-configurable; ADR 0009 still leaves the thresholds and public names to the maintainer. The live
+configurable and uses the accepted ADR 0009 thresholds and public names. The live
 binary format has no publication timestamp and event offsets are signed 32-bit milliseconds.
 The lake stores cell bounds and track identifiers, but not the flash membership of each cell.
 

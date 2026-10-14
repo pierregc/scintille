@@ -699,7 +699,7 @@ The versioned schema is `data/contract/storm.schema.json`. `storms/<slug>.json` 
 persisted summary, bbox, centroid track, publication time, last observation time and replay
 references. Slugs come from `gold/storm_names` and never change. Bounds with west greater than east
 cross the antimeridian. All timestamps represent UTC instants. Intensity names and rules are read
-from `gold/storm_levels`; the publication contract does not approve ADR 0009's proposed thresholds.
+from `gold/storm_levels`; publication forwards the accepted ADR 0009 classification unchanged.
 
 Replay chunk paths are relative to the public data root, not the metadata URL. Each immutable
 `storms/chunks/<sha256>.bin.gz` uses the existing live binary layout with an event-hour origin;

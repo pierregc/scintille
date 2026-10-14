@@ -225,8 +225,8 @@ of 50 summaries and XML sitemaps. `hourly_storm_catalog` materializes its upstre
 A storm starting at the beginning of an hour therefore reaches publication after 80 minutes when
 silver is available and the run succeeds, within the two-hour target.
 
-Before activation, accept the public intensity decision in ADR 0009 (#71), merge classification
-#183 (#72), materialize missing `minute_counts` and levels, and bootstrap tracking sequentially
+Classification (#183/#72) is on main and ADR 0009 is accepted. Before activation, materialize
+missing historical `minute_counts` and levels, and bootstrap tracking sequentially
 through the hour before the schedule's first run. The publisher requires a name and persisted
 classification for every indexed storm; it never supplies classification defaults. A missing
 upstream partition stops the run rather than silently starting a new storm chain. Recovery runs
