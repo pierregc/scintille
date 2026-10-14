@@ -93,20 +93,3 @@ Measured download size of each tier (day + night + mask), in MB (10^6 bytes):
 
 The mobile tier is well under the 4 MB target. Sizes change if encoder settings change: re-run the
 script and update this table from `out/manifest.json`.
-
-## Storm replay data
-
-`GlobeApp.data.openStorm(baseUrl, slug, speed)` loads the published metadata and SCNT gzip
-extract at `storms/<slug>.json` and switches the existing scene clock to replay. It returns
-metadata on success and `null` when superseded or cancelled. Replay chunk paths resolve against
-`baseUrl`, as specified in the storm publication contract. `data.open(source, speed)` accepts an
-injected archive source for fixtures or future time-range queries.
-
-Loading keeps the current observations until the new extract is complete. Replay stops live
-polling, retains the immutable extract on the CPU and moves a bounded window through the same
-ring used by lightning and thunder. Seeking updates that window on the next animation frame.
-`data.live()` cancels pending loads, clears the replay window and starts a fresh live client;
-it downloads the current manifest's chunks again. Disposal releases the archive and subscriptions.
-CPU memory scales with the extract's flash count; the renderer ring and GPU capacity stay fixed.
-Camera entry, historical cloud restoration and replay controls are handled by the subsequent
-replay tickets.

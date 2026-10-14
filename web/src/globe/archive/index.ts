@@ -148,7 +148,8 @@ export class SceneData {
 			(lo < this.#windowStart + count - quarter || this.#windowStart + count === archive.size)) return;
 		const from = Math.max(0, Math.min(lo - Math.floor(count / 2), archive.size - count));
 		if (from === this.#windowStart) return;
-		this.ring.replace(archive, from, count);
+		if (this.#windowStart < 0) this.ring.replace(archive, from, count);
+		else this.ring.slide(archive, from, count);
 		this.#windowStart = from;
 	}
 

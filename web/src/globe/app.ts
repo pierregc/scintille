@@ -1,4 +1,5 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
@@ -10,6 +11,7 @@ import { createCoverage } from './coverage';
 import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
+import { runDevStorm } from './dev-storm';
 import { createEarth } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
@@ -218,6 +220,10 @@ export function createGlobeApp(
 		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+	if (import.meta.env.DEV || BUILD.pr !== null) {
+		const base = import.meta.env.DEV ? liveBaseUrl() : new URL('/_replay-fixtures/', location.href).href;
+		void runDevStorm(data, controls.flyTo, location.search, base).catch((error: unknown) => console.warn('fixture replay:', error));
+	}
 
 	return {
 		flyTo: controls.flyTo,

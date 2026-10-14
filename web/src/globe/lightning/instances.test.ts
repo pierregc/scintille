@@ -151,6 +151,26 @@ describe('FlashInstances', () => {
 		}
 	});
 
+	it('uploads only new observations when an immutable archive window moves forward', () => {
+		const archive = new FlashRing(12);
+		push(archive, 100, 12);
+		const { ring, instances, ranges, times } = setup(4, 4, 1000);
+		ring.replace(archive, 0, 4);
+		instances.sync(100_000);
+		const generation = ring.generation;
+		const origin = instances.origin;
+		ring.slide(archive, 1, 4);
+		instances.sync(100_001);
+		expect(ring.generation).toBe(generation);
+		expect(instances.origin).toBe(origin);
+		expect(ranges).toEqual([[0, 4], [0, 1]]);
+		expect(times().sort()).toEqual([100_001, 100_002, 100_003, 100_004]);
+		ring.slide(archive, 0, 4);
+		instances.sync(100_000);
+		expect(times().sort()).toEqual([100_000, 100_001, 100_002, 100_003]);
+		expect(ring.generation).toBe(generation);
+	});
+
 	it('plays each source its delay after its event time', () => {
 		const { ring, instances, times } = setup(16, 8, 10);
 		const flashes = [0, 1, 2].map((source) => ({ offsetMs: 0, lat: 0, lon: 0, source }));

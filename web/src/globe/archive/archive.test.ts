@@ -68,8 +68,10 @@ describe('archive scene data', () => {
 		const { data } = await setup(4);
 		try {
 			await data.open(source(100_000, 20));
+			const dataset = data.ring.generation;
 			expect(times(data.ring)).toEqual([100_000, 101_000, 102_000, 103_000]);
 			data.update(119_000);
+			expect(data.ring.generation).toBe(dataset);
 			expect(times(data.ring)).toEqual([116_000, 117_000, 118_000, 119_000]);
 			data.update(102_000);
 			expect(times(data.ring)).toContain(102_000);

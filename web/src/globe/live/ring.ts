@@ -24,6 +24,8 @@ export class FlashRing {
 	readonly source: Uint8Array;
 	readonly quality: Uint8Array;
 	#written = 0;
+	#size = 0;
+	#windowSource: FlashRing | undefined;
 	#generation = 0;
 	readonly #watchers: RingWatcher[] = [];
 
@@ -47,33 +49,58 @@ export class FlashRing {
 
 	clear(): void {
 		this.#written = 0;
+		this.#size = 0;
+		this.#windowSource = undefined;
 		this.#generation++;
 		for (const watcher of this.#watchers) watcher.from = 0;
 	}
 
-	/** Replaces observations with a bounded, ordered window of another ring. */
+	/** Starts a new dataset from a bounded, ordered window of another ring. */
 	replace(source: FlashRing, from: number, count: number): void {
+		this.#validateWindow(source, from, count);
+		this.clear();
+		this.#windowSource = source;
+		this.#copyWindow(source, from, count);
+	}
+
+	/** Moves through the same immutable dataset, preserving observation indices and active audio. */
+	slide(source: FlashRing, from: number, count: number): void {
+		this.#validateWindow(source, from, count);
+		if (source !== this.#windowSource) throw new Error('window source changed');
+		if (count !== this.#size) throw new Error('window size changed');
+		const first = source.written - source.size + from;
+		const changed = first < this.#written - this.#size ? first : this.#written;
+		this.#copyWindow(source, from, count);
+		for (const watcher of this.#watchers) watcher.from = Math.min(watcher.from, changed);
+	}
+
+	#validateWindow(source: FlashRing, from: number, count: number): void {
 		if (source === this || !Number.isInteger(from) || !Number.isInteger(count) || from < 0 || count < 0 || from + count > source.size || count > this.capacity) {
 			throw new RangeError('invalid ring window');
 		}
-		this.clear();
+	}
+
+	#copyWindow(source: FlashRing, from: number, count: number): void {
+		const first = source.written - source.size + from;
 		for (let i = 0; i < count; i++) {
 			const slot = source.slot(from + i);
-			this.time[i] = source.time[slot];
-			this.lat[i] = source.lat[slot];
-			this.lon[i] = source.lon[slot];
-			this.intensity[i] = source.intensity[slot];
-			this.areaKm2[i] = source.areaKm2[slot];
-			this.durationMs[i] = source.durationMs[slot];
-			this.source[i] = source.source[slot];
-			this.quality[i] = source.quality[slot];
+			const target = (first + i) % this.capacity;
+			this.time[target] = source.time[slot];
+			this.lat[target] = source.lat[slot];
+			this.lon[target] = source.lon[slot];
+			this.intensity[target] = source.intensity[slot];
+			this.areaKm2[target] = source.areaKm2[slot];
+			this.durationMs[target] = source.durationMs[slot];
+			this.source[target] = source.source[slot];
+			this.quality[target] = source.quality[slot];
 		}
-		this.#written = count;
+		this.#written = first + count;
+		this.#size = count;
 	}
 
 	/** Number of valid slots. */
 	get size(): number {
-		return Math.min(this.#written, this.capacity);
+		return this.#size;
 	}
 
 	/** Slot the next flash goes to. */
@@ -81,7 +108,7 @@ export class FlashRing {
 		return this.#written % this.capacity;
 	}
 
-	/** Flashes pushed since the last clear; with `size`, maps `written` indices to stored flashes. */
+	/** Logical index after the last flash; with `size`, maps `written` indices to stored flashes. */
 	get written(): number {
 		return this.#written;
 	}
@@ -140,6 +167,8 @@ export class FlashRing {
 			}
 		}
 		this.#written += count;
+		this.#size = Math.min(this.#size + count, this.capacity);
+		this.#windowSource = undefined;
 		for (const watcher of this.#watchers) watcher.from = Math.min(watcher.from, at);
 	}
 

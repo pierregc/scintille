@@ -1,6 +1,6 @@
 # 0013 · One scene data owner for live and archive playback
 
-- Status: accepted
+- Status: proposed
 - Date: 2026-10-12
 
 ## Context
@@ -18,7 +18,9 @@ capacity, and seeking backwards must still recover its earlier observations.
 ## Decision
 SceneData owns archive loading and live feed transitions while lightning and thunder keep the
 same ring. Loaded extracts remain in an immutable CPU store; playback and seeks move a bounded
-window into the renderer ring, whose generation invalidates cached observations.
+window into the renderer ring. Dataset replacements change its generation to invalidate cached
+observations; sliding windows retain logical observation indices, active audio and overlapping GPU
+instances.
 
 ## Consequences
 - New loads cancel older requests. Current observations stay available until the replacement is
