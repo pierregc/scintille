@@ -4,7 +4,7 @@
 
 Lightning across the whole planet, live, on a cinematic 3D globe. Every flash seen by the NOAA GOES
 and EUMETSAT MTG weather satellites lands on the globe within minutes, as bright as the satellites
-measured it. Storms are detected and tracked automatically.
+measured it.
 
 ## Under the hood
 
@@ -13,22 +13,24 @@ Behind the globe runs a small but real lakehouse, fed around the clock by geosta
 ```mermaid
 flowchart LR
     sat["Satellites<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
-    ingest -->|seconds| live[("Live feed<br/>R2 + CDN")] --> globe["Three.js globe"]
+    ingest -->|30 s chunks| live[("Live feed<br/>R2 + CDN")] --> globe["Three.js globe"]
     ingest --> spool[("Spool")] --> writer["lake-writer"]
-    writer --> lake[("Iceberg<br/>bronze · silver")]
-    lake --> dagster["Dagster + DuckDB"] --> gold[("Iceberg gold<br/>storms, regions")]
+    writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver")]
+    lake --> dagster["Dagster"] --> gold[("Iceberg gold<br/>stats · storms")]
 ```
 
-- **Two paths.** A hot path publishes flashes in seconds; a durable spool feeds the lakehouse
-  separately, so a catalog outage never slows the live globe.
-- **Apache Iceberg on Cloudflare R2**, behind R2 Data Catalog. Tables are defined in code, with a
-  strict schema evolution policy.
-- **Dagster** turns silver into gold with plain SQL run by DuckDB, checks the data (stuck detector
-  pixels, satellite overlap, freshness) and backfills from the upstream archives.
-- **A versioned data contract** shared by Python and TypeScript, checked in CI against breaking
-  changes. The live feed is gzip binary chunks served from the edge.
-- **Run like a product**: freshness SLOs, a public status page, Terraform for Cloudflare, Docker
-  Compose on one VPS, deploys with automatic rollback.
+- **Two paths.** `ingest-live` publishes the live feed in 30-second chunks and writes every batch to
+  a durable spool; `lake-writer` commits the spool to Iceberg every five minutes, so a catalog
+  outage never slows the live globe.
+- **Apache Iceberg on Cloudflare R2**, through a REST catalog (R2 Data Catalog in production,
+  Lakekeeper locally). Tables are declared in code and `migrate` only applies safe schema changes.
+- **Dagster** builds the daily gold tables from SQL files run by DuckDB, checks silver every hour
+  and every day (freshness, completeness, ranges, volume, duplicates, and a file-by-file
+  reconciliation from spool to silver), tracks storm cells with Polars and backfills GLM days from the NOAA archives.
+- **A versioned data contract** in Python, with TypeScript types generated from it; CI fails on any
+  drift or unversioned schema change. The live feed is gzip binary chunks served from the edge.
+- **Operations**: Terraform for Cloudflare, Docker Compose on one VPS, deploys that roll back on
+  failure, a public status page fed by live metrics.
 
 Every significant choice is an [ADR](docs/adr/); the full picture is in
 [architecture](docs/architecture.md).
