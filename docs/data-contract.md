@@ -714,3 +714,38 @@ storm id descending. Page zero exists for an empty catalog. The total page count
 old pages can remain after a catalog shrinks and must not be exposed beyond that count. Sitemap
 files include schema and freshness metadata in XML comments, preserve the sitemap protocol, and
 stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #75 detail file.
+
+## Storm replay data
+
+`GlobeApp.data.openStorm(baseUrl, slug, speed)` loads the published metadata and SCNT gzip
+extract at `storms/<slug>.json` and switches the existing scene clock to replay. It returns
+metadata on success and `null` when superseded or cancelled. Replay chunk paths resolve against
+`baseUrl`, as specified in the storm publication contract. `data.open(source, speed)` accepts an
+injected archive source for fixtures or future time-range queries.
+
+Loading keeps the current observations until the new extract is complete. Replay stops live
+polling, retains the immutable extract on the CPU and moves a bounded window through the same
+ring used by lightning and thunder. Seeking updates that window on the next animation frame.
+`data.live()` cancels pending loads, clears the replay window and starts a fresh live client;
+it downloads the current manifest's chunks again. Disposal releases the archive and subscriptions.
+CPU memory scales with the extract's flash count; the renderer ring and GPU capacity stay fixed.
+Sliding the same extract preserves logical flash indices and pending thunder; dataset replacement
+invalidates those consumers.
+Camera entry, historical cloud restoration and replay controls are handled by the subsequent
+replay tickets.
+
+### Replay fixture verification
+
+Dev and Preview builds accept `/?storm=2026-07-15-orlando` (optional positive `speed`, default 1).
+The entry loads the synthetic fixture and places the camera over it for inspection; production
+builds ignore this query. In dev, run `python3 fixtures/serve.py` alongside `pnpm -C web dev`.
+Preview builds bundle the metadata and gzip chunk under `/_replay-fixtures/`, without requiring
+a fixture upload to R2. These assets are omitted from production builds.
+
+Open that URL, choose the 5 min afterglow, enable thunder from the HUD, and observe the three
+fixture flashes. Click Live,
+check that the old flashes and pending thunder disappear, then click Time travel to reload the
+fixture in the same scene. Repeat these two controls without reloading the page.
+Use the debug panel to inspect ring counts and the browser's graphics/audio tools to check stable
+resources across repeated round trips. This fixture entry is for loader QA; it does not implement
+production storm links or scene restoration.

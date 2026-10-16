@@ -1,4 +1,6 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { BUILD } from '../version';
+import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
@@ -9,6 +11,7 @@ import { createCoverage } from './coverage';
 import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
+import { runDevStorm } from './dev-storm';
 import { createEarth } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
@@ -38,6 +41,7 @@ function deviceHints(context: WebGL2RenderingContext) {
 export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
+	readonly data: SceneData;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	readonly thunder: Thunder;
@@ -114,6 +118,11 @@ export function createGlobeApp(
 		: undefined;
 
 	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: (manifest) => coverage.setManifest(manifest) });
+	const data = new SceneData(clock, live, (ring) => startLiveFeed({
+		ring,
+		now: () => clock.wallTime(),
+		onManifest: (manifest) => coverage.setManifest(manifest),
+	}));
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -188,6 +197,7 @@ export function createGlobeApp(
 		if (clouds.visible && !renderParams) cloudFeed.start();
 		clouds.setTime(now);
 		stars.setTime(now);
+		data.update(now);
 		const delays = playbackDelays();
 		lightning.setTime(now, delays);
 		thunder.update(now, delays);
@@ -210,21 +220,26 @@ export function createGlobeApp(
 		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+	if (import.meta.env.DEV || BUILD.pr !== null) {
+		const base = import.meta.env.DEV ? liveBaseUrl() : new URL('/_replay-fixtures/', location.href).href;
+		void runDevStorm(data, controls.flyTo, location.search, base).catch((error: unknown) => console.warn('fixture replay:', error));
+	}
 
 	return {
 		flyTo: controls.flyTo,
 		clock,
+		data,
 		clouds,
 		cloudFeed,
 		thunder,
 		lightning,
 		feedStatus: () =>
-			feedStatus(live.client.manifest, live.client.loadedAt, clock.wallTime(), live.client.failures > 0),
-		hasData: (time) => live.client.covers(time),
-		dataStart: () => live.client.coverageStart(),
+			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
+		hasData: (time) => data.covers(time),
+		dataStart: () => data.coverageStart(),
 		debug: {
 			ring: live.ring,
-			client: live.client,
+			get client() { return data.liveClient; },
 			delays: playbackDelays,
 			quality: () => tier,
 		},
@@ -232,7 +247,7 @@ export function createGlobeApp(
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
-			live.stop();
+			data.dispose();
 			cloudFeed.stop();
 			detachCoverageLabel?.();
 			coverage.dispose();

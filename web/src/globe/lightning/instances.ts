@@ -24,6 +24,7 @@ export class FlashInstances {
 	/** Origin of stored times, UTC ms. */
 	origin = Number.NaN;
 	#count = 0;
+	#generation = -1;
 	#cursor = 0;
 	/** Ring window on the GPU, in `ring.written` indices. */
 	#start = 0;
@@ -54,6 +55,11 @@ export class FlashInstances {
 	/** Copies what the playhead needs and was not copied yet; reloads after a rebase or a seek back out of the window. */
 	sync(sceneTime: number, delays = NO_DELAY): void {
 		const ring = this.#ring;
+		if (this.#generation !== ring.generation) {
+			this.#generation = ring.generation;
+			this.#count = this.#cursor = this.#start = this.#end = 0;
+			this.origin = Number.NaN;
+		}
 		const oldest = ring.written - ring.size;
 		const changed = this.#changes.from;
 		this.#changes.from = Number.POSITIVE_INFINITY;

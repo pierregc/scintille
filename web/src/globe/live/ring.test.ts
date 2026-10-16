@@ -87,3 +87,34 @@ describe('FlashRing', () => {
 		expect(watcher.from).toBe(1);
 	});
 });
+
+it('keeps absolute indices and the actual size of a partial archive window', () => {
+	const archive = new FlashRing(8);
+	archive.push(chunk(100, 12));
+	const ring = new FlashRing(4);
+	const watcher = ring.watch();
+	ring.replace(archive, 2, 2);
+	const generation = ring.generation;
+	expect(ring.written).toBe(8);
+	expect(ring.size).toBe(2);
+	expect(times(ring)).toEqual([100_006, 100_007]);
+	watcher.from = Number.POSITIVE_INFINITY;
+	ring.slide(archive, 3, 2);
+	expect(watcher.from).toBe(8);
+	expect(times(ring)).toEqual([100_007, 100_008]);
+	expect(ring.generation).toBe(generation);
+	ring.slide(archive, 2, 2);
+	expect(watcher.from).toBe(6);
+	expect(times(ring)).toEqual([100_006, 100_007]);
+});
+
+it('requires a replacement when the archive dataset changes', () => {
+	const archive = new FlashRing(8);
+	archive.push(chunk(100, 8));
+	const ring = new FlashRing(4);
+	ring.replace(archive, 0, 4);
+	expect(() => ring.slide(new FlashRing(8), 0, 0)).toThrow('window source changed');
+	expect(() => ring.slide(archive, 0, 0)).toThrow('window size changed');
+	ring.clear();
+	expect(() => ring.slide(archive, 0, 4)).toThrow('window source changed');
+});

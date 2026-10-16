@@ -798,7 +798,7 @@ import Version from './Version.astro';
 			if (info) info.open = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
-			app?.clock.live();
+			void app?.data.live();
 			tick();
 		});
 		clouds?.addEventListener('click', () => {
