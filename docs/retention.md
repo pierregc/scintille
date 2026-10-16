@@ -6,6 +6,47 @@ migrates tables, changes maintenance, writes data, or deletes objects. Keep expo
 
 ## Commands
 
+### Manual GitHub collection
+
+After the collection workflow is merged, run Actions > **retention** > **Run workflow** on `main`,
+or `gh workflow run retention.yml --ref main`. It uses the existing production environment,
+`VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` and `VPS_HOST`; no new credentials are needed. It is manual-only
+and shares the VPS deployment lock so collection and deployment cannot overlap.
+
+The workflow streams the reviewed collector and retention measurement module into a Python process
+in the running `dagster-daemon` container. It uses the image's installed dependencies and existing
+connection settings, without installing packages, deploying code, restarting services or changing
+data/policies. The two source modules live only in that process. The container must already include
+the maintenance/catalog modules used by the deployed pipelines. Missing production settings fail
+instead of connecting to local defaults.
+
+Download the `retention-<run id>` artifact within **14 days**, then preserve the aggregate evidence
+needed for the decision. It contains:
+
+- `retention.json`: complete lake/live bucket listing totals and upload-day groups, current silver
+  partitions and retained-file references, table-location inventory bytes, and per-source daily
+  min/median/max bytes and bytes per physical row. Days through UTC today minus two are summarized,
+  allowing the same settling delay as the maintenance checks. Missing days inside each observed
+  range are counted. These are **observed settled partitions, not verified complete days**.
+- `deployed-images.txt`: deployed release and container image identifiers.
+- `provenance.txt`: collector commit and workflow run URL. A collector's version can differ from
+  the deployed release; both are recorded.
+
+The report includes configured maintenance defaults, explicitly marked as **not verified provider
+policy**. It does not query or prove Cloudflare lifecycle/managed-maintenance settings. Reads use
+the deployed credentials' existing permissions; no write/delete API is called. Listings read both
+entire buckets and are held in memory. They incur provider operations and are not atomic with
+concurrent ingestion or compaction. A failed/interrupted/duplicate listing produces no report
+artifact. The report deliberately excludes raw object names, endpoints and tokens; storage errors
+are reduced to their exception class in Actions logs.
+
+Repeat collection on different days and complete the evidence checklist below. The workflow cannot
+establish upstream completeness, explain outages/backfills, accept the budget, or apply the retention
+decision. It does not close #41. A production run is only possible after the workflow exists on
+`main`; local fixture tests do not substitute for those production measurements.
+
+### Local catalog and exported inventories
+
 From `data/`, with the maintainer's existing `SCINTILLE_LAKE_*` connection:
 
 ```sh
