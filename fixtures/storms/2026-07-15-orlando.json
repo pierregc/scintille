@@ -1,0 +1,53 @@
+{
+  "schema_version": "2.4.0",
+  "published_at": "2026-07-15T19:00:00Z",
+  "last_observation_time": "2026-07-15T18:02:00Z",
+  "storm": {
+    "storm_id": "synthetic-orlando",
+    "slug": "2026-07-15-orlando",
+    "name": "Orlando",
+    "label": "Orlando, Florida, United States",
+    "country_code": "US",
+    "t_start": "2026-07-15T18:00:01Z",
+    "t_end": "2026-07-15T18:02:00Z",
+    "closed": true,
+    "flashes": 3,
+    "peak_rate": 1,
+    "level": 1,
+    "level_name": "Synthetic",
+    "level_rule": "synthetic-fixture-only",
+    "sources": [
+      "glm-east"
+    ]
+  },
+  "bounds": {
+    "west": -81.4,
+    "south": 28.4,
+    "east": -81.2,
+    "north": 28.6
+  },
+  "track": [
+    {
+      "time": "2026-07-15T18:01:00Z",
+      "lat": 28.5,
+      "lon": -81.3,
+      "flash_count": 3,
+      "area_km2": 1.0
+    }
+  ],
+  "replay": {
+    "selection": "track-bounds",
+    "flash_count": 3,
+    "chunks": [
+      {
+        "start": "2026-07-15T18:00:00Z",
+        "end": "2026-07-15T19:00:00Z",
+        "path": "storms/chunks/8f9f3a4a0db8cf2e4dde374fc25baa32487118fad9089db19fce9f85e12c3944.bin.gz",
+        "flash_count": 3,
+        "size_bytes": 66,
+        "event_min": "2026-07-15T18:00:01Z",
+        "event_max": "2026-07-15T18:02:00Z"
+      }
+    ]
+  }
+}

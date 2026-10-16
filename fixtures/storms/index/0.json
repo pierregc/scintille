@@ -1,0 +1,29 @@
+{
+  "schema_version": "2.4.0",
+  "published_at": "2026-07-15T19:00:00Z",
+  "last_observation_time": "2026-07-15T18:02:00Z",
+  "page": 0,
+  "page_size": 50,
+  "total_storms": 1,
+  "total_pages": 1,
+  "storms": [
+    {
+      "storm_id": "synthetic-orlando",
+      "slug": "2026-07-15-orlando",
+      "name": "Orlando",
+      "label": "Orlando, Florida, United States",
+      "country_code": "US",
+      "t_start": "2026-07-15T18:00:01Z",
+      "t_end": "2026-07-15T18:02:00Z",
+      "closed": true,
+      "flashes": 3,
+      "peak_rate": 1,
+      "level": 1,
+      "level_name": "Synthetic",
+      "level_rule": "synthetic-fixture-only",
+      "sources": [
+        "glm-east"
+      ]
+    }
+  ]
+}

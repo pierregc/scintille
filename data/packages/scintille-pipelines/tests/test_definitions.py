@@ -75,6 +75,7 @@ def test_code_location_loads() -> None:
     assert repo.get_job("daily_gold")
     assert {s.name for s in repo.schedule_defs} == {
         "daily_gold_schedule",
+        "storm_catalog_schedule",
         "silver_hourly_checks_schedule",
         "silver_daily_checks_schedule",
         "lake_weekly_maintenance_schedule",
@@ -121,7 +122,7 @@ def test_schedules_and_sensors_start_running() -> None:
     repo = defs.get_repository_def()
     assert {
         s.name for s in repo.schedule_defs if s.default_status != DefaultScheduleStatus.RUNNING
-    } == set()
+    } == {"storm_catalog_schedule"}
     assert {
         s.name for s in repo.sensor_defs if s.default_status != DefaultSensorStatus.RUNNING
     } == set()
