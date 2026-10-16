@@ -1,0 +1,67 @@
+name: retention
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retention-production
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: vps-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare the reviewed collector
+        run: python3 infra/compose/retention_bundle.py > "$RUNNER_TEMP/retention-collector.py"
+      - name: SSH key
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Collect metadata and bucket listings without deploying
+        env:
+          SCINTILLE_VPS_HOST: ${{ vars.VPS_HOST }}
+        run: |
+          mkdir -p evidence
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "deploy@$SCINTILLE_VPS_HOST" \
+            'cd /srv/scintille && docker compose exec -T dagster-daemon python -' \
+            < "$RUNNER_TEMP/retention-collector.py" > evidence/retention.json
+          python3 -m json.tool evidence/retention.json > /dev/null
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "deploy@$SCINTILLE_VPS_HOST" \
+            'cd /srv/scintille && cat .deployed && docker compose images --format json' \
+            > evidence/deployed-images.txt
+      - name: Record provenance and remaining evidence
+        env:
+          COLLECTOR_COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          printf 'Collector commit: %s\nRun: %s\n' "$COLLECTOR_COMMIT" "$RUN_URL" > evidence/provenance.txt
+          {
+            echo '### Retention measurements'
+            echo 'Read-only metadata and full bucket listings collected; download the evidence artifact.'
+            echo 'This does not establish source completeness, applied provider policy, costs or retention acceptance.'
+            echo 'Compare repeated runs and complete the checklist in docs/retention.md before closing #41.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: retention-${{ github.run_id }}
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove SSH material
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts

@@ -43,8 +43,13 @@ All workflows live in `.github/workflows/`. Typical durations are from recent ru
 | `images` | Manual | `build` (matrix), `smoke`, `rollback`, `lake`, `deploy` | 4 to 6 min |
 | `render` | Manual | `determinism` | 5 min |
 | `terraform` | PR touching `infra/terraform/**`; manual | `plan`, `apply` | 15 s |
+| `retention` | Manual, `main` only | Read-only VPS storage evidence for #41 | Depends on bucket/metadata size |
 
 Run a manual workflow from Actions > <workflow> > Run workflow, or `gh workflow run <workflow> --ref <branch>`.
+
+`retention` reuses the production SSH configuration and serializes with VPS deployments. It streams
+the reviewed collector into the existing pipelines container without deploying or changing policy,
+then retains an aggregate evidence artifact for 14 days ([measurement runbook](retention.md)).
 
 ### `ci`: checks on pull requests
 
