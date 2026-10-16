@@ -50,6 +50,8 @@ export interface Clouds {
 	 * It owns the texture: a frame with the same time replaces it, the oldest beyond the limit are disposed.
 	 */
 	setFrame(frame: CloudFrame): void;
+	/** Keep only these observation times, disposing every other texture. */
+	retainFrames(times: readonly number[]): void;
 	/** Turns the layer on or off and remembers the choice. */
 	setVisible(visible: boolean): void;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
@@ -169,6 +171,17 @@ export function createClouds(
 			// Keep showing the same instant, if any is on screen; the next setTime eases toward the new target.
 			position = Number.isFinite(shown) ? framePosition(frames.map((f) => f.time), shown) : target();
 			show();
+			syncVisibility();
+		},
+		retainFrames(times) {
+			for (let i = frames.length - 1; i >= 0; i--) {
+				if (!times.includes(frames[i].time)) frames.splice(i, 1)[0].texture.dispose();
+			}
+			position = target();
+			if (frames.length === 0) {
+				material.uniforms.cloudMap.value = null;
+				material.uniforms.cloudMapNext.value = null;
+			} else show();
 			syncVisibility();
 		},
 		setVisible(next) {

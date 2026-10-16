@@ -142,6 +142,16 @@ describe('CloudFeed', () => {
 		expect(loads).toEqual([`${BASE}live/clouds/4k/f3.webp`]);
 	});
 
+	it('reloads the same live URLs after replay has released their textures', async () => {
+		const f = start({ frames: 1 });
+		await f.idle();
+		f.stop();
+		f.start();
+		await f.idle();
+		expect(loads).toEqual([`${BASE}live/clouds/2k/f3.webp`, `${BASE}live/clouds/2k/f3.webp`]);
+		expect(frames).toHaveLength(2);
+	});
+
 	it('reloads a revised frame under its new path', async () => {
 		const f = start({ frames: 1 });
 		await f.idle();

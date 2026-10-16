@@ -1,0 +1,29 @@
+{
+  "generated_at": "2099-01-01T00:00:00Z",
+  "attribution": "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)",
+  "frames": [
+    {
+      "time": "2026-07-15T18:00:00Z",
+      "published_at": "2099-01-01T00:00:00Z",
+      "product": "GLOBCOMPLIR_v3r0_blend_s202607151800000_e202607151809599_c202607151834153.nc",
+      "reference": "gfs 2026071512 f006",
+      "textures": {
+        "2k": {
+          "path": "../2k/2026/07/15/20260715T180000Z-f7492cd2.webp",
+          "width": 2048,
+          "height": 1024,
+          "size_bytes": 327500
+        },
+        "4k": {
+          "path": "../2k/2026/07/15/20260715T180000Z-f7492cd2.webp",
+          "width": 2048,
+          "height": 1024,
+          "size_bytes": 327500
+        }
+      },
+      "expires_at": "2099-01-31T00:00:00Z"
+    }
+  ],
+  "schema_version": 1,
+  "day": "2026-07-15"
+}
