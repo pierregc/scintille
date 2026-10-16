@@ -20,7 +20,7 @@ function manifest(day: string, hours: number[]) {
 	};
 }
 
-function setup(hours = [0, 1, 2]) {
+function setup(hours = [0, 1, 2], now = () => T0) {
 	const clouds = createClouds(1, { storage: null, maxFrames: 3 });
 	clouds.setVisible(true);
 	const textures: Texture[] = [];
@@ -35,7 +35,7 @@ function setup(hours = [0, 1, 2]) {
 		return String(input).endsWith('2026-07-15.json')
 			? Response.json(manifest('2026-07-15', hours)) : new Response(null, { status: 404 });
 	});
-	const feed = new ArchiveCloudFeed({ baseUrl: BASE, tier: '2k', clouds, fetch: fetchFn, load, now: () => T0 });
+	const feed = new ArchiveCloudFeed({ baseUrl: BASE, tier: '2k', clouds, fetch: fetchFn, load, now });
 	return { clouds, feed, textures, requests, fetchFn, load };
 }
 
@@ -61,6 +61,34 @@ describe('archive cloud playback', () => {
 		expect(dispose).toHaveBeenCalledOnce();
 		expect(s.clouds.frameTime).toBeNull();
 		expect(s.clouds.mesh.visible).toBe(false);
+		s.feed.stop(); s.clouds.dispose();
+	});
+
+	it('keeps three textures when seeking forward and backwards across windows', async () => {
+		const s = setup([0, 1, 2, 3, 4, 5]);
+		s.feed.setTime(T0); await s.feed.idle();
+		const disposals = s.textures.map((texture) => vi.spyOn(texture, 'dispose'));
+		s.feed.setTime(T0 + 4 * HOUR); await s.feed.idle();
+		expect(disposals.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+		expect(s.textures).toHaveLength(6);
+		const newDisposals = s.textures.slice(3).map((texture) => vi.spyOn(texture, 'dispose'));
+		s.feed.setTime(T0); await s.feed.idle();
+		expect(newDisposals.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+		s.clouds.setTime(T0); expect(s.clouds.frameTime).toBe(T0);
+		s.feed.stop(); s.clouds.dispose();
+	});
+
+	it('retries negative discovery once the wall-clock minute changes', async () => {
+		let wall = T0;
+		const s = setup([0], () => wall);
+		s.fetchFn.mockImplementation(async () => new Response(null, { status: 404 }));
+		s.feed.setTime(T0); await s.feed.idle();
+		s.feed.setTime(T0 + 1); await s.feed.idle();
+		expect(s.requests).toHaveLength(0); expect(s.fetchFn).toHaveBeenCalledTimes(3);
+		wall += 60_000;
+		s.fetchFn.mockImplementation(async () => Response.json(manifest('2026-07-15', [0])));
+		s.feed.setTime(T0); await s.feed.idle();
+		expect(s.fetchFn).toHaveBeenCalledTimes(6); expect(s.load).toHaveBeenCalledOnce();
 		s.feed.stop(); s.clouds.dispose();
 	});
 

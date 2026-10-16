@@ -87,6 +87,7 @@ export class CloudFeed {
 	start(): void {
 		if (this.#running) return;
 		this.#running = true;
+		this.#settled = false;
 		this.#abort = new AbortController();
 		this.#unsubscribe = this.#visibility.subscribe(() => this.#onVisibilityChange());
 		if (!this.#visibility.hidden()) {
@@ -99,7 +100,6 @@ export class CloudFeed {
 		this.#revision++;
 		this.#running = false;
 		this.#loaded.clear();
-		this.#settled = false;
 		this.#unsubscribe?.();
 		this.#abort?.abort();
 		clearTimeout(this.#timer);

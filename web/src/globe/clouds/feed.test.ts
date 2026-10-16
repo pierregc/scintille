@@ -146,6 +146,7 @@ describe('CloudFeed', () => {
 		const f = start({ frames: 1 });
 		await f.idle();
 		f.stop();
+		expect(f.settled).toBe(true); // The offline renderer freezes a settled feed before checking it.
 		f.start();
 		await f.idle();
 		expect(loads).toEqual([`${BASE}live/clouds/2k/f3.webp`, `${BASE}live/clouds/2k/f3.webp`]);

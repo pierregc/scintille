@@ -50,7 +50,7 @@ export function parseCloudManifest(json: unknown): CloudManifest {
 
 /** The newest `count` frames that have `tier`, oldest first, with absolute texture URLs. */
 export function frameSources(
-	manifest: CloudManifest,
+	manifest: Pick<CloudManifest, 'frames'>,
 	tier: CloudTier,
 	manifestUrl: string,
 	count: number,

@@ -9,14 +9,15 @@ const DAY = 24 * HOUR;
 const MAX_MANIFEST_BYTES = 128 * 1024;
 const MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
-interface ArchiveManifest extends CloudManifest {
+interface ArchiveManifest extends Omit<CloudManifest, 'window_seconds'> {
 	schema_version: 1;
 	day: string;
 	frames: (CloudManifest['frames'][number] & { expires_at: string })[];
 }
 
 function parseArchive(json: unknown, day: string): ArchiveManifest {
-	const manifest = parseCloudManifest(json) as ArchiveManifest;
+	parseCloudManifest(json);
+	const manifest = json as ArchiveManifest;
 	if (manifest.schema_version !== 1 || manifest.day !== day || manifest.frames.length > 96) {
 		throw new Error('invalid archive cloud manifest');
 	}

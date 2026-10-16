@@ -375,14 +375,15 @@ def test_archive_index_survives_restart_replaces_revisions_and_resolves_only_wri
             )
 
 
-def test_partial_archive_never_publishes_a_new_index_or_breaks_live() -> None:
+@pytest.mark.parametrize("failed_prefix", ["2k/", "4k/", "manifests/"])
+def test_partial_archive_never_publishes_a_new_index_or_breaks_live(failed_prefix: str) -> None:
     pub, store = publisher()
     asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
     before = obstore.get(store, "archive/clouds/manifests/2026-10-10.json").bytes().to_bytes()
 
     class Broken(ObjectLiveStore):
         async def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
-            if path.startswith("4k/"):
+            if path.startswith(failed_prefix):
                 raise OSError("archive copy interrupted")
             await super().put(path, data, headers)
 
