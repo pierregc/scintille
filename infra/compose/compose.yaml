@@ -20,6 +20,7 @@ x-pipelines: &pipelines
       PACKAGE: scintille-pipelines
   environment:
     SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+    DAGSTER_POSTGRES_URL: postgresql+psycopg2://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
     SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
   # Reference downloads (Natural Earth) survive container recreation.
   volumes:

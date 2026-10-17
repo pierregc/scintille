@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pytest
+import yaml  # type: ignore[import-untyped]
 from dagster import (
     DefaultScheduleStatus,
     DefaultSensorStatus,
@@ -126,3 +127,10 @@ def test_schedules_and_sensors_start_running() -> None:
     assert {
         s.name for s in repo.sensor_defs if s.default_status != DefaultSensorStatus.RUNNING
     } == set()
+
+
+def test_dagster_storage_uses_psycopg2_on_the_vps() -> None:
+    compose = Path(__file__).parents[4] / "infra/compose/compose.yaml"
+    env = yaml.safe_load(compose.read_text())["x-pipelines"]["environment"]
+    assert env["DAGSTER_POSTGRES_URL"].startswith("postgresql+psycopg2://")
+    assert env["SCINTILLE_POSTGRES_DSN"].startswith("postgresql://")
