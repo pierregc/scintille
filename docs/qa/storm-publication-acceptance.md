@@ -1,7 +1,7 @@
 # Storm publication acceptance (#74)
 
-Updated 2026-10-17. The initial source review used main `a4ede5c`; feature PRs #264–#267
-are now merged, most recently as `2628c16`. **Production acceptance remains open.**
+Updated 2026-10-17. Feature PRs #264–#267 and the #271 fix (#274, `da0ea94`) are merged.
+**Production acceptance remains open** until a release containing them is deployed and verified.
 The merged exporter (#228), accepted classification (#72/ADR 0009) and historical cloud discovery
 (#260) are implemented. This record adds no exporter, enables no schedule and changes no retention.
 
@@ -17,7 +17,7 @@ were read-only: no schedule, deployment, table, run or public object was changed
 | Deployed publication code | `scintille_pipelines.storm_publication` is absent; registered jobs omit `hourly_storm_catalog`, registered schedules omit `storm_catalog_schedule` |
 | Persisted schedules | Four existing schedules are `DECLARED_IN_CODE`; the catalog schedule has no deployed definition or persisted state. Do not describe it as merely stopped |
 | Run storage | 256 `NOT_STARTED`, zero successful/failed/queued/started runs at inspection. Latest `daily_gold` run `4c06a7ff-e3eb-4b71-a20f-bf8475198349`, created 08:35:50 UTC, has only `ASSET_MATERIALIZATION_PLANNED`, no start/end |
-| Schedule/sensor failures | Latest `daily_gold_schedule`, silver-check schedules and `silver_changed` ticks fail during run creation with a PostgreSQL syntax error on `NOTIFY run_events, $1`. Tracked in [#271](https://github.com/pierregc/scintille/issues/271) |
+| Schedule/sensor failures | Latest `daily_gold_schedule`, silver-check schedules and `silver_changed` ticks fail during run creation with a PostgreSQL syntax error on `NOTIFY run_events, $1`. Fixed on main by #274, not yet deployed at inspection ([#271](https://github.com/pierregc/scintille/issues/271)) |
 | Installed combination | Dagster 1.13.26, dagster-postgres 0.29.26, SQLAlchemy 2.1.4, psycopg 3.3.6, psycopg2-binary 2.9.13. Installed `dagster_postgres/event_log/event_log.py:202` issues parameterized `NOTIFY`; no installed package was patched |
 | Silver inventory | `silver.flashes` exists: snapshot `4400025650626484040`, 2026-10-17 08:26:11 UTC, 20,312,406 records, 1,403 files, 928,018,541 file bytes; 18 day/source partitions covering 2026-10-12 through 2026-10-17. This is file metadata, not an event-hour completeness audit |
 | Gold inventory | `catalog.list_tables('gold')` returns no tables. Cells, tracks, storms, names and levels cannot yet supply a published catalog; no historical minute counts or persisted classifications were verified |
@@ -31,10 +31,10 @@ namespace and notification failures are separate observed blockers.
 
 ### Recovery order
 
-1. Resolve #271 with a Postgres integration regression and a validated release. Preserve run history;
-   inventory the orphaned `NOT_STARTED` runs before any explicit recovery/cancellation decision.
-2. Build and validate a release containing the already merged exporter and classification prerequisites;
-   inspect the concrete release/configuration before approving its production rollout.
+1. Done on main: #274 pins Dagster storage to psycopg2 (#271). Preserve run history and inventory
+   the orphaned `NOT_STARTED` runs before any explicit recovery/cancellation decision.
+2. Build and deploy a release from main, which contains the exporter, classification and #274;
+   check that the job and schedule are registered and new runs leave `NOT_STARTED`.
 3. Inventory available silver event hours, then materialize cells and recover tracking oldest first.
    Build names and accepted-rule levels before publishing. A schema-only migration is insufficient.
 4. Run one controlled publication and unchanged rerun, audit all public references within declared
@@ -42,8 +42,8 @@ namespace and notification failures are separate observed blockers.
 5. Only then consider activating the catalog schedule and measuring actual new-storm freshness.
    Hand five real slugs to #83/#261 after the catalog is readable.
 
-No production activation or deployment is performed by this documentation PR. The missing release
-and bootstrap work remain within #74; #271 isolates the newly reproduced execution defect.
+No production activation or deployment is performed by this documentation PR. The release and
+bootstrap work remain within #74.
 
 ## Prerequisites before enabling the hourly schedule
 
@@ -136,5 +136,5 @@ not a measured 2 h service guarantee. Attach dated observations before checking 
 - [ ] Five actual catalog slugs/times handed to #83 and the complete journey review #261.
 
 The inspection establishes why publication cannot yet run; it does not satisfy the successful
-publication, reference integrity or freshness criteria. #271 blocks those observations. Keep #74 open until these observations are attached. M4 region publication does not block a
+publication, reference integrity or freshness criteria. Keep #74 open until these observations are attached. M4 region publication does not block a
 storm-only catalog, and M5 live cells/following do not enter this acceptance scope.
