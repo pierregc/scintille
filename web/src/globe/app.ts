@@ -26,6 +26,7 @@ import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
 import { StormReplay } from './replay';
+import { StormTrack } from './replay/track';
 import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
@@ -146,6 +147,8 @@ export function createGlobeApp(
 		onManifest: (manifest) => coverage.setManifest(manifest),
 	}));
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
+	const track = new StormTrack(RADIUS);
+	scene.add(track.group);
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -215,6 +218,8 @@ export function createGlobeApp(
 		if (!renderParams) controls.update(time);
 		fitClipPlanes();
 		const now = clock.time();
+		track.setStorm(clock.mode === 'replay' ? replay.state.selected : null);
+		track.setTime(now);
 		earth.setTime(now);
 		atmosphere.setTime(now);
 		if (!renderParams) cloudPlayback.update(clock.mode, now);
@@ -271,6 +276,7 @@ export function createGlobeApp(
 			renderer.setAnimationLoop(null);
 			controls.dispose();
 			replay.dispose();
+			track.dispose();
 			data.dispose();
 			detachCloudMode();
 			cloudPlayback.dispose();
