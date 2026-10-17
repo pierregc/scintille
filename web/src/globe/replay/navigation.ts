@@ -7,12 +7,14 @@ export interface NavigationHost {
 	url(): URL;
 	write(url: URL, push: boolean): void;
 	onPop(listener: () => void): () => void;
+	initialView?(slug: string): ReplayLocation['view'];
 }
 
 export class ReplayNavigation {
 	#revision = 0;
 	#applying = false;
 	#disposed = false;
+	#initial = true;
 	readonly #off: (() => void)[];
 
 	constructor(
@@ -33,33 +35,39 @@ export class ReplayNavigation {
 		})];
 	}
 
-	#snapshot(paused = !this.clock.playing, captureInterruptedView = false): ReplayLocation | null {
+	#snapshot(paused = !this.clock.playing, view?: ReplayLocation['view']): ReplayLocation | null {
 		const detail = this.replay.state.selected;
 		if (!detail || this.clock.mode !== 'replay') return null;
 		return { slug: detail.storm.slug,
 			time: Math.min(Math.max(this.clock.time(), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)),
-			speed: this.clock.speed, paused, view: this.replay.framed || captureInterruptedView ? this.controls.view() : undefined };
+			speed: this.clock.speed, paused, view };
 	}
 
 	#write(push: boolean): void {
 		if (this.#disposed || this.replay.state.loading) return;
 		const current = this.host.url();
-		const url = replayUrl(current, this.#snapshot());
+		const state = this.#snapshot();
+		const requested = parseReplayLocation(current);
+		if (!push && state && requested?.slug === state.slug) state.view = requested.view;
+		const url = replayUrl(current, state);
 		if (url.href !== current.href) this.host.write(url, push);
 	}
 
-	shareUrl(): string { return replayUrl(this.host.url(), this.#snapshot(true, true)).href; }
+	shareUrl(): string { return replayUrl(this.host.url(), this.#snapshot(true, this.controls.view())).href; }
 
 	async restore(): Promise<void> {
 		if (this.#disposed) return;
 		const revision = ++this.#revision;
+		const initial = this.#initial;
+		this.#initial = false;
 		this.#applying = true;
 		try {
 			const state = parseReplayLocation(this.host.url());
+			const checkpoint = initial && state && !state.view ? this.host.initialView?.(state.slug) : undefined;
 			if (!state && this.host.url().searchParams.has('storm')) await this.replay.open(this.host.url().searchParams.get('storm') ?? '', 60, undefined, 'navigation');
 			else if (!state) await this.replay.live('navigation');
 			else if (state.slug === this.replay.state.selected?.storm.slug && !this.replay.state.loading) await this.replay.restore(state);
-			else await this.replay.open(state.slug, state.speed, state, 'navigation');
+			else await this.replay.open(state.slug, state.speed, state, 'navigation', checkpoint);
 			if (revision === this.#revision) this.#write(false);
 		} finally { if (revision === this.#revision) this.#applying = false; }
 	}

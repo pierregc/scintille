@@ -33,6 +33,7 @@ export interface GlobeControls {
 	centerOn(lat: number, lon: number): void;
 	/** Resolves true on arrival, false if interrupted; preserveRange allows close surface restoration. */
 	flyTo(options: FlyToOptions, restore?: { preserveRange?: boolean }): Promise<boolean>;
+	isAt(options: FlyToOptions): boolean;
 	cancelFlight(): void;
 	view(): Required<Omit<FlyToOptions, 'duration'>>;
 	dispose(): void;
@@ -261,6 +262,21 @@ export function createGlobeControls(
 		controls.update();
 	};
 
+	const destination = ({ lat, lon, altitude, tilt = 0 }: FlyToOptions, preserveRange = false) => {
+		const requested = altitude === undefined ? camera.position.length() - radius : kmToWorld(altitude, radius);
+		const orbitMin = limits?.min ?? controls.minDistance;
+		const onSurface = tilt > 0 || (preserveRange && requested + radius < orbitMin);
+		const base = onSurface ? 0 : radius;
+		const lowest = onSurface ? minRange(radius) : orbitMin;
+		const range = Math.min(Math.max(requested + base, lowest), limits?.max ?? controls.maxDistance);
+		const clear = onSurface ? Math.min(tilt, (maxTilt(range, radius) * 180) / Math.PI) : 0;
+		const pose = poseAt(lat, lon, range - base, clear, radius);
+		if (onSurface && clear === 0) pose.target.copy(pose.position).setLength(radius);
+		return pose;
+	};
+	const isAtPose = (pose: CameraPose) => camera.position.distanceTo(pose.position) < radius * 1e-6
+		&& camera.quaternion.angleTo(pose.quaternion) < 1e-6;
+
 	return {
 		cancelFlight: () => endFlight(false),
 		view() {
@@ -303,17 +319,10 @@ export function createGlobeControls(
 			placeCamera(new Vector3(...latLonToVector(lat, lon)), camera.position.length());
 		},
 
-		flyTo({ lat, lon, altitude, tilt = 0, duration }, { preserveRange = false } = {}) {
-			const requested = altitude === undefined ? camera.position.length() - radius : kmToWorld(altitude, radius);
-			const orbitMin = limits?.min ?? controls.minDistance;
-			const onSurface = tilt > 0 || (preserveRange && requested + radius < orbitMin);
-			const base = onSurface ? 0 : radius;
-			const lowest = onSurface ? minRange(radius) : orbitMin;
-			const range = Math.min(Math.max(requested + base, lowest), limits?.max ?? controls.maxDistance);
-			const clear = onSurface ? Math.min(tilt, (maxTilt(range, radius) * 180) / Math.PI) : 0;
-			const pose = poseAt(lat, lon, range - base, clear, radius);
-			if (onSurface && clear === 0) pose.target.copy(pose.position).setLength(radius);
-			return startFlight(pose, duration);
+		isAt: (options) => isAtPose(destination(options)),
+		flyTo(options, { preserveRange = false } = {}) {
+			const pose = destination(options, preserveRange);
+			return startFlight(pose, isAtPose(pose) ? 0 : options.duration);
 		},
 
 		dispose() {

@@ -188,53 +188,88 @@ describe('createGlobeControls flight handoff', () => {
 		} finally { navigation.dispose(); replay.dispose(); }
 	});
 
-	it.each([16 / 9, 9 / 16])('restarts an interrupted approach on a fresh reload at aspect %s', async (aspect) => {
-		camera.fov = 35;
-		camera.aspect = aspect;
-		camera.updateProjectionMatrix();
-		controls.resize();
-		let url = new URL(`https://scintille.app/?storm=${fixture.storm.slug}&speed=60`);
-		const session = () => {
-			const clock = new SceneClock(() => time);
-			const data = {
-				openStorm: async () => { clock.replay(Date.parse(fixture.storm.t_start), 60); return fixture as StormDetail; },
-				live: async () => { clock.live(); },
+	it.each([16 / 9, 9 / 16].flatMap((aspect) => [false, true].map((completed) => ({ aspect, completed }))))(
+		'reframes on reload after moving the camera at aspect $aspect (approach completed: $completed)', async ({ aspect, completed }) => {
+			camera.fov = 35;
+			camera.aspect = aspect;
+			camera.updateProjectionMatrix();
+			controls.resize();
+			let url = new URL(`https://scintille.app/?storm=${fixture.storm.slug}&speed=60`);
+			const session = () => {
+				const clock = new SceneClock(() => time);
+				const data = {
+					openStorm: async () => { clock.replay(Date.parse(fixture.storm.t_start), 60); return fixture as StormDetail; },
+					live: async () => { clock.live(); },
+				};
+				const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: camera.fov, aspect }));
+				const navigation = new ReplayNavigation(replay, clock, controls, {
+					url: () => url, write: (next) => { url = next; }, onPop: () => () => {},
+				});
+				return { navigation, replay, dispose: () => { navigation.dispose(); replay.dispose(); } };
 			};
-			const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: camera.fov, aspect }));
-			const navigation = new ReplayNavigation(replay, clock, controls, {
-				url: () => url, write: (next) => { url = next; }, onPop: () => () => {},
-			});
-			return { navigation, replay, dispose: () => { navigation.dispose(); replay.dispose(); } };
-		};
-		const first = session();
-		try {
-			const opening = first.navigation.restore();
-			await Promise.resolve();
-			step(1000);
-			pointerDown();
-			await opening;
-			expect(url.searchParams.has('view')).toBe(false);
-		} finally { first.dispose(); }
-		controls.dispose();
-		const fake = fakeElement();
-		controls = createGlobeControls(camera, fake.element, R, { now: () => time });
-		controls.resize();
-		const fresh = session();
-		try {
-			let arrived = false;
-			const restoring = fresh.navigation.restore().then(() => { arrived = true; });
-			await Promise.resolve();
-			const start = camera.position.clone();
-			step(1400);
-			await Promise.resolve();
-			expect(arrived).toBe(false);
-			expect(camera.position.distanceTo(start)).toBeGreaterThan(0.01);
-			step(1400);
-			await restoring;
-			expect(controls.view().altitude).toBeCloseTo(306, 1);
-			expect(controls.view().tilt).toBeCloseTo(12, 4);
-			expect(url.searchParams.has('view')).toBe(true);
-		} finally { fresh.dispose(); }
+			const first = session();
+			try {
+				const opening = first.navigation.restore();
+				await Promise.resolve();
+				if (completed) {
+					step(2800);
+					await opening;
+					drag(-120, { button: 2 });
+				} else {
+					step(1000);
+					pointerDown();
+					await opening;
+				}
+				expect(url.searchParams.has('view')).toBe(false);
+			} finally { first.dispose(); }
+			controls.dispose();
+			const fake = fakeElement();
+			controls = createGlobeControls(camera, fake.element, R, { now: () => time });
+			controls.resize();
+			const fresh = session();
+			try {
+				let arrived = false;
+				const restoring = fresh.navigation.restore().then(() => { arrived = true; });
+				await Promise.resolve();
+				const start = camera.position.clone();
+				step(1400);
+				await Promise.resolve();
+				expect(arrived).toBe(false);
+				expect(camera.position.distanceTo(start)).toBeGreaterThan(0.01);
+				step(1400);
+				await restoring;
+				expect(controls.view().altitude).toBeCloseTo(306, 1);
+				expect(controls.view().tilt).toBeCloseTo(12, 4);
+				expect(url.searchParams.has('view')).toBe(false);
+			} finally { fresh.dispose(); }
+	});
+
+	it('finishes immediately when already at the requested pose, but reframes a changed heading', async () => {
+		const target = { lat: 28.5, lon: -81.3, altitude: 306, tilt: 12, duration: 2800 };
+		await settle(controls.flyTo({ ...target, duration: 0 }));
+		const position = camera.position.clone();
+		const rotation = camera.quaternion.clone();
+		expect(controls.isAt(target)).toBe(true);
+		const unchanged = controls.flyTo(target);
+		step(0);
+		await expect(unchanged).resolves.toBe(true);
+		expect(camera.position.distanceTo(position)).toBeLessThan(1e-6);
+		expect(camera.quaternion.angleTo(rotation)).toBeLessThan(1e-6);
+		fire('pointerdown', { button: 2 });
+		fire('pointermove', { button: 2, clientX: 100 });
+		fire('pointerup', { button: 2, clientX: 100 });
+		expect(controls.view()).toMatchObject({ lat: expect.closeTo(target.lat, 4), lon: expect.closeTo(target.lon, 4),
+			altitude: expect.closeTo(target.altitude, 4), tilt: expect.closeTo(target.tilt, 4) });
+		expect(camera.quaternion.angleTo(rotation)).toBeGreaterThan(0.1);
+		expect(controls.isAt(target)).toBe(false);
+		let arrived = false;
+		const reframing = controls.flyTo(target).then(() => { arrived = true; });
+		step(0);
+		await Promise.resolve();
+		expect(arrived).toBe(false);
+		step(2800);
+		await reframing;
+		expect(camera.quaternion.angleTo(rotation)).toBeLessThan(1e-6);
 	});
 
 	const settle = async (flight: Promise<boolean>) => {

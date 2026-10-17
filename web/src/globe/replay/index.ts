@@ -4,6 +4,7 @@ import type { SceneClock } from '../clock';
 import type { GlobeControls } from '../controls';
 import { frameStorm } from './framing';
 import type { ReplayLocation } from './url';
+import { sameFrame } from './checkpoint';
 
 type Origin = 'user' | 'navigation';
 
@@ -18,7 +19,6 @@ export class StormReplay {
 	#state: ReplayState = { selected: null, loading: null, error: null };
 	#revision = 0;
 	#disposed = false;
-	#framed = false;
 	readonly #offMode: () => void;
 	readonly #listeners = new Set<(origin: Origin) => void>();
 
@@ -35,7 +35,6 @@ export class StormReplay {
 	}
 
 	get state(): Readonly<ReplayState> { return this.#state; }
-	get framed(): boolean { return this.#framed; }
 
 	onChange(listener: (origin: Origin) => void): () => void {
 		this.#listeners.add(listener);
@@ -44,7 +43,7 @@ export class StormReplay {
 
 	#emit(origin: Origin): void { for (const listener of this.#listeners) listener(origin); }
 
-	async open(slug: string, speed = 60, restore?: ReplayLocation, origin: Origin = 'user'): Promise<boolean> {
+	async open(slug: string, speed = 60, restore?: ReplayLocation, origin: Origin = 'user', checkpoint?: ReplayLocation['view']): Promise<boolean> {
 		if (this.#disposed) return false;
 		const revision = ++this.#revision;
 		this.controls.cancelFlight();
@@ -53,7 +52,7 @@ export class StormReplay {
 			const detail = await this.data.openStorm(this.baseUrl, slug, speed);
 			if (!detail || revision !== this.#revision) return false;
 			this.#state = { selected: detail, loading: slug, error: null };
-			await this.#place(detail, revision, restore);
+			await this.#place(detail, revision, restore, checkpoint);
 			if (revision === this.#revision) {
 				this.#state = { ...this.#state, loading: null };
 				this.#emit(origin);
@@ -76,18 +75,18 @@ export class StormReplay {
 		await this.#place(detail, revision, state);
 	}
 
-	async #place(detail: StormDetail, revision: number, restore?: ReplayLocation): Promise<void> {
-		this.#framed = false;
+	async #place(detail: StormDetail, revision: number, restore?: ReplayLocation, checkpoint?: ReplayLocation['view']): Promise<void> {
 		this.clock.pause();
 		if (restore) {
 			this.clock.seek(Math.min(Math.max(restore.time ?? Date.parse(detail.storm.t_start), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)));
 		}
 		const { fov, aspect } = this.view();
-		const arrived = restore?.view
-			? await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true })
-			: await this.controls.flyTo(frameStorm(detail.bounds, fov, aspect));
+		if (restore?.view) await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true });
+		else {
+			const frame = frameStorm(detail.bounds, fov, aspect);
+			await this.controls.flyTo({ ...frame, duration: sameFrame(checkpoint, frame) ? 0 : frame.duration });
+		}
 		if (revision !== this.#revision) return;
-		this.#framed = arrived;
 		if (this.clock.mode === 'replay' && !restore?.paused) this.clock.play();
 	}
 
@@ -101,7 +100,6 @@ export class StormReplay {
 	#clear(): boolean {
 		const hadState = Boolean(this.#state.selected || this.#state.loading || this.#state.error);
 		this.#revision++;
-		this.#framed = false;
 		this.controls.cancelFlight();
 		this.#state = { selected: null, loading: null, error: null };
 		return hadState;

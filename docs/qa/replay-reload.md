@@ -3,24 +3,33 @@
 ## Report and fix
 
 During #83 calibration the maintainer interrupted the camera flight and refreshed the page.
-The automatically written URL contained the partial pose, so reload restored that pose instantly.
-The new placement-completion state omits that pose from automatic history while retaining the
-storm, playhead, speed and pause state. Reload then runs the storm framing flight again.
-Explicit Share replay still captures the chosen camera, including an intentionally interrupted pose.
-See [proposed ADR 0018](../adr/0018-interrupted-replay-framing.md); previous ADR files are unchanged.
+The first fix stopped automatic URL writes from saving incomplete poses. The maintainer confirmed
+that behavior, then reported that refreshing after arrival followed by a camera move still skipped
+framing. The final behavior uses normal storm framing unless an explicit camera view was requested.
+
+Automatic history no longer adds `view`, even after arrival or later pause/seek/speed actions.
+Explicit Share replay still captures the chosen camera. A local history checkpoint skips a redundant
+approach on reload only if the camera was already at the verified final frame, the viewport matches
+and the newly loaded metadata still produces the same frame. Position and quaternion are checked,
+so a heading-only turn also invalidates that shortcut.
+
+See [proposed ADR 0019](../adr/0019-reload-storm-framing.md), amending the earlier
+[0018 proposal](../adr/0018-interrupted-replay-framing.md) without rewriting it.
 
 ## Reproduce on the fix Preview
 
 1. Start with `/?storm=2026-07-15-orlando&speed=60` without a `view` parameter.
-2. Move the camera during its approach. The current scene stays interactive and the URL has no `view`.
-3. Refresh. The camera approaches Orlando again; interrupted pause/seek/speed state is retained.
-4. Let the flight finish, then refresh: the completed view is restored normally.
-5. Interrupt another approach and choose Share replay. Open the copied URL: the intentionally
-   shared camera view is restored, including a close view tilted back to zero degrees.
-6. Repeat with back/forward, pointer/wheel interruption, portrait layout and reduced motion.
+2. Move the camera during its approach and refresh: the approach restarts.
+3. Let the approach finish, then pan, zoom, tilt or turn and refresh: the approach restarts.
+4. Let it finish, leave the camera at the final frame and refresh: that frame is restored without
+   an unnecessary flight. A viewport change or updated storm bounds triggers normal framing.
+5. After moving the camera, also pause, seek or change speed before refreshing: those actions keep
+   the playhead/speed/pause state, without adding a camera view to the normal URL.
+6. Choose Share replay after a camera change and open the copied link: its explicitly chosen view
+   is preserved. Repeat with a close view tilted back to zero degrees, back/forward and reduced motion.
 
 Old URLs from before the fix may already contain `view`. They remain explicit views for compatibility;
-start again from the clean link above to test the corrected interruption/reload behavior.
+start again from the clean link above to test the expanded reload behavior.
 
 ## Sparse fixtures reported during calibration
 
@@ -45,8 +54,9 @@ currently blocked by #271; no synthetic observation is substituted for that miss
 
 ## Automated evidence
 
-Regression tests first fail on the reported unwanted `view` persistence. They then exercise fresh
-reload with real controls at desktop/portrait aspects and verify the full animated approach completes.
-Navigation tests cover both initial URL entry and user selection, pause/seek/speed persistence and
-explicit sharing after interruption. Existing zero-tilt sharing, cancellation, bounds and fixture
-loader checks remain in the full suite. Browser runtime capture remains pending.
+Regression tests first fail on unwanted `view` persistence and unnecessary repeated flights.
+They exercise real controls at desktop/portrait aspects, moving before and after arrival, fresh
+reload, and orientation-only movement. Navigation tests cover pause/seek/speed, the one-time reload
+checkpoint and explicit sharing priority. Checkpoint tests reject a different storm/viewport,
+malformed values and a frame that no longer matches current bounds. Existing zero-tilt sharing,
+cancellation and bounds checks remain in the full suite. Browser runtime retest remains pending.
