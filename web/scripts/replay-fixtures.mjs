@@ -1,8 +1,9 @@
 // @ts-check
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { buildInfo } from './build-info.mjs';
+import { framingFixtures } from './framing-fixtures.ts';
 
 /** @returns {import('astro').AstroIntegration} */
 export function replayFixtures() {
@@ -28,6 +29,11 @@ export function replayFixtures() {
 					const target = join(fileURLToPath(dir), '_replay-fixtures', path);
 					await mkdir(dirname(target), { recursive: true });
 					await copyFile(join(root, path), target);
+				}
+				for (const [path, body] of framingFixtures()) {
+					const target = join(fileURLToPath(dir), '_replay-fixtures', path);
+					await mkdir(dirname(target), { recursive: true });
+					await writeFile(target, body);
 				}
 			},
 		},

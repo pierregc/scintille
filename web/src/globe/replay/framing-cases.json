@@ -1,0 +1,7 @@
+[
+  { "slug": "2026-07-15-orlando", "label": "Synthetic small coastal daylight", "start": "2026-07-15T18:00:00Z", "bounds": { "west": -81.4, "east": -81.2, "south": 28.4, "north": 28.6 }, "points": [[28.5, -81.3]] },
+  { "slug": "qa-large-inland-night", "label": "Synthetic large inland night", "start": "2026-07-16T06:00:00Z", "bounds": { "west": -104, "east": -84, "south": 26, "north": 42 }, "points": [[28, -102], [32, -97], [36, -92], [40, -86]] },
+  { "slug": "qa-offshore-day", "label": "Synthetic offshore daylight", "start": "2026-07-15T15:00:00Z", "bounds": { "west": -39, "east": -33, "south": 10, "north": 14 }, "points": [[10.5, -38.5], [11.5, -37], [12.5, -35.5], [13.5, -33.5]] },
+  { "slug": "qa-dateline-day", "label": "Synthetic antimeridian geometry stress case", "start": "2026-07-15T00:00:00Z", "bounds": { "west": 177, "east": -177, "south": -4, "north": 4 }, "points": [[-3, 178], [-1, 179], [1, -179], [3, -178]] },
+  { "slug": "qa-south-coast-night", "label": "Synthetic southern coastal night", "start": "2026-07-16T03:00:00Z", "bounds": { "west": -51, "east": -48, "south": -31, "north": -28 }, "points": [[-30.5, -50.5], [-30, -50], [-29.5, -49.5], [-28.5, -48.5]] }
+]

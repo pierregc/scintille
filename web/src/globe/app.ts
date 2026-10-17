@@ -13,7 +13,7 @@ import { createCoverage } from './coverage';
 import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
-import { REPLAY_FIXTURE_SLUG } from './dev-storm';
+import { isReplayFixture } from './dev-storm';
 import { createEarth } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
@@ -121,7 +121,7 @@ export function createGlobeApp(
 		onError: (error) => console.warn('clouds:', error),
 	});
 	const fixtureReplay = (import.meta.env.DEV || BUILD.pr !== null) &&
-		new URLSearchParams(location.search).get('storm') === REPLAY_FIXTURE_SLUG;
+		isReplayFixture(new URLSearchParams(location.search).get('storm'));
 	const replayBase = fixtureReplay && !import.meta.env.DEV
 		? new URL('/_replay-fixtures/', location.href).href : liveBaseUrl();
 	const cloudArchive = new ArchiveCloudFeed({
