@@ -54,25 +54,21 @@ camera-settled separately from navigation to data-ready, downloaded bytes and ne
 Attach captures to #83, replace/augment synthetic examples with five actual catalog slugs, then
 record the chosen configuration or a small correction PR before accepting #83.
 
-## Follow-up after the feature merges
+## Synthetic density
 
-Feature PRs #264–#267 are merged into main. The zero-tilt share/restore regression in #267 is fixed:
-the real-controls tests retain a dragged 306 km surface view through same-storm history and fresh
-URL restoration, in landscape and portrait. Include that scenario in the browser captures rather
-than treating the earlier review comment as an outstanding code defect.
+Each non-Orlando extract holds 480 flashes over 45 scene minutes, scattered around the track
+with a rise and decay in rate (peak about 20 per minute), so about 45 seconds of playback at 60×.
+Generation is seeded per slug and reproducible. Orlando keeps its existing 3-flash contract
+fixture, shared with other tests. Density remains synthetic and says nothing about real storms.
 
-The calibration tests now exercise the real camera/control path for all ten fixture/aspect pairs,
-projecting the full geographic boxes and every generated trajectory vertex after arrival. They
-also verify interrupted flights and reduced motion. After rebasing onto the merged #267 fix,
-432 web tests, Astro check, ESLint, the production build and SEO checks pass locally. The full
-build required permission for Wrangler registry writes outside the sandbox; hosted validation is
-recorded on the PR separately.
-These tests do not render lightning, overlay controls, clouds or audio, and cannot establish touch
-behavior or visual approval. Keep the proposed 12° / 2800 ms configuration until the required
-observations support a maintainer decision.
+## Status
 
-The browser backend was retried on 2026-10-17 and still reported no available browser. SSH and public
-HTTP access now work: production inspection found an undeployed exporter, empty gold namespace and
-HTTP 404 for the catalog index. Dagster's confirmed notification defect is tracked in
-[#271](https://github.com/pierregc/scintille/issues/271); deployment/bootstrap evidence belongs to
-#74/#269. No five real catalog slugs or production freshness measurements are available yet.
+Feature PRs #264 to #267 and the reload fix #273 are merged. The tests exercise the real
+camera/control path for all ten fixture/aspect pairs, projecting the full geographic boxes and
+every trajectory vertex after arrival, plus interrupted flights and reduced motion. They do not
+render lightning, overlay controls, clouds or audio, and cannot establish touch behavior or
+visual approval. Keep the proposed 12° / 2800 ms configuration until the required observations
+support a maintainer decision.
+
+Real catalog slugs are still unavailable: the public catalog index returns 404 (#74/#269). The
+Dagster run-submission defect #271 is fixed by #274; production bootstrap remains to be run.
