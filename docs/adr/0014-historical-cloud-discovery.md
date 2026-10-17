@@ -25,10 +25,24 @@ archive texture before referencing it. Revised observations replace the same tim
 index; a restart reads the prior index. Archive failures leave live publishing operational and the
 last successful index intact.
 
+A malformed version-1 index is rebuilt from the next successfully published frame, with a warning;
+previous entries cannot be reconstructed from corrupt bytes. An unsupported version is preserved,
+not overwritten by this publisher. GMGSI supplies hourly observations (24 per UTC day), as confirmed
+by the [NOAA product description](https://www.ospo.noaa.gov/products/imagery/gmgsi/).
+If a different cadence exceeds the capacity, explicitly keep the newest bounded set and log the
+dropped coverage instead of freezing the index. This is not silent support for a new cloud source.
+
+Wire limits, supported tiers and texture path syntax live in the contract package's
+`cloud_archive_rules.json`, consumed by both Python and TypeScript. Shared accepted/rejected
+fixtures test the two validators. The readers validate their own runtime data structures; no
+generic schema-validation library or flash-contract generator change is introduced here.
+
 The replay client reads the playhead day and adjacent days, selects at most three nearby frames
-of its quality tier, and refreshes discovery at most once per wall-clock minute or playhead-hour
-change. Discovery responses are capped at 128 KiB; compressed textures at 16 MiB. One sequence of
-requests/decodes runs at a time; newer seeks coalesce and cancel stale work. GPU texture ownership
+of its quality tier, and caches each daily index, including failed lookups, for 60 seconds of wall
+time. Selection follows the actual playhead, including sub-hourly seeks, independently of metadata
+refresh. Discovery responses are capped at 128 KiB; compressed textures at 16 MiB in live and replay.
+One metadata sequence and one texture load may run concurrently. Only obsolete work is cancelled:
+refreshing metadata never interrupts a still-selected image on a slow connection. GPU texture ownership
 stays with the cloud layer, which releases frames outside the selected window and on mode changes.
 
 ## Consequences

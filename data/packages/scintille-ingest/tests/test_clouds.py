@@ -417,6 +417,67 @@ def test_historical_client_fixture_uses_the_archive_contract() -> None:
             assert (root / "manifests" / texture.path).stat().st_size == texture.size_bytes
 
 
+@pytest.mark.parametrize("invalid", [b'{"frames":', b'{"schema_version":1,"frames":[{}]}'])
+def test_corrupt_daily_index_recovers_without_blocking_live(invalid: bytes) -> None:
+    pub, store = publisher()
+    asyncio.run(pub.archive.put("manifests/2026-10-10.json", invalid, MANIFEST_HEADERS))
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    assert [f.time for f in archived_manifest(store).frames] == [T0]
+    assert manifest(store).frames[0].time == T0
+
+
+def test_unknown_daily_index_version_is_preserved() -> None:
+    pub, store = publisher()
+    future = b'{"schema_version":2,"new-format":["preserve"]}'
+    asyncio.run(pub.archive.put("manifests/2026-10-10.json", future, MANIFEST_HEADERS))
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    assert (
+        obstore.get(store, "archive/clouds/manifests/2026-10-10.json").bytes().to_bytes() == future
+    )
+    assert manifest(store).frames[0].time == T0
+
+
+def test_over_capacity_day_advances_to_newest_observations(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from scintille_contract.cloud_archive import MAX_ARCHIVE_FRAMES
+
+    pub, store = publisher()
+    for minute in range(MAX_ARCHIVE_FRAMES + 1):
+        time = T0 + timedelta(minutes=minute)
+        asyncio.run(pub.publish(time, gmgsi_name(time, time), "gfs", TEXTURES, time))
+    archived = archived_manifest(store)
+    assert len(archived.frames) == MAX_ARCHIVE_FRAMES
+    assert archived.frames[0].time == T0 + timedelta(minutes=1)
+    assert archived.frames[-1].time == T0 + timedelta(minutes=MAX_ARCHIVE_FRAMES)
+    assert "capacity exceeded" in caplog.text
+
+
+def test_producer_and_reader_share_contract_cases() -> None:
+    import copy
+    import json
+
+    from pydantic import ValidationError
+    from scintille_contract.cloud_archive import MAX_ARCHIVE_FRAMES
+
+    root = Path(__file__).parents[4] / "fixtures/archive/clouds"
+    fixture = json.loads((root / "manifests/2026-07-15.json").read_text())
+    for case in json.loads((root / "contract-cases.json").read_text()):
+        payload = copy.deepcopy(fixture)
+        for change in case["changes"]:
+            parent = payload
+            for key in change["path"][:-1]:
+                parent = parent[key]
+            parent[change["path"][-1]] = change["value"]
+        if case.get("repeat_frames_over_limit"):
+            payload["frames"] = [payload["frames"][0]] * (MAX_ARCHIVE_FRAMES + 1)
+        if case["accept"]:
+            ArchiveCloudManifest.model_validate(payload)
+        else:
+            with pytest.raises(ValidationError):
+                ArchiveCloudManifest.model_validate(payload)
+
+
 # Collector
 
 

@@ -1,7 +1,9 @@
 import { Texture } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../../../fixtures/archive/clouds/manifests/2026-07-15.json';
-import { ArchiveCloudFeed } from './archive';
+import contractCases from '../../../../fixtures/archive/clouds/contract-cases.json';
+import { CLOUD_ARCHIVE_RULES } from '../../contract/cloud-archive';
+import { ArchiveCloudFeed, parseArchive } from './archive';
 import type { CloudFrame } from './frame';
 import { createClouds } from './index';
 import { CloudPlayback } from './playback';
@@ -11,11 +13,25 @@ const HOUR = 3_600_000;
 const T0 = Date.UTC(2026, 6, 15, 18);
 const BASE = 'https://example.test/';
 
+it.each(contractCases)('shares producer/reader contract case: $name', (test) => {
+	const payload = structuredClone(fixture);
+	for (const change of test.changes) {
+		let parent: unknown = payload;
+		for (const key of change.path.slice(0, -1)) parent = (parent as Record<string, unknown>)[key];
+		const last = change.path.at(-1);
+		if (last === undefined) throw new Error('empty contract test path');
+		(parent as Record<string, unknown>)[last] = change.value;
+	}
+	if (test.repeat_frames_over_limit) payload.frames = Array(CLOUD_ARCHIVE_RULES.max_frames + 1).fill(payload.frames[0]);
+	if (test.accept) expect(() => parseArchive(payload, '2026-07-15')).not.toThrow();
+	else expect(() => parseArchive(payload, '2026-07-15')).toThrow();
+});
+
 function manifest(day: string, hours: number[]) {
 	return {
 		...fixture, day,
 		frames: hours.map((h) => ({ ...fixture.frames[0], time: new Date(T0 + h * HOUR).toISOString(),
-			textures: { '2k': { ...fixture.frames[0].textures['2k'], path: `../2k/2026/07/15/f${h}.webp` } },
+			textures: { '2k': { ...fixture.frames[0].textures['2k'], path: `../2k/2026/07/15/f${Math.round(h * 60)}.webp` } },
 		})),
 	};
 }
@@ -92,6 +108,41 @@ describe('archive cloud playback', () => {
 		s.feed.stop(); s.clouds.dispose();
 	});
 
+	it('preserves a useful slow texture while refreshing discovery after a minute', async () => {
+		let wall = T0;
+		const s = setup([0], () => wall);
+		let finish: (frame: CloudFrame) => void = () => {};
+		let signal: AbortSignal | undefined;
+		const load = vi.fn((_url: string, _time: number, nextSignal: AbortSignal) => {
+			signal = nextSignal;
+			return new Promise<CloudFrame>((resolve) => { finish = resolve; });
+		});
+		const feed = new ArchiveCloudFeed({ baseUrl: BASE, tier: '2k', clouds: s.clouds,
+			fetch: s.fetchFn, now: () => wall, load });
+		feed.setTime(T0);
+		await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+		wall += 61_000;
+		feed.setTime(T0);
+		await vi.waitFor(() => expect(s.fetchFn).toHaveBeenCalledTimes(6));
+		expect(signal?.aborted).toBe(false);
+		finish({ texture: new Texture({ width: 2048, height: 1024 }), time: T0 });
+		await feed.idle(); s.clouds.setTime(T0);
+		expect(s.clouds.frameTime).toBe(T0);
+		expect(load).toHaveBeenCalledOnce();
+		feed.stop(); s.clouds.dispose();
+	});
+
+	it('reselects sub-hourly images without refetching the same day indices', async () => {
+		const s = setup([0, 0.25, 0.5, 0.75, 1, 2, 3]);
+		s.feed.setTime(T0); await s.feed.idle();
+		s.feed.setTime(T0 + 0.75 * HOUR); await s.feed.idle();
+		s.clouds.setTime(T0 + 0.75 * HOUR);
+		expect(s.clouds.frameTime).toBe(T0 + 0.75 * HOUR);
+		s.feed.setTime(T0 + 2 * HOUR); await s.feed.idle();
+		expect(s.fetchFn).toHaveBeenCalledTimes(3);
+		s.feed.stop(); s.clouds.dispose();
+	});
+
 	it('treats expired, malformed and oversized manifests as unavailable', async () => {
 		for (const bad of [
 			{ ...manifest('2026-07-15', [0]), schema_version: 99 },
@@ -131,17 +182,25 @@ describe('archive cloud playback', () => {
 	});
 });
 
-it('switches cloud owners and clears textures on live/replay/live transitions', () => {
-	const clouds = { visible: true, retainFrames: vi.fn() };
-	const live = { start: vi.fn(), stop: vi.fn(), settled: true, attribution: 'Live' };
-	const archive = { setTime: vi.fn(), stop: vi.fn(), settled: true, attribution: 'Historical' };
-	const playback = new CloudPlayback(clouds, live, archive);
-	playback.update('live', T0); playback.update('replay', T0 - 10 * HOUR);
-	expect(playback.status.attribution).toBe('Historical');
-	expect(archive.setTime).toHaveBeenCalledWith(T0 - 10 * HOUR);
-	playback.update('live', T0); expect(playback.status.attribution).toBe('Live');
-	expect(clouds.retainFrames).toHaveBeenCalledTimes(3);
-	playback.dispose();
+it('releases owned textures on live/replay/live transitions and disposal', async () => {
+	const s = setup([0]);
+	const liveTextures: Texture[] = [];
+	const live = { start: vi.fn(() => {
+		const texture = new Texture({ width: 2048, height: 1024 });
+		liveTextures.push(texture); s.clouds.setFrame({ texture, time: T0 });
+	}), stop: vi.fn(), settled: true, attribution: 'Live' };
+	const playback = new CloudPlayback(s.clouds, live, s.feed);
+	playback.update('live', T0);
+	const liveDisposed = vi.spyOn(liveTextures[0], 'dispose');
+	playback.update('replay', T0); await s.feed.idle();
+	expect(liveDisposed).toHaveBeenCalledOnce();
+	const historicalDisposed = vi.spyOn(s.textures[0], 'dispose');
+	playback.update('live', T0);
+	expect(historicalDisposed).toHaveBeenCalledOnce();
+	expect(playback.status.attribution).toBe('Live');
+	const lastDisposed = vi.spyOn(liveTextures[1], 'dispose');
+	playback.dispose(); expect(lastDisposed).toHaveBeenCalledOnce();
+	s.clouds.dispose();
 });
 
 it('bounds streamed responses and cancels over-limit bodies', async () => {

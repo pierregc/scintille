@@ -7,7 +7,7 @@ import type { Clouds } from './index';
 export class CloudPlayback {
 	#archiveMode: boolean | undefined;
 	constructor(
-		readonly clouds: Pick<Clouds, 'visible' | 'retainFrames'>,
+		readonly clouds: Pick<Clouds, 'visible'>,
 		readonly live: Pick<CloudFeed, 'start' | 'stop' | 'settled' | 'attribution'>,
 		readonly archive: Pick<ArchiveCloudFeed, 'setTime' | 'stop' | 'settled' | 'attribution'>,
 	) {}
@@ -21,7 +21,6 @@ export class CloudPlayback {
 		if (archive !== this.#archiveMode) {
 			this.live.stop();
 			this.archive.stop();
-			this.clouds.retainFrames([]);
 			this.#archiveMode = archive;
 		}
 		if (!this.clouds.visible) return;

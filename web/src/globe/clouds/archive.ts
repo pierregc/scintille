@@ -3,31 +3,32 @@ import { CLOUD_MAX_GAP_MS } from './index';
 import { type CloudFrame, loadCloudFrame } from './frame';
 import { type CloudManifest, type CloudTier, frameSources, parseCloudManifest } from './manifest';
 import { boundedBody } from './response';
+import { CLOUD_ARCHIVE_RULES as RULES } from '../../contract/cloud-archive';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-const MAX_MANIFEST_BYTES = 128 * 1024;
-const MAX_FRAME_BYTES = 16 * 1024 * 1024;
+const REFRESH_MS = 60_000;
+const TEXTURE_PATH = new RegExp(RULES.texture_path_pattern);
 
 interface ArchiveManifest extends Omit<CloudManifest, 'window_seconds'> {
-	schema_version: 1;
+	schema_version: number;
 	day: string;
 	frames: (CloudManifest['frames'][number] & { expires_at: string })[];
 }
 
-function parseArchive(json: unknown, day: string): ArchiveManifest {
+export function parseArchive(json: unknown, day: string): ArchiveManifest {
 	parseCloudManifest(json);
 	const manifest = json as ArchiveManifest;
-	if (manifest.schema_version !== 1 || manifest.day !== day || manifest.frames.length > 96) {
+	if (manifest.schema_version !== RULES.schema_version || manifest.day !== day || manifest.frames.length > RULES.max_frames) {
 		throw new Error('invalid archive cloud manifest');
 	}
 	for (const frame of manifest.frames) {
 		if (new Date(frame.time).toISOString().slice(0, 10) !== day ||
 			!Number.isFinite(Date.parse(frame.expires_at))) throw new Error('invalid archive cloud frame');
 		for (const [tier, texture] of Object.entries(frame.textures)) {
-			if (!texture || !['2k', '4k'].includes(tier) ||
-				!/^\.\.\/(2k|4k)\/\d{4}\/\d{2}\/\d{2}\/[\w-]+\.webp$/.test(texture.path) ||
-				!Number.isSafeInteger(texture.size_bytes) || texture.size_bytes < 1 || texture.size_bytes > MAX_FRAME_BYTES) {
+			if (!texture || !RULES.tiers.includes(tier) ||
+				!TEXTURE_PATH.test(texture.path) ||
+				!Number.isSafeInteger(texture.size_bytes) || texture.size_bytes < 1 || texture.size_bytes > RULES.max_frame_bytes) {
 				throw new Error('invalid archive cloud texture');
 			}
 		}
@@ -44,21 +45,32 @@ export interface ArchiveCloudOptions {
 	load?: (url: string, time: number, signal: AbortSignal) => Promise<CloudFrame>;
 }
 
-/** At most three daily indices and three textures around the playhead; no bucket listing. */
+interface CachedDay {
+	manifest: ArchiveManifest | null;
+	fetchedAt: number;
+}
+
+interface Work {
+	request: AbortController;
+	promise: Promise<void>;
+	key: string;
+}
+
+/** Metadata refresh and texture loading have independent cancellation lifetimes. */
 export class ArchiveCloudFeed {
 	readonly #options: ArchiveCloudOptions;
 	readonly #fetch: typeof fetch;
 	readonly #now: () => number;
 	readonly #load: NonNullable<ArchiveCloudOptions['load']>;
-	readonly #manifests = new Map<string, ArchiveManifest | null>();
+	readonly #root: string;
+	readonly #manifests = new Map<string, CachedDay>();
 	readonly #loaded = new Map<string, number>();
-	#request: AbortController | undefined;
-	#window = '';
-	#baseUrl: string;
-	#pending: Promise<void> = Promise.resolve();
-	#desired: { time: number; request: AbortController } | undefined;
-	#running = false;
-	#settled = false;
+	readonly #failed = new Map<string, number>();
+	#time: number | undefined;
+	#days: string[] = [];
+	#sources: { time: number; url: string }[] = [];
+	#discovery: Work | undefined;
+	#loading: Work | undefined;
 	#attribution: string | null = null;
 
 	constructor(options: ArchiveCloudOptions) {
@@ -66,101 +78,128 @@ export class ArchiveCloudFeed {
 		this.#fetch = options.fetch ?? fetch;
 		this.#now = options.now;
 		this.#load = options.load ?? ((url, time, signal) => loadCloudFrame(url, time, undefined, signal));
-		this.#baseUrl = options.baseUrl;
+		this.#root = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`;
 	}
 
-	get settled(): boolean { return this.#settled; }
+	get settled(): boolean {
+		return this.#time !== undefined && !this.#discovery && !this.#loading;
+	}
 	get attribution(): string | null { return this.#attribution; }
-	idle(): Promise<void> { return this.#pending; }
 
-	/** A fixture or future storm entry may use a different data root. */
-	setBaseUrl(baseUrl: string): void {
-		if (baseUrl === this.#baseUrl) return;
-		this.stop();
-		this.#baseUrl = baseUrl;
+	async idle(): Promise<void> {
+		while (this.#discovery || this.#loading) {
+			await Promise.allSettled([this.#discovery?.promise, this.#loading?.promise]);
+		}
 	}
 
 	setTime(time: number): void {
 		if (!Number.isFinite(time)) return;
-		const window = `${Math.floor(time / HOUR)}:${Math.floor(this.#now() / 60_000)}`;
-		if (window === this.#window) return;
-		this.#window = window;
-		this.#request?.abort();
-		const request = new AbortController();
-		this.#request = request;
-		this.#settled = false;
-		this.#desired = { time, request };
-		if (!this.#running) this.#pending = this.#drain();
+		this.#time = time;
+		this.#days = [-DAY, 0, DAY].map((offset) => new Date(time + offset).toISOString().slice(0, 10));
+		for (const day of this.#manifests.keys()) if (!this.#days.includes(day)) this.#manifests.delete(day);
+		this.#select();
+		this.#refresh();
 	}
 
-	async #drain(): Promise<void> {
-		this.#running = true;
-		try {
-			while (this.#desired) {
-				const { time, request } = this.#desired;
-				this.#desired = undefined;
-				try { await this.#update(time, request); }
-				catch { if (!request.signal.aborted) this.#settled = true; }
-			}
-		} finally { this.#running = false; }
-	}
-
-	async #update(time: number, request: AbortController): Promise<void> {
-		const { signal } = request;
-		if (signal.aborted) return;
-		const days = [-DAY, 0, DAY].map((offset) => new Date(time + offset).toISOString().slice(0, 10));
-		const root = this.#baseUrl.endsWith('/') ? this.#baseUrl : `${this.#baseUrl}/`;
-		// Refresh the small daily indices once a minute, including negative lookups.
-		this.#manifests.clear();
-		for (const day of days) {
-			if (this.#manifests.has(day)) continue;
-			const url = new URL(`archive/clouds/manifests/${day}.json`, root);
-			try {
-				const response = await this.#fetch(url.href, { signal });
-				if (!response.ok) throw new Error('cloud archive unavailable');
-				const text = new TextDecoder().decode(await boundedBody(response, MAX_MANIFEST_BYTES));
-				const manifest = parseArchive(JSON.parse(text), day);
-				if (signal.aborted) return;
-				this.#manifests.set(day, manifest);
-			} catch {
-				if (signal.aborted) return;
-				this.#manifests.set(day, null);
-			}
+	#refresh(): void {
+		if (this.#time === undefined) return;
+		const key = this.#days.join(',');
+		if (this.#discovery) {
+			if (this.#discovery.key !== key) this.#discovery.request.abort();
+			return;
 		}
-		const sources = days.flatMap((day) => {
-			const manifest = this.#manifests.get(day);
+		const days = this.#days.filter((day) => {
+			const cached = this.#manifests.get(day);
+			return !cached || this.#now() - cached.fetchedAt >= REFRESH_MS;
+		});
+		if (days.length === 0) return;
+		const request = new AbortController();
+		const work: Work = { key, request, promise: Promise.resolve() };
+		this.#discovery = work;
+		work.promise = this.#discover(days, request.signal).finally(() => {
+			if (this.#discovery !== work) return;
+			this.#discovery = undefined;
+			if (this.#time !== undefined) {
+				this.#select();
+				if (request.signal.aborted) this.#refresh();
+			}
+		});
+	}
+
+	async #discover(days: string[], signal: AbortSignal): Promise<void> {
+		for (const day of days) {
+			if (signal.aborted) return;
+			let manifest: ArchiveManifest | null = null;
+			try {
+				const response = await this.#fetch(new URL(`archive/clouds/manifests/${day}.json`, this.#root).href, { signal });
+				if (!response.ok) throw new Error('cloud archive unavailable');
+				const bytes = await boundedBody(response, RULES.max_manifest_bytes);
+				manifest = parseArchive(JSON.parse(new TextDecoder().decode(bytes)), day);
+			} catch { if (signal.aborted) return; }
+			if (signal.aborted) return;
+			this.#manifests.set(day, { manifest, fetchedAt: this.#now() });
+		}
+	}
+
+	#select(): void {
+		const time = this.#time;
+		if (time === undefined) return;
+		this.#sources = this.#days.flatMap((day) => {
+			const manifest = this.#manifests.get(day)?.manifest;
 			if (!manifest) return [];
-			const usable = { ...manifest, frames: manifest.frames.filter((f) => Date.parse(f.expires_at) > this.#now()) };
-			return frameSources(usable, this.#options.tier,
-				new URL(`archive/clouds/manifests/${day}.json`, root).href, 96);
+			const frames = manifest.frames.filter((f) => Date.parse(f.expires_at) > this.#now());
+			return frameSources({ frames }, this.#options.tier,
+				new URL(`archive/clouds/manifests/${day}.json`, this.#root).href, RULES.max_frames);
 		}).filter((f) => Math.abs(f.time - time) <= CLOUD_MAX_GAP_MS)
 			.sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time)).slice(0, 3);
-		const urls = new Set(sources.map((s) => s.url));
-		for (const url of this.#loaded.keys()) if (!urls.has(url)) this.#loaded.delete(url);
-		this.#options.clouds.retainFrames([...this.#loaded.values()]);
-		for (const source of sources) {
-			if (signal.aborted) return;
-			if (this.#loaded.has(source.url)) continue;
+		const urls = new Set(this.#sources.map((s) => s.url));
+		let removed = false;
+		for (const url of this.#loaded.keys()) {
+			if (!urls.has(url)) { this.#loaded.delete(url); removed = true; }
+		}
+		if (removed) this.#options.clouds.retainFrames([...this.#loaded.values()]);
+		for (const url of this.#failed.keys()) if (!urls.has(url)) this.#failed.delete(url);
+		if (this.#loading && !urls.has(this.#loading.key)) this.#loading.request.abort();
+		this.#attribution = this.#days.map((d) => this.#manifests.get(d)?.manifest?.attribution).find(Boolean) ?? null;
+		this.#loadNext();
+	}
+
+	#loadNext(): void {
+		if (this.#loading || this.#time === undefined) return;
+		const source = this.#sources.find((s) => !this.#loaded.has(s.url) &&
+			(this.#failed.get(s.url) ?? 0) <= this.#now());
+		if (!source) return;
+		const request = new AbortController();
+		const work: Work = { key: source.url, request, promise: Promise.resolve() };
+		this.#loading = work;
+		work.promise = (async () => {
 			try {
-				const frame = await this.#load(source.url, source.time, signal);
-				if (signal.aborted) { frame.texture.dispose(); return; }
+				const frame = await this.#load(source.url, source.time, request.signal);
+				if (request.signal.aborted || !this.#sources.some((s) => s.url === source.url)) {
+					frame.texture.dispose(); return;
+				}
 				this.#loaded.set(source.url, source.time);
 				this.#options.clouds.setFrame(frame);
-			} catch { if (signal.aborted) return; }
-		}
-		this.#attribution = days.map((d) => this.#manifests.get(d)?.attribution).find(Boolean) ?? null;
-		this.#settled = true;
+			} catch {
+				if (!request.signal.aborted) this.#failed.set(source.url, this.#now() + REFRESH_MS);
+			}
+		})().finally(() => {
+			if (this.#loading !== work) return;
+			this.#loading = undefined;
+			this.#loadNext();
+		});
 	}
 
 	stop(): void {
-		this.#request?.abort();
-		this.#request = undefined;
-		this.#desired = undefined;
-		this.#window = '';
-		this.#settled = false;
+		this.#time = undefined;
+		this.#discovery?.request.abort();
+		this.#loading?.request.abort();
+		this.#days = [];
+		this.#sources = [];
 		this.#attribution = null;
 		this.#manifests.clear();
 		this.#loaded.clear();
+		this.#failed.clear();
 		this.#options.clouds.retainFrames([]);
 	}
 }
