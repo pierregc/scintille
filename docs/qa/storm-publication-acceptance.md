@@ -23,7 +23,7 @@ were read-only: no schedule, deployment, table, run or public object was changed
 | Gold inventory | `catalog.list_tables('gold')` returns no tables. Cells, tracks, storms, names and levels cannot yet supply a published catalog; no historical minute counts or persisted classifications were verified |
 | Public catalog | GET `https://data.scintille.app/storms/index/0.json` returned HTTP 404 at 08:40:50 GMT, `cf-cache-status: MISS`. The host resolves; the index is unavailable at the required path. No detail/chunk/reference audit is possible yet |
 | Available release tags | GHCR's latest pipeline package is still tagged `880df68` and `main`. This does not contain the merged exporter; a current validated image must be built before deployment |
-| ADR 0011 | Still proposed; the provenance decision remains with the maintainer |
+| ADR 0011 | Proposed at inspection; accepted by the maintainer on 2026-10-17 |
 
 The earlier sandbox DNS/SSH failures are superseded by these successful access checks. They were
 not evidence of a production outage. The current catalog 404, missing deployed exporter, empty gold
@@ -63,7 +63,7 @@ state and run configuration. A merged commit or a successful build alone is insu
 4. Confirm one stable name and one persisted classification per storm, accepted rule
    `sqrt(flashes × peak_rate)`, thresholds 8/25/120/450, best source and five names from ADR 0009.
    Record the deployed rule fingerprint, blocking asset checks and sample storm IDs/metrics.
-5. Accept ADR 0011 or record an amendment before treating the catalog as production accepted.
+5. ADR 0011 is accepted (2026-10-17).
    Classification uses storm membership/best-source metrics; replay initially selects track bounds
    and can include nearby unrelated flashes. `replay.flash_count` is not `storm.flashes`.
 
@@ -128,7 +128,7 @@ not a measured 2 h service guarantee. Attach dated observations before checking 
 
 ## Decision record to complete
 
-- [ ] ADR 0011 accepted or amendment linked; classified metrics and approximate replay count remain distinct.
+- [x] ADR 0011 accepted; classified metrics and approximate replay count remain distinct.
 - [ ] Deployed image/config and historical minute-count/level coverage verified, with run IDs.
 - [ ] Missed hours recovered in order; bootstrap backlog and rejected exports accounted for.
 - [ ] Controlled rerun/restart evidence and complete public reference audit attached.
