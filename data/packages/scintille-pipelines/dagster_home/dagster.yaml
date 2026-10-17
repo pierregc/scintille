@@ -1,8 +1,10 @@
 # Dagster instance: run, event and schedule storage in Postgres.
+# The URL names psycopg2: dagster-postgres binds NOTIFY parameters client side, which psycopg 3,
+# the SQLAlchemy 2.1 default for postgresql://, rejects.
 storage:
   postgres:
     postgres_url:
-      env: SCINTILLE_POSTGRES_DSN
+      env: DAGSTER_POSTGRES_URL
 
 concurrency:
   runs:

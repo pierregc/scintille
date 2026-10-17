@@ -81,3 +81,7 @@ docker compose start ingest    # both checks come back up at the next ping
   the manifest by hand and compare its `generated_at` with the time.
 - **Site down.** Check the Cloudflare status page and the last `web` deploy ([deploy](deploy.md)).
 - **Pipeline run failed.** Open the run in the Dagster UI ([deploy](deploy.md#data-services)).
+- **Runs stuck in `NOT_STARTED`.** A run whose submission failed (#271) is never launched: the
+  daemon only starts queued runs, so it stays as inert history. Fix the cause, let the next
+  schedule and sensor ticks submit fresh runs, and backfill the missed `daily_gold` partitions from
+  the UI. The stuck runs can stay; deleting them is optional and cannot be undone.
