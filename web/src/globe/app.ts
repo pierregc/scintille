@@ -13,7 +13,7 @@ import { createCoverage } from './coverage';
 import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
-import { REPLAY_FIXTURE_SLUG, runDevStorm } from './dev-storm';
+import { REPLAY_FIXTURE_SLUG } from './dev-storm';
 import { createEarth } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
@@ -25,6 +25,7 @@ import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
 import { createStarfield } from './starfield';
+import { StormReplay } from './replay';
 import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
@@ -44,6 +45,7 @@ export interface GlobeApp {
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly data: SceneData;
+	readonly replay: StormReplay;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
@@ -115,10 +117,11 @@ export function createGlobeApp(
 	});
 	const fixtureReplay = (import.meta.env.DEV || BUILD.pr !== null) &&
 		new URLSearchParams(location.search).get('storm') === REPLAY_FIXTURE_SLUG;
+	const replayBase = fixtureReplay && !import.meta.env.DEV
+		? new URL('/_replay-fixtures/', location.href).href : liveBaseUrl();
 	const cloudArchive = new ArchiveCloudFeed({
 		now: () => clock.wallTime(),
-		baseUrl: fixtureReplay && !import.meta.env.DEV
-			? new URL('/_replay-fixtures/', location.href).href : liveBaseUrl(),
+		baseUrl: replayBase,
 		tier: preset.clouds,
 		clouds,
 	});
@@ -142,6 +145,7 @@ export function createGlobeApp(
 		now: () => clock.wallTime(),
 		onManifest: (manifest) => coverage.setManifest(manifest),
 	}));
+	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -239,15 +243,14 @@ export function createGlobeApp(
 		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
-	if (import.meta.env.DEV || BUILD.pr !== null) {
-		const base = import.meta.env.DEV ? liveBaseUrl() : new URL('/_replay-fixtures/', location.href).href;
-		void runDevStorm(data, controls.flyTo, location.search, base).catch((error: unknown) => console.warn('fixture replay:', error));
-	}
+	const requestedStorm = new URLSearchParams(location.search).get('storm');
+	if (!renderParams && requestedStorm) void replay.open(requestedStorm);
 
 	return {
 		flyTo: controls.flyTo,
 		clock,
 		data,
+		replay,
 		clouds,
 		cloudFeed,
 		cloudStatus: () => cloudPlayback.status,
@@ -267,6 +270,7 @@ export function createGlobeApp(
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
+			replay.dispose();
 			data.dispose();
 			detachCloudMode();
 			cloudPlayback.dispose();

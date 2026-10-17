@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
-import { stormSource } from './storm';
+import { REPLAY_LIMITS, stormSource } from './storm';
 
 async function fixtureFetch() {
 	const requests: string[] = [];
@@ -34,10 +34,24 @@ describe('published storm extracts', () => {
 			{ ...fixture, storm: { ...fixture.storm, slug: 'other' } },
 			{ ...fixture, storm: { ...fixture.storm, t_start: 'invalid' } },
 			{ ...fixture, replay: { ...fixture.replay, chunks: [{ path: null }] } },
+			{ ...fixture, bounds: { ...fixture.bounds, south: -91 } },
+			{ ...fixture, replay: { ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], path: 'https://other.test/chunk.bin.gz' }] } },
 		];
 		for (const metadata of variants) {
 			const fetchFn: typeof fetch = async () => Response.json(metadata);
 			await expect(stormSource('https://feed.test/', fixture.storm.slug, new AbortController().signal, fetchFn)).rejects.toThrow('invalid storm');
+		}
+	});
+
+	it('rejects oversized exports before downloading chunks', async () => {
+		for (const replay of [
+			{ ...fixture.replay, flash_count: REPLAY_LIMITS.flashes + 1 },
+			{ ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], size_bytes: REPLAY_LIMITS.storedBytes + 1 }] },
+		]) {
+			let requests = 0;
+			const fetchFn: typeof fetch = async () => { requests++; return Response.json({ ...fixture, replay }); };
+			await expect(stormSource('https://feed.test/', fixture.storm.slug, new AbortController().signal, fetchFn)).rejects.toThrow('too large');
+			expect(requests).toBe(1);
 		}
 	});
 
