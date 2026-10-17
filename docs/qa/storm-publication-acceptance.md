@@ -1,19 +1,49 @@
 # Storm publication acceptance (#74)
 
-Prepared 2026-10-17 against main `a4ede5c`. **Production acceptance remains open.**
+Updated 2026-10-17. The initial source review used main `a4ede5c`; feature PRs #264–#267
+are now merged, most recently as `2628c16`. **Production acceptance remains open.**
 The merged exporter (#228), accepted classification (#72/ADR 0009) and historical cloud discovery
 (#260) are implemented. This record adds no exporter, enables no schedule and changes no retention.
 
-## Evidence available in this session
+## Production inspection: 2026-10-17, 08:40–08:45 UTC
 
-| Observation | What it proves |
+The resumed session reached the VPS over the existing pinned-host SSH identity. All checks below
+were read-only: no schedule, deployment, table, run or public object was changed.
+
+| Observation | Evidence / implication |
 | --- | --- |
-| Source: `storm_catalog_schedule`, cron `20 * * * *`, UTC, default `STOPPED` | Code defaults only; persisted Dagster state can differ |
-| `hourly_storm_catalog` selects catalog upstream assets | The job includes prerequisite materialization; it cannot repair skipped tracking hours by itself |
-| [Latest images run inspected](https://github.com/pierregc/scintille/actions/runs/38254521478), 2026-10-12, failed builds/smoke, deploy skipped | No successful deployment evidence in this run; not a diagnosis of the current VPS |
-| [Earlier successful images run inspected](https://github.com/pierregc/scintille/actions/runs/38252699040), 2026-10-12, deploy skipped | Successful image checks do not establish which image is running |
-| Public catalog request from this sandbox, 2026-10-17, DNS resolution unavailable | Endpoint could not be inspected from this session; does not establish a production outage |
-| ADR 0011 status is proposed | Replay selection still needs an explicit maintainer decision |
+| Pipeline release | Daemon and webserver run `ghcr.io/pierregc/scintille-pipelines:880df6805cd67ff198b552c5daeece4e79d3fefe`, image `sha256:938b40c705c46fcada1025432b6f6ce490ffabda36456ff8a95738e397f752d1`, created 2026-10-14 09:27:37 UTC |
+| Service state | Ingest, clouds, daemon, webserver and Postgres report healthy; lake-writer and live-probe are running without healthchecks. Container health does not prove successful pipeline execution |
+| Deployed publication code | `scintille_pipelines.storm_publication` is absent; registered jobs omit `hourly_storm_catalog`, registered schedules omit `storm_catalog_schedule` |
+| Persisted schedules | Four existing schedules are `DECLARED_IN_CODE`; the catalog schedule has no deployed definition or persisted state. Do not describe it as merely stopped |
+| Run storage | 256 `NOT_STARTED`, zero successful/failed/queued/started runs at inspection. Latest `daily_gold` run `4c06a7ff-e3eb-4b71-a20f-bf8475198349`, created 08:35:50 UTC, has only `ASSET_MATERIALIZATION_PLANNED`, no start/end |
+| Schedule/sensor failures | Latest `daily_gold_schedule`, silver-check schedules and `silver_changed` ticks fail during run creation with a PostgreSQL syntax error on `NOTIFY run_events, $1`. Tracked in [#271](https://github.com/pierregc/scintille/issues/271) |
+| Installed combination | Dagster 1.13.26, dagster-postgres 0.29.26, SQLAlchemy 2.1.4, psycopg 3.3.6, psycopg2-binary 2.9.13. Installed `dagster_postgres/event_log/event_log.py:202` issues parameterized `NOTIFY`; no installed package was patched |
+| Silver inventory | `silver.flashes` exists: snapshot `4400025650626484040`, 2026-10-17 08:26:11 UTC, 20,312,406 records, 1,403 files, 928,018,541 file bytes; 18 day/source partitions covering 2026-10-12 through 2026-10-17. This is file metadata, not an event-hour completeness audit |
+| Gold inventory | `catalog.list_tables('gold')` returns no tables. Cells, tracks, storms, names and levels cannot yet supply a published catalog; no historical minute counts or persisted classifications were verified |
+| Public catalog | GET `https://data.scintille.app/storms/index/0.json` returned HTTP 404 at 08:40:50 GMT, `cf-cache-status: MISS`. The host resolves; the index is unavailable at the required path. No detail/chunk/reference audit is possible yet |
+| Available release tags | GHCR's latest pipeline package is still tagged `880df68` and `main`. This does not contain the merged exporter; a current validated image must be built before deployment |
+| ADR 0011 | Still proposed; the provenance decision remains with the maintainer |
+
+The earlier sandbox DNS/SSH failures are superseded by these successful access checks. They were
+not evidence of a production outage. The current catalog 404, missing deployed exporter, empty gold
+namespace and notification failures are separate observed blockers.
+
+### Recovery order
+
+1. Resolve #271 with a Postgres integration regression and a validated release. Preserve run history;
+   inventory the orphaned `NOT_STARTED` runs before any explicit recovery/cancellation decision.
+2. Build and validate a release containing the already merged exporter and classification prerequisites;
+   inspect the concrete release/configuration before approving its production rollout.
+3. Inventory available silver event hours, then materialize cells and recover tracking oldest first.
+   Build names and accepted-rule levels before publishing. A schema-only migration is insufficient.
+4. Run one controlled publication and unchanged rerun, audit all public references within declared
+   bounds, drain or account for bootstrap exclusions/backlog, and record run IDs.
+5. Only then consider activating the catalog schedule and measuring actual new-storm freshness.
+   Hand five real slugs to #83/#261 after the catalog is readable.
+
+No production activation or deployment is performed by this documentation PR. The missing release
+and bootstrap work remain within #74; #271 isolates the newly reproduced execution defect.
 
 ## Prerequisites before enabling the hourly schedule
 
@@ -36,6 +66,9 @@ state and run configuration. A merged commit or a successful build alone is insu
 5. Accept ADR 0011 or record an amendment before treating the catalog as production accepted.
    Classification uses storm membership/best-source metrics; replay initially selects track bounds
    and can include nearby unrelated flashes. `replay.flash_count` is not `storm.flashes`.
+
+Repeat the inspection through the existing pinned-host SSH procedure; do not expose service
+environment variables, credentials or unrelated production data in the evidence.
 
 These are deployment-state checks. Do not infer them from unit-test results or enable the schedule
 as part of a documentation PR.
@@ -102,5 +135,6 @@ not a measured 2 h service guarantee. Attach dated observations before checking 
 - [ ] Schedule activation and measured new-storm freshness attached, with source limitations.
 - [ ] Five actual catalog slugs/times handed to #83 and the complete journey review #261.
 
-Keep #74 open until these observations are attached. M4 region publication does not block a
+The inspection establishes why publication cannot yet run; it does not satisfy the successful
+publication, reference integrity or freshness criteria. #271 blocks those observations. Keep #74 open until these observations are attached. M4 region publication does not block a
 storm-only catalog, and M5 live cells/following do not enter this acceptance scope.
