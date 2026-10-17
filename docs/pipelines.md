@@ -262,3 +262,7 @@ that cap. The public index includes only storms whose detail exists; history dra
 Invalid exports are logged and counted in run metadata. Oversized or invalid updates retain their
 previous public detail and summary; invalid new storms stay out of the index and sitemap.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.
+
+The remaining deployment prerequisites, schedule decision and dated evidence for #74 are tracked
+in [storm publication acceptance](qa/storm-publication-acceptance.md). Source defaults and unit
+tests do not establish production schedule state or measured publication freshness.
