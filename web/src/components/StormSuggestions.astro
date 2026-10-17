@@ -1,0 +1,108 @@
+<details class="suggestions" data-storm-suggestions hidden>
+	<summary>Explore storms</summary>
+	<div class="panel">
+		<p role="status" data-catalog-status></p>
+		<ul aria-label="Available storm replays" data-storm-cards></ul>
+		<p class="note">Levels describe measured electrical activity. Replay bounds may include nearby flashes.</p>
+		<button type="button" data-catalog-retry>Refresh storms</button>
+	</div>
+</details>
+
+<style>
+	.suggestions { position: fixed; top: calc(var(--gut) + 140px); left: var(--gut); z-index: 3; width: min(24rem, calc(100vw - 2 * var(--gut))); }
+	summary, [data-catalog-retry] { color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
+	summary { min-height: 32px; }
+	.panel { padding: 16px; background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); max-height: calc(100svh - 280px); overflow-y: auto; overscroll-behavior: contain; }
+	p { margin: 0 0 12px; color: var(--soft); font: 300 12px/1.6 var(--sans); }
+	ul { display: grid; gap: 8px; padding: 0; margin: 0 0 12px; list-style: none; }
+	[data-storm-cards] :global(button) { display: grid; gap: 6px; width: 100%; min-height: 44px; padding: 12px; color: var(--ink); text-align: left; cursor: pointer; background: rgb(255 255 255 / 0.025); border: 1px solid var(--hair); }
+	[data-storm-cards] :global(strong) { font: 300 15px/1.4 var(--sans); }
+	[data-storm-cards] :global(span) { color: var(--soft); font: 300 10px/1.6 var(--mono); }
+	.note { color: var(--dim); font-size: 11px; }
+	[data-catalog-retry] { padding: 8px 0; background: none; border: 0; }
+	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
+	[hidden] { display: none !important; }
+	@media (max-width: 640px) {
+		.suggestions { top: calc(var(--gut) + 62px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
+		.panel { max-height: calc(100svh - 220px); }
+	}
+</style>
+
+<script>
+	import type { GlobeApp } from '../globe/app';
+	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { CATALOG_LIMITS, loadSuggestions } from '../globe/replay/catalog';
+
+	const root = document.querySelector<HTMLDetailsElement>('[data-storm-suggestions]');
+	if (root) {
+		const status = root.querySelector<HTMLElement>('[data-catalog-status]');
+		const list = root.querySelector<HTMLElement>('[data-storm-cards]');
+		const retry = root.querySelector<HTMLButtonElement>('[data-catalog-retry]');
+		let app: GlobeApp | undefined;
+		let request: AbortController | undefined;
+		let loaded = false;
+		const setStatus = (text: string) => { if (status) status.textContent = text; };
+
+		const load = async () => {
+			if (!app || !list) return;
+			request?.abort();
+			const current = new AbortController();
+			request = current;
+			loaded = false;
+			list.replaceChildren();
+			setStatus('Loading available storms…');
+			try {
+				const result = await loadSuggestions(app.replay.baseUrl, current.signal);
+				if (current.signal.aborted) return;
+				loaded = true;
+				const date = new Date(result.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+				const stale = Date.now() - result.publishedAt > CATALOG_LIMITS.staleMs;
+				setStatus(!result.storms.length ? 'No published storm replays are available yet.' :
+					`Catalog published ${date}.${stale ? ' Recent storms may be missing.' : ''}${result.partial ? ' Only part of the catalog could be loaded.' : ''}`);
+				for (const storm of result.storms) {
+					const item = document.createElement('li');
+					const button = document.createElement('button');
+					button.type = 'button';
+					const title = document.createElement('strong');
+					title.textContent = storm.label;
+					const when = document.createElement('span');
+					when.textContent = new Date(storm.t_start).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+					const metrics = document.createElement('span');
+					metrics.textContent = `${storm.level_name} electrical activity · ${storm.flashes.toLocaleString()} flashes · peak ${storm.peak_rate.toLocaleString()}/min`;
+					button.append(title, when, metrics);
+					button.addEventListener('click', async () => {
+						const currentApp = app;
+						if (!currentApp) return;
+						setStatus(`Opening ${storm.label}…`);
+						const opened = await currentApp.replay.open(storm.slug);
+						if (app !== currentApp) return;
+						if (opened) { root.open = false; document.querySelector<HTMLButtonElement>('[data-play]')?.focus(); }
+						else if (currentApp.replay.state.error) setStatus(currentApp.replay.state.error);
+					});
+					item.append(button);
+					list.append(item);
+				}
+			} catch {
+				if (!current.signal.aborted) setStatus('The storm catalog is unavailable. Refresh to try again; live viewing remains available.');
+			}
+		};
+		root.addEventListener('toggle', () => {
+			if (!root.open) return;
+			const info = document.querySelector<HTMLDetailsElement>('[data-info]');
+			if (info) info.open = false;
+			if (!loaded) void load();
+		});
+		root.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') { root.open = false; root.querySelector('summary')?.focus(); }
+		});
+		retry?.addEventListener('click', () => { void load(); });
+		window.addEventListener(GLOBE_READY, (event) => {
+			app = (event as CustomEvent<GlobeApp>).detail;
+			root.hidden = false;
+			if (root.open) void load();
+		});
+		window.addEventListener(GLOBE_GONE, () => {
+			request?.abort(); app = undefined; loaded = false; root.hidden = true; list?.replaceChildren();
+		});
+	}
+</script>
