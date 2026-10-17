@@ -1,10 +1,10 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { StormBounds } from '../../contract/types';
-import { type FlyToOptions, kmToWorld, northTangent, poseAt, worldToKm } from '../flight';
+import { type FlyToOptions, kmToWorld, poseAt, worldToKm } from '../flight';
 import { latLonToVector } from '../sun';
 import { fitDistance } from '../viewport';
 
-export const REPLAY_FRAME = { duration: 2800, tilt: 12, viewportFraction: 0.62, minAltitudeKm: 300 };
+export const REPLAY_FRAME = { duration: 2800, tilt: 20, viewportFraction: 0.62, minAltitudeKm: 300 };
 
 /** A spherical cap enclosing the full geographic box, including wrapped longitude intervals. */
 export function stormCap(bounds: StormBounds): { lat: number; lon: number; angle: number } {
@@ -27,22 +27,21 @@ export function stormCap(bounds: StormBounds): { lat: number; lon: number; angle
 	return { lat, lon, angle: Math.acos(Math.max(-1, Math.min(1, cosine))) };
 }
 
-/** Fit the enclosing cap inside a central safe area, falling back to the whole globe for wide extents. */
+/** Fit the geographic box inside a central safe area, falling back to the whole globe for wide extents. */
 export function frameStorm(bounds: StormBounds, fov: number, aspect: number): Required<FlyToOptions> {
 	const { lat, lon, angle } = stormCap(bounds);
 	if (angle > Math.PI / 3) {
 		return { lat, lon, altitude: worldToKm(fitDistance(1, fov, aspect) * 1.25 - 1, 1), tilt: 0, duration: REPLAY_FRAME.duration };
 	}
-	const normal = new Vector3(...latLonToVector(lat, lon));
-	const north = northTangent(normal);
-	const east = north.clone().cross(normal);
-	const points = Array.from({ length: 72 }, (_, i) => {
-		const bearing = i * 2 * Math.PI / 72;
-		return normal.clone().multiplyScalar(Math.cos(angle))
-			.addScaledVector(north, Math.sin(angle) * Math.cos(bearing))
-			.addScaledVector(east, Math.sin(angle) * Math.sin(bearing));
-	});
-	points.push(normal);
+	const { west, east, south, north } = bounds;
+	const width = east >= west ? east - west : east + 360 - west;
+	const points = [new Vector3(...latLonToVector(lat, lon))];
+	for (let i = 0; i <= 24; i++) {
+		const f = i / 24;
+		for (const [a, b] of [[south, west + width * f], [north, west + width * f], [south + (north - south) * f, west], [south + (north - south) * f, west + width]]) {
+			points.push(new Vector3(...latLonToVector(a, b)));
+		}
+	}
 	const camera = new PerspectiveCamera(fov, aspect, 1e-5, 1000);
 	const fits = (altitude: number) => {
 		const pose = poseAt(lat, lon, kmToWorld(altitude, 1), REPLAY_FRAME.tilt, 1);

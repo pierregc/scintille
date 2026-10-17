@@ -12,7 +12,7 @@ import { FlashRing } from '../live/ring';
 import { FakeFeed, FakeVisibility } from '../live/testing';
 import { latLonToVector } from '../sun';
 import { StormReplay } from './index';
-import { frameStorm, stormCap } from './framing';
+import { frameStorm, REPLAY_FRAME, stormCap } from './framing';
 
 const detail = fixture as StormDetail;
 
@@ -35,7 +35,7 @@ describe('storm framing', () => {
 				const lat = bounds.south + (bounds.north - bounds.south) * i / 10;
 				const lon = bounds.west + width * j / 10;
 				const point = new Vector3(...latLonToVector(lat, lon)).project(camera);
-				expect(Math.max(Math.abs(point.x), Math.abs(point.y))).toBeLessThan(0.64);
+				expect(Math.max(Math.abs(point.x), Math.abs(point.y))).toBeLessThan(REPLAY_FRAME.viewportFraction + 0.02);
 			}
 		}
 	});

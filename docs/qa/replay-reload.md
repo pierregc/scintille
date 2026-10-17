@@ -39,13 +39,11 @@ are synthetic geometry/decoding fixtures, not realistic storm-activity samples:
 | Cases | Encoded flashes | Scene interval | Playback at 60× |
 | --- | --- | --- | --- |
 | Orlando | 3 | 119 seconds | About 2 seconds after entry |
-| Inland, offshore, antimeridian and southern coast | 12 each | 18 minutes 20 seconds | About 18 seconds after entry |
+| Inland, offshore, antimeridian and southern coast | 480 each | About 45 minutes | About 45 seconds after entry |
 
-The twelve-flash extracts contain four groups of three at successive track points. Within a group,
-flashes are ten scene seconds apart, only about 0.17 seconds at 60×, so a group can look like one
-short burst. A perceived count of four is not evidence of a four-flash extract. Lowering `speed`
-makes the sequence easier to inspect but does not add observations. Once the extract has elapsed,
-no further observations exist in these fixtures.
+The four synthetic extracts originally held only twelve flashes each; they were densified in
+#268 after this report (see [replay-framing.md](replay-framing.md#synthetic-density)). Lowering
+`speed` makes the sequence easier to inspect but does not add observations.
 
 This feedback confirms only that some trajectory connectors are perceptible; it does not establish
 full visual acceptance or a measured loss of flashes. Real density, duration, brightness/readability
