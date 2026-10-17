@@ -5,12 +5,14 @@ import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 import polars as pl
 import pyarrow as pa
 from pyiceberg.catalog import Catalog
-from pyiceberg.expressions import In, Reference
+from pyiceberg.expressions import AlwaysTrue, And, BooleanExpression, In, Reference
 from pyiceberg.expressions.literals import literal
+from pyiceberg.expressions.parser import parse
 from pyiceberg.table import Table
 from scintille_lake.locks import partition_key
 from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
@@ -24,6 +26,9 @@ BATCHES_PROPERTY = "scintille.batch_ids"
 SILVER_COLUMNS = [f.name for f in FLASHES.schema.fields]
 LOG_COLUMNS = [f.name for f in INGEST_LOG.schema.fields]
 QUARANTINE_COLUMNS = [f.name for f in FLASHES_QUARANTINE.schema.fields]
+# Flashes of a product lie within its time window; the margin only widens partition pruning.
+SCOPE_MARGIN = timedelta(hours=1)
+ALL = AlwaysTrue()
 
 Locker = Callable[[Iterable[str]], AbstractContextManager[object]]
 
@@ -44,6 +49,33 @@ def committed_batches(table: Table) -> set[str]:
         if value:
             ids.update(value.split(","))
     return ids
+
+
+def _between(column: str, start: object, end: object) -> BooleanExpression:
+    assert isinstance(start, datetime) and isinstance(end, datetime)
+    return parse(f"{column} >= '{start.isoformat()}' AND {column} <= '{end.isoformat()}'")
+
+
+def silver_scope(products: pl.DataFrame) -> BooleanExpression:
+    """Partitions that can hold earlier revisions of these products.
+
+    Product names share their first 16 characters, the length Iceberg keeps in column bounds, so
+    a filter on names alone reads every data file of the table.
+    """
+    if products.is_empty():
+        return ALL
+    sources = {literal(s) for s in products["source"].cast(pl.String).unique()}
+    window = products.select(
+        pl.col("product_start").min() - SCOPE_MARGIN, pl.col("product_end").max() + SCOPE_MARGIN
+    ).row(0)
+    return And(In(term=Reference("source"), values=sources), _between("event_time", *window))
+
+
+def bronze_scope(products: pl.DataFrame) -> BooleanExpression:
+    if products.is_empty():
+        return ALL
+    start, end = products["product_start"].min(), products["product_start"].max()
+    return _between("product_start", start, end)
 
 
 def to_silver(flashes: pl.DataFrame) -> pl.DataFrame:
@@ -97,13 +129,17 @@ class LakeCommit:
             .iter_rows()
         }
         files = {b: logs[b]["key"].to_list() for b in batches}
+        products = pl.concat(
+            [f.select("source", "product_start", "product_end") for f in logs.values()],
+            how="vertical_relaxed",
+        )
         with self.locker(locks):
             silver_frames = {b: to_silver(f) for b, f in flashes.items()}
             names = {b: [k.rsplit("/", 1)[-1] for k in keys] for b, keys in files.items()}
-            self._replace(silver, "product_file", names, silver_frames)
+            self._replace(silver, "product_file", names, silver_frames, silver_scope(products))
             self.after_commit("silver")
             log_frames = {b: to_ingest_log(f) for b, f in logs.items()}
-            self._replace(bronze, "key", files, log_frames)
+            self._replace(bronze, "key", files, log_frames, bronze_scope(products))
             self.after_commit("bronze")
             empty = pl.DataFrame(schema={c: pl.Null for c in QUARANTINE_COLUMNS})
             quarantined = {
@@ -124,6 +160,7 @@ class LakeCommit:
         column: str,
         files: dict[str, list[str]],
         frames: dict[str, pl.DataFrame],
+        scope: BooleanExpression = ALL,
     ) -> None:
         """Writes the batches this table does not hold yet, in one commit recording their ids.
 
@@ -147,7 +184,8 @@ class LakeCommit:
         if latest:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", "Delete operation did not match any records")
-                replaced = In(term=Reference(column), values={literal(n) for n in latest})
+                names = In(term=Reference(column), values={literal(n) for n in latest})
+                replaced = And(scope, names)
                 table.overwrite(data, replaced, snapshot_properties=properties)
         else:
             table.append(data, snapshot_properties=properties)
