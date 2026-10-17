@@ -22,7 +22,9 @@ from scintille_pipelines.storm_catalog import (
 )
 from scintille_pipelines.storm_publication import (
     BOOTSTRAP_STORMS,
+    FLASH_WINDOW,
     export_candidates,
+    flash_windows,
     storm_catalog_schedule,
 )
 
@@ -165,6 +167,23 @@ def test_bootstrap_is_bounded_but_current_storms_are_always_selected() -> None:
     assert len(candidates) == BOOTSTRAP_STORMS + 1
     assert touched <= candidates
     assert storms[0].storm_id not in candidates
+
+
+def test_storms_share_bounded_flash_scans() -> None:
+    hour = timedelta(hours=1)
+    spans = {
+        "late": (NOW + 3 * hour, NOW + 4 * hour),
+        "early": (NOW, NOW + hour),
+        "long": (NOW + 10 * hour, NOW + 20 * hour),
+        "next": (NOW + 11 * hour, NOW + 12 * hour),
+    }
+    groups = flash_windows(spans)
+    assert [members for _, members in groups] == [["early", "late"], ["long"], ["next"]]
+    assert groups[0][0] == (NOW, NOW + 4 * hour)
+    for (start, end), members in groups:
+        assert len(members) == 1 or end - start <= FLASH_WINDOW
+        assert all(start <= spans[m][0] and spans[m][1] <= end for m in members)
+    assert flash_windows({}) == []
 
 
 def test_regions_use_existence_checks_without_downloading_bodies() -> None:

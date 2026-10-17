@@ -3,19 +3,25 @@ from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
+import obstore
 import polars as pl
 import pyarrow as pa
 import pytest
 from dagster import AssetKey, DagsterInstance, materialize
+from obstore.store import MemoryStore, ObjectStore
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
-from scintille_lake.migrate import migrate
+from scintille_contract.models import StormDetail
+from scintille_lake.migrate import migrate, sync_table
 from scintille_lake.tables import FLASHES
 from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.definitions import defs
-from scintille_pipelines.resources import LakeResource
+from scintille_pipelines.resources import FeedResource, LakeResource
+from scintille_pipelines.storm_catalog import selected_flashes
 from scintille_pipelines.storm_cells import range_cells, storm_cells
 from scintille_pipelines.storm_levels import STORM_LEVELS, StormLevelsConfig, storm_levels
+from scintille_pipelines.storm_names import STORM_NAMES
+from scintille_pipelines.storm_publication import storm_catalog
 from scintille_pipelines.storms import STORM_TRACKS, STORMS, check_storms, storm_tracks, storms
 from scintille_pipelines.tracking import (
     TRACK_SCHEMA,
@@ -348,3 +354,55 @@ def test_registered_in_the_code_location() -> None:
     graph = defs.resolve_asset_graph()
     for name in ("storm_tracks", "storms"):
         assert graph.get(AssetKey(["gold", name])).pools == {"storm-tracks"}
+
+
+class MemoryFeed(FeedResource):
+    def store(self) -> ObjectStore:
+        return MEMORY
+
+
+MEMORY = MemoryStore()
+
+
+def test_publishes_every_storm_from_shared_flash_scans(two_sources: SqliteLake) -> None:
+    instance = DagsterInstance.ephemeral()
+    for key in ("2026-07-15-18:00", "2026-07-15-19:00", "2026-07-15-20:00"):
+        run(two_sources, instance, key)
+    rows = scan(two_sources, STORMS.identifier)
+    catalog = two_sources.catalog()
+    sync_table(catalog, STORM_NAMES)
+    names = rows.select(
+        "storm_id",
+        storm_start=pl.col("t_start"),
+        day=pl.col("t_start").dt.date(),
+        slug=pl.format("storm-{}", pl.int_range(pl.len())),
+        name=pl.lit("Test"),
+        label=pl.lit("Test storm"),
+        place=pl.lit(None, pl.String),
+        place_km=pl.lit(None, pl.Float64),
+        region=pl.lit(None, pl.String),
+        country_code=pl.lit(None, pl.String),
+        country_name=pl.lit(None, pl.String),
+        sea=pl.lit("Test Sea"),
+        offshore=pl.lit(True),
+        lat=pl.lit(0.0),
+        lon=pl.lit(0.0),
+        geodata=pl.lit("test"),
+    )
+    table = catalog.load_table(STORM_NAMES.identifier)
+    table.append(names.to_arrow().cast(table.schema().as_arrow()))
+    result = materialize(
+        [storm_catalog],
+        partition_key="2026-07-15-19:00",
+        resources={"lake": two_sources, "feed_bucket": MemoryFeed()},
+        instance=instance,
+    )
+    assert result.success
+    flashes = scan(two_sources, FLASHES.identifier)
+    tracks = scan(two_sources, STORM_TRACKS.identifier)
+    for storm_id, slug in names.select("storm_id", "slug").iter_rows():
+        detail = StormDetail.model_validate_json(
+            obstore.get(MEMORY, f"storms/{slug}.json").bytes().to_bytes()
+        )
+        expected = selected_flashes(flashes, tracks.filter(pl.col("storm_id") == storm_id))
+        assert detail.replay.flash_count == expected.height > 0

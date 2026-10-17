@@ -37,6 +37,7 @@ from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
 BOOTSTRAP_STORMS = 100
+FLASH_WINDOW = timedelta(hours=6)
 
 
 def export_candidates(
@@ -47,6 +48,21 @@ def export_candidates(
         key=lambda storm: (storm.t_start, storm.storm_id),
     )
     return touched | {storm.storm_id for storm in historical[:BOOTSTRAP_STORMS]}
+
+
+def flash_windows(
+    spans: dict[str, tuple[datetime, datetime]],
+) -> list[tuple[tuple[datetime, datetime], list[str]]]:
+    """Group storm spans into scans of at most FLASH_WINDOW; longer storms get their own."""
+    groups: list[tuple[tuple[datetime, datetime], list[str]]] = []
+    for storm_id, (first, last) in sorted(spans.items(), key=lambda item: item[1]):
+        if groups:
+            (start, end), members = groups[-1]
+            if max(end, last) - start <= FLASH_WINDOW:
+                groups[-1] = ((start, max(end, last)), [*members, storm_id])
+                continue
+        groups.append(((first, last), [storm_id]))
+    return groups
 
 
 def purge_tags(tags: list[str]) -> bool:
@@ -111,42 +127,54 @@ def storm_catalog(
     rejected: dict[str, StormSummary | None] = {}
     objects: dict[str, bytes] = {}
     flash_table = catalog.load_table(FLASHES.identifier)
-    for storm in summary:
-        if storm.storm_id not in ids:
-            continue
-        row = storms.filter(pl.col("storm_id") == storm.storm_id).row(0, named=True)
-        tracks = _scan(tracks_table, f"storm_id == '{storm.storm_id}'")
+
+    def reject(slug: str) -> None:
+        previous = store.get(f"storms/{slug}.json")
+        rejected[slug] = (
+            StormDetail.model_validate_json(previous).storm if previous is not None else None
+        )
+
+    candidates = {storm.storm_id: storm for storm in summary if storm.storm_id in ids}
+    all_tracks = (
+        _scan(tracks_table, f"storm_id IN ({', '.join(repr(i) for i in candidates)})")
+        if candidates
+        else touched.clear()
+    )
+    spans: dict[str, tuple[datetime, datetime]] = {}
+    for storm in candidates.values():
+        tracks = all_tracks.filter(pl.col("storm_id") == storm.storm_id)
         first, last = tracks["window_start"].min(), tracks["window_end"].max()
         if not isinstance(first, datetime) or not isinstance(last, datetime):
             context.log.error("Skipping storm without a valid track: %s", storm.slug)
-            previous = store.get(f"storms/{storm.slug}.json")
-            rejected[storm.slug] = (
-                StormDetail.model_validate_json(previous).storm if previous is not None else None
-            )
+            reject(storm.slug)
             continue
-        flashes = _scan(flash_table, _between("event_time", first, last))
-        try:
-            replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
-            detail = StormDetail(
-                schema_version=SCHEMA_VERSION,
-                published_at=now,
-                last_observation_time=storm.t_end,
-                storm=storm,
-                bounds=StormBounds.model_validate(
-                    {key: row[key] for key in ("west", "south", "east", "north")}
-                ),
-                track=row["track"],
-                replay=replay,
-            )
-        except ValueError:
-            context.log.exception("Skipping invalid storm export: %s", storm.slug)
-            previous = store.get(f"storms/{storm.slug}.json")
-            rejected[storm.slug] = (
-                StormDetail.model_validate_json(previous).storm if previous is not None else None
-            )
-            continue
-        objects.update(chunks)
-        details.append(detail)
+        spans[storm.storm_id] = (first, last)
+    for (start_window, end_window), members in flash_windows(spans):
+        # One silver scan per window instead of one per storm.
+        flashes = _scan(flash_table, _between("event_time", start_window, end_window))
+        for storm_id in members:
+            storm = candidates[storm_id]
+            row = storms.filter(pl.col("storm_id") == storm_id).row(0, named=True)
+            tracks = all_tracks.filter(pl.col("storm_id") == storm_id)
+            try:
+                replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
+                detail = StormDetail(
+                    schema_version=SCHEMA_VERSION,
+                    published_at=now,
+                    last_observation_time=storm.t_end,
+                    storm=storm,
+                    bounds=StormBounds.model_validate(
+                        {key: row[key] for key in ("west", "south", "east", "north")}
+                    ),
+                    track=row["track"],
+                    replay=replay,
+                )
+            except ValueError:
+                context.log.exception("Skipping invalid storm export: %s", storm.slug)
+                reject(storm.slug)
+                continue
+            objects.update(chunks)
+            details.append(detail)
     visible = [
         rejected.get(storm.slug) or storm
         for storm in summary
