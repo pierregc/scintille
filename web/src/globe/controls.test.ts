@@ -7,6 +7,7 @@ import type { StormDetail } from '../contract/types';
 import { SceneClock } from './clock';
 import { StormReplay } from './replay';
 import { ReplayNavigation } from './replay/navigation';
+import { REPLAY_FRAME } from './replay/framing';
 
 const R = 1;
 
@@ -239,7 +240,7 @@ describe('createGlobeControls flight handoff', () => {
 				step(1400);
 				await restoring;
 				expect(controls.view().altitude).toBeCloseTo(306, 1);
-				expect(controls.view().tilt).toBeCloseTo(12, 4);
+				expect(controls.view().tilt).toBeCloseTo(REPLAY_FRAME.tilt, 4);
 				expect(url.searchParams.has('view')).toBe(false);
 			} finally { fresh.dispose(); }
 	});

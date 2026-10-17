@@ -1,8 +1,9 @@
 # Replay framing calibration (#83)
 
 Updated 2026-10-17. **Visual calibration and maintainer acceptance are pending.**
-The current configuration remains the initial #79 proposal: 12° tilt, 2.8 s flight, 62% central
-viewport, 300 km minimum requested range. No visual tuning was inferred from unit tests.
+Configuration: 20° tilt, 2.8 s flight, 300 km minimum requested range, with the geographic box
+(not its enclosing circle) fitted inside the central 62% of the viewport. This follows maintainer
+feedback on the Preview asking for a closer, slightly more tilted view.
 
 ## Reproduce
 
@@ -21,14 +22,14 @@ builds omit all fixture files. Requests for a QA slug select the fixture data ro
 | Fixture slug | Start UTC | Target lat, lon | Desktop range km | Portrait range km | Purpose |
 | --- | --- | --- | --- | --- | --- |
 | `2026-07-15-orlando` | 2026-07-15 18:00:01 | 28.5, -81.3 | 306.000 | 306.000 | Small, coastal, day; existing real-contract synthetic fixture |
-| `qa-large-inland-night` | 2026-07-16 06:00:00 | 34, -94 | 6924.340 | 11928.677 | Large inland extent at night |
-| `qa-offshore-day` | 2026-07-15 15:00:00 | 12, -36 | 2103.818 | 3657.004 | Offshore daytime context |
-| `qa-dateline-day` | 2026-07-15 00:00:00 | 0, -180 | 2952.968 | 5125.035 | Wrapped bounds and short-arc trajectory |
-| `qa-south-coast-night` | 2026-07-16 03:00:00 | -29.5, -49.5 | 1179.216 | 2053.277 | Southern coastal night |
+| `qa-large-inland-night` | 2026-07-16 06:00:00 | 34, -94 | 4707.998 | 9387.424 | Large inland extent at night |
+| `qa-offshore-day` | 2026-07-15 15:00:00 | 12, -36 | 1170.955 | 3111.113 | Offshore daytime context |
+| `qa-dateline-day` | 2026-07-15 00:00:00 | 0, -180 | 2354.091 | 3217.222 | Wrapped bounds and short-arc trajectory |
+| `qa-south-coast-night` | 2026-07-16 03:00:00 | -29.5, -49.5 | 883.878 | 1380.886 | Southern coastal night |
 
 Ranges are the framing outputs at FOV 35°, aspects 16:9 and 9:16. Automated checks now also
 confirm these destination ranges and tilts after the real control safety limits and flight handoff.
-Tilt is 12° and duration 2800 ms for each pose. Controls retain reduced-motion instant arrival and
+Tilt is 20° and duration 2800 ms for each pose. Controls retain reduced-motion instant arrival and
 their existing altitude/tilt safety limits.
 
 Only the Orlando observation time has a cloud fixture; other times can legitimately show no
@@ -67,8 +68,7 @@ Feature PRs #264 to #267 and the reload fix #273 are merged. The tests exercise 
 camera/control path for all ten fixture/aspect pairs, projecting the full geographic boxes and
 every trajectory vertex after arrival, plus interrupted flights and reduced motion. They do not
 render lightning, overlay controls, clouds or audio, and cannot establish touch behavior or
-visual approval. Keep the proposed 12° / 2800 ms configuration until the required observations
-support a maintainer decision.
+visual approval. The maintainer decides on the 20° / 2800 ms configuration from the Preview.
 
 Real catalog slugs are still unavailable: the public catalog index returns 404 (#74/#269). The
 Dagster run-submission defect #271 is fixed by #274; production bootstrap remains to be run.

@@ -10,7 +10,7 @@ import { latLonToVector } from '../sun';
 import { framingFixtures, scatterDegrees, TRACK_STEP_MS, trackAt } from '../../../scripts/framing-fixtures';
 import { stormSource } from '../archive/storm';
 import { parseCatalogPage } from './catalog';
-import { frameStorm } from './framing';
+import { frameStorm, REPLAY_FRAME } from './framing';
 import cases from './framing-cases.json';
 import { trackGeometry } from './track';
 import { decodeChunk, CHUNK_SCALES } from '../live/decode';
@@ -22,7 +22,7 @@ it('keeps five explicitly synthetic reproducible cases with desktop and portrait
 		for (const aspect of [16 / 9, 9 / 16]) {
 			const view = frameStorm(item.bounds, 35, aspect);
 			expect(view.duration).toBeLessThan(4000);
-			expect(view.tilt).toBeLessThanOrEqual(12);
+			expect(view.tilt).toBeLessThanOrEqual(REPLAY_FRAME.tilt);
 			expect(view.altitude).toBeGreaterThanOrEqual(300);
 		}
 	}
@@ -127,7 +127,7 @@ describe('calibration poses after real control limits', () => {
 					const projected = point.clone().project(rig.camera);
 					expect(projected.z).toBeGreaterThan(-1);
 					expect(projected.z).toBeLessThan(1);
-					expect(Math.max(Math.abs(projected.x), Math.abs(projected.y))).toBeLessThan(0.64);
+					expect(Math.max(Math.abs(projected.x), Math.abs(projected.y))).toBeLessThan(REPLAY_FRAME.viewportFraction + 0.02);
 				};
 				const { west, east, south, north } = item.bounds;
 				const width = east >= west ? east - west : east + 360 - west;

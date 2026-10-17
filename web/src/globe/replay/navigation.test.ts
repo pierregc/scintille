@@ -4,6 +4,7 @@ import type { StormDetail } from '../../contract/types';
 import { SceneClock } from '../clock';
 import { StormReplay } from './index';
 import { ReplayNavigation, type NavigationHost } from './navigation';
+import { REPLAY_FRAME } from './framing';
 
 function setup(search: string, initialView?: NavigationHost['initialView']) {
 	let url = new URL(`https://scintille.app/${search}`);
@@ -112,7 +113,7 @@ describe('replay browser navigation', () => {
 	});
 
 	it('restores a verified final-frame checkpoint only on the first load and keeps it out of the URL', async () => {
-		const view = { lat: 28.5, lon: -81.3, altitude: 306, tilt: 12 };
+		const view = { lat: 28.5, lon: -81.3, altitude: 306, tilt: REPLAY_FRAME.tilt };
 		const checkpoint = vi.fn(() => view);
 		const x = setup(`?storm=${fixture.storm.slug}`, checkpoint);
 		try {
