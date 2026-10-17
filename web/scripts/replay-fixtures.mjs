@@ -20,6 +20,15 @@ export function replayFixtures() {
 					await mkdir(dirname(target), { recursive: true });
 					await copyFile(join(root, path), target);
 				}
+				const cloudPath = 'archive/clouds/manifests/2026-07-15.json';
+				/** @type {import('../src/globe/clouds/manifest').CloudManifest} */
+				const cloud = JSON.parse(await readFile(join(root, cloudPath), 'utf8'));
+				for (const path of [cloudPath, ...new Set(cloud.frames.flatMap((frame) =>
+					Object.values(frame.textures).map((texture) => join(dirname(cloudPath), texture.path))))]) {
+					const target = join(fileURLToPath(dir), '_replay-fixtures', path);
+					await mkdir(dirname(target), { recursive: true });
+					await copyFile(join(root, path), target);
+				}
 			},
 		},
 	};

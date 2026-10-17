@@ -740,12 +740,12 @@ import Version from './Version.astro';
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 			if (cloudTime) {
 				const caption = app
-					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudFeed.settled)
+					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudStatus().settled)
 					: '';
 				cloudTime.hidden = !caption;
 				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
 			}
-			const credit = app?.cloudFeed.attribution?.trim().replace(/\.+$/, '');
+			const credit = app?.cloudStatus().attribution?.trim().replace(/\.+$/, '');
 			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
 			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
 			for (const { minutes, button } of displayButtons) {

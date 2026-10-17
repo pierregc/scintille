@@ -2,10 +2,19 @@
 and the same textures under `archive/clouds/` for replay."""
 
 import hashlib
+import json
 import logging
-from datetime import datetime, timedelta
+import re
+from datetime import UTC, date, datetime, timedelta
 
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from scintille_contract.cloud_archive import (
+    ARCHIVE_SCHEMA_VERSION,
+    ARCHIVE_TEXTURE_PATTERN,
+    CLOUD_TIERS,
+    MAX_ARCHIVE_FRAMES,
+    MAX_CLOUD_FRAME_BYTES,
+)
 
 from scintille_ingest.runtime.live_feed import LiveStore
 
@@ -15,6 +24,7 @@ log = logging.getLogger("scintille_ingest.clouds")
 
 ATTRIBUTION = "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)"
 WINDOW = timedelta(hours=6)
+ARCHIVE_RETENTION = timedelta(days=30)
 TEXTURE_HEADERS = {
     "Content-Type": "image/webp",
     "Cache-Control": "public, max-age=31536000, immutable",
@@ -27,7 +37,7 @@ class CloudTexture(BaseModel):
     """Relative to the manifest; opaque."""
     width: int
     height: int
-    size_bytes: int
+    size_bytes: int = Field(strict=True, ge=1, le=MAX_CLOUD_FRAME_BYTES)
 
 
 class CloudFrameRef(BaseModel):
@@ -47,6 +57,41 @@ class CloudManifest(BaseModel):
     attribution: str
     frames: list[CloudFrameRef]
     """Oldest first."""
+
+
+class ArchiveCloudFrame(CloudFrameRef):
+    expires_at: AwareDatetime
+    """Conservative availability limit, before the bucket's lifecycle grace period."""
+
+    @model_validator(mode="after")
+    def valid_textures(self) -> "ArchiveCloudFrame":
+        for tier, texture in self.textures.items():
+            if (
+                tier not in CLOUD_TIERS
+                or not re.fullmatch(ARCHIVE_TEXTURE_PATTERN, texture.path)
+                or not 1 <= texture.size_bytes <= MAX_CLOUD_FRAME_BYTES
+            ):
+                raise ValueError("invalid archive cloud texture")
+        return self
+
+
+class ArchiveCloudManifest(BaseModel):
+    schema_version: int = Field(
+        default=ARCHIVE_SCHEMA_VERSION,
+        strict=True,
+        ge=ARCHIVE_SCHEMA_VERSION,
+        le=ARCHIVE_SCHEMA_VERSION,
+    )
+    day: date
+    generated_at: AwareDatetime
+    attribution: str = ATTRIBUTION
+    frames: list[ArchiveCloudFrame] = Field(max_length=MAX_ARCHIVE_FRAMES)
+
+    @model_validator(mode="after")
+    def valid_observation_days(self) -> "ArchiveCloudManifest":
+        if any(f.time.astimezone(UTC).date() != self.day for f in self.frames):
+            raise ValueError("archive cloud manifest contains a different observation day")
+        return self
 
 
 def texture_name(time: datetime, product: str) -> str:
@@ -87,6 +132,7 @@ class CloudPublisher:
     ) -> CloudFrameRef:
         """Textures, then the manifest, then the archive copies. Live textures that left the
         window are deleted on the next publish, so cached manifests still resolve."""
+        time = time.astimezone(UTC)
         name = texture_name(time, product)
         refs = {}
         for tier, data in textures.items():
@@ -110,8 +156,7 @@ class CloudPublisher:
         for path in self.expired - kept:
             await self._delete(path)
         self.expired = {t.path for f in before for t in f.textures.values()} - kept
-        for tier, data in textures.items():
-            await self._archive(archive_path(tier, time, name), data)
+        await self._archive(frame, textures, now)
         return frame
 
     def manifest(self, now: datetime) -> CloudManifest:
@@ -122,11 +167,52 @@ class CloudPublisher:
             frames=self.frames,
         )
 
-    async def _archive(self, path: str, data: bytes) -> None:
+    async def _archive(
+        self, frame: CloudFrameRef, textures: dict[str, bytes], now: datetime
+    ) -> None:
         try:
-            await self.archive.put(path, data, TEXTURE_HEADERS)
+            key = f"manifests/{frame.time:%Y-%m-%d}.json"
+            previous = await self.archive.get(key)
+            frames: list[ArchiveCloudFrame] = []
+            if previous:
+                try:
+                    payload = json.loads(previous)
+                    version = payload.get("schema_version") if isinstance(payload, dict) else None
+                    if isinstance(version, int) and version != ARCHIVE_SCHEMA_VERSION:
+                        log.error("unsupported cloud archive version; preserving existing index")
+                        return
+                    restored = ArchiveCloudManifest.model_validate(payload)
+                    if restored.day != frame.time.date():
+                        raise ValueError("cloud archive index has the wrong day")
+                    frames = restored.frames
+                except ValueError:
+                    log.warning("rebuilding invalid cloud archive index", exc_info=True)
+            refs = {}
+            for tier, data in textures.items():
+                path = archive_path(tier, frame.time, texture_name(frame.time, frame.product))
+                await self.archive.put(path, data, TEXTURE_HEADERS)
+                refs[tier] = frame.textures[tier].model_copy(update={"path": f"../{path}"})
+            kept = [f for f in frames if f.time != frame.time and f.expires_at > now]
+            archived = ArchiveCloudFrame(
+                **frame.model_dump(exclude={"textures"}),
+                textures=refs,
+                expires_at=now + ARCHIVE_RETENTION,
+            )
+            combined = sorted([*kept, archived], key=lambda f: f.time)
+            if len(combined) > MAX_ARCHIVE_FRAMES:
+                log.warning(
+                    "cloud archive day capacity exceeded; retaining newest observations",
+                    extra={"fields": {"day": str(frame.time.date()), "frames": len(combined)}},
+                )
+                combined = combined[-MAX_ARCHIVE_FRAMES:]
+            manifest = ArchiveCloudManifest(
+                day=frame.time.date(),
+                generated_at=now,
+                frames=combined,
+            )
+            await self.archive.put(key, manifest.model_dump_json().encode(), MANIFEST_HEADERS)
         except Exception:
-            log.exception("cloud archive write failed", extra={"fields": {"path": path}})
+            log.exception("cloud archive publication failed")
 
     async def _delete(self, path: str) -> None:
         try:

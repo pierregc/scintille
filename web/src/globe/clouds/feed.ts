@@ -42,6 +42,7 @@ export class CloudFeed {
 	#failures = 0;
 	#settled = false;
 	#running = false;
+	#revision = 0;
 	#polling = false;
 	#inFlight: Promise<void> | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
@@ -86,13 +87,19 @@ export class CloudFeed {
 	start(): void {
 		if (this.#running) return;
 		this.#running = true;
+		this.#settled = false;
 		this.#abort = new AbortController();
 		this.#unsubscribe = this.#visibility.subscribe(() => this.#onVisibilityChange());
-		if (!this.#visibility.hidden()) void this.poll();
+		if (!this.#visibility.hidden()) {
+			if (this.#polling) void this.idle().then(() => this.poll());
+			else void this.poll();
+		}
 	}
 
 	stop(): void {
+		this.#revision++;
 		this.#running = false;
+		this.#loaded.clear();
 		this.#unsubscribe?.();
 		this.#abort?.abort();
 		clearTimeout(this.#timer);
@@ -112,6 +119,7 @@ export class CloudFeed {
 	}
 
 	async #poll(): Promise<void> {
+		const revision = this.#revision;
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
 		this.#polling = true;
@@ -120,7 +128,7 @@ export class CloudFeed {
 			const response = await this.#fetch(this.manifestUrl.href, { signal });
 			if (!response.ok) throw new Error(`${this.manifestUrl.href}: HTTP ${response.status}`);
 			const manifest = parseCloudManifest(await response.json());
-			if (!this.#running) return;
+			if (!this.#running || revision !== this.#revision) return;
 			this.#manifest = manifest;
 			const sources = frameSources(manifest, this.#tier, this.manifestUrl.href, this.#frames);
 			const listed = new Set(sources.map((s) => s.url));
@@ -135,7 +143,7 @@ export class CloudFeed {
 					frameError ??= error;
 					continue;
 				}
-				if (!this.#running) {
+				if (!this.#running || revision !== this.#revision) {
 					frame.texture.dispose();
 					return;
 				}
@@ -145,12 +153,12 @@ export class CloudFeed {
 			if (frameError !== undefined) throw frameError;
 			this.#failures = 0;
 		} catch (error) {
-			if (!this.#running) return;
+			if (!this.#running || revision !== this.#revision) return;
 			this.#failures++;
 			this.#onError(error);
 		} finally {
 			this.#polling = false;
-			this.#settled = true;
+			if (revision === this.#revision) this.#settled = true;
 			this.#schedule();
 		}
 	}

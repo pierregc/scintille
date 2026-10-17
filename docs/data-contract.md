@@ -180,6 +180,60 @@ scene time is more than 3 hours from every loaded frame (stale manifest, or none
 back to a sample image. The HUD shows the observation time of the frame on screen; the about sheet
 carries the attribution.
 
+## Historical cloud discovery
+
+`archive/clouds/manifests/YYYY-MM-DD.json` is the version 1 daily archive index
+([ADR 0014](adr/0014-historical-cloud-discovery.md), #260). It is a separate document from the live
+flash contract. The day is the **UTC observation day**. `ArchiveCloudManifest` in
+`scintille_ingest.clouds.publish` validates the publication model.
+
+```json
+{
+  "schema_version": 1,
+  "day": "2026-10-10",
+  "generated_at": "2026-10-10T00:40:12Z",
+  "attribution": "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)",
+  "frames": [{
+    "time": "2026-10-10T00:00:00Z",
+    "published_at": "2026-10-10T00:40:12Z",
+    "expires_at": "2026-11-09T00:40:12Z",
+    "product": "upstream-mosaic.nc",
+    "reference": "gfs 2026100918 f006",
+    "textures": {
+      "2k": {"path": "../2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp", "width": 2048, "height": 1024, "size_bytes": 316424}
+    }
+  }]
+}
+```
+
+The publisher writes archive textures first, then the day index (`Cache-Control: public, max-age=60`).
+At most 96 references are sorted by observation time; a revision replaces the same observation.
+The current hourly source produces 24 daily frames. Unexpected excess retains the newest 96 and
+logs the dropped coverage. A corrupt version-1 index recovers from the next publication; unsupported
+versions are preserved rather than replaced. Rebuilding cannot recover earlier corrupt entries.
+The canonical limits, tiers and texture-path rule are packaged in
+`scintille_contract/cloud_archive_rules.json` and imported by both runtimes. Shared contract test
+vectors exercise their accepted and rejected payloads without adding a generic runtime validator.
+`expires_at` is archive publication plus 30 days. The existing archive lifecycle can still remove
+referenced objects; indices do not promise permanent availability or exact cloud measurements at
+every scene instant. No existing unindexed archive is backfilled by this change.
+
+Interactive replay fetches at most three daily indices and keeps at most three frame textures close
+to the playhead, bounded by the existing 3-hour gap rule. Selection follows sub-hourly scrubs as well.
+Each daily index, including failures, is cached for 60 seconds of wall time; changing the scene hour
+alone does not fetch it again. Metadata refresh preserves still-selected texture loads; obsolete
+requests are cancelled and stale textures disposed. Live and archive textures share the download
+byte limit. One owner clears textures on each live/replay transition.
+Switching to live clears the historical layer and resumes the live feed. Missing/expired images
+show `No cloud data`; they never select current clouds. The HUD shows the observation time and
+attribution of the selected source. The existing deterministic offline renderer remains unchanged.
+
+For QA on a Preview, open `/?storm=2026-07-15-orlando&speed=30`. Historical cloud fixtures are copied
+under `/_replay-fixtures/archive/clouds/` only in Preview builds. Their far-future publication/expiry
+dates are synthetic so the real July imagery remains available for repeatable visual checks.
+Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
+does not include these fixtures. Dev uses the existing fixture server at the configured data root.
+
 ## Chunk encoding
 
 `LiveChunk` (in `chunk.schema.json`) describes what a chunk contains once decoded: the display fields

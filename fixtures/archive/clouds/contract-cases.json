@@ -1,0 +1,12 @@
+[
+  {"name": "valid", "accept": true, "changes": []},
+  {"name": "future version", "accept": false, "changes": [{"path": ["schema_version"], "value": 2}]},
+  {"name": "string version", "accept": false, "changes": [{"path": ["schema_version"], "value": "1"}]},
+  {"name": "wrong observation day", "accept": false, "changes": [{"path": ["day"], "value": "2026-07-14"}]},
+  {"name": "invalid expiry", "accept": false, "changes": [{"path": ["frames", 0, "expires_at"], "value": "invalid"}]},
+  {"name": "external texture", "accept": false, "changes": [{"path": ["frames", 0, "textures", "2k", "path"], "value": "https://other.test/image.webp"}]},
+  {"name": "empty texture", "accept": false, "changes": [{"path": ["frames", 0, "textures", "2k", "size_bytes"], "value": 0}]},
+  {"name": "fractional texture size", "accept": false, "changes": [{"path": ["frames", 0, "textures", "2k", "size_bytes"], "value": 1.5}]},
+  {"name": "string texture size", "accept": false, "changes": [{"path": ["frames", 0, "textures", "2k", "size_bytes"], "value": "100"}]},
+  {"name": "too many frames", "accept": false, "repeat_frames_over_limit": true, "changes": []}
+]

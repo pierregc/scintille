@@ -19,6 +19,7 @@ from scintille_ingest.clouds.publish import (
     ATTRIBUTION,
     MANIFEST_HEADERS,
     TEXTURE_HEADERS,
+    ArchiveCloudManifest,
     CloudManifest,
     CloudPublisher,
 )
@@ -276,6 +277,7 @@ def test_publish_writes_textures_archive_and_manifest() -> None:
         f"live/clouds/4k/{name}",
         f"archive/clouds/2k/2026/10/10/{name}",
         f"archive/clouds/4k/2026/10/10/{name}",
+        "archive/clouds/manifests/2026-10-10.json",
     }
     m = manifest(store)
     assert m.attribution == ATTRIBUTION and m.window_seconds == 6 * 3600
@@ -339,6 +341,141 @@ def test_restore_continues_the_published_frames() -> None:
     )
     asyncio.run(again.restore())
     assert again.published() == {T0: NAME}
+
+
+def archived_manifest(store: MemoryStore, day: str = "2026-10-10") -> ArchiveCloudManifest:
+    return ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, f"archive/clouds/manifests/{day}.json").bytes().to_bytes()
+    )
+
+
+def test_archive_index_survives_restart_replaces_revisions_and_resolves_only_written_textures() -> (
+    None
+):
+    from posixpath import normpath
+
+    pub, store = publisher()
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    again = CloudPublisher(pub.live, pub.archive)
+    later = T0 + timedelta(hours=1)
+    asyncio.run(again.publish(later, gmgsi_name(later, later), "gfs", TEXTURES, later))
+    revision = gmgsi_name(T0, later)
+    asyncio.run(again.publish(T0, revision, "gfs", TEXTURES, later))
+    archived = archived_manifest(store)
+    assert archived.schema_version == 1
+    assert [f.time for f in archived.frames] == [T0, later]
+    assert archived.frames[0].product == revision
+    assert archived.frames[0].expires_at == later + timedelta(days=30)
+    for frame in archived.frames:
+        for texture in frame.textures.values():
+            path = normpath("archive/clouds/manifests/" + texture.path)
+            assert (
+                obstore.get(store, path).bytes().to_bytes()
+                == TEXTURES["2k" if texture.width == 2048 else "4k"]
+            )
+
+
+@pytest.mark.parametrize("failed_prefix", ["2k/", "4k/", "manifests/"])
+def test_partial_archive_never_publishes_a_new_index_or_breaks_live(failed_prefix: str) -> None:
+    pub, store = publisher()
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    before = obstore.get(store, "archive/clouds/manifests/2026-10-10.json").bytes().to_bytes()
+
+    class Broken(ObjectLiveStore):
+        async def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+            if path.startswith(failed_prefix):
+                raise OSError("archive copy interrupted")
+            await super().put(path, data, headers)
+
+    pub.archive = Broken(store, "archive/clouds/")
+    later = T0 + timedelta(hours=1)
+    asyncio.run(pub.publish(later, gmgsi_name(later, later), "gfs", TEXTURES, later))
+    assert (
+        obstore.get(store, "archive/clouds/manifests/2026-10-10.json").bytes().to_bytes() == before
+    )
+    assert manifest(store).frames[-1].time == later
+
+
+def test_daily_archive_is_utc_partitioned_and_expires_old_refs() -> None:
+    pub, store = publisher()
+    offset = datetime.fromisoformat("2026-10-11T01:00:00+02:00")
+    asyncio.run(pub.publish(offset, "offset.nc", "gfs", TEXTURES, T0))
+    archived = archived_manifest(store)
+    assert archived.frames[0].time == T0 + timedelta(hours=23)
+    later = T0 + timedelta(days=31)
+    asyncio.run(pub.publish(T0, "late-rebuild.nc", "gfs", TEXTURES, later))
+    assert [f.product for f in archived_manifest(store).frames] == ["late-rebuild.nc"]
+
+
+def test_historical_client_fixture_uses_the_archive_contract() -> None:
+    root = Path(__file__).parents[4] / "fixtures/archive/clouds"
+    archived = ArchiveCloudManifest.model_validate_json(
+        (root / "manifests/2026-07-15.json").read_text()
+    )
+    for frame in archived.frames:
+        for texture in frame.textures.values():
+            assert (root / "manifests" / texture.path).stat().st_size == texture.size_bytes
+
+
+@pytest.mark.parametrize("invalid", [b'{"frames":', b'{"schema_version":1,"frames":[{}]}'])
+def test_corrupt_daily_index_recovers_without_blocking_live(invalid: bytes) -> None:
+    pub, store = publisher()
+    asyncio.run(pub.archive.put("manifests/2026-10-10.json", invalid, MANIFEST_HEADERS))
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    assert [f.time for f in archived_manifest(store).frames] == [T0]
+    assert manifest(store).frames[0].time == T0
+
+
+def test_unknown_daily_index_version_is_preserved() -> None:
+    pub, store = publisher()
+    future = b'{"schema_version":2,"new-format":["preserve"]}'
+    asyncio.run(pub.archive.put("manifests/2026-10-10.json", future, MANIFEST_HEADERS))
+    asyncio.run(pub.publish(T0, NAME, "gfs", TEXTURES, T0))
+    assert (
+        obstore.get(store, "archive/clouds/manifests/2026-10-10.json").bytes().to_bytes() == future
+    )
+    assert manifest(store).frames[0].time == T0
+
+
+def test_over_capacity_day_advances_to_newest_observations(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from scintille_contract.cloud_archive import MAX_ARCHIVE_FRAMES
+
+    pub, store = publisher()
+    for minute in range(MAX_ARCHIVE_FRAMES + 1):
+        time = T0 + timedelta(minutes=minute)
+        asyncio.run(pub.publish(time, gmgsi_name(time, time), "gfs", TEXTURES, time))
+    archived = archived_manifest(store)
+    assert len(archived.frames) == MAX_ARCHIVE_FRAMES
+    assert archived.frames[0].time == T0 + timedelta(minutes=1)
+    assert archived.frames[-1].time == T0 + timedelta(minutes=MAX_ARCHIVE_FRAMES)
+    assert "capacity exceeded" in caplog.text
+
+
+def test_producer_and_reader_share_contract_cases() -> None:
+    import copy
+    import json
+
+    from pydantic import ValidationError
+    from scintille_contract.cloud_archive import MAX_ARCHIVE_FRAMES
+
+    root = Path(__file__).parents[4] / "fixtures/archive/clouds"
+    fixture = json.loads((root / "manifests/2026-07-15.json").read_text())
+    for case in json.loads((root / "contract-cases.json").read_text()):
+        payload = copy.deepcopy(fixture)
+        for change in case["changes"]:
+            parent = payload
+            for key in change["path"][:-1]:
+                parent = parent[key]
+            parent[change["path"][-1]] = change["value"]
+        if case.get("repeat_frames_over_limit"):
+            payload["frames"] = [payload["frames"][0]] * (MAX_ARCHIVE_FRAMES + 1)
+        if case["accept"]:
+            ArchiveCloudManifest.model_validate(payload)
+        else:
+            with pytest.raises(ValidationError):
+                ArchiveCloudManifest.model_validate(payload)
 
 
 # Collector

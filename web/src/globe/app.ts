@@ -4,14 +4,16 @@ import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
+import { ArchiveCloudFeed } from './clouds/archive';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
+import { CloudPlayback } from './clouds/playback';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { createCoverage } from './coverage';
 import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
-import { runDevStorm } from './dev-storm';
+import { REPLAY_FIXTURE_SLUG, runDevStorm } from './dev-storm';
 import { createEarth } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
@@ -44,6 +46,7 @@ export interface GlobeApp {
 	readonly data: SceneData;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
+	cloudStatus(): { settled: boolean; attribution: string | null };
 	readonly thunder: Thunder;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
@@ -104,8 +107,24 @@ export function createGlobeApp(
 	const cloudFeed = new CloudFeed({
 		baseUrl: liveBaseUrl(),
 		tier: preset.clouds,
-		onFrame: (frame) => clouds.setFrame(frame),
+		onFrame: (frame) => {
+			if (clock.mode !== 'replay' || renderParams) clouds.setFrame(frame);
+			else frame.texture.dispose();
+		},
 		onError: (error) => console.warn('clouds:', error),
+	});
+	const fixtureReplay = (import.meta.env.DEV || BUILD.pr !== null) &&
+		new URLSearchParams(location.search).get('storm') === REPLAY_FIXTURE_SLUG;
+	const cloudArchive = new ArchiveCloudFeed({
+		now: () => clock.wallTime(),
+		baseUrl: fixtureReplay && !import.meta.env.DEV
+			? new URL('/_replay-fixtures/', location.href).href : liveBaseUrl(),
+		tier: preset.clouds,
+		clouds,
+	});
+	const cloudPlayback = new CloudPlayback(clouds, cloudFeed, cloudArchive);
+	const detachCloudMode = clock.on('mode', () => {
+		if (!renderParams) cloudPlayback.update(clock.mode, clock.time());
 	});
 	const detachDevClouds = import.meta.env.DEV ? attachDevClouds(clouds, window) : undefined;
 	const stars = createStarfield();
@@ -194,7 +213,7 @@ export function createGlobeApp(
 		const now = clock.time();
 		earth.setTime(now);
 		atmosphere.setTime(now);
-		if (clouds.visible && !renderParams) cloudFeed.start();
+		if (!renderParams) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
 		stars.setTime(now);
 		data.update(now);
@@ -231,6 +250,7 @@ export function createGlobeApp(
 		data,
 		clouds,
 		cloudFeed,
+		cloudStatus: () => cloudPlayback.status,
 		thunder,
 		lightning,
 		feedStatus: () =>
@@ -248,7 +268,8 @@ export function createGlobeApp(
 			renderer.setAnimationLoop(null);
 			controls.dispose();
 			data.dispose();
-			cloudFeed.stop();
+			detachCloudMode();
+			cloudPlayback.dispose();
 			detachCoverageLabel?.();
 			coverage.dispose();
 			window.removeEventListener('resize', resize);
