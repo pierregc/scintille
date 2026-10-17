@@ -56,6 +56,22 @@ function setup(hours = [0, 1, 2], now = () => T0) {
 }
 
 describe('archive cloud playback', () => {
+	it('calls the global fetch unbound by default', async () => {
+		const clouds = createClouds(1, { storage: null, maxFrames: 3 });
+		clouds.setVisible(true);
+		const strict = vi.fn(function (this: unknown, input: string | URL | Request) {
+			if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+			return Promise.resolve(String(input).endsWith('2026-07-15.json')
+				? Response.json(manifest('2026-07-15', [0])) : new Response(null, { status: 404 }));
+		});
+		vi.stubGlobal('fetch', strict);
+		const load = vi.fn(async (_url: string, time: number) => ({ texture: new Texture(), time }));
+		const feed = new ArchiveCloudFeed({ baseUrl: BASE, tier: '2k', clouds, load, now: () => T0 });
+		feed.setTime(T0); await feed.idle();
+		expect(load).toHaveBeenCalledOnce();
+		feed.stop(); clouds.dispose(); vi.unstubAllGlobals();
+	});
+
 	it('discovers just three day indices and loads nearby historical textures for scene time', async () => {
 		const s = setup();
 		s.feed.setTime(T0 + HOUR);
