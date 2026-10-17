@@ -1,10 +1,7 @@
-# 0017 · One scene data owner for live and archive playback
+# 0013 · One scene data owner for live and archive playback
 
 - Status: proposed
 - Date: 2026-10-12
-
-Renumbered from the proposed replay ADR 0013 on 2026-10-17 to distinguish it from the
-3D-lightning ADR. Status and architectural content are unchanged.
 
 ## Context
 Storm entry, tracks and share URLs depend on the archive loader (#76). Lightning and thunder

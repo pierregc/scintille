@@ -1,39 +1,67 @@
 # M3 discovery and replay acceptance (#261)
 
-Prepared 2026-10-17. **M3 is not accepted by this document.** No PR in the stack below has been
-merged by the agent. Unit/build evidence and synthetic Preview exercises are separate from runtime,
-production and maintainer acceptance.
+Updated 2026-10-17. **M3 is not accepted by this document.** Feature PRs #264–#267 have been
+merged by the maintainer, including the close zero-tilt restoration fix in #267. Unit/build evidence
+and synthetic Preview exercises are separate from runtime, production and maintainer acceptance.
 
 ## Review order and delivered work
 
 | Ticket | PR / dependency | Available evidence |
 | --- | --- | --- |
 | #260 | [#263, merged by maintainer](https://github.com/pierregc/scintille/pull/263) | Historical cloud indices, bounded downloads, cancellation/cache tests |
-| #79 | [#264](https://github.com/pierregc/scintille/pull/264), base main | Production replay entry, atomic scene replacement and geographic framing |
-| #80 | [#265](https://github.com/pierregc/scintille/pull/265), base #264 | Observed trajectory growth/rewind, spherical paths and disposal |
-| #81 | [#266](https://github.com/pierregc/scintille/pull/266), base #265 | Bounded catalog suggestions and useful error/empty/stale states |
-| #82 | [#267](https://github.com/pierregc/scintille/pull/267), base #266 | UTC moment/view share links, navigation, validation and clipboard fallback |
-| #83 | [#268, draft](https://github.com/pierregc/scintille/pull/268), base #267 | [Five reproducible synthetic framing cases](replay-framing.md); real-storm/visual acceptance pending |
+| #79 | [#264](https://github.com/pierregc/scintille/pull/264), merged into main | Production replay entry, atomic scene replacement and geographic framing |
+| #80 | [#265](https://github.com/pierregc/scintille/pull/265), merged into main | Observed trajectory growth/rewind, spherical paths and disposal |
+| #81 | [#266](https://github.com/pierregc/scintille/pull/266), merged into main | Bounded catalog suggestions and useful error/empty/stale states |
+| #82 | [#267](https://github.com/pierregc/scintille/pull/267), merged into main | UTC moment/view share links, navigation, clipboard fallback and zero-tilt range restoration |
+| #83 | [#268, draft](https://github.com/pierregc/scintille/pull/268), base main | [Five reproducible synthetic framing cases](replay-framing.md); real-storm/visual acceptance pending |
 | #74 | [#269, draft](https://github.com/pierregc/scintille/pull/269), base main | Production prerequisite/freshness evidence checklist; actual deployment checks pending |
 
-Review/merge the feature stack from its base upward and retarget each dependent PR after the
-previous base merges. #269 is independent. This document and the integration PR depend on #268.
+The feature stack is merged. #268 now targets main; this integration PR still depends on #268.
+#269 is independent. Retarget the integration PR to main after #268 merges.
 
-The four ready feature PRs have passing CI and Preview builds. Their web test totals progress
-388 → 394 → 401 → 414. The calibration preparation has 416 passing local web tests, type/lint
-checks and a passing Preview build. Those totals do not prove frame rate, perceived flight quality,
-physical GPU release, audio output or production availability. This session has no browser backend;
-local builds cannot complete the Cloudflare inspector socket under the sandbox, while hosted builds
-can. The public data endpoint could not be resolved from this environment.
+The original feature heads had passing CI and Preview builds. Their web test totals progressed
+388 → 394 → 401 → 414. The #267 follow-up passed 416 local tests, including real-controls
+share/history restoration of a dragged zero-tilt surface view at desktop and portrait aspects.
+The original calibration head had 416 passing local web tests, type/lint checks and a passing
+Preview build. Its follow-up adds final-camera extent/track projections for all five fixtures at
+both aspects, pointer/wheel interruption and reduced-motion arrival using real controls.
+After rebase on current main including the #267 fix, that follow-up passes 432 tests, Astro check,
+ESLint, a complete production build and SEO checks on the calibration branch. Those results do not prove
+frame rate, perceived flight quality, physical GPU release, audio output or production availability. This session has no browser backend;
+the complete local build succeeded after allowing Wrangler registry writes outside the sandbox.
+SSH and public HTTP observations are recorded below.
+
+## Production and browser observations on 2026-10-17
+
+The resumed session reached the VPS over pinned-host SSH at 08:40–08:45 UTC. The running pipeline
+release is `880df68`, before the catalog exporter. It has no publication module/job/schedule;
+`gold` has no tables. Silver has data, but that does not establish usable per-cell minute counts,
+ordered tracks or persisted levels. The required public index returns HTTP 404.
+
+Dagster has 256 `NOT_STARTED` runs and no successful executions. Recent sensor/schedule ticks fail
+on parameterized PostgreSQL `NOTIFY` during asset-planned event storage. This reproduced defect is
+tracked in [#271](https://github.com/pierregc/scintille/issues/271) and blocks production prerequisite
+materialization. Full release, driver, run-ID and inventory evidence is recorded in
+[the #74 production acceptance packet](https://github.com/pierregc/scintille/pull/269).
+No deployment, schedule activation, run cancellation or table write was performed. Recover the
+execution defect, deploy a validated current release and materialize/publish in dependency order
+before claiming actual catalog examples, reference integrity or measured freshness.
+
+The browser backend was retried and still reported no available browser. Desktop/touch captures,
+clipboard/focus, GPU/audio and device timing remain unobserved. Earlier sandbox access failures
+are superseded by successful SSH/HTTP reads, not by successful production acceptance.
 
 ## Decisions to record
 
 - ADR 0011: accept the explicit track-bounds approximation and separate replay/classification
   counts, or propose a concrete amendment. #266 exposes classified metrics and the approximation
-  note. Historical cloud discovery is no longer an upstream gap; the proposed text now points to 0014.
-- The duplicate proposed replay ADR 0013 is renumbered to [0017](../adr/0017-replay-feed-lifecycle.md).
-  The lightning-ribbons ADR keeps 0013. Recommend reviewing the shared scene-owner decision against
-  the runtime resource checks below before marking it accepted.
+  note. Historical cloud discovery is implemented by #260 ([0014](../adr/0014-historical-cloud-discovery.md));
+  ADR 0011 retains its original historical statement unchanged.
+- Keep both historical 0013 proposals unchanged and identify them by full filename:
+  [replay feed lifecycle](../adr/0013-replay-feed-lifecycle.md) and
+  [3D lightning ribbons](../adr/0013-3d-lightning-ribbons.md).
+  [0017](../adr/0017-preserve-adr-history.md) records the duplicate resolution and amendment policy.
+  Review the shared scene-owner proposal against runtime resource evidence; no acceptance is inferred.
 - ADRs 0015 and 0016 remain proposals for entry/support limits and the URL subset. In particular,
   sharing preserves target/range/tilt and normalizes local heading/roll; accept or amend that subset.
 - #41 was closed after the retention collector PR #262 merged. Preserve that decision. Its
@@ -57,7 +85,7 @@ Repeat on desktop and touch, keyboard only, and with reduced motion. Use this re
 | Playback | Autoplay from requested time after framing, pause/play, every speed, forward/backward seek |
 | Clouds/sun | Right UTC sun and historical observation; partial/missing archive stays honestly missing |
 | Share | Copy/reopen same supported view and instant; manual-copy field after clipboard denial |
-| Navigation | Initial URL, same/different storm, back/forward, rapid changes, failed replacement, Back to live |
+| Navigation | Initial URL, same/different storm, back/forward, rapid changes, failed replacement, Back to live; share/restore a close zero-tilt surface view after a right drag |
 | Input | Native card/share controls, focus, touch targets and announcements |
 | Result | Capture/video, pass/fail, defect issue, maintainer decision |
 
@@ -88,7 +116,8 @@ storm preserves the old scene and reports an error; stale asynchronous results m
 - [ ] Cold/error paths and partial historical clouds observed.
 - [ ] Repeated transition GPU/audio evidence attached and stable.
 - [ ] #74 production prerequisites/freshness and #41 retention evidence status explicitly reconciled.
-- [ ] Any remaining runtime defect has its own small blocking ticket, with reproduction and evidence.
+- [x] Confirmed PostgreSQL notification failure has a reproduction/evidence ticket: #271.
+- [ ] #271 resolved and successful production recovery observed; any further runtime defect ticketed.
 - [ ] Maintainer accepts the dated evidence before closing M3.
 
 No runtime defect is invented merely because a check could not be executed here. Add a defect ticket

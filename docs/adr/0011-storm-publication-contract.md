@@ -34,6 +34,5 @@ are published before metadata, then index pages, then sitemaps; published object
 by this job. Re-running preserves stable slugs and unchanged detail bytes. Sitemaps include regions
 only after their detail file exists. XML comments carry schema and freshness metadata without
 changing the sitemap protocol. Pending cache tags survive failed purges in a pipeline outbox.
-Historical cloud frame discovery is now implemented by #260 (ADR 0014). Missing/expired cloud
-observations remain missing in replay; current imagery is never a historical fallback.
+Cloud archive frame files exist, but their discoverable manifest is still an upstream gap for #79.
 Synthetic fixtures label their intensity rule explicitly and adopt no public classification choice.
