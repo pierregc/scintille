@@ -79,6 +79,11 @@ import Version from './Version.astro';
 
 	<p class="stale cap" role="status" data-stale hidden></p>
 	<p class="replay-status" role="status" data-replay-status hidden></p>
+	<div class="share" data-share-tools hidden>
+		<button type="button" data-share>Share replay</button>
+		<input type="text" readonly aria-label="Replay link" data-share-url hidden />
+		<span role="status" data-share-status></span>
+	</div>
 
 	<div class="layers" data-layers hidden>
 		<div class="group" role="group" aria-label="Layers">
@@ -115,9 +120,14 @@ import Version from './Version.astro';
 		color: var(--soft);
 		font: 300 12px/1.6 var(--sans);
 	}
+	.share { position: fixed; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
+	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
+	.share input { width: 100%; padding: 8px; color: var(--ink); background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); }
+	.share span { display: block; color: var(--soft); font: 300 11px/1.5 var(--sans); }
 	.hud[data-mode='live'][data-opening] .golive { display: inline-block; }
 	@media (max-width: 640px) {
 		.replay-status { top: auto; bottom: calc(var(--gut) + 128px); }
+		.share { top: auto; bottom: calc(var(--gut) + 180px); }
 	}
 	.hud {
 		--ink: rgb(238 242 247 / 0.9);
@@ -713,10 +723,14 @@ import Version from './Version.astro';
 		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
 		const replayStatus = $('[data-replay-status]');
+		const shareTools = $('[data-share-tools]');
+		const shareInput = $<HTMLInputElement>('[data-share-url]');
+		const shareStatus = $('[data-share-status]');
 		const display = $('[data-display]');
 		const legend = $<HTMLDetailsElement>('[data-legend]');
 		if (legend) legend.open = matchMedia('(min-width: 641px)').matches;
 		let app: GlobeApp | undefined;
+		let shareStorm: string | undefined;
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
 			const status = live && app ? app.feedStatus() : undefined;
@@ -742,6 +756,12 @@ import Version from './Version.astro';
 
 		const tick = () => {
 			const replay = app?.replay.state;
+			if (shareStorm !== replay?.selected?.storm.slug) {
+				shareStorm = replay?.selected?.storm.slug;
+				if (shareInput) shareInput.hidden = true;
+				if (shareStatus) shareStatus.textContent = '';
+			}
+			if (shareTools) shareTools.hidden = !replay?.selected || Boolean(replay.loading);
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
 			if (replayStatus) {
 				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? (replay?.selected
@@ -825,6 +845,18 @@ import Version from './Version.astro';
 		$('[data-live]')?.addEventListener('click', () => {
 			void app?.replay.live();
 			tick();
+		});
+		$('[data-share]')?.addEventListener('click', async () => {
+			if (!app?.replay.state.selected) return;
+			const url = app.shareUrl();
+			try {
+				await navigator.clipboard.writeText(url);
+				if (shareStatus) shareStatus.textContent = 'Replay link copied.';
+				if (shareInput) shareInput.hidden = true;
+			} catch {
+				if (shareStatus) shareStatus.textContent = 'Copy this replay link:';
+				if (shareInput) { shareInput.value = url; shareInput.hidden = false; shareInput.focus(); shareInput.select(); }
+			}
 		});
 		clouds?.addEventListener('click', () => {
 			if (app) app.clouds.setVisible(!app.clouds.visible);

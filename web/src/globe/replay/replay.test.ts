@@ -82,7 +82,7 @@ describe('production replay entry', () => {
 
 	it('keeps the current selection on failure and ignores superseded results', async () => {
 		const clock = new SceneClock(() => 0);
-		const data = { openStorm: vi.fn().mockResolvedValue(detail), live: vi.fn().mockResolvedValue(undefined) };
+		const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(Date.parse(detail.storm.t_start), 60); return detail; }), live: vi.fn().mockResolvedValue(undefined) };
 		const controls = { flyTo: vi.fn().mockResolvedValue(false), cancelFlight: vi.fn() };
 		const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
 		expect(await replay.open(detail.storm.slug)).toBe(true); // Interrupted flight keeps the loaded replay.
@@ -100,4 +100,26 @@ describe('production replay entry', () => {
 		expect(controls.flyTo).toHaveBeenCalledTimes(1);
 		replay.dispose();
 	});
+});
+
+it('holds the start instant during the camera flight before autoplay so a short storm is not skipped', async () => {
+	let wall = 0;
+	const clock = new SceneClock(() => wall);
+	const start = Date.parse(fixture.storm.t_start);
+	let finish!: (arrived: boolean) => void;
+	const controls = { cancelFlight: vi.fn(), flyTo: vi.fn().mockImplementation(() => new Promise<boolean>((done) => { finish = done; })) };
+	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return detail; }), live: vi.fn().mockResolvedValue(undefined) };
+	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
+	const opening = replay.open(fixture.storm.slug);
+	await Promise.resolve();
+	wall += 2800;
+	expect(clock.time()).toBe(start);
+	expect(clock.playing).toBe(false);
+	finish(true);
+	await opening;
+	expect(clock.playing).toBe(true);
+	expect(clock.time()).toBe(start);
+	wall += 100;
+	expect(clock.time()).toBe(start + 6000);
+	replay.dispose();
 });

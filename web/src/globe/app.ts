@@ -27,6 +27,7 @@ import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './qua
 import { createStarfield } from './starfield';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
+import { ReplayNavigation } from './replay/navigation';
 import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
@@ -47,6 +48,7 @@ export interface GlobeApp {
 	readonly clock: SceneClock;
 	readonly data: SceneData;
 	readonly replay: StormReplay;
+	shareUrl(): string;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
@@ -248,14 +250,19 @@ export function createGlobeApp(
 		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
-	const requestedStorm = new URLSearchParams(location.search).get('storm');
-	if (!renderParams && requestedStorm) void replay.open(requestedStorm);
+	const navigation = renderParams ? undefined : new ReplayNavigation(replay, clock, controls, {
+		url: () => new URL(location.href),
+		write: (url, push) => { if (push) history.pushState(null, '', url); else history.replaceState(history.state, '', url); },
+		onPop: (listener) => { window.addEventListener('popstate', listener); return () => window.removeEventListener('popstate', listener); },
+	});
+	if (!(import.meta.env.DEV && new URLSearchParams(location.search).has('replay'))) void navigation?.restore();
 
 	return {
 		flyTo: controls.flyTo,
 		clock,
 		data,
 		replay,
+		shareUrl: () => navigation?.shareUrl() ?? location.href,
 		clouds,
 		cloudFeed,
 		cloudStatus: () => cloudPlayback.status,
@@ -275,6 +282,7 @@ export function createGlobeApp(
 		dispose() {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
+			navigation?.dispose();
 			replay.dispose();
 			track.dispose();
 			data.dispose();

@@ -31,9 +31,10 @@ export interface GlobeControls {
 	/** Call once per frame with the animation loop timestamp (ms). */
 	update(time: number): void;
 	centerOn(lat: number, lon: number): void;
-	/** Flies to a point, altitude kept within the zoom limits; resolves true on arrival, false if interrupted. */
-	flyTo(options: FlyToOptions): Promise<boolean>;
+	/** Resolves true on arrival, false if interrupted; preserveRange allows close surface restoration. */
+	flyTo(options: FlyToOptions, restore?: { preserveRange?: boolean }): Promise<boolean>;
 	cancelFlight(): void;
+	view(): Required<Omit<FlyToOptions, 'duration'>>;
 	dispose(): void;
 }
 
@@ -262,6 +263,15 @@ export function createGlobeControls(
 
 	return {
 		cancelFlight: () => endFlight(false),
+		view() {
+			const direction = controls.target.lengthSq() > 0 ? controls.target.clone().normalize() : camera.position.clone().normalize();
+			return {
+				lat: Math.asin(Math.max(-1, Math.min(1, direction.y))) * 180 / Math.PI,
+				lon: -Math.atan2(direction.z, direction.x) * 180 / Math.PI,
+				altitude: (surface ? surface.range : camera.position.length() - radius) / radius * 6371,
+				tilt: surface ? surface.tilt * 180 / Math.PI : 0,
+			};
+		},
 		resize() {
 			const next = zoomLimits(radius, camera.fov, camera.aspect);
 			const distance = limits ? rescaleDistance(camera.position.length(), limits, next) : next.fit;
@@ -293,15 +303,17 @@ export function createGlobeControls(
 			placeCamera(new Vector3(...latLonToVector(lat, lon)), camera.position.length());
 		},
 
-		flyTo({ lat, lon, altitude, tilt = 0, duration }) {
+		flyTo({ lat, lon, altitude, tilt = 0, duration }, { preserveRange = false } = {}) {
 			const requested = altitude === undefined ? camera.position.length() - radius : kmToWorld(altitude, radius);
-			// Keep the destination inside the orbit limits so arrival does not snap to another distance.
-			const tilted = tilt > 0;
-			const base = tilted ? 0 : radius;
-			const lowest = tilted ? minRange(radius) : (limits?.min ?? controls.minDistance);
+			const orbitMin = limits?.min ?? controls.minDistance;
+			const onSurface = tilt > 0 || (preserveRange && requested + radius < orbitMin);
+			const base = onSurface ? 0 : radius;
+			const lowest = onSurface ? minRange(radius) : orbitMin;
 			const range = Math.min(Math.max(requested + base, lowest), limits?.max ?? controls.maxDistance);
-			const clear = tilted ? Math.min(tilt, (maxTilt(range, radius) * 180) / Math.PI) : 0;
-			return startFlight(poseAt(lat, lon, range - base, clear, radius), duration);
+			const clear = onSurface ? Math.min(tilt, (maxTilt(range, radius) * 180) / Math.PI) : 0;
+			const pose = poseAt(lat, lon, range - base, clear, radius);
+			if (onSurface && clear === 0) pose.target.copy(pose.position).setLength(radius);
+			return startFlight(pose, duration);
 		},
 
 		dispose() {
