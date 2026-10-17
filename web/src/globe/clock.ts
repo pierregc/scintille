@@ -3,6 +3,7 @@ export type ClockMode = 'live' | 'replay' | 'render';
 export interface ClockEvents {
 	mode: ClockMode;
 	seek: number;
+	playback: { playing: boolean; speed: number };
 }
 
 type Listener<T> = (value: T) => void;
@@ -20,6 +21,7 @@ export class SceneClock {
 	readonly #listeners: { [K in keyof ClockEvents]: Set<Listener<ClockEvents[K]>> } = {
 		mode: new Set(),
 		seek: new Set(),
+		playback: new Set(),
 	};
 
 	constructor(now: () => number = () => Date.now()) {
@@ -92,6 +94,7 @@ export class SceneClock {
 		if (this.#playing) return;
 		this.#anchorWall = this.#now();
 		this.#playing = true;
+		this.#emit('playback', { playing: this.#playing, speed: this.#speed });
 	}
 
 	pause(): void {
@@ -99,6 +102,7 @@ export class SceneClock {
 		if (!this.#playing) return;
 		this.#anchorScene = this.time();
 		this.#playing = false;
+		this.#emit('playback', { playing: this.#playing, speed: this.#speed });
 	}
 
 	setSpeed(speed: number): void {
@@ -106,6 +110,7 @@ export class SceneClock {
 		assertSpeed(speed);
 		this.#anchor(this.time());
 		this.#speed = speed;
+		this.#emit('playback', { playing: this.#playing, speed: this.#speed });
 	}
 
 	seek(time: number): void {

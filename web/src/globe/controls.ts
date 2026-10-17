@@ -34,6 +34,7 @@ export interface GlobeControls {
 	/** Flies to a point, altitude kept within the zoom limits; resolves true on arrival, false if interrupted. */
 	flyTo(options: FlyToOptions): Promise<boolean>;
 	cancelFlight(): void;
+	view(): Required<Omit<FlyToOptions, 'duration'>>;
 	dispose(): void;
 }
 
@@ -262,6 +263,15 @@ export function createGlobeControls(
 
 	return {
 		cancelFlight: () => endFlight(false),
+		view() {
+			const direction = controls.target.lengthSq() > 0 ? controls.target.clone().normalize() : camera.position.clone().normalize();
+			return {
+				lat: Math.asin(Math.max(-1, Math.min(1, direction.y))) * 180 / Math.PI,
+				lon: -Math.atan2(direction.z, direction.x) * 180 / Math.PI,
+				altitude: (surface ? surface.range : camera.position.length() - radius) / radius * 6371,
+				tilt: surface ? surface.tilt * 180 / Math.PI : 0,
+			};
+		},
 		resize() {
 			const next = zoomLimits(radius, camera.fov, camera.aspect);
 			const distance = limits ? rescaleDistance(camera.position.length(), limits, next) : next.fit;
