@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PerspectiveCamera, Vector3 } from 'three';
+import { atmosphereParameters } from '../atmosphere';
+import { cloudShellRadius } from '../clouds';
+import { createGlobeControls } from '../controls';
+import { CLOUD_TOP_KM } from '../lightning';
+import { kmToWorld } from '../flight';
+import { clipPlanes } from '../orbit';
+import { latLonToVector } from '../sun';
 import { framingFixtures } from '../../../scripts/framing-fixtures';
 import { stormSource } from '../archive/storm';
 import { parseCatalogPage } from './catalog';
@@ -47,5 +55,98 @@ describe('Preview calibration extracts', () => {
 		}
 		const page = files.get('storms/index/0.json');
 		expect(parseCatalogPage(JSON.parse(new TextDecoder().decode(page)), 0).storms).toHaveLength(5);
+	});
+});
+
+function cameraRig(aspect: number, reducedMotion = false) {
+	vi.stubGlobal('window', { matchMedia: () => ({ matches: reducedMotion }) });
+	const listeners = new Map<string, ((event: unknown) => void)[]>();
+	const doc = { addEventListener() {}, removeEventListener() {} };
+	const element = {
+		addEventListener: (type: string, listener: (event: unknown) => void) =>
+			listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+		removeEventListener() {}, style: {}, clientHeight: 810,
+		getRootNode: () => doc, ownerDocument: doc, setPointerCapture() {}, releasePointerCapture() {},
+	};
+	let time = 0;
+	const camera = new PerspectiveCamera(35, aspect, 1e-5, 100);
+	const controls = createGlobeControls(camera, element as unknown as HTMLElement, 1, { now: () => time });
+	controls.resize();
+	return { camera, controls,
+		step: (ms: number) => { time += ms; controls.update(time); },
+		fire: (type: string) => {
+			for (const listener of listeners.get(type) ?? []) listener({ pointerId: 1, pointerType: 'mouse', button: 2,
+				clientX: 0, clientY: 0, deltaY: 0, deltaMode: 0, preventDefault() {} });
+		},
+	};
+}
+
+describe('calibration poses after real control limits', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it.each(cases.flatMap((item) => [16 / 9, 9 / 16].map((aspect) => ({ ...item, aspect }))))(
+		'keeps the full $slug extent and trajectory inside the safe viewport at aspect $aspect', async (item) => {
+			const rig = cameraRig(item.aspect);
+			try {
+				const destination = frameStorm(item.bounds, 35, item.aspect);
+				const flight = rig.controls.flyTo(destination);
+				let arrived = false;
+				void flight.then(() => { arrived = true; });
+				rig.step(destination.duration - 1);
+				await Promise.resolve();
+				expect(arrived).toBe(false);
+				rig.step(1);
+				await expect(flight).resolves.toBe(true);
+				const settled = rig.camera.position.clone();
+				rig.step(16);
+				expect(rig.camera.position.distanceTo(settled)).toBeLessThan(1e-6);
+				expect(rig.controls.view().altitude).toBeCloseTo(destination.altitude, 3);
+				expect(rig.controls.view().tilt).toBeCloseTo(destination.tilt, 3);
+				const { near, far } = clipPlanes(rig.camera.position.length(), 1, [cloudShellRadius(1), 1 + kmToWorld(CLOUD_TOP_KM, 1), atmosphereParameters(1).atmosphereRadius]);
+				rig.camera.near = near;
+				rig.camera.far = far;
+				rig.camera.updateProjectionMatrix();
+				rig.camera.updateMatrixWorld();
+				const check = (point: Vector3) => {
+					const projected = point.clone().project(rig.camera);
+					expect(projected.z).toBeGreaterThan(-1);
+					expect(projected.z).toBeLessThan(1);
+					expect(Math.max(Math.abs(projected.x), Math.abs(projected.y))).toBeLessThan(0.64);
+				};
+				const { west, east, south, north } = item.bounds;
+				const width = east >= west ? east - west : east + 360 - west;
+				for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) {
+					check(new Vector3(...latLonToVector(south + (north - south) * i / 10, west + width * j / 10)));
+				}
+				const track = trackGeometry(item.points.map(([lat, lon], i) => ({ lat, lon,
+					time: new Date(Date.parse(item.start) + i * 360_000).toISOString(), flash_count: 3, area_km2: 1 })), 1 + kmToWorld(20, 1));
+				for (const vertices of [track.positions, track.observations]) {
+					for (let i = 0; i < vertices.length; i += 3) check(new Vector3().fromArray(vertices, i));
+				}
+			} finally { rig.controls.dispose(); }
+		},
+	);
+
+	it.each(['pointerdown', 'wheel'])('interrupts a calibration flight with %s', async (event) => {
+		const rig = cameraRig(16 / 9);
+		try {
+			const flight = rig.controls.flyTo(frameStorm(cases[3].bounds, 35, 16 / 9));
+			rig.step(1400);
+			rig.fire(event);
+			await expect(flight).resolves.toBe(false);
+			rig.step(2800);
+			expect(rig.controls.view().lon).not.toBeCloseTo(-180, 1);
+		} finally { rig.controls.dispose(); }
+	});
+
+	it.each([16 / 9, 9 / 16])('arrives on the first update with reduced motion at aspect %s', async (aspect) => {
+		const rig = cameraRig(aspect, true);
+		try {
+			const destination = frameStorm(cases[1].bounds, 35, aspect);
+			const flight = rig.controls.flyTo(destination);
+			rig.step(0);
+			await expect(flight).resolves.toBe(true);
+			expect(rig.controls.view().altitude).toBeCloseTo(destination.altitude, 3);
+		} finally { rig.controls.dispose(); }
 	});
 });
