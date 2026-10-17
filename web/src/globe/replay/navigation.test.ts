@@ -60,6 +60,35 @@ describe('replay browser navigation', () => {
 			expect(x.writes.at(-1)?.push).toBe(true);
 		} finally { x.dispose(); }
 	});
+	it.each(['navigation', 'selection'])('reframes on reload after an interrupted %s entry while explicit sharing keeps its view', async (entry) => {
+		const x = setup(entry === 'navigation' ? `?storm=${fixture.storm.slug}` : '');
+		try {
+			x.controls.flyTo.mockResolvedValueOnce(false);
+			if (entry === 'navigation') await x.navigation.restore();
+			else await x.replay.open(fixture.storm.slug);
+			x.clock.pause();
+			x.clock.seek(Date.parse('2026-07-15T18:00:30Z'));
+			x.clock.setSpeed(30);
+			expect(x.url().searchParams.has('view')).toBe(false);
+			const reload = setup(x.url().search);
+			try {
+				await reload.navigation.restore();
+				expect(reload.controls.flyTo).toHaveBeenCalledWith(expect.objectContaining({ duration: 2800 }));
+				expect(reload.clock.time()).toBe(Date.parse('2026-07-15T18:00:30Z'));
+				expect(reload.clock.speed).toBe(30);
+				expect(reload.clock.playing).toBe(false);
+			} finally { reload.dispose(); }
+			const shared = new URL(x.navigation.shareUrl());
+			expect(shared.searchParams.has('view')).toBe(true);
+			const sharedSession = setup(shared.search);
+			try {
+				await sharedSession.navigation.restore();
+				expect(sharedSession.controls.flyTo).toHaveBeenCalledWith(expect.objectContaining({ duration: 0 }), { preserveRange: true });
+				expect(sharedSession.controls.view()).toMatchObject(x.controls.view());
+			} finally { sharedSession.dispose(); }
+		} finally { x.dispose(); }
+	});
+
 	it.each(['unknown', '../bad'])('keeps a usable scene and visible error for invalid/unavailable storm %s', async (slug) => {
 		const x = setup(`?storm=${slug}`);
 		try {

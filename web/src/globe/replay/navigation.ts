@@ -33,12 +33,12 @@ export class ReplayNavigation {
 		})];
 	}
 
-	#snapshot(paused = !this.clock.playing): ReplayLocation | null {
+	#snapshot(paused = !this.clock.playing, captureInterruptedView = false): ReplayLocation | null {
 		const detail = this.replay.state.selected;
 		if (!detail || this.clock.mode !== 'replay') return null;
 		return { slug: detail.storm.slug,
 			time: Math.min(Math.max(this.clock.time(), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)),
-			speed: this.clock.speed, paused, view: this.controls.view() };
+			speed: this.clock.speed, paused, view: this.replay.framed || captureInterruptedView ? this.controls.view() : undefined };
 	}
 
 	#write(push: boolean): void {
@@ -48,7 +48,7 @@ export class ReplayNavigation {
 		if (url.href !== current.href) this.host.write(url, push);
 	}
 
-	shareUrl(): string { return replayUrl(this.host.url(), this.#snapshot(true)).href; }
+	shareUrl(): string { return replayUrl(this.host.url(), this.#snapshot(true, true)).href; }
 
 	async restore(): Promise<void> {
 		if (this.#disposed) return;

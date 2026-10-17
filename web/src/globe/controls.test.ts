@@ -188,6 +188,55 @@ describe('createGlobeControls flight handoff', () => {
 		} finally { navigation.dispose(); replay.dispose(); }
 	});
 
+	it.each([16 / 9, 9 / 16])('restarts an interrupted approach on a fresh reload at aspect %s', async (aspect) => {
+		camera.fov = 35;
+		camera.aspect = aspect;
+		camera.updateProjectionMatrix();
+		controls.resize();
+		let url = new URL(`https://scintille.app/?storm=${fixture.storm.slug}&speed=60`);
+		const session = () => {
+			const clock = new SceneClock(() => time);
+			const data = {
+				openStorm: async () => { clock.replay(Date.parse(fixture.storm.t_start), 60); return fixture as StormDetail; },
+				live: async () => { clock.live(); },
+			};
+			const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: camera.fov, aspect }));
+			const navigation = new ReplayNavigation(replay, clock, controls, {
+				url: () => url, write: (next) => { url = next; }, onPop: () => () => {},
+			});
+			return { navigation, replay, dispose: () => { navigation.dispose(); replay.dispose(); } };
+		};
+		const first = session();
+		try {
+			const opening = first.navigation.restore();
+			await Promise.resolve();
+			step(1000);
+			pointerDown();
+			await opening;
+			expect(url.searchParams.has('view')).toBe(false);
+		} finally { first.dispose(); }
+		controls.dispose();
+		const fake = fakeElement();
+		controls = createGlobeControls(camera, fake.element, R, { now: () => time });
+		controls.resize();
+		const fresh = session();
+		try {
+			let arrived = false;
+			const restoring = fresh.navigation.restore().then(() => { arrived = true; });
+			await Promise.resolve();
+			const start = camera.position.clone();
+			step(1400);
+			await Promise.resolve();
+			expect(arrived).toBe(false);
+			expect(camera.position.distanceTo(start)).toBeGreaterThan(0.01);
+			step(1400);
+			await restoring;
+			expect(controls.view().altitude).toBeCloseTo(306, 1);
+			expect(controls.view().tilt).toBeCloseTo(12, 4);
+			expect(url.searchParams.has('view')).toBe(true);
+		} finally { fresh.dispose(); }
+	});
+
 	const settle = async (flight: Promise<boolean>) => {
 		step(1);
 		await flight;

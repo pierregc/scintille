@@ -18,6 +18,7 @@ export class StormReplay {
 	#state: ReplayState = { selected: null, loading: null, error: null };
 	#revision = 0;
 	#disposed = false;
+	#framed = false;
 	readonly #offMode: () => void;
 	readonly #listeners = new Set<(origin: Origin) => void>();
 
@@ -34,6 +35,7 @@ export class StormReplay {
 	}
 
 	get state(): Readonly<ReplayState> { return this.#state; }
+	get framed(): boolean { return this.#framed; }
 
 	onChange(listener: (origin: Origin) => void): () => void {
 		this.#listeners.add(listener);
@@ -75,14 +77,18 @@ export class StormReplay {
 	}
 
 	async #place(detail: StormDetail, revision: number, restore?: ReplayLocation): Promise<void> {
+		this.#framed = false;
 		this.clock.pause();
 		if (restore) {
 			this.clock.seek(Math.min(Math.max(restore.time ?? Date.parse(detail.storm.t_start), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)));
 		}
 		const { fov, aspect } = this.view();
-		if (restore?.view) await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true });
-		else await this.controls.flyTo(frameStorm(detail.bounds, fov, aspect));
-		if (revision === this.#revision && this.clock.mode === 'replay' && !restore?.paused) this.clock.play();
+		const arrived = restore?.view
+			? await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true })
+			: await this.controls.flyTo(frameStorm(detail.bounds, fov, aspect));
+		if (revision !== this.#revision) return;
+		this.#framed = arrived;
+		if (this.clock.mode === 'replay' && !restore?.paused) this.clock.play();
 	}
 
 	live(origin: Origin = 'user'): Promise<void> {
@@ -95,6 +101,7 @@ export class StormReplay {
 	#clear(): boolean {
 		const hadState = Boolean(this.#state.selected || this.#state.loading || this.#state.error);
 		this.#revision++;
+		this.#framed = false;
 		this.controls.cancelFlight();
 		this.#state = { selected: null, loading: null, error: null };
 		return hadState;
