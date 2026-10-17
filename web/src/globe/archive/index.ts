@@ -26,7 +26,7 @@ export async function loadArchiveChunks(
 		signal.throwIfAborted();
 		const batch = entries.slice(i, i + 6);
 		const results = await Promise.allSettled(batch.map(async ([url, ref]) => {
-			const chunk = await fetchChunk(url, fetchFn, signal);
+			const chunk = await fetchChunk(url, fetchFn, signal, { stored: ref.size_bytes, decoded: 2 * 1024 * 1024 });
 			if (chunk.count !== ref.flash_count) throw new Error(`archive count mismatch: ${url}`);
 			return chunk;
 		}));

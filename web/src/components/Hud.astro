@@ -76,6 +76,7 @@ import Version from './Version.astro';
 	</section>
 
 	<p class="stale cap" role="status" data-stale hidden></p>
+	<p class="replay-status" role="status" data-replay-status hidden></p>
 
 	<div class="layers" data-layers hidden>
 		<div class="group" role="group" aria-label="Layers">
@@ -104,6 +105,18 @@ import Version from './Version.astro';
 </main>
 
 <style>
+	.replay-status {
+		position: fixed;
+		top: calc(var(--gut) + 100px);
+		left: var(--gut);
+		max-width: min(24rem, calc(100vw - 2 * var(--gut)));
+		color: var(--soft);
+		font: 300 12px/1.6 var(--sans);
+	}
+	.hud[data-mode='live'][data-opening] .golive { display: inline-block; }
+	@media (max-width: 640px) {
+		.replay-status { top: auto; bottom: calc(var(--gut) + 128px); }
+	}
 	.hud {
 		--ink: rgb(238 242 247 / 0.9);
 		--soft: rgb(238 242 247 / 0.62);
@@ -696,6 +709,7 @@ import Version from './Version.astro';
 		const cloudTime = $('[data-cloud-time]');
 		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
+		const replayStatus = $('[data-replay-status]');
 		const display = $('[data-display]');
 		const legend = $<HTMLDetailsElement>('[data-legend]');
 		if (legend) legend.open = matchMedia('(min-width: 641px)').matches;
@@ -724,6 +738,13 @@ import Version from './Version.astro';
 		};
 
 		const tick = () => {
+			const replay = app?.replay.state;
+			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
+			if (replayStatus) {
+				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? replay?.selected?.storm.label ?? '';
+				replayStatus.hidden = !caption;
+				if (replayStatus.textContent !== caption) replayStatus.textContent = caption;
+			}
 			const now = app?.clock.time() ?? Date.now();
 			const text = formatTime(now);
 			if (time && time.textContent !== text) {
@@ -798,7 +819,7 @@ import Version from './Version.astro';
 			if (info) info.open = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
-			void app?.data.live();
+			void app?.replay.live();
 			tick();
 		});
 		clouds?.addEventListener('click', () => {

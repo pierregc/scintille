@@ -190,9 +190,6 @@
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { REPLAY_FIXTURE_SLUG, runDevStorm } from '../globe/dev-storm';
-	import { liveBaseUrl } from '../globe/live';
-	import { BUILD } from '../version';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { formatTime, zoneLabel } from './hud/format';
 	import {
@@ -271,9 +268,9 @@
 
 		$('[data-travel]')?.addEventListener('click', () => {
 			if (!app) return;
-			if ((import.meta.env.DEV || BUILD.pr !== null) && new URLSearchParams(location.search).get('storm') === REPLAY_FIXTURE_SLUG) {
-				const base = import.meta.env.DEV ? liveBaseUrl() : new URL('/_replay-fixtures/', location.href).href;
-				void runDevStorm(app.data, app.flyTo, location.search, base).catch((error: unknown) => console.warn('fixture replay:', error));
+			const slug = new URLSearchParams(location.search).get('storm');
+			if (slug) {
+				void app.replay.open(slug);
 				return;
 			}
 			app.clock.replay(Math.max(Date.now() - REPLAY_LOOKBACK_MS, app.dataStart() ?? 0), DEFAULT_SPEED);

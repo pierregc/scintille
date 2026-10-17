@@ -1,4 +1,5 @@
 import { CHUNK_COLUMNS_BINARY_LAYOUT, SCHEMA_VERSION } from '../../contract/types';
+import { boundedBody } from '../clouds/response';
 
 type Layout = typeof CHUNK_COLUMNS_BINARY_LAYOUT;
 type ColumnName = Layout[number]['name'];
@@ -57,9 +58,15 @@ export function decodeChunk(buffer: ArrayBuffer): DecodedChunk {
 }
 
 /** Fetches and gunzips a chunk; no `Content-Encoding` is involved. */
-export async function fetchChunk(url: string, fetchFn: typeof fetch, signal?: AbortSignal): Promise<DecodedChunk> {
+export async function fetchChunk(
+	url: string, fetchFn: typeof fetch, signal?: AbortSignal,
+	limits?: { stored: number; decoded: number },
+): Promise<DecodedChunk> {
 	const response = await fetchFn(url, { signal });
 	if (!response.ok || !response.body) throw new Error(`${url}: HTTP ${response.status}`);
-	const buffer = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+	const compressed = limits ? new Response(await boundedBody(response, limits.stored)).body : response.body;
+	if (!compressed) throw new Error(`${url}: missing body`);
+	const decoded = new Response(compressed.pipeThrough(new DecompressionStream('gzip')));
+	const buffer = limits ? (await boundedBody(decoded, limits.decoded)).buffer : await decoded.arrayBuffer();
 	return decodeChunk(buffer);
 }

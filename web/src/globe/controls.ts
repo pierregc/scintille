@@ -33,6 +33,7 @@ export interface GlobeControls {
 	centerOn(lat: number, lon: number): void;
 	/** Flies to a point, altitude kept within the zoom limits; resolves true on arrival, false if interrupted. */
 	flyTo(options: FlyToOptions): Promise<boolean>;
+	cancelFlight(): void;
 	dispose(): void;
 }
 
@@ -157,6 +158,7 @@ export function createGlobeControls(
 	};
 
 	const onPointerDown = (event: PointerEvent) => {
+		endFlight(false);
 		const touch = event.pointerType === 'touch';
 		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 		element.setPointerCapture?.(event.pointerId);
@@ -233,6 +235,7 @@ export function createGlobeControls(
 	};
 
 	const onWheel = (event: WheelEvent) => {
+		endFlight(false);
 		if (!surface) return;
 		event.preventDefault();
 		if (flight) return;
@@ -258,6 +261,7 @@ export function createGlobeControls(
 	};
 
 	return {
+		cancelFlight: () => endFlight(false),
 		resize() {
 			const next = zoomLimits(radius, camera.fov, camera.aspect);
 			const distance = limits ? rescaleDistance(camera.position.length(), limits, next) : next.fit;
