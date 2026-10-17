@@ -691,6 +691,7 @@ import Version from './Version.astro';
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { DISPLAY_MINUTES } from '../globe/lightning/display';
+	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
 	import { cloudCaption, formatDate, formatTime, zoneLabel } from './hud/format';
 
@@ -741,7 +742,8 @@ import Version from './Version.astro';
 			const replay = app?.replay.state;
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
 			if (replayStatus) {
-				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? replay?.selected?.storm.label ?? '';
+				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? (replay?.selected
+					? `${replay.selected.storm.label} · ${trackCaption(replay.selected)}` : '');
 				replayStatus.hidden = !caption;
 				if (replayStatus.textContent !== caption) replayStatus.textContent = caption;
 			}

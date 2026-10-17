@@ -27,6 +27,7 @@ export async function stormSource(
 		throw new Error('invalid storm replay metadata');
 	}
 	stormCap(detail.bounds ?? {} as StormDetail['bounds']);
+	if (!Array.isArray(detail.track)) throw new Error('invalid storm track');
 	if (detail.replay.flash_count > REPLAY_LIMITS.flashes) throw new Error('storm replay is too large');
 	let storedBytes = 0;
 	let flashes = 0;
