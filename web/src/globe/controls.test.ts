@@ -2,6 +2,11 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { worldToKm } from './flight';
+import fixture from '../../../fixtures/storms/2026-07-15-orlando.json';
+import type { StormDetail } from '../contract/types';
+import { SceneClock } from './clock';
+import { StormReplay } from './replay';
+import { ReplayNavigation } from './replay/navigation';
 
 const R = 1;
 
@@ -136,6 +141,51 @@ describe('createGlobeControls flight handoff', () => {
 		expect(tiltOf()).toBeLessThan(0.5);
 		const forward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 		expect(forward.dot(camera.position.clone().normalize())).toBeCloseTo(-1, 3);
+	});
+
+	it.each([16 / 9, 9 / 16])('round trips a dragged zero-tilt surface view through sharing and history at aspect %s', async (aspect) => {
+		camera.fov = 35;
+		camera.aspect = aspect;
+		camera.updateProjectionMatrix();
+		controls.resize();
+		const clock = new SceneClock(() => time);
+		const data = {
+			openStorm: vi.fn(async () => { clock.replay(Date.parse(fixture.storm.t_start), 60); return fixture as StormDetail; }),
+			live: async () => { clock.live(); },
+		};
+		const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: camera.fov, aspect }));
+		let url = new URL('https://scintille.app/');
+		const navigation = new ReplayNavigation(replay, clock, controls, {
+			url: () => url, write: (next) => { url = next; }, onPop: () => () => {},
+		});
+		try {
+			const opening = replay.open(fixture.storm.slug);
+			await Promise.resolve();
+			step(2800);
+			await opening;
+			drag(2000, { button: 2 });
+			const original = controls.view();
+			expect(original.tilt).toBeCloseTo(0, 4);
+			expect(original.altitude).toBeCloseTo(306, 1);
+			const shared = navigation.shareUrl();
+			for (const fresh of [false, true]) {
+				if (fresh) await replay.live();
+				await settle(controls.flyTo({ lat: 0, lon: 0, altitude: 5000, duration: 0 }));
+				url = new URL(shared);
+				const restoring = navigation.restore();
+				await Promise.resolve();
+				step(1);
+				await restoring;
+				for (let i = 0; i < 60; i++) step(16);
+				const restored = controls.view();
+				expect(restored.lat).toBeCloseTo(original.lat, 4);
+				expect(restored.lon).toBeCloseTo(original.lon, 4);
+				expect(restored.altitude).toBeCloseTo(original.altitude, 3);
+				expect(restored.tilt).toBeCloseTo(0, 4);
+				expect(clock.playing).toBe(false);
+				expect(data.openStorm).toHaveBeenCalledTimes(fresh ? 2 : 1);
+			}
+		} finally { navigation.dispose(); replay.dispose(); }
 	});
 
 	const settle = async (flight: Promise<boolean>) => {

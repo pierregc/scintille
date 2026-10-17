@@ -29,7 +29,9 @@ Own these query keys on `/`:
 
 `view` supports a north-up target, range and tilt, matching flyTo. Local heading/roll are normalized
 on restoration; arbitrary camera orientation and M5 following modes are outside this contract.
-Controls apply their actual aspect-dependent zoom and safety limits. Malformed optional values use
+Restoration retains close surface ranges even at zero tilt, without applying the globe orbit
+minimum. Controls still apply surface clearance and maximum zoom limits; ordinary nadir flights
+keep their aspect-dependent globe orbit limits. Malformed optional values use
 defaults. Invalid/unknown slugs and unavailable extracts retain a usable scene and show an error;
 the URL is then canonicalized to the retained scene or live state.
 

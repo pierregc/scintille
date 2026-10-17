@@ -80,7 +80,8 @@ export class StormReplay {
 			this.clock.seek(Math.min(Math.max(restore.time ?? Date.parse(detail.storm.t_start), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)));
 		}
 		const { fov, aspect } = this.view();
-		await this.controls.flyTo(restore?.view ? { ...restore.view, duration: 0 } : frameStorm(detail.bounds, fov, aspect));
+		if (restore?.view) await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true });
+		else await this.controls.flyTo(frameStorm(detail.bounds, fov, aspect));
 		if (revision === this.#revision && this.clock.mode === 'replay' && !restore?.paused) this.clock.play();
 	}
 
