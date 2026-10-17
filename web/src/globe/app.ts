@@ -28,6 +28,8 @@ import { createStarfield } from './starfield';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
 import { ReplayNavigation } from './replay/navigation';
+import { readFrameCheckpoint, type FrameCheckpoint } from './replay/checkpoint';
+import { frameStorm } from './replay/framing';
 import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
@@ -250,11 +252,23 @@ export function createGlobeApp(
 		: undefined;
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+	const reload = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
+	const initialFrame: unknown = reload ? history.state?.scintilleReplayFrame : undefined;
 	const navigation = renderParams ? undefined : new ReplayNavigation(replay, clock, controls, {
 		url: () => new URL(location.href),
+		initialView: (slug) => readFrameCheckpoint(initialFrame, slug, camera.fov, camera.aspect),
 		write: (url, push) => { if (push) history.pushState(null, '', url); else history.replaceState(history.state, '', url); },
 		onPop: (listener) => { window.addEventListener('popstate', listener); return () => window.removeEventListener('popstate', listener); },
 	});
+	const rememberFrame = () => {
+		const detail = replay.state.selected;
+		let checkpoint: FrameCheckpoint | null = null;
+		if (clock.mode === 'replay' && detail && !replay.state.loading && controls.isAt(frameStorm(detail.bounds, camera.fov, camera.aspect))) {
+			checkpoint = { slug: detail.storm.slug, fov: camera.fov, aspect: camera.aspect, view: controls.view() };
+		}
+		history.replaceState({ ...history.state, scintilleReplayFrame: checkpoint }, '', location.href);
+	};
+	if (navigation) window.addEventListener('pagehide', rememberFrame, { capture: true });
 	if (!(import.meta.env.DEV && new URLSearchParams(location.search).has('replay'))) void navigation?.restore();
 
 	return {
@@ -281,6 +295,7 @@ export function createGlobeApp(
 		render,
 		dispose() {
 			renderer.setAnimationLoop(null);
+			window.removeEventListener('pagehide', rememberFrame, { capture: true });
 			controls.dispose();
 			navigation?.dispose();
 			replay.dispose();
