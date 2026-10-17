@@ -75,7 +75,7 @@ export class ArchiveCloudFeed {
 
 	constructor(options: ArchiveCloudOptions) {
 		this.#options = options;
-		this.#fetch = options.fetch ?? fetch;
+		this.#fetch = options.fetch ?? ((input, init) => fetch(input, init));
 		this.#now = options.now;
 		this.#load = options.load ?? ((url, time, signal) => loadCloudFrame(url, time, undefined, signal));
 		this.#root = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`;
