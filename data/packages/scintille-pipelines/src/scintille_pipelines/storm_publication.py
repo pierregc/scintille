@@ -38,6 +38,8 @@ from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
 BOOTSTRAP_STORMS = 100
+# Strong and above (ADR 0009): about a quarter of storms, nine tenths of the flashes.
+PUBLISHED_MIN_LEVEL = 3
 FLASH_WINDOW = timedelta(hours=6)
 
 
@@ -83,6 +85,10 @@ def purge_tags(tags: list[str]) -> bool:
         return False
 
 
+def publishable(summary: list[StormSummary]) -> list[StormSummary]:
+    return [storm for storm in summary if storm.level >= PUBLISHED_MIN_LEVEL]
+
+
 def summaries(
     storms: pl.DataFrame, names: pl.DataFrame, levels: pl.DataFrame
 ) -> list[StormSummary]:
@@ -116,7 +122,8 @@ def storm_catalog(
     storms = _scan(catalog.load_table(STORMS.identifier), "true")
     names = _scan(catalog.load_table(STORM_NAMES.identifier), "true")
     levels = _scan(catalog.load_table(STORM_LEVELS.identifier), "true")
-    summary = summaries(storms, names, levels)
+    classified = summaries(storms, names, levels)
+    summary = publishable(classified)
     tracks_table = catalog.load_table(STORM_TRACKS.identifier)
     touched = _scan(tracks_table, _between("window_start", start - timedelta(hours=1), end))
     touched_ids = set(touched["storm_id"].to_list())
@@ -200,6 +207,7 @@ def storm_catalog(
         )
     metrics = publish_catalog(store, details, objects, visible, now, purge_tags, regions)
     metrics["invalid_exports"] = len(rejected)
+    metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(
         storm.slug not in published and storm.storm_id not in ids for storm in summary
     )
