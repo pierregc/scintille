@@ -66,6 +66,10 @@
 	:global(.hud[data-mode='replay']) .live-only {
 		display: none !important;
 	}
+	:global(.storm-browser-open) .strip { left: calc(360px + var(--gut)); }
+	@media (max-width: 640px) {
+		:global(.storm-browser-open) .strip { left: var(--gut); bottom: calc(45dvh + 12px); }
+	}
 	.ctl {
 		display: flex;
 		gap: 22px;
@@ -174,7 +178,11 @@
 		.scale {
 			grid-area: scale;
 		}
-		.ctl {
+		:global(.storm-browser-open) .strip { left: calc(360px + var(--gut)); }
+	@media (max-width: 640px) {
+		:global(.storm-browser-open) .strip { left: var(--gut); bottom: calc(45dvh + 12px); }
+	}
+	.ctl {
 			grid-area: ctl;
 			flex-wrap: wrap;
 			gap: 14px;

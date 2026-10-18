@@ -112,6 +112,13 @@ import Version from './Version.astro';
 </main>
 
 <style>
+	:global(.storm-browser-open) :is(.id, .info, .share, .replay-status) { left: calc(360px + var(--gut)); }
+	:global(.storm-browser-open) :is(.stale, .frame) { display: none; }
+	@media (max-width: 640px) {
+		:global(.storm-browser-open) :is(.id, .info, .share, .replay-status) { left: var(--gut); }
+		:global(.storm-browser-open) :is(.share, .replay-status, .layers) { display: none; }
+	}
+
 	.replay-status {
 		position: fixed;
 		top: calc(var(--gut) + 100px);

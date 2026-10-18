@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.4.0"]
-SCHEMA_VERSION: Final = "2.4.0"
+SchemaVersion = Literal["2.5.0"]
+SCHEMA_VERSION: Final = "2.5.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -514,3 +514,108 @@ class StormDetail(BaseModel):
     bounds: StormBounds
     track: list[StormTrackPoint]
     replay: StormReplay
+
+
+StormSearchRegion = Literal[
+    "africa",
+    "asia",
+    "europe",
+    "north-america",
+    "south-america",
+    "oceania",
+    "antarctica",
+    "unassigned",
+]
+STORM_SEARCH_REGION_VALUES: Final[tuple[StormSearchRegion, ...]] = (
+    "africa",
+    "asia",
+    "europe",
+    "north-america",
+    "south-america",
+    "oceania",
+    "antarctica",
+    "unassigned",
+)
+
+
+class StormSearchMarker(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class StormSearchRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    label: str = Field(min_length=1, max_length=2048)
+    t_start: UtcTimestamp
+    t_end: UtcTimestamp
+    country_code: str | None
+    region: StormSearchRegion
+    level: int = Field(ge=1, le=5)
+    level_name: str
+    flashes: int = Field(ge=0)
+    peak_rate: int = Field(ge=0)
+    marker: StormSearchMarker
+    words: list[Annotated[str, Field(min_length=1, max_length=256)]]
+
+
+class StormSearchQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    words: list[str]
+    start: UtcTimestamp | None
+    end: UtcTimestamp | None
+    region: StormSearchRegion | None
+    level: int | None
+
+
+class StormSearchMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    selector: str
+    count: int = Field(ge=0)
+    page_count: int = Field(ge=0, le=16777215)
+
+
+class StormSearchPage(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    page: int = Field(ge=0)
+    storms: list[StormSearchRecord]
+
+
+class StormSearchManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    generation: str = Field(pattern="^[a-f0-9]{64}$")
+    published_at: UtcTimestamp
+    last_observation_time: UtcTimestamp | None
+    total_storms: int = Field(ge=0)
+
+
+class StormSearchPointer(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    generation: str = Field(pattern="^[a-f0-9]{64}$")
+    catalog_checked_at: UtcTimestamp
+
+
+class StormSearchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    generation: str = Field(pattern="^[a-f0-9]{64}$")
+    published_at: UtcTimestamp
+    catalog_checked_at: UtcTimestamp
+    last_observation_time: UtcTimestamp | None
+    query: StormSearchQuery
+    storms: list[StormSearchRecord]
+    next_cursor: str | None
+    exhausted: bool
+    page_links_available: bool
+    current_generation: str = Field(pattern="^[a-f0-9]{64}$")

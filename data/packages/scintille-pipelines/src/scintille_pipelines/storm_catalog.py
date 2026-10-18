@@ -70,6 +70,14 @@ class ObjectCatalogStore:
             return False
 
 
+def read_published_detail(body: bytes) -> StormDetail:
+    value = json.loads(body)
+    if str(value.get("schema_version", "")).split(".")[0] != SCHEMA_VERSION.split(".")[0]:
+        raise ValueError("unsupported published storm version")
+    value["schema_version"] = SCHEMA_VERSION
+    return StormDetail.model_validate(value)
+
+
 def published_slugs(store: CatalogStore) -> set[str]:
     return set(json.loads(store.get(PUBLISHED_PATH) or b"[]"))
 
@@ -201,6 +209,7 @@ def publish_catalog(
     now: datetime,
     purge: Callable[[list[str]], bool],
     region_codes: Sequence[str] = (),
+    on_snapshot: Callable[[Sequence[StormSummary]], None] | None = None,
 ) -> dict[str, int]:
     with ThreadPoolExecutor(IO_THREADS) as pool:
         paths = [f"storms/{detail.storm.slug}.json" for detail in details]
@@ -219,9 +228,7 @@ def publish_catalog(
                 )
                 previous = stored[path]
                 if previous is not None:
-                    previous_summaries[detail.storm.slug] = StormDetail.model_validate_json(
-                        previous
-                    ).storm
+                    previous_summaries[detail.storm.slug] = read_published_detail(previous).storm
                 continue
             accepted.append(detail)
             bodies[path] = body
@@ -260,7 +267,7 @@ def publish_catalog(
             path = f"storms/{detail.storm.slug}.json"
             previous = stored[path]
             if previous is not None:
-                old = StormDetail.model_validate_json(previous)
+                old = read_published_detail(previous)
                 if content(old) == content(detail):
                     continue
                 if old.storm.closed:
@@ -280,6 +287,8 @@ def publish_catalog(
     available_regions = [code for code in region_codes if store.exists(f"regions/{code}.json")]
     for path, body in sitemaps(all_storms, now, available_regions).items():
         store.put(path, body, {"Content-Type": "application/xml", "Cache-Control": "max-age=60"})
+    if on_snapshot is not None:
+        on_snapshot(all_storms)
     tags = sorted(pending)
     # One batch per run; hourly retries stay within the Free request limit.
     batch = tags[:100]

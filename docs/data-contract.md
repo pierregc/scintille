@@ -318,7 +318,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.4.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.5.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -326,7 +326,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.4.0`.
+Value: `2.5.0`.
 
 ### UtcTimestamp
 
@@ -744,6 +744,120 @@ storms/<slug>.json: bounded metadata and replay references.
 | `bounds` | [StormBounds](#stormbounds) | yes |  |  |
 | `track` | array of [StormTrackPoint](#stormtrackpoint) | yes |  |  |
 | `replay` | [StormReplay](#stormreplay) | yes |  |  |
+
+### StormSearchRegion
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Index | Value |
+|---|---|
+| 0 | `africa` |
+| 1 | `asia` |
+| 2 | `europe` |
+| 3 | `north-america` |
+| 4 | `south-america` |
+| 5 | `oceania` |
+| 6 | `antarctica` |
+| 7 | `unassigned` |
+
+### StormSearchMarker
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+
+### StormSearchRecord
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `slug` | string | yes | pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` |  |
+| `label` | string | yes | minLength `1`, maxLength `2048` |  |
+| `t_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `t_end` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `country_code` | string or null | yes |  |  |
+| `region` | [StormSearchRegion](#stormsearchregion) | yes |  |  |
+| `level` | integer | yes | minimum `1`, maximum `5` |  |
+| `level_name` | string | yes |  |  |
+| `flashes` | integer | yes | minimum `0` |  |
+| `peak_rate` | integer | yes | minimum `0` |  |
+| `marker` | [StormSearchMarker](#stormsearchmarker) | yes |  |  |
+| `words` | array of string | yes | minLength `1`, maxLength `256` |  |
+
+### StormSearchQuery
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `words` | array of string | yes |  |  |
+| `start` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `end` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `region` | [StormSearchRegion](#stormsearchregion) or null | yes |  |  |
+| `level` | integer or null | yes |  |  |
+
+### StormSearchMeta
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `selector` | string | yes |  |  |
+| `count` | integer | yes | minimum `0` |  |
+| `page_count` | integer | yes | minimum `0`, maximum `16777215` |  |
+
+### StormSearchPage
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `page` | integer | yes | minimum `0` |  |
+| `storms` | array of [StormSearchRecord](#stormsearchrecord) | yes |  |  |
+
+### StormSearchManifest
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `generation` | string | yes | pattern `^[a-f0-9]{64}$` |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `total_storms` | integer | yes | minimum `0` |  |
+
+### StormSearchPointer
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `generation` | string | yes | pattern `^[a-f0-9]{64}$` |  |
+| `catalog_checked_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+
+### StormSearchResponse
+
+Defined in `data/contract/storm-search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `generation` | string | yes | pattern `^[a-f0-9]{64}$` |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `catalog_checked_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `query` | [StormSearchQuery](#stormsearchquery) | yes |  |  |
+| `storms` | array of [StormSearchRecord](#stormsearchrecord) | yes |  |  |
+| `next_cursor` | string or null | yes |  |  |
+| `exhausted` | boolean | yes |  |  |
+| `page_links_available` | boolean | yes |  |  |
+| `current_generation` | string | yes | pattern `^[a-f0-9]{64}$` |  |
 
 <!-- END GENERATED REFERENCE -->
 

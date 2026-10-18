@@ -264,3 +264,13 @@ that cap. The public index includes only storms whose detail exists; history dra
 Invalid exports are logged and counted in run metadata. Oversized or invalid updates retain their
 previous public detail and summary; invalid new storms stay out of the index and sitemap.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.
+
+### Storm catalog search index
+
+The catalog asset also publishes `storms/search/` from the effective accepted public snapshot.
+A search publication failure records `search_failed=1`, logs the reason and leaves the previous
+search pointer/check time intact while ordinary publication remains usable. Correct missing naming
+coordinates or oversized records and rerun the serialized asset; do not refresh the pointer by hand.
+Metrics include search records, objects, encoded bytes and unassigned locations. Identical input
+reuses its immutable generation. Keep old generations during rollout; no automatic deletion occurs.
+See [ADR 0020](adr/0020-storm-catalog-search.md) and [search QA](qa/storm-browser.md).

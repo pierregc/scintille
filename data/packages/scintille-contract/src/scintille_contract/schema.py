@@ -17,6 +17,7 @@ SCHEMA_FILES = (
     "metrics.schema.json",
     "coverage.schema.json",
     "storm.schema.json",
+    "storm-search.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 

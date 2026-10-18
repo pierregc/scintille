@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:storm-search",
+  "title": "StormSearchResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generation",
+    "published_at",
+    "catalog_checked_at",
+    "last_observation_time",
+    "query",
+    "storms",
+    "next_cursor",
+    "exhausted",
+    "page_links_available",
+    "current_generation"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/SchemaVersion"
+    },
+    "generation": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "published_at": {
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "catalog_checked_at": {
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "last_observation_time": {
+      "anyOf": [
+        {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "query": {
+      "$ref": "#/$defs/StormSearchQuery"
+    },
+    "storms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/StormSearchRecord"
+      },
+      "maxItems": 20
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 1024
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exhausted": {
+      "type": "boolean"
+    },
+    "page_links_available": {
+      "type": "boolean"
+    },
+    "current_generation": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "StormSearchRegion": {
+      "type": "string",
+      "enum": [
+        "africa",
+        "asia",
+        "europe",
+        "north-america",
+        "south-america",
+        "oceania",
+        "antarctica",
+        "unassigned"
+      ]
+    },
+    "StormSearchMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    },
+    "StormSearchRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "label",
+        "t_start",
+        "t_end",
+        "country_code",
+        "region",
+        "level",
+        "level_name",
+        "flashes",
+        "peak_rate",
+        "marker",
+        "words"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "t_start": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "t_end": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "country_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/StormSearchRegion"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "level_name": {
+          "type": "string"
+        },
+        "flashes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peak_rate": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "marker": {
+          "$ref": "#/$defs/StormSearchMarker"
+        },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 128
+        }
+      }
+    },
+    "StormSearchQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "words",
+        "start",
+        "end",
+        "region",
+        "level"
+      ],
+      "properties": {
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StormSearchRegion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "StormSearchMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selector",
+        "count",
+        "page_count"
+      ],
+      "properties": {
+        "selector": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777215
+        }
+      }
+    },
+    "StormSearchPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page",
+        "storms"
+      ],
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "storms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StormSearchRecord"
+          },
+          "maxItems": 64
+        }
+      }
+    },
+    "StormSearchManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generation",
+        "published_at",
+        "last_observation_time",
+        "total_storms"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/SchemaVersion"
+        },
+        "generation": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "published_at": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "last_observation_time": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_storms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "StormSearchPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generation",
+        "catalog_checked_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/SchemaVersion"
+        },
+        "generation": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "catalog_checked_at": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        }
+      }
+    }
+  }
+}

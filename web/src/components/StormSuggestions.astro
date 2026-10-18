@@ -1,108 +1,63 @@
+---
+import { STORM_SEARCH_REGION_VALUES } from '../contract/types';
+---
 <details class="suggestions" data-storm-suggestions hidden>
 	<summary>Explore storms</summary>
-	<div class="panel">
-		<p role="status" data-catalog-status></p>
-		<ul aria-label="Available storm replays" data-storm-cards></ul>
+	<section class="panel" aria-label="Storm catalog browser">
+		<div class="heading"><h2>Explore storms</h2><button type="button" data-browser-close>Close</button></div>
+		<form data-storm-search>
+			<label>Place, country or date<input name="q" type="search" maxlength="120" placeholder="São Paulo, France, 2026-10" /></label>
+			<p class="note">Complete words · UTC dates: YYYY-MM-DD or YYYY-MM</p>
+			<div class="filters">
+				<label>Storm start<select name="period"><option value="">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="custom">Custom dates</option></select></label>
+				<label>Region<select name="region"><option value="">All regions</option>{STORM_SEARCH_REGION_VALUES.map(region => <option value={region}>{region === 'unassigned' ? 'Offshore / unassigned' : region.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())}</option>)}</select></label>
+				<label>Activity<select name="level"><option value="">All levels</option><option value="1">1 · Light</option><option value="2">2 · Moderate</option><option value="3">3 · Strong</option><option value="4">4 · Intense</option><option value="5">5 · Exceptional</option></select></label>
+			</div>
+			<div class="dates" data-custom-dates hidden><label>From (UTC)<input name="from" type="date" /></label><label>Until (UTC, excluded)<input name="to" type="date" /></label></div>
+			<div class="actions"><button type="submit">Search</button><button type="reset">Clear filters</button></div>
+		</form>
+		<p role="status" aria-live="polite" data-catalog-status></p>
+		<p class="note" data-query-dates></p>
+		<ol aria-label="Published storm replays" data-storm-cards></ol>
+		<div class="actions"><button type="button" data-browser-previous disabled>Previous</button><button type="button" data-browser-next disabled>Next</button><button type="button" data-catalog-retry>Refresh</button></div>
+		<p class="note">Numbers mark this page’s first named locations. Rotate the globe to see the far side. Grouped markers focus their rows.</p>
 		<p class="note">Levels describe measured electrical activity. Replay bounds may include nearby flashes.</p>
-		<button type="button" data-catalog-retry>Refresh storms</button>
-	</div>
+	</section>
 </details>
-
 <style>
-	.suggestions { position: fixed; top: calc(var(--gut) + 140px); left: var(--gut); z-index: 3; width: min(24rem, calc(100vw - 2 * var(--gut))); }
-	summary, [data-catalog-retry] { color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
-	summary { min-height: 32px; }
-	.panel { padding: 16px; background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); max-height: calc(100svh - 280px); overflow-y: auto; overscroll-behavior: contain; }
-	p { margin: 0 0 12px; color: var(--soft); font: 300 12px/1.6 var(--sans); }
-	ul { display: grid; gap: 8px; padding: 0; margin: 0 0 12px; list-style: none; }
-	[data-storm-cards] :global(button) { display: grid; gap: 6px; width: 100%; min-height: 44px; padding: 12px; color: var(--ink); text-align: left; cursor: pointer; background: rgb(255 255 255 / 0.025); border: 1px solid var(--hair); }
-	[data-storm-cards] :global(strong) { font: 300 15px/1.4 var(--sans); }
-	[data-storm-cards] :global(span) { color: var(--soft); font: 300 10px/1.6 var(--mono); }
+	.suggestions { position: fixed; top: calc(var(--gut) + 140px); left: var(--gut); z-index: 3; }
+	summary, button { color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+	summary { min-height: 44px; }
+	.suggestions[open] { inset: 0 auto 0 0; width: 360px; }
+	.suggestions[open] summary { display: none; }
+	.panel { box-sizing: border-box; height: 100%; padding: 24px 20px; background: rgb(3 8 16 / .95); border-right: 1px solid var(--hair); overflow-y: auto; overscroll-behavior: contain; }
+	.heading, .actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+	h2 { color: var(--ink); font: 300 22px/1.4 var(--sans); margin: 0 0 20px; }
+	p { color: var(--soft); font: 300 12px/1.6 var(--sans); }
+	label { display: grid; gap: 6px; color: var(--soft); font: 300 11px/1.5 var(--sans); }
+	input, select { box-sizing: border-box; min-width: 0; width: 100%; min-height: 44px; color: var(--ink); background: #0b131d; border: 1px solid var(--hair); border-radius: 0; padding: 8px; font: 300 12px var(--sans); }
+	.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+	.dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+	button { background: none; border: 0; min-height: 44px; padding: 8px 0; }
+	button:disabled { opacity: .4; cursor: default; }
+	ol { padding: 0; list-style: none; }
+	[data-storm-cards] :global(li) { padding: 14px 0; border-top: 1px solid var(--hair); }
+	[data-storm-cards] :global(strong) { color: var(--ink); font: 300 16px/1.5 var(--sans); }
+	[data-storm-cards] :global(p) { margin: 4px 0; }
+	[data-storm-cards] :global(a) { color: var(--soft); margin-left: 16px; font: 12px var(--sans); }
 	.note { color: var(--dim); font-size: 11px; }
-	[data-catalog-retry] { padding: 8px 0; background: none; border: 0; }
-	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
+	:focus-visible, :global([data-storm-cards] button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
 	[hidden] { display: none !important; }
 	@media (max-width: 640px) {
-		.suggestions { top: calc(var(--gut) + 62px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
-		.panel { max-height: calc(100svh - 220px); }
+		.suggestions { top: calc(var(--gut) + 62px); }
+		.suggestions[open] { inset: auto 0 0; width: 100%; height: 45dvh; }
+		.panel { padding: 14px 16px; border-top: 1px solid var(--hair); }
+		h2 { margin-bottom: 10px; font-size: 20px; }
+		.filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	}
 </style>
-
 <script>
-	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { CATALOG_LIMITS, loadSuggestions } from '../globe/replay/catalog';
-
+	import { mountStormBrowser } from './hud/storm-browser';
 	const root = document.querySelector<HTMLDetailsElement>('[data-storm-suggestions]');
-	if (root) {
-		const status = root.querySelector<HTMLElement>('[data-catalog-status]');
-		const list = root.querySelector<HTMLElement>('[data-storm-cards]');
-		const retry = root.querySelector<HTMLButtonElement>('[data-catalog-retry]');
-		let app: GlobeApp | undefined;
-		let request: AbortController | undefined;
-		let loaded = false;
-		const setStatus = (text: string) => { if (status) status.textContent = text; };
-
-		const load = async () => {
-			if (!app || !list) return;
-			request?.abort();
-			const current = new AbortController();
-			request = current;
-			loaded = false;
-			list.replaceChildren();
-			setStatus('Loading available storms…');
-			try {
-				const result = await loadSuggestions(app.replay.baseUrl, current.signal);
-				if (current.signal.aborted) return;
-				loaded = true;
-				const date = new Date(result.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-				const stale = Date.now() - result.publishedAt > CATALOG_LIMITS.staleMs;
-				setStatus(!result.storms.length ? 'No published storm replays are available yet.' :
-					`Catalog published ${date}.${stale ? ' Recent storms may be missing.' : ''}${result.partial ? ' Only part of the catalog could be loaded.' : ''}`);
-				for (const storm of result.storms) {
-					const item = document.createElement('li');
-					const button = document.createElement('button');
-					button.type = 'button';
-					const title = document.createElement('strong');
-					title.textContent = storm.label;
-					const when = document.createElement('span');
-					when.textContent = new Date(storm.t_start).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-					const metrics = document.createElement('span');
-					metrics.textContent = `${storm.level_name} electrical activity · ${storm.flashes.toLocaleString()} flashes · peak ${storm.peak_rate.toLocaleString()}/min`;
-					button.append(title, when, metrics);
-					button.addEventListener('click', async () => {
-						const currentApp = app;
-						if (!currentApp) return;
-						setStatus(`Opening ${storm.label}…`);
-						const opened = await currentApp.replay.open(storm.slug);
-						if (app !== currentApp) return;
-						if (opened) { root.open = false; document.querySelector<HTMLButtonElement>('[data-play]')?.focus(); }
-						else if (currentApp.replay.state.error) setStatus(currentApp.replay.state.error);
-					});
-					item.append(button);
-					list.append(item);
-				}
-			} catch {
-				if (!current.signal.aborted) setStatus('The storm catalog is unavailable. Refresh to try again; live viewing remains available.');
-			}
-		};
-		root.addEventListener('toggle', () => {
-			if (!root.open) return;
-			const info = document.querySelector<HTMLDetailsElement>('[data-info]');
-			if (info) info.open = false;
-			if (!loaded) void load();
-		});
-		root.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape') { root.open = false; root.querySelector('summary')?.focus(); }
-		});
-		retry?.addEventListener('click', () => { void load(); });
-		window.addEventListener(GLOBE_READY, (event) => {
-			app = (event as CustomEvent<GlobeApp>).detail;
-			root.hidden = false;
-			if (root.open) void load();
-		});
-		window.addEventListener(GLOBE_GONE, () => {
-			request?.abort(); app = undefined; loaded = false; root.hidden = true; list?.replaceChildren();
-		});
-	}
+	if (root) mountStormBrowser(root);
 </script>

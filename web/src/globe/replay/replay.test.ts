@@ -123,3 +123,21 @@ it('holds the start instant during the camera flight before autoplay so a short 
 	expect(clock.time()).toBe(start + 6000);
 	replay.dispose();
 });
+
+
+it('announces entry synchronously before loading and framing without a navigation event', async () => {
+	const order: string[] = [];
+	let aspect = .5;
+	const clock = new SceneClock(() => 0);
+	const data = { openStorm: async () => { order.push('load'); clock.replay(Date.parse(detail.storm.t_start), 60); return detail; }, live: async () => {} };
+	const controls = { flyTo: vi.fn().mockResolvedValue(true), cancelFlight: vi.fn() };
+	const replay = new StormReplay(data, clock, controls, '', () => { order.push('frame'); return { fov: 35, aspect }; });
+	const changed = vi.fn(); replay.onChange(changed);
+	const detach = replay.onEntry(() => { order.push('close'); aspect = 2; expect(changed).not.toHaveBeenCalled(); });
+	const opened = replay.open(detail.storm.slug);
+	expect(order).toEqual(['close', 'load']);
+	await opened;
+	expect(order).toEqual(['close', 'load', 'frame']);
+	expect(controls.flyTo).toHaveBeenCalledWith(expect.objectContaining(frameStorm(detail.bounds, 35, 2)));
+	detach(); replay.dispose();
+});

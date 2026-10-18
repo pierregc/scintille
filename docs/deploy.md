@@ -198,3 +198,12 @@ The webserver is on http://localhost:3000, with the local lakehouse from `compos
 2. `docker login ghcr.io` as `deploy` with a token that can only read packages.
 3. In GitHub: secrets `VPS_SSH_KEY` (a key for `deploy` only) and `VPS_KNOWN_HOSTS`
    (`ssh-keyscan <host>`), variables `VPS_HOST` and `VPS_DEPLOY=true`.
+
+### Storm catalog search
+
+`GET /api/storms/search` uses the existing `LIVE` binding (production or Preview bucket).
+No new database, binding or secret is needed. Publish a verified search generation before rollout;
+a missing pointer returns an explicit 503/Retry state. Query responses are bounded and expose
+R2 counters through `Server-Timing`; errors are not cached. Public storm-page links remain disabled
+until #88 supplies all published routes. Follow [the QA procedure](qa/storm-browser.md) to seed
+local R2 and collect Preview evidence. Never seed the production bucket with synthetic catalogs.

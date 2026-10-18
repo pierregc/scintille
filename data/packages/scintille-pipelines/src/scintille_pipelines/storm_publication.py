@@ -3,6 +3,7 @@
 import json
 import os
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -29,12 +30,14 @@ from .storm_catalog import (
     ObjectCatalogStore,
     publish_catalog,
     published_slugs,
+    read_published_detail,
     replay_chunks,
     selected_flashes,
 )
 from .storm_cells import hourly
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
+from .storm_search import publish_search, search_records
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
 BOOTSTRAP_STORMS = 100
@@ -138,9 +141,7 @@ def storm_catalog(
 
     def reject(slug: str) -> None:
         previous = store.get(f"storms/{slug}.json")
-        rejected[slug] = (
-            StormDetail.model_validate_json(previous).storm if previous is not None else None
-        )
+        rejected[slug] = read_published_detail(previous).storm if previous is not None else None
 
     candidates = {storm.storm_id: storm for storm in summary if storm.storm_id in ids}
     all_tracks = (
@@ -205,7 +206,19 @@ def storm_catalog(
             for item in batch
             if item["path"].endswith(".json") and item["path"].count("/") == 1
         )
-    metrics = publish_catalog(store, details, objects, visible, now, purge_tags, regions)
+    search_metrics: dict[str, int] = {}
+
+    def search_snapshot(effective: Sequence[StormSummary]) -> None:
+        try:
+            search_metrics.update(publish_search(store, search_records(effective, names), now))
+        except (ValueError, OSError):
+            context.log.exception("Search publication failed; previous generation remains active")
+            search_metrics["search_failed"] = 1
+
+    metrics = publish_catalog(
+        store, details, objects, visible, now, purge_tags, regions, search_snapshot
+    )
+    metrics.update(search_metrics)
     metrics["invalid_exports"] = len(rejected)
     metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(

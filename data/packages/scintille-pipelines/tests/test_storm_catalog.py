@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 from scintille_contract.chunk import decode
-from scintille_contract.models import StormDetail
+from scintille_contract.models import StormDetail, StormSearchRecord, StormSummary
 from scintille_pipelines.storm_catalog import (
     DETAIL_MAX_BYTES,
     PUBLISHED_PATH,
@@ -29,6 +29,7 @@ from scintille_pipelines.storm_publication import (
     publishable,
     storm_catalog_schedule,
 )
+from scintille_pipelines.storm_search import publish_search, search_records, selector_key, words
 
 ROOT = Path(__file__).parents[4]
 NOW = datetime(2026, 7, 15, 20, tzinfo=UTC)
@@ -301,3 +302,118 @@ def test_schedule_targets_latest_closed_hour() -> None:
     request = storm_catalog_schedule(build_schedule_context(scheduled_execution_time=NOW))
     assert isinstance(request, RunRequest)
     assert request.partition_key == "2026-07-15-19:00"
+
+
+def records(count: int = 140) -> list[StormSearchRecord]:
+    storm = detail().storm
+    summaries = [
+        storm.model_copy(
+            update={
+                "slug": f"storm-{i}",
+                "storm_id": str(i),
+                "t_start": storm.t_start - timedelta(days=i),
+            }
+        )
+        for i in range(count)
+    ]
+    names = pl.DataFrame(
+        {
+            "storm_id": [str(i) for i in range(count)],
+            "lat": [10.0] * count,
+            "lon": [179.0] * count,
+            "country_name": ["France"] * count,
+        }
+    )
+    return search_records(summaries, names)
+
+
+def test_shared_normalization() -> None:
+    for case in json.loads((ROOT / "fixtures/storms/search/normalization.json").read_text()):
+        assert words(case["input"]) == case["words"]
+
+
+def test_postings_are_complete_bounded_and_deterministic() -> None:
+    store = Store()
+    result = publish_search(store, records(), NOW)
+    pointer = json.loads(store.files["storms/search/latest.json"])
+    generation = pointer["generation"]
+    prefix = f"storms/search/{generation}/lists/{selector_key('all')}"
+    meta = json.loads(store.files[f"{prefix}/meta.json"])
+    found: list[str] = []
+    for i in range(meta["page_count"]):
+        body = store.files[f"{prefix}/{i}.json"]
+        assert len(body) <= 65536
+        page = json.loads(body)["storms"]
+        assert len(page) <= 64
+        found.extend(r["slug"] for r in page)
+    assert len(found) == len(set(found)) == 140
+    manifest = store.files[f"storms/search/{generation}/manifest.json"]
+    publish_search(store, list(reversed(records())), NOW + timedelta(hours=1))
+    assert json.loads(store.files["storms/search/latest.json"])["generation"] == generation
+    assert store.files[f"storms/search/{generation}/manifest.json"] == manifest
+    assert result["search_records"] == 140
+    assert result["search_unassigned"] == 0
+
+
+def test_incomplete_naming_fails_instead_of_omitting_records() -> None:
+    with pytest.raises(ValueError, match="unresolved"):
+        search_records([detail().storm], pl.DataFrame({"storm_id": [], "lat": [], "lon": []}))
+
+
+def test_duplicate_and_oversized_records_preserve_pointer() -> None:
+    store = Store()
+    publish_search(store, records(1), NOW)
+    pointer = store.files["storms/search/latest.json"]
+    with pytest.raises(ValueError, match="duplicate"):
+        publish_search(store, records(2) * 2, NOW)
+    oversized = records(1)[0].model_copy(update={"words": ["x" * 256] * 100})
+    with pytest.raises(ValueError, match="oversized"):
+        publish_search(store, [oversized], NOW)
+    assert store.files["storms/search/latest.json"] == pointer
+    with pytest.raises(ValueError, match="backwards"):
+        publish_search(store, records(1), NOW - timedelta(hours=1))
+
+
+def test_interrupted_generation_never_replaces_pointer() -> None:
+    baseline = Store()
+    publish_search(baseline, records(1), NOW)
+    pointer = baseline.files["storms/search/latest.json"]
+    for after in range(15):
+        store = Store(after)
+        store.files = baseline.files.copy()
+        with pytest.raises(OSError):
+            publish_search(store, records(2), NOW + timedelta(hours=1))
+        assert store.files["storms/search/latest.json"] == pointer
+
+
+def test_effective_snapshot_retains_previous_summary() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, lambda _: True)
+    oversized = document.model_copy(
+        update={
+            "storm": document.storm.model_copy(
+                update={"label": "x" * DETAIL_MAX_BYTES, "flashes": 999}
+            )
+        }
+    )
+    snapshots: list[StormSummary] = []
+    publish_catalog(
+        store,
+        [oversized],
+        {},
+        [oversized.storm],
+        NOW,
+        lambda _: True,
+        on_snapshot=lambda storms: snapshots.extend(storms),
+    )
+    assert snapshots == [document.storm]
+
+
+def test_previous_minor_publication_remains_readable() -> None:
+    from scintille_contract.models import SCHEMA_VERSION
+    from scintille_pipelines.storm_catalog import read_published_detail
+
+    body = detail().model_dump_json().replace(SCHEMA_VERSION, "2.4.0").encode()
+    assert read_published_detail(body).storm == detail().storm
+    with pytest.raises(ValueError, match="unsupported"):
+        read_published_detail(body.replace(b"2.4.0", b"1.4.0"))

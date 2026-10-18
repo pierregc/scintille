@@ -1,6 +1,11 @@
 # #282 — Storm catalog browser: proposal for maintainer review
 
-**Status: proposed; implementation is not authorized by this document.**
+**Status: implementation requested by the maintainer on 2026-10-18.**
+
+The request to implement PR #283 approves this design for implementation. See
+[ADR 0020](../adr/0020-storm-catalog-search.md) and the [QA evidence](../qa/storm-browser.md)
+for delivered behaviour, measurements and outstanding Preview acceptance. The original proposal
+below is retained as design context; its preparation-time statements are historical.
 
 Prepared on 2026-10-18 for [issue #282](https://github.com/pierregc/scintille/issues/282).
 Repository inspected: `main` at `ef10aeeb2487aad723f0133a9449dd7ca3597fba`, also verified as

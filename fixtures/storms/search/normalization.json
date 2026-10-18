@@ -1,0 +1,49 @@
+[
+  {
+    "input": "São Paulo / FRANCE",
+    "words": [
+      "france",
+      "paulo",
+      "sao"
+    ]
+  },
+  {
+    "input": "Île-de-France, FR fr",
+    "words": [
+      "de",
+      "fr",
+      "france",
+      "ile"
+    ]
+  },
+  {
+    "input": "東京 １２３ café",
+    "words": [
+      "123",
+      "cafe",
+      "東京"
+    ]
+  },
+  {
+    "input": "Straße ΣΟΣ ς",
+    "words": [
+      "straße",
+      "ς",
+      "σοσ"
+    ]
+  },
+  {
+    "input": "á a! 42",
+    "words": [
+      "42",
+      "a"
+    ]
+  },
+  {
+    "input": "𐐀 東京",
+    "words": [
+      "東京",
+      "𐐨"
+    ]
+  }
+]

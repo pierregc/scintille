@@ -20,6 +20,7 @@ export class StormReplay {
 	#revision = 0;
 	#disposed = false;
 	readonly #offMode: () => void;
+	readonly #entryListeners = new Set<() => void>();
 	readonly #listeners = new Set<(origin: Origin) => void>();
 
 	constructor(
@@ -36,6 +37,11 @@ export class StormReplay {
 
 	get state(): Readonly<ReplayState> { return this.#state; }
 
+	onEntry(listener: () => void): () => void {
+		this.#entryListeners.add(listener);
+		return () => this.#entryListeners.delete(listener);
+	}
+
 	onChange(listener: (origin: Origin) => void): () => void {
 		this.#listeners.add(listener);
 		return () => this.#listeners.delete(listener);
@@ -45,6 +51,7 @@ export class StormReplay {
 
 	async open(slug: string, speed = 60, restore?: ReplayLocation, origin: Origin = 'user', checkpoint?: ReplayLocation['view']): Promise<boolean> {
 		if (this.#disposed) return false;
+		for (const listener of this.#entryListeners) listener();
 		const revision = ++this.#revision;
 		this.controls.cancelFlight();
 		this.#state = { ...this.#state, loading: slug, error: null };
@@ -68,6 +75,7 @@ export class StormReplay {
 	async restore(state: ReplayLocation): Promise<void> {
 		const detail = this.#state.selected;
 		if (!detail || this.#disposed) return;
+		for (const listener of this.#entryListeners) listener();
 		const revision = ++this.#revision;
 		this.controls.cancelFlight();
 		this.#state = { ...this.#state, error: null };
@@ -110,5 +118,6 @@ export class StormReplay {
 		this.#clear();
 		this.#offMode();
 		this.#listeners.clear();
+		this.#entryListeners.clear();
 	}
 }

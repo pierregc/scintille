@@ -18,6 +18,10 @@
 		width: 100vw;
 		height: 100vh;
 	}
+	:global(.storm-browser-open) .globe-canvas { left: 360px; width: calc(100vw - 360px); }
+	@media (max-width: 640px) {
+		:global(.storm-browser-open) .globe-canvas { left: 0; width: 100vw; height: 55dvh; }
+	}
 	.globe-canvas[hidden],
 	.globe-fallback[hidden],
 	.coverage-label[hidden] {

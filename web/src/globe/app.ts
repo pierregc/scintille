@@ -1,4 +1,5 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { createDiscovery, type Discovery } from './discovery';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
@@ -46,6 +47,7 @@ function deviceHints(context: WebGL2RenderingContext) {
 }
 
 export interface GlobeApp {
+	readonly discovery?: Discovery;
 	readonly flyTo: GlobeControls['flyTo'];
 	readonly clock: SceneClock;
 	readonly data: SceneData;
@@ -181,8 +183,8 @@ export function createGlobeApp(
 	};
 
 	const resize = () => {
-		const width = renderParams?.width ?? window.innerWidth;
-		const height = renderParams?.height ?? window.innerHeight;
+		const width = renderParams?.width ?? canvas.clientWidth;
+		const height = renderParams?.height ?? canvas.clientHeight;
 		renderer.setPixelRatio(
 			renderParams ? 1 : cappedPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio),
 		);
@@ -204,6 +206,9 @@ export function createGlobeApp(
 		watchPixelRatio();
 	}
 
+	const discovery = renderParams ? undefined : createDiscovery(canvas, camera, resize);
+	const observer = new ResizeObserver(resize);
+	if (!renderParams) observer.observe(canvas);
 	resize();
 	watchPixelRatio();
 	window.addEventListener('resize', resize);
@@ -221,6 +226,7 @@ export function createGlobeApp(
 	const draw = (time: number) => {
 		if (!renderParams) controls.update(time);
 		fitClipPlanes();
+		discovery?.update();
 		const now = clock.time();
 		track.setStorm(clock.mode === 'replay' ? replay.state.selected : null);
 		track.setTime(now);
@@ -272,6 +278,7 @@ export function createGlobeApp(
 	if (!(import.meta.env.DEV && new URLSearchParams(location.search).has('replay'))) void navigation?.restore();
 
 	return {
+		discovery,
 		flyTo: controls.flyTo,
 		clock,
 		data,
@@ -296,6 +303,8 @@ export function createGlobeApp(
 		dispose() {
 			renderer.setAnimationLoop(null);
 			window.removeEventListener('pagehide', rememberFrame, { capture: true });
+			observer.disconnect();
+			discovery?.dispose();
 			controls.dispose();
 			navigation?.dispose();
 			replay.dispose();
