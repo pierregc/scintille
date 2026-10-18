@@ -1,7 +1,9 @@
 name: images
 
-# Manual (Actions > images > Run workflow): the stack is tested locally, and VPS deploys are rare.
 on:
+  push:
+    branches: [main]
+    paths: ["data/**", "infra/compose/**", ".github/workflows/images.yml"]
   workflow_dispatch:
 
 concurrency:

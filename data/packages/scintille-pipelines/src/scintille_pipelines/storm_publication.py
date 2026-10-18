@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -37,6 +38,7 @@ from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 
 BOOTSTRAP_STORMS = 100
+FLASH_WINDOW = timedelta(hours=6)
 
 
 def export_candidates(
@@ -47,6 +49,21 @@ def export_candidates(
         key=lambda storm: (storm.t_start, storm.storm_id),
     )
     return touched | {storm.storm_id for storm in historical[:BOOTSTRAP_STORMS]}
+
+
+def flash_windows(
+    steps: list[tuple[datetime, datetime]],
+) -> list[tuple[tuple[datetime, datetime], list[int]]]:
+    """Group track steps, sorted by start, into silver scans of at most FLASH_WINDOW."""
+    groups: list[tuple[tuple[datetime, datetime], list[int]]] = []
+    for index, (first, last) in enumerate(steps):
+        if groups:
+            (start, end), members = groups[-1]
+            if max(end, last) - start <= FLASH_WINDOW:
+                groups[-1] = ((start, max(end, last)), [*members, index])
+                continue
+        groups.append(((first, last), [index]))
+    return groups
 
 
 def purge_tags(tags: list[str]) -> bool:
@@ -111,22 +128,46 @@ def storm_catalog(
     rejected: dict[str, StormSummary | None] = {}
     objects: dict[str, bytes] = {}
     flash_table = catalog.load_table(FLASHES.identifier)
-    for storm in summary:
-        if storm.storm_id not in ids:
-            continue
-        row = storms.filter(pl.col("storm_id") == storm.storm_id).row(0, named=True)
-        tracks = _scan(tracks_table, f"storm_id == '{storm.storm_id}'")
+
+    def reject(slug: str) -> None:
+        previous = store.get(f"storms/{slug}.json")
+        rejected[slug] = (
+            StormDetail.model_validate_json(previous).storm if previous is not None else None
+        )
+
+    candidates = {storm.storm_id: storm for storm in summary if storm.storm_id in ids}
+    all_tracks = (
+        _scan(tracks_table, f"storm_id IN ({', '.join(repr(i) for i in candidates)})")
+        if candidates
+        else touched.clear()
+    )
+    valid = []
+    for storm in candidates.values():
+        tracks = all_tracks.filter(pl.col("storm_id") == storm.storm_id)
         first, last = tracks["window_start"].min(), tracks["window_end"].max()
         if not isinstance(first, datetime) or not isinstance(last, datetime):
             context.log.error("Skipping storm without a valid track: %s", storm.slug)
-            previous = store.get(f"storms/{storm.slug}.json")
-            rejected[storm.slug] = (
-                StormDetail.model_validate_json(previous).storm if previous is not None else None
-            )
+            reject(storm.slug)
             continue
-        flashes = _scan(flash_table, _between("event_time", first, last))
+        valid.append(storm.storm_id)
+    steps = all_tracks.filter(pl.col("storm_id").is_in(valid)).sort("window_start")
+    selected: dict[str, list[pl.DataFrame]] = defaultdict(list)
+    # Bounded silver scans shared by every storm, long ones read piece by piece.
+    for (start_window, end_window), rows in flash_windows(
+        list(zip(steps["window_start"], steps["window_end"], strict=True))
+    ):
+        flashes = _scan(flash_table, _between("event_time", start_window, end_window))
+        for (storm_id,), part in steps[rows].partition_by("storm_id", as_dict=True).items():
+            selected[str(storm_id)].append(selected_flashes(flashes, part))
+        del flashes
+    for storm_id in valid:
+        storm = candidates[storm_id]
+        row = storms.filter(pl.col("storm_id") == storm_id).row(0, named=True)
+        flashes = (
+            pl.concat(selected.pop(storm_id)).unique("flash_id").sort("event_time", "flash_id")
+        )
         try:
-            replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
+            replay, chunks = replay_chunks(flashes)
             detail = StormDetail(
                 schema_version=SCHEMA_VERSION,
                 published_at=now,
@@ -140,10 +181,7 @@ def storm_catalog(
             )
         except ValueError:
             context.log.exception("Skipping invalid storm export: %s", storm.slug)
-            previous = store.get(f"storms/{storm.slug}.json")
-            rejected[storm.slug] = (
-                StormDetail.model_validate_json(previous).storm if previous is not None else None
-            )
+            reject(storm.slug)
             continue
         objects.update(chunks)
         details.append(detail)

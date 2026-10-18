@@ -35,6 +35,8 @@ What becomes easier, what becomes harder, what we must watch.
 | [0013 · Replay feed lifecycle](0013-replay-feed-lifecycle.md) | Proposed | Shared scene-owner decision plus GPU/audio/resource evidence in #261 |
 | [0013 · 3D lightning ribbons](0013-3d-lightning-ribbons.md) | Proposed | Separate lightning decision; identify by full filename |
 | [0017 · Preserve ADR history](0017-preserve-adr-history.md) | Proposed | Records the history policy and duplicate-identifier resolution |
+| [0018 · Interrupted replay framing](0018-interrupted-replay-framing.md) | Proposed | Reload behaviour of an interrupted flight; #272 |
+| [0019 · Reload storm framing](0019-reload-storm-framing.md) | Proposed | Storm framing on reload, explicit views for sharing; #272 |
 
 Both historical 0013 records retain their original paths, headings and text. Cite the full filename
 when referring to either proposal. [0017](0017-preserve-adr-history.md) documents this resolution;

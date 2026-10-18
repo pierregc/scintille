@@ -169,11 +169,11 @@ Ingestion and Dagster run on the VPS ([ADR 0008](adr/0008-ovh-vps.md)) with Dock
 `.env` sets `COMPOSE_PROFILES=clouds`.
 
 - **Images.** `data/Dockerfile` builds one image per package (uv, non-root user `10001`, pinned base
-  digests, no secrets). The `images` workflow (manual) builds both; on `main` it pushes
+  digests, no secrets). The `images` workflow builds both on every merge touching `data/` or `infra/compose/`; on `main` it pushes
   them to GHCR as `ghcr.io/pierregc/scintille-<package>:<sha>` and `:main`.
 - **Smoke test.** The same workflow starts the stack with the local lakehouse and checks the
   webserver, the daemon liveness and the non-root user.
-- **Deploy.** On a manual run on `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
+- **Deploy.** On a run on `main`, the `deploy` job copies `compose.yaml` to `/srv/scintille/releases/<sha>/`
   and `deploy.sh` to `/srv/scintille`, then runs `deploy.sh <sha>`: pull, `up --wait`, and on a
   failed health check, back to the previous SHA with its own compose file. It only runs once the
   repository variable `VPS_DEPLOY` is `true`. The `rollback` job tests that path on every run

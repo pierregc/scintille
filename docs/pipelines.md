@@ -14,7 +14,9 @@ uv run dagster dev -m scintille_pipelines.definitions
 
 Without `DAGSTER_HOME`, `dagster dev` keeps its state in a temporary folder. To use Postgres as in
 production, point `DAGSTER_HOME` at `data/packages/scintille-pipelines/dagster_home` and set
-`SCINTILLE_POSTGRES_DSN` (locally `postgresql://postgres:postgres@localhost:55432/scintille`).
+`DAGSTER_POSTGRES_URL` (locally `postgresql+psycopg2://postgres:postgres@localhost:55432/scintille`).
+Dagster's storage needs the `psycopg2` driver named in the URL: with psycopg 3, the SQLAlchemy 2.1
+default for `postgresql://`, every event write fails on `NOTIFY` and runs never start (#271).
 
 ## Contents
 
@@ -215,7 +217,7 @@ so its value never shows in the UI or the logs. Unset variables fall back to the
 
 `uv run pytest` materializes the gold assets and the feed in-process on a SQLite catalog and an
 in-memory bucket. `uv run pytest -m lake` materializes them against the local Lakekeeper and S3
-store, probes the DuckDB write path and tests the Postgres lock; the `lake` job of the manual `images` workflow runs the second.
+store, probes the DuckDB write path, tests the Postgres lock and runs a job on Dagster's Postgres storage; the `lake` job of the manual `images` workflow runs the second.
 
 ## Storm catalog publication
 

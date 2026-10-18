@@ -1,8 +1,9 @@
 # Replay framing calibration (#83)
 
 Updated 2026-10-17. **Visual calibration and maintainer acceptance are pending.**
-The current configuration remains the initial #79 proposal: 12° tilt, 2.8 s flight, 62% central
-viewport, 300 km minimum requested range. No visual tuning was inferred from unit tests.
+Configuration: 20° tilt, 2.8 s flight, 300 km minimum requested range, with the geographic box
+(not its enclosing circle) fitted inside the central 62% of the viewport. This follows maintainer
+feedback on the Preview asking for a closer, slightly more tilted view.
 
 ## Reproduce
 
@@ -21,14 +22,14 @@ builds omit all fixture files. Requests for a QA slug select the fixture data ro
 | Fixture slug | Start UTC | Target lat, lon | Desktop range km | Portrait range km | Purpose |
 | --- | --- | --- | --- | --- | --- |
 | `2026-07-15-orlando` | 2026-07-15 18:00:01 | 28.5, -81.3 | 306.000 | 306.000 | Small, coastal, day; existing real-contract synthetic fixture |
-| `qa-large-inland-night` | 2026-07-16 06:00:00 | 34, -94 | 6924.340 | 11928.677 | Large inland extent at night |
-| `qa-offshore-day` | 2026-07-15 15:00:00 | 12, -36 | 2103.818 | 3657.004 | Offshore daytime context |
-| `qa-dateline-day` | 2026-07-15 00:00:00 | 0, -180 | 2952.968 | 5125.035 | Wrapped bounds and short-arc trajectory |
-| `qa-south-coast-night` | 2026-07-16 03:00:00 | -29.5, -49.5 | 1179.216 | 2053.277 | Southern coastal night |
+| `qa-large-inland-night` | 2026-07-16 06:00:00 | 34, -94 | 4707.998 | 9387.424 | Large inland extent at night |
+| `qa-offshore-day` | 2026-07-15 15:00:00 | 12, -36 | 1170.955 | 3111.113 | Offshore daytime context |
+| `qa-dateline-day` | 2026-07-15 00:00:00 | 0, -180 | 2354.091 | 3217.222 | Wrapped bounds and short-arc trajectory |
+| `qa-south-coast-night` | 2026-07-16 03:00:00 | -29.5, -49.5 | 883.878 | 1380.886 | Southern coastal night |
 
 Ranges are the framing outputs at FOV 35°, aspects 16:9 and 9:16. Automated checks now also
 confirm these destination ranges and tilts after the real control safety limits and flight handoff.
-Tilt is 12° and duration 2800 ms for each pose. Controls retain reduced-motion instant arrival and
+Tilt is 20° and duration 2800 ms for each pose. Controls retain reduced-motion instant arrival and
 their existing altitude/tilt safety limits.
 
 Only the Orlando observation time has a cloud fixture; other times can legitimately show no
@@ -54,25 +55,20 @@ camera-settled separately from navigation to data-ready, downloaded bytes and ne
 Attach captures to #83, replace/augment synthetic examples with five actual catalog slugs, then
 record the chosen configuration or a small correction PR before accepting #83.
 
-## Follow-up after the feature merges
+## Synthetic density
 
-Feature PRs #264–#267 are merged into main. The zero-tilt share/restore regression in #267 is fixed:
-the real-controls tests retain a dragged 306 km surface view through same-storm history and fresh
-URL restoration, in landscape and portrait. Include that scenario in the browser captures rather
-than treating the earlier review comment as an outstanding code defect.
+Each non-Orlando extract holds 480 flashes over 45 scene minutes, scattered around the track
+with a rise and decay in rate (peak about 20 per minute), so about 45 seconds of playback at 60×.
+Generation is seeded per slug and reproducible. Orlando keeps its existing 3-flash contract
+fixture, shared with other tests. Density remains synthetic and says nothing about real storms.
 
-The calibration tests now exercise the real camera/control path for all ten fixture/aspect pairs,
-projecting the full geographic boxes and every generated trajectory vertex after arrival. They
-also verify interrupted flights and reduced motion. After rebasing onto the merged #267 fix,
-432 web tests, Astro check, ESLint, the production build and SEO checks pass locally. The full
-build required permission for Wrangler registry writes outside the sandbox; hosted validation is
-recorded on the PR separately.
-These tests do not render lightning, overlay controls, clouds or audio, and cannot establish touch
-behavior or visual approval. Keep the proposed 12° / 2800 ms configuration until the required
-observations support a maintainer decision.
+## Status
 
-The browser backend was retried on 2026-10-17 and still reported no available browser. SSH and public
-HTTP access now work: production inspection found an undeployed exporter, empty gold namespace and
-HTTP 404 for the catalog index. Dagster's confirmed notification defect is tracked in
-[#271](https://github.com/pierregc/scintille/issues/271); deployment/bootstrap evidence belongs to
-#74/#269. No five real catalog slugs or production freshness measurements are available yet.
+Feature PRs #264 to #267 and the reload fix #273 are merged. The tests exercise the real
+camera/control path for all ten fixture/aspect pairs, projecting the full geographic boxes and
+every trajectory vertex after arrival, plus interrupted flights and reduced motion. They do not
+render lightning, overlay controls, clouds or audio, and cannot establish touch behavior or
+visual approval. The maintainer decides on the 20° / 2800 ms configuration from the Preview.
+
+Real catalog slugs are still unavailable: the public catalog index returns 404 (#74/#269). The
+Dagster run-submission defect #271 is fixed by #274; production bootstrap remains to be run.

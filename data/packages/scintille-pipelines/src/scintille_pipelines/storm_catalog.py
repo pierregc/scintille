@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Protocol
 from xml.etree import ElementTree as ET
@@ -23,6 +24,7 @@ from scintille_contract.models import (
 from scintille_ingest.runtime.live_feed import columns
 
 DETAIL_MAX_BYTES = 256 * 1024
+IO_THREADS = 16
 INDEX_PAGE_SIZE = 50
 CHUNK_FLASHES = 65536
 SITEMAP_URLS = 50000
@@ -200,66 +202,77 @@ def publish_catalog(
     purge: Callable[[list[str]], bool],
     region_codes: Sequence[str] = (),
 ) -> dict[str, int]:
-    accepted = []
-    skipped = set()
-    previous_summaries: dict[str, StormSummary] = {}
-    bodies = {}
-    for detail in details:
-        path = f"storms/{detail.storm.slug}.json"
-        body = detail.model_dump_json().encode()
-        if len(body) > DETAIL_MAX_BYTES:
-            skipped.add(detail.storm.slug)
-            log.warning(
-                "Skipping oversized storm metadata: %s (%d bytes)", detail.storm.slug, len(body)
-            )
-            previous = store.get(path)
-            if previous is not None:
-                previous_summaries[detail.storm.slug] = StormDetail.model_validate_json(
-                    previous
-                ).storm
-            continue
-        accepted.append(detail)
-        bodies[path] = body
-    details = accepted
-    all_storms = [
-        previous_summaries.get(storm.slug, storm)
-        for storm in all_storms
-        if storm.slug not in skipped or storm.slug in previous_summaries
-    ]
-    published = published_slugs(store)
-    # Validate every reference before the first mutation.
-    for detail in details:
-        for ref in detail.replay.chunks:
-            if ref.path not in chunks and store.get(ref.path) is None:
-                raise ValueError(f"missing replay chunk: {ref.path}")
-    for storm in all_storms:
-        if (
-            storm.slug not in published
-            and f"storms/{storm.slug}.json" not in bodies
-            and store.get(f"storms/{storm.slug}.json") is None
-        ):
-            raise ValueError(f"missing storm detail: {storm.slug}")
-    pending = set(json.loads(store.get(PURGE_PATH) or b"[]"))
-    changed = 0
-    referenced = {ref.path for detail in details for ref in detail.replay.chunks}
-    for path in referenced & chunks.keys():
-        store.put(path, chunks[path], CHUNK_HEADERS)
-    for detail in details:
-        path = f"storms/{detail.storm.slug}.json"
-        previous = store.get(path)
-        if previous is not None:
-            old = StormDetail.model_validate_json(previous)
-            if content(old) == content(detail):
+    with ThreadPoolExecutor(IO_THREADS) as pool:
+        paths = [f"storms/{detail.storm.slug}.json" for detail in details]
+        stored = dict(zip(paths, pool.map(store.get, paths), strict=True))
+        accepted = []
+        skipped = set()
+        previous_summaries: dict[str, StormSummary] = {}
+        bodies = {}
+        for detail in details:
+            path = f"storms/{detail.storm.slug}.json"
+            body = detail.model_dump_json().encode()
+            if len(body) > DETAIL_MAX_BYTES:
+                skipped.add(detail.storm.slug)
+                log.warning(
+                    "Skipping oversized storm metadata: %s (%d bytes)", detail.storm.slug, len(body)
+                )
+                previous = stored[path]
+                if previous is not None:
+                    previous_summaries[detail.storm.slug] = StormDetail.model_validate_json(
+                        previous
+                    ).storm
                 continue
-            if old.storm.closed:
-                pending.update([f"storm:{detail.storm.slug}", "storms-index"])
-                for code in (old.storm.country_code, detail.storm.country_code):
-                    if code:
-                        pending.add(f"region:{code}")
-        # Save invalidation intent before writing the changed document.
-        store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
-        store.put(path, bodies[path], JSON_HEADERS)
-        changed += 1
+            accepted.append(detail)
+            bodies[path] = body
+        details = accepted
+        all_storms = [
+            previous_summaries.get(storm.slug, storm)
+            for storm in all_storms
+            if storm.slug not in skipped or storm.slug in previous_summaries
+        ]
+        published = published_slugs(store)
+        # Validate every reference before the first mutation.
+        refs = {ref.path for detail in details for ref in detail.replay.chunks} - chunks.keys()
+        for path, found in zip(refs, pool.map(store.get, refs), strict=True):
+            if found is None:
+                raise ValueError(f"missing replay chunk: {path}")
+        unknown = [
+            f"storms/{storm.slug}.json"
+            for storm in all_storms
+            if storm.slug not in published and f"storms/{storm.slug}.json" not in bodies
+        ]
+        for path, found in zip(unknown, pool.map(store.get, unknown), strict=True):
+            if found is None:
+                raise ValueError(
+                    f"missing storm detail: {path.removeprefix('storms/').removesuffix('.json')}"
+                )
+        pending = set(json.loads(store.get(PURGE_PATH) or b"[]"))
+        referenced = {ref.path for detail in details for ref in detail.replay.chunks}
+        list(
+            pool.map(
+                lambda path: store.put(path, chunks[path], CHUNK_HEADERS),
+                referenced & chunks.keys(),
+            )
+        )
+        changed = []
+        for detail in details:
+            path = f"storms/{detail.storm.slug}.json"
+            previous = stored[path]
+            if previous is not None:
+                old = StormDetail.model_validate_json(previous)
+                if content(old) == content(detail):
+                    continue
+                if old.storm.closed:
+                    pending.update([f"storm:{detail.storm.slug}", "storms-index"])
+                    for code in (old.storm.country_code, detail.storm.country_code):
+                        if code:
+                            pending.add(f"region:{code}")
+            changed.append(path)
+        # Save invalidation intent before writing the changed documents.
+        if changed:
+            store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
+        list(pool.map(lambda path: store.put(path, bodies[path], JSON_HEADERS), changed))
     published.update(storm.slug for storm in all_storms)
     store.put(PUBLISHED_PATH, json.dumps(sorted(published)).encode(), JSON_HEADERS)
     for page in index_pages(all_storms, now):
@@ -278,7 +291,7 @@ def publish_catalog(
             log.exception("Cache purge transport failed; pending tags retry on the next run")
     store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
     return {
-        "changed": changed,
+        "changed": len(changed),
         "storms": len(all_storms),
         "skipped_storms": len(skipped),
         "pending_purge_tags": len(pending),

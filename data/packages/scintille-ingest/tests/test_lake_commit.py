@@ -13,7 +13,12 @@ from pyiceberg.catalog.sql import SqlCatalog
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.ingest_log import IngestLogRecord
-from scintille_ingest.runtime.lake_commit import LakeCommit, committed_batches
+from scintille_ingest.runtime.lake_commit import (
+    LakeCommit,
+    bronze_scope,
+    committed_batches,
+    silver_scope,
+)
 from scintille_ingest.runtime.lake_writer import LakeWriter
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import Product
@@ -31,9 +36,9 @@ class Source:
     name = "glm-east"
     cadence = 1.0
 
-    def __init__(self) -> None:
+    def __init__(self, hour: datetime = HOUR) -> None:
         self.products = [
-            Product(f"glm/{i:02d}.nc", HOUR + timedelta(minutes=5 * i), etag="v1")
+            Product(f"glm/{hour:%d}-{i:02d}.nc", hour + timedelta(minutes=5 * i), etag="v1")
             for i in range(12)
         ]
         self.revised: set[str] = set()
@@ -256,3 +261,30 @@ def test_two_revisions_in_one_commit_keep_the_latest(tmp_path: Path, catalog: Ca
 
     LakeCommit(lambda: catalog)(spool, spool.pending())
     assert counts(catalog) == (53, 12)
+
+
+def test_revisions_only_read_the_partitions_of_their_products(
+    tmp_path: Path, catalog: Catalog
+) -> None:
+    spool = Spool(tmp_path / "spool")
+    sources = [Source(HOUR), Source(HOUR + timedelta(days=2))]
+    for source in sources:
+        asyncio.run(IngestLive([source], MemoryState(), spool, clock=lambda: HOUR).poll(source))
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+    later = sources[1].products
+    products = pl.DataFrame(
+        {
+            "source": ["glm-east"],
+            "product_start": [later[0].start],
+            "product_end": [later[-1].start + timedelta(seconds=20)],
+        }
+    )
+    for identifier, scope, column in (
+        (FLASHES.identifier, silver_scope(products), "event_time"),
+        (INGEST_LOG.identifier, bronze_scope(products), "product_start"),
+    ):
+        table = catalog.load_table(identifier)
+        assert len(list(table.scan().plan_files())) == 2
+        rows = table.scan(row_filter=scope).to_arrow()
+        assert len(list(table.scan(row_filter=scope).plan_files())) == 1
+        assert pc.min(rows[column]).as_py() >= later[0].start

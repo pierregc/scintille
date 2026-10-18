@@ -7,10 +7,10 @@ import { CLOUD_TOP_KM } from '../lightning';
 import { kmToWorld } from '../flight';
 import { clipPlanes } from '../orbit';
 import { latLonToVector } from '../sun';
-import { framingFixtures } from '../../../scripts/framing-fixtures';
+import { framingFixtures, scatterDegrees, TRACK_STEP_MS, trackAt } from '../../../scripts/framing-fixtures';
 import { stormSource } from '../archive/storm';
 import { parseCatalogPage } from './catalog';
-import { frameStorm } from './framing';
+import { frameStorm, REPLAY_FRAME } from './framing';
 import cases from './framing-cases.json';
 import { trackGeometry } from './track';
 import { decodeChunk, CHUNK_SCALES } from '../live/decode';
@@ -22,7 +22,7 @@ it('keeps five explicitly synthetic reproducible cases with desktop and portrait
 		for (const aspect of [16 / 9, 9 / 16]) {
 			const view = frameStorm(item.bounds, 35, aspect);
 			expect(view.duration).toBeLessThan(4000);
-			expect(view.tilt).toBeLessThanOrEqual(12);
+			expect(view.tilt).toBeLessThanOrEqual(REPLAY_FRAME.tilt);
 			expect(view.altitude).toBeGreaterThanOrEqual(300);
 		}
 	}
@@ -47,11 +47,27 @@ describe('Preview calibration extracts', () => {
 			if (!file) throw new Error('missing fixture');
 			const raw = new Uint8Array(gunzipSync(file));
 			const decoded = decodeChunk(raw.buffer);
+			expect(decoded.count).toBeGreaterThanOrEqual(400);
+			const { west, east, south, north } = item.bounds;
+			const width = east >= west ? east - west : east + 360 - west;
+			const reach = 4 * scatterDegrees(item.bounds) + 0.01;
+			const perMinute = new Map<number, number>();
 			for (let i = 0; i < decoded.count; i++) {
-				const sample = item.points[Math.floor(i / 3)];
-				expect(decoded.columns.lat[i] * CHUNK_SCALES.lat).toBeCloseTo(sample[0], 2);
-				expect(decoded.columns.lon[i] * CHUNK_SCALES.lon).toBeCloseTo(sample[1], 2);
+				const offset = decoded.columns.event_offset_ms[i];
+				if (i > 0) expect(offset).toBeGreaterThanOrEqual(decoded.columns.event_offset_ms[i - 1]);
+				perMinute.set(Math.floor(offset / 60_000), (perMinute.get(Math.floor(offset / 60_000)) ?? 0) + 1);
+				const lat = decoded.columns.lat[i] * CHUNK_SCALES.lat;
+				const lon = decoded.columns.lon[i] * CHUNK_SCALES.lon;
+				expect(lat).toBeGreaterThanOrEqual(south - 0.01);
+				expect(lat).toBeLessThanOrEqual(north + 0.01);
+				expect((((lon - west + 0.01) % 360) + 360) % 360).toBeLessThanOrEqual(width + 0.02);
+				const [cLat, cLon] = trackAt(item.points, offset);
+				expect(Math.abs(lat - cLat)).toBeLessThan(reach);
+				expect(Math.abs((((lon - cLon + 540) % 360) - 180))).toBeLessThan(reach);
 			}
+			expect(perMinute.size).toBeGreaterThan(40);
+			expect(detail.storm.peak_rate).toBe(Math.max(...perMinute.values()));
+			expect(detail.track.reduce((sum, point) => sum + point.flash_count, 0)).toBe(decoded.count);
 		}
 		const page = files.get('storms/index/0.json');
 		expect(parseCatalogPage(JSON.parse(new TextDecoder().decode(page)), 0).storms).toHaveLength(5);
@@ -111,7 +127,7 @@ describe('calibration poses after real control limits', () => {
 					const projected = point.clone().project(rig.camera);
 					expect(projected.z).toBeGreaterThan(-1);
 					expect(projected.z).toBeLessThan(1);
-					expect(Math.max(Math.abs(projected.x), Math.abs(projected.y))).toBeLessThan(0.64);
+					expect(Math.max(Math.abs(projected.x), Math.abs(projected.y))).toBeLessThan(REPLAY_FRAME.viewportFraction + 0.02);
 				};
 				const { west, east, south, north } = item.bounds;
 				const width = east >= west ? east - west : east + 360 - west;
@@ -119,7 +135,7 @@ describe('calibration poses after real control limits', () => {
 					check(new Vector3(...latLonToVector(south + (north - south) * i / 10, west + width * j / 10)));
 				}
 				const track = trackGeometry(item.points.map(([lat, lon], i) => ({ lat, lon,
-					time: new Date(Date.parse(item.start) + i * 360_000).toISOString(), flash_count: 3, area_km2: 1 })), 1 + kmToWorld(20, 1));
+					time: new Date(Date.parse(item.start) + i * TRACK_STEP_MS).toISOString(), flash_count: 3, area_km2: 1 })), 1 + kmToWorld(20, 1));
 				for (const vertices of [track.positions, track.observations]) {
 					for (let i = 0; i < vertices.length; i += 3) check(new Vector3().fromArray(vertices, i));
 				}
