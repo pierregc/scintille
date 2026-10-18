@@ -169,21 +169,15 @@ def test_bootstrap_is_bounded_but_current_storms_are_always_selected() -> None:
     assert storms[0].storm_id not in candidates
 
 
-def test_storms_share_bounded_flash_scans() -> None:
+def test_track_steps_share_bounded_flash_scans() -> None:
     hour = timedelta(hours=1)
-    spans = {
-        "late": (NOW + 3 * hour, NOW + 4 * hour),
-        "early": (NOW, NOW + hour),
-        "long": (NOW + 10 * hour, NOW + 20 * hour),
-        "next": (NOW + 11 * hour, NOW + 12 * hour),
-    }
-    groups = flash_windows(spans)
-    assert [members for _, members in groups] == [["early", "late"], ["long"], ["next"]]
-    assert groups[0][0] == (NOW, NOW + 4 * hour)
+    steps = [(NOW + n * hour, NOW + (n + 1.5) * hour) for n in (0, 1, 3, 4, 5, 9)]
+    groups = flash_windows(steps)
+    assert [members for _, members in groups] == [[0, 1, 2, 3], [4, 5]]
     for (start, end), members in groups:
-        assert len(members) == 1 or end - start <= FLASH_WINDOW
-        assert all(start <= spans[m][0] and spans[m][1] <= end for m in members)
-    assert flash_windows({}) == []
+        assert end - start <= FLASH_WINDOW
+        assert all(start <= steps[m][0] and steps[m][1] <= end for m in members)
+    assert flash_windows([]) == []
 
 
 def test_regions_use_existence_checks_without_downloading_bodies() -> None:

@@ -14,6 +14,7 @@ from pyiceberg.catalog.sql import SqlCatalog
 from scintille_contract.models import StormDetail
 from scintille_lake.migrate import migrate, sync_table
 from scintille_lake.tables import FLASHES
+from scintille_pipelines import storm_publication
 from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.definitions import defs
 from scintille_pipelines.resources import FeedResource, LakeResource
@@ -364,7 +365,12 @@ class MemoryFeed(FeedResource):
 MEMORY = MemoryStore()
 
 
-def test_publishes_every_storm_from_shared_flash_scans(two_sources: SqliteLake) -> None:
+@pytest.mark.parametrize("window", [timedelta(hours=6), timedelta(minutes=30)])
+def test_publishes_every_storm_from_shared_flash_scans(
+    two_sources: SqliteLake, window: timedelta, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(storm_publication, "FLASH_WINDOW", window)
+    monkeypatch.setitem(globals(), "MEMORY", MemoryStore())
     instance = DagsterInstance.ephemeral()
     for key in ("2026-07-15-18:00", "2026-07-15-19:00", "2026-07-15-20:00"):
         run(two_sources, instance, key)
