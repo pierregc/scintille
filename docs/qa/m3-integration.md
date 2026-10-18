@@ -59,7 +59,7 @@ are superseded by successful SSH/HTTP reads, not by successful production accept
   ADR 0011 retains its original historical statement unchanged.
 - Keep both historical 0013 proposals unchanged and identify them by full filename:
   [replay feed lifecycle](../adr/0013-replay-feed-lifecycle.md) and
-  [3D lightning ribbons](../adr/0013-3d-lightning-ribbons.md).
+  [3D lightning ribbons](../adr/0013-bis-3d-lightning-ribbons.md).
   [0017](../adr/0017-preserve-adr-history.md) records the duplicate resolution and amendment policy.
   Review the shared scene-owner proposal against runtime resource evidence; no acceptance is inferred.
 - ADRs 0015 and 0016 remain proposals for entry/support limits and the URL subset. In particular,
