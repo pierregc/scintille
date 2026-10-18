@@ -87,3 +87,34 @@ describe('bounded R2 catalog search', () => {
 		await expect(searchCatalog(bucket, new URLSearchParams(), now)).rejects.toThrow('too large');
 	});
 });
+
+it('stops before the response byte ceiling and resumes at the unread record', async () => {
+	const rows = Array.from({ length: 32 }, (_, i) => ({ ...storm(i), label: 'é'.repeat(2048), words: ['france', ...Array.from({ length: 20 }, (_, w) => `word${w}${'x'.repeat(100)}`)] }));
+	const { bucket, files } = await fixture(rows);
+	const path = `${prefix}/lists/${await hash('all')}`;
+	files.set(`${path}/meta.json`, JSON.stringify({ selector: 'all', count: rows.length, page_count: 4 }));
+	for (let page = 0; page < 4; page++) files.set(`${path}/${page}.json`, JSON.stringify({ page, storms: rows.slice(page * 8, (page + 1) * 8) }));
+	const found: string[] = [];
+	let cursor: string | null = null;
+	do {
+		const params = new URLSearchParams(); if (cursor) params.set('cursor', cursor);
+		const result = await searchCatalog(bucket, params, now);
+		expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(65536);
+		expect(result.storms.length).toBeGreaterThan(0);
+		found.push(...result.storms.map(r => r.slug)); cursor = result.next_cursor;
+	} while (cursor);
+	expect(found).toEqual(rows.map(r => r.slug));
+});
+
+it('checks cursor expiry before a Worker cache hit', async () => {
+	const { bucket } = await fixture(Array.from({ length: 30 }, (_, i) => storm(i)));
+	const saved = new Map<string, Awaited<ReturnType<typeof searchCatalog>>>();
+	const cache = { async get(key: string) { return saved.get(key) ?? null; }, async put(key: string, value: Awaited<ReturnType<typeof searchCatalog>>) { saved.set(key, value); } };
+	const first = await searchCatalog(bucket, new URLSearchParams(), now, undefined, cache);
+	const params = new URLSearchParams({ cursor: first.next_cursor ?? '' });
+	await searchCatalog(bucket, params, now, undefined, cache);
+	const metrics = { reads: 0, bytes: 0, candidates: 0 };
+	await searchCatalog(bucket, params, now, metrics, cache);
+	expect(metrics.reads).toBe(2);
+	await expect(searchCatalog(bucket, params, now + 86400001, undefined, cache)).rejects.toMatchObject({ status: 410 });
+});

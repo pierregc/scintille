@@ -4,8 +4,7 @@ import { searchCatalog, type SearchBucket, type SearchCache } from '../../../sto
 import { BUILD } from '../../../version';
 import type { StormSearchResponse } from '../../../contract/types';
 import { boundedBody } from '../../../globe/clouds/response';
-import { hash } from '../../../storms/search-query';
-import { SearchError } from '../../../storms/search-query';
+import { hash, SearchError } from '../../../storms/search-query';
 
 export const prerender = false;
 

@@ -20,7 +20,7 @@ No production schedule, bucket lifecycle, detection or activity thresholds were 
 
 Local HTTP checks used Astro 7.3.7 / Worker runtime with `LIVE` bound to local R2:
 missing pointer returned 503 with `Cache-Control: no-store`; seeded Orlando search returned 200,
-721 decoded bytes, `Server-Timing: 4 reads / 760 bytes`, one candidate. Fixtures are synthetic.
+721 decoded bytes (before adding the current-generation response field), `Server-Timing: 4 reads / 760 bytes`, one candidate. Fixtures are synthetic.
 
 ## Reproduce local fixtures and measurements
 
@@ -62,10 +62,10 @@ retention decision; 24 changed hourly generations of this synthetic 100k dataset
 
 | Query | Results | Decoded / gzip bytes | R2-model reads / decoded bytes | Candidates | Local disk p95 |
 | --- | --- | --- | --- | --- | --- |
-| Initial open | 20 | 7,213 / 1,086 | 4 / 21,173 | 20 | 1.003 ms |
-| `place99`, before 2026-10-17 | 20 | 7,376 / 1,019 | 9 / 127,463 | 41 | 1.570 ms |
-| North America + level 4 + start date | 20 | 7,251 / 1,034 | 5 / 21,275 | 20 | 0.748 ms |
-| `region1` + level 1 | 0, continuation | 751 / 553 | 8 / 84,133 | 256 | 1.356 ms |
+| Initial open | 20 | 7,301 / 1,094 | 4 / 21,173 | 20 | 1.045 ms |
+| `place99`, before 2026-10-17 | 20 | 7,464 / 1,029 | 9 / 127,463 | 41 | 1.840 ms |
+| North America + level 4 + start date | 20 | 7,339 / 1,044 | 5 / 21,275 | 20 | 0.776 ms |
+| `region1` + level 1 | 0, continuation | 839 / 563 | 8 / 84,133 | 256 | 1.305 ms |
 
 Gzip numbers use Node zlib and are estimates, not browser HAR transfer measurements. R2-model
 counters count object bodies actually consumed by the query engine. Local disk p95 is not a
