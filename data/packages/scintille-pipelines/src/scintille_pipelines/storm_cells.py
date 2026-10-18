@@ -1,6 +1,7 @@
 """`gold/storm_cells`: flashes clustered into storm cells, one hourly window at a time."""
 
 import math
+from collections.abc import Callable
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -19,6 +20,7 @@ from dagster import (
 )
 from pyiceberg.partitioning import PartitionField, PartitionSpec
 from pyiceberg.schema import Schema
+from pyiceberg.table import Table
 from pyiceberg.transforms import DayTransform
 from pyiceberg.types import (
     DoubleType,
@@ -33,7 +35,7 @@ from scintille_lake.migrate import sync_table
 from scintille_lake.tables import FLASHES, gold_table
 
 from .clustering import Params, st_dbscan, summarize
-from .hotspots import HotspotRule, drop_hotspots, fixed_hotspots
+from .hotspots import HotspotRule, drop_hotspots, fixed_hotspots, hotspots_from_days, pixel_days
 from .resources import LakeResource
 
 hourly = HourlyPartitionsDefinition(start_date="2026-07-01-00:00", timezone="UTC")
@@ -156,6 +158,7 @@ def hour_cells(
     overlap: timedelta,
     params: Params,
     rule: HotspotRule | None = None,
+    hotspots: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Cells of [hour - overlap, hour + 1 h) with at least one flash in the hour itself.
 
@@ -165,7 +168,8 @@ def hour_cells(
     end = hour + timedelta(hours=1)
     window = flashes.filter(pl.col("event_time").is_between(hour - overlap, end, closed="left"))
     if rule is not None:
-        window = drop_hotspots(window, fixed_hotspots(flashes, end, rule), rule.radius_km)
+        spots = fixed_hotspots(flashes, end, rule) if hotspots is None else hotspots
+        window = drop_hotspots(window, spots, rule.radius_km)
     t = window["event_time"].dt.epoch("us").to_numpy() / 1e6
     labels = st_dbscan(window["lat"].to_numpy(), window["lon"].to_numpy(), t, params)
     cells = summarize(window, labels, hour, end, params)
@@ -186,12 +190,41 @@ def range_cells(
     overlap: timedelta,
     params: Params,
     rule: HotspotRule | None = None,
+    hotspots: Callable[[datetime], pl.DataFrame] | None = None,
 ) -> pl.DataFrame:
-    hours = int((end - start) / timedelta(hours=1))
+    hours = [start + timedelta(hours=h) for h in range(int((end - start) / timedelta(hours=1)))]
     frames = [
-        hour_cells(flashes, start + timedelta(hours=h), overlap, params, rule) for h in range(hours)
+        hour_cells(
+            flashes,
+            hour,
+            overlap,
+            params,
+            rule,
+            None if hotspots is None else hotspots(hour + timedelta(hours=1)),
+        )
+        for hour in hours
     ]
     return pl.concat(frames)
+
+
+def scan_hotspots(table: Table, end: datetime, rule: HotspotRule) -> pl.DataFrame:
+    """`fixed_hotspots` before `end`, reading one day of positions at a time."""
+    days = []
+    for day in range(rule.lookback.days):
+        hi = end - timedelta(days=day)
+        flashes = pl.from_arrow(
+            table.scan(
+                row_filter=_window(hi - timedelta(days=1), hi),
+                selected_fields=("source", "event_time", "lat", "lon"),
+            ).to_arrow()
+        )
+        assert isinstance(flashes, pl.DataFrame)
+        days.append(pixel_days(flashes, end, rule))
+    return hotspots_from_days(pl.concat(days), rule)
+
+
+def _window(lo: datetime, hi: datetime) -> str:
+    return f"event_time >= '{lo.isoformat()}' AND event_time < '{hi.isoformat()}'"
 
 
 CHECK = AssetCheckSpec(
@@ -234,11 +267,17 @@ def storm_cells(
     start, end = context.partition_time_window
     overlap = timedelta(minutes=config.overlap_minutes)
     rule = config.rule
-    lookback = max(overlap, rule.lookback)
     catalog = lake.catalog()
     sync_table(catalog, STORM_CELLS)
     source = catalog.load_table(FLASHES.identifier)
     frames = []
+    hourly_spots: dict[datetime, pl.DataFrame] = {}
+
+    def spots_at(hour_end: datetime) -> pl.DataFrame:
+        # Hot spots need days of positions: read them day by day, never all at once.
+        hourly_spots[hour_end] = scan_hotspots(source, hour_end, rule)
+        return hourly_spots[hour_end]
+
     spots = []
     read = 0
     for chunk in range(math.ceil((end - start) / CHUNK)):
@@ -246,17 +285,14 @@ def storm_cells(
         hi = min(lo + CHUNK, end)
         flashes = pl.from_arrow(
             source.scan(
-                row_filter=(
-                    f"event_time >= '{(lo - lookback).isoformat()}' "
-                    f"AND event_time < '{hi.isoformat()}'"
-                ),
+                row_filter=_window(lo - overlap, hi),
                 selected_fields=("flash_id", "source", "event_time", "lat", "lon"),
             ).to_arrow()
         )
         assert isinstance(flashes, pl.DataFrame)
-        read += flashes.filter(pl.col("event_time") >= lo - overlap).height
-        frames.append(range_cells(flashes, lo, hi, overlap, config.params, rule))
-        spots.append(fixed_hotspots(flashes, hi, rule))
+        read += flashes.height
+        frames.append(range_cells(flashes, lo, hi, overlap, config.params, rule, spots_at))
+        spots.append(hourly_spots[hi])
     cells = pl.concat(frames)
     hotspots = (
         pl.concat(spots)

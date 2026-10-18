@@ -36,17 +36,24 @@ class HotspotRule:
         return timedelta(days=max(1, self.pixel_days))
 
 
+CELL = ["source", "gi", "gj"]
+
+
 def fixed_hotspots(flashes: pl.DataFrame, end: datetime, rule: HotspotRule) -> pl.DataFrame:
     """Hot spots seen before `end`: source, centre (median position), flashes and days."""
-    cell = ["source", "gi", "gj"]
-    days = (
+    return hotspots_from_days(pixel_days(flashes, end, rule), rule)
+
+
+def pixel_days(flashes: pl.DataFrame, end: datetime, rule: HotspotRule) -> pl.DataFrame:
+    """Per grid cell and day before `end`; each day only needs its own flashes."""
+    return (
         flashes.filter(pl.col("event_time").is_between(end - rule.lookback, end, closed="left"))
         .with_columns(
             gi=(pl.col("lat") / rule.grid_deg).floor(),
             gj=(pl.col("lon") / rule.grid_deg).floor(),
             day=((pl.lit(end) - pl.col("event_time")).dt.total_microseconds() // 86_400_000_000),
         )
-        .group_by(*cell, "day")
+        .group_by(*CELL, "day")
         .agg(
             pl.col("lat").median(),
             pl.col("lon").median(),
@@ -71,8 +78,11 @@ def fixed_hotspots(flashes: pl.DataFrame, end: datetime, rule: HotspotRule) -> p
             tight=pl.col("pixel") & pl.col("last") & (pl.col("spread_km") < rule.pixel_tight_km),
         )
     )
+
+
+def hotspots_from_days(days: pl.DataFrame, rule: HotspotRule) -> pl.DataFrame:
     return (
-        days.group_by(cell)
+        days.group_by(CELL)
         .agg(
             pl.col("lat").filter(pl.col("busy") | pl.col("stuck") | pl.col("tight")).median(),
             pl.col("lon").filter(pl.col("busy") | pl.col("stuck") | pl.col("tight")).median(),

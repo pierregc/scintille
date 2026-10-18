@@ -1,10 +1,12 @@
+import re
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import polars as pl
 from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.hotspots import HotspotRule, drop_hotspots, fixed_hotspots
-from scintille_pipelines.storm_cells import StormCellsConfig, hour_cells
+from scintille_pipelines.storm_cells import StormCellsConfig, hour_cells, scan_hotspots
 
 PARAMS = Params(eps_km=10, eps_minutes=10, min_pts=10)
 RULE = HotspotRule()
@@ -113,3 +115,26 @@ def test_drop_keeps_order_and_wraps_the_antimeridian() -> None:
 
 def test_config_defaults_match_the_rule() -> None:
     assert StormCellsConfig().rule == RULE
+
+
+class Silver:
+    """Answers `scan(row_filter=..., selected_fields=...)` from a frame, counting rows read."""
+
+    def __init__(self, df: pl.DataFrame) -> None:
+        self.df, self.largest = df, 0
+
+    def scan(self, row_filter: str, selected_fields: tuple[str, ...]) -> Any:
+        lo, hi = (datetime.fromisoformat(t) for t in re.findall(r"'([^']+)'", row_filter))
+        part = self.df.filter(pl.col("event_time").is_between(lo, hi, closed="left"))
+        self.largest = max(self.largest, part.height)
+        return type("Scan", (), {"to_arrow": lambda _: part.select(selected_fields).to_arrow()})()
+
+
+def test_hotspots_read_day_by_day_match_a_single_read() -> None:
+    days = [pixel(hours=72), pixel(hours=2).with_columns(pl.col("lat") + 1)]
+    df = pl.concat(days)
+    silver = Silver(df)
+    expected = fixed_hotspots(df, END, RULE)
+    assert not expected.is_empty()
+    assert scan_hotspots(silver, END, RULE).equals(expected)  # type: ignore[arg-type]
+    assert silver.largest < df.height / 2
