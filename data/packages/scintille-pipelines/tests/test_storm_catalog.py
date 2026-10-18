@@ -23,8 +23,10 @@ from scintille_pipelines.storm_catalog import (
 from scintille_pipelines.storm_publication import (
     BOOTSTRAP_STORMS,
     FLASH_WINDOW,
+    PUBLISHED_MIN_LEVEL,
     export_candidates,
     flash_windows,
+    publishable,
     storm_catalog_schedule,
 )
 
@@ -178,6 +180,15 @@ def test_track_steps_share_bounded_flash_scans() -> None:
         assert end - start <= FLASH_WINDOW
         assert all(start <= steps[m][0] and steps[m][1] <= end for m in members)
     assert flash_windows([]) == []
+
+
+def test_only_strong_storms_are_published() -> None:
+    base = detail().storm
+    storms = [
+        base.model_copy(update={"storm_id": str(level), "slug": f"storm-{level}", "level": level})
+        for level in range(1, 6)
+    ]
+    assert [s.level for s in publishable(storms)] == list(range(PUBLISHED_MIN_LEVEL, 6))
 
 
 def test_regions_use_existence_checks_without_downloading_bodies() -> None:

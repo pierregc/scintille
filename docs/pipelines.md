@@ -256,6 +256,8 @@ Pending tags are stored in `_pipeline/storms/purge.json` in the feed bucket. Fai
 credentials leaves the queue intact and does not fail publication. One batch of at most 100 tags
 is attempted per hourly run; the remainder retries next run, below the Free request limit.
 
+Only storms of level 3 (Strong) and above are published: about a quarter of the storms and nine
+tenths of the flashes. Smaller storms are still detected and tracked, since large storms start small.
 Historical bootstrap exports at most 100 previously unpublished storms per run, oldest first.
 Storms touched in the current and previous hour always take priority and are not counted against
 that cap. The public index includes only storms whose detail exists; history drains incrementally.

@@ -370,6 +370,7 @@ def test_publishes_every_storm_from_shared_flash_scans(
     two_sources: SqliteLake, window: timedelta, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(storm_publication, "FLASH_WINDOW", window)
+    monkeypatch.setattr(storm_publication, "PUBLISHED_MIN_LEVEL", 1)
     monkeypatch.setitem(globals(), "MEMORY", MemoryStore())
     instance = DagsterInstance.ephemeral()
     for key in ("2026-07-15-18:00", "2026-07-15-19:00", "2026-07-15-20:00"):
