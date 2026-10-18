@@ -13,8 +13,8 @@ turn deploys on. Details live in [deploy](deploy.md), [secrets](secrets.md) and
   parallel.
   Draft PRs run nothing; run the local commands instead.
 - A merge into `main` deploys `web/` to `scintille.app`. Checks are not run again on `main`.
-- The heavy jobs (images, stack smoke test, lakehouse, render determinism, VPS deploy) are manual
-  runs.
+- A merge into `main` touching `data/` or `infra/compose/` builds the images and deploys the VPS.
+- Render determinism is a manual run.
 - A PR labeled `preview` gets its own Preview of the site, with a URL posted on the PR.
 - Terraform is never applied automatically: PRs get a plan, `apply` is a manual run.
 - **Budget.** Few jobs, run only when needed.
@@ -25,7 +25,7 @@ flowchart LR
     pr -- "label preview" --> preview["Preview<br/>pr-N on workers.dev"]
     checks --> merge["Merge into main"]
     merge --> webdeploy["web / deploy<br/>wrangler deploy"]
-    manualimg["Manual run on main"] --> imgdeploy["images / deploy<br/>GHCR, then SSH to the VPS"]
+    merge --> imgdeploy["images / deploy<br/>GHCR, then SSH to the VPS"]
     webdeploy --> site["scintille.app<br/>Cloudflare Worker"]
     imgdeploy --> vps["OVH VPS<br/>Docker Compose"]
     manual["Manual run on main"] --> tfapply["terraform / apply"]
@@ -40,7 +40,7 @@ All workflows live in `.github/workflows/`. Typical durations are from recent ru
 |---|---|---|---|
 | `ci` | Every PR that is not a draft | `secrets`, `changes`, `data`, `web` | 1 to 3 min |
 | `web` | Push to `main` touching `web/**`; PRs labeled `preview`, and their close; manual | `deploy`, `preview`, `preview-cleanup` | 1 min |
-| `images` | Manual | `build` (matrix), `smoke`, `rollback`, `lake`, `deploy` | 4 to 6 min |
+| `images` | Push to `main` touching `data/**` or `infra/compose/**`; manual | `build` (matrix), `smoke`, `rollback`, `lake`, `deploy` | 4 to 6 min |
 | `render` | Manual | `determinism` | 5 min |
 | `terraform` | PR touching `infra/terraform/**`; manual | `plan`, `apply` | 15 s |
 | `retention` | Manual, `main` only | Read-only VPS storage evidence for #41 | Depends on bucket/metadata size |
@@ -97,8 +97,11 @@ To redeploy `main` without a change: Actions > web > Run workflow, or
 
 ### `images`: containers, the lakehouse and the VPS
 
-Manual only. Run it before a VPS deploy, or to check a change to the stack that the local commands
-cannot cover.
+Runs on every merge into `main` that touches `data/` or `infra/compose/`, and manually to check a
+change to the stack that the local commands cannot cover.
+
+A deploy restarts Dagster and kills its running runs. Before merging data changes during a long
+backfill, set `VPS_DEPLOY` to `false`, then back to `true` and rerun `images` once it is done.
 
 - **`build`**: one Docker image per service from `data/Dockerfile` (`scintille-ingest`,
   `scintille-pipelines`), with the GitHub Actions layer cache. On `main` it pushes
@@ -151,7 +154,7 @@ Until launch, `scintille.app` is behind a Cloudflare Access gate (#142); Preview
 ### VPS deploy
 
 Ingestion and Dagster run on one OVH VPS with Docker Compose ([ADR 0008](adr/0008-ovh-vps.md)). On a
-manual run of `images` on `main`, once `build`, `smoke`, `rollback` and `lake` are green, the `deploy` job (environment
+run of `images` on `main`, once `build`, `smoke`, `rollback` and `lake` are green, the `deploy` job (environment
 `production`, serialized by the `vps-deploy` group):
 
 1. writes the SSH key and the pinned host key from secrets;
