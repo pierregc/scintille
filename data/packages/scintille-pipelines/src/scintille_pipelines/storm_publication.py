@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -51,17 +52,17 @@ def export_candidates(
 
 
 def flash_windows(
-    spans: dict[str, tuple[datetime, datetime]],
-) -> list[tuple[tuple[datetime, datetime], list[str]]]:
-    """Group storm spans into scans of at most FLASH_WINDOW; longer storms get their own."""
-    groups: list[tuple[tuple[datetime, datetime], list[str]]] = []
-    for storm_id, (first, last) in sorted(spans.items(), key=lambda item: item[1]):
+    steps: list[tuple[datetime, datetime]],
+) -> list[tuple[tuple[datetime, datetime], list[int]]]:
+    """Group track steps, sorted by start, into silver scans of at most FLASH_WINDOW."""
+    groups: list[tuple[tuple[datetime, datetime], list[int]]] = []
+    for index, (first, last) in enumerate(steps):
         if groups:
             (start, end), members = groups[-1]
             if max(end, last) - start <= FLASH_WINDOW:
-                groups[-1] = ((start, max(end, last)), [*members, storm_id])
+                groups[-1] = ((start, max(end, last)), [*members, index])
                 continue
-        groups.append(((first, last), [storm_id]))
+        groups.append(((first, last), [index]))
     return groups
 
 
@@ -140,7 +141,7 @@ def storm_catalog(
         if candidates
         else touched.clear()
     )
-    spans: dict[str, tuple[datetime, datetime]] = {}
+    valid = []
     for storm in candidates.values():
         tracks = all_tracks.filter(pl.col("storm_id") == storm.storm_id)
         first, last = tracks["window_start"].min(), tracks["window_end"].max()
@@ -148,33 +149,42 @@ def storm_catalog(
             context.log.error("Skipping storm without a valid track: %s", storm.slug)
             reject(storm.slug)
             continue
-        spans[storm.storm_id] = (first, last)
-    for (start_window, end_window), members in flash_windows(spans):
-        # One silver scan per window instead of one per storm.
+        valid.append(storm.storm_id)
+    steps = all_tracks.filter(pl.col("storm_id").is_in(valid)).sort("window_start")
+    selected: dict[str, list[pl.DataFrame]] = defaultdict(list)
+    # Bounded silver scans shared by every storm, long ones read piece by piece.
+    for (start_window, end_window), rows in flash_windows(
+        list(zip(steps["window_start"], steps["window_end"], strict=True))
+    ):
         flashes = _scan(flash_table, _between("event_time", start_window, end_window))
-        for storm_id in members:
-            storm = candidates[storm_id]
-            row = storms.filter(pl.col("storm_id") == storm_id).row(0, named=True)
-            tracks = all_tracks.filter(pl.col("storm_id") == storm_id)
-            try:
-                replay, chunks = replay_chunks(selected_flashes(flashes, tracks))
-                detail = StormDetail(
-                    schema_version=SCHEMA_VERSION,
-                    published_at=now,
-                    last_observation_time=storm.t_end,
-                    storm=storm,
-                    bounds=StormBounds.model_validate(
-                        {key: row[key] for key in ("west", "south", "east", "north")}
-                    ),
-                    track=row["track"],
-                    replay=replay,
-                )
-            except ValueError:
-                context.log.exception("Skipping invalid storm export: %s", storm.slug)
-                reject(storm.slug)
-                continue
-            objects.update(chunks)
-            details.append(detail)
+        for (storm_id,), part in steps[rows].partition_by("storm_id", as_dict=True).items():
+            selected[str(storm_id)].append(selected_flashes(flashes, part))
+        del flashes
+    for storm_id in valid:
+        storm = candidates[storm_id]
+        row = storms.filter(pl.col("storm_id") == storm_id).row(0, named=True)
+        flashes = (
+            pl.concat(selected.pop(storm_id)).unique("flash_id").sort("event_time", "flash_id")
+        )
+        try:
+            replay, chunks = replay_chunks(flashes)
+            detail = StormDetail(
+                schema_version=SCHEMA_VERSION,
+                published_at=now,
+                last_observation_time=storm.t_end,
+                storm=storm,
+                bounds=StormBounds.model_validate(
+                    {key: row[key] for key in ("west", "south", "east", "north")}
+                ),
+                track=row["track"],
+                replay=replay,
+            )
+        except ValueError:
+            context.log.exception("Skipping invalid storm export: %s", storm.slug)
+            reject(storm.slug)
+            continue
+        objects.update(chunks)
+        details.append(detail)
     visible = [
         rejected.get(storm.slug) or storm
         for storm in summary
