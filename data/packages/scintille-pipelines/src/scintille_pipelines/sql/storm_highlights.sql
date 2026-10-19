@@ -52,4 +52,4 @@ candidates AS (
     UNION ALL
     SELECT 'largest', NULL, slug, row_number() OVER (ORDER BY max_area_km2 DESC, slug) FROM week
 )
-SELECT kind, area, slug, rank FROM candidates WHERE rank <= 12 ORDER BY kind, area, rank
+SELECT kind, area, slug FROM candidates WHERE rank = 1 ORDER BY kind, area

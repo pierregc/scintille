@@ -2,7 +2,7 @@ import type { StormHighlight, StormHighlights, StormIndexPage, StormSummary } fr
 import { boundedBody } from '../clouds/response';
 import { CONTRACT_MAJOR } from '../live/decode';
 
-export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, highlights: 6, highlightBytes: 64 * 1024, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
+export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, highlights: 12, highlightBytes: 64 * 1024, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export function parseCatalogPage(value: unknown, page: number): StormIndexPage {
@@ -32,7 +32,7 @@ const AREAS: Record<string, string> = { americas: 'the Americas', europe: 'Europ
 
 export function parseHighlights(value: unknown): StormHighlights {
 	if (!record(value) || Number(String(value.schema_version).split('.')[0]) !== CONTRACT_MAJOR ||
-		!Number.isFinite(Date.parse(String(value.published_at))) || !Array.isArray(value.highlights) || value.highlights.length > 12) {
+		!Number.isFinite(Date.parse(String(value.published_at))) || !Array.isArray(value.highlights) || value.highlights.length > CATALOG_LIMITS.highlights) {
 		throw new Error('invalid storm highlights');
 	}
 	for (const item of value.highlights as unknown[]) {
@@ -100,7 +100,7 @@ export async function loadSuggestions(baseUrl: string, signal: AbortSignal, fetc
 	if (!response.ok) throw new Error(`highlights HTTP ${response.status}`);
 	const value = parseHighlights(JSON.parse(new TextDecoder().decode(await boundedBody(response, CATALOG_LIMITS.highlightBytes))));
 	signal.throwIfAborted();
-	const cards = value.highlights.slice(0, CATALOG_LIMITS.highlights).map((item) => ({ storm: item.storm, reason: reason(item) }));
+	const cards = value.highlights.map((item) => ({ storm: item.storm, reason: reason(item) }));
 	return cards.length ? { cards, publishedAt: Date.parse(value.published_at), partial: false } : loadRecent(root, signal, fetchFn);
 }
 

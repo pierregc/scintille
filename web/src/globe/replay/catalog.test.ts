@@ -29,6 +29,15 @@ it('falls back to recent index pages when highlights are empty, and fails on oth
 	await expect(loadSuggestions('https://feed.test/', new AbortController().signal, async () => new Response('x'.repeat(CATALOG_LIMITS.highlightBytes + 1)))).rejects.toThrow('too large');
 });
 
+it('shows every published highlight, weekly records included', async () => {
+	const [item] = highlights.highlights;
+	const kinds = [['day', null], ['week', null], ['area', 'americas'], ['area', 'europe'], ['area', 'africa'], ['area', 'asia'], ['longest', null], ['intense', null], ['largest', null]];
+	const all = kinds.map(([kind, area], i) => ({ kind, area, storm: { ...item.storm, slug: `storm-${i}` } }));
+	const result = await loadSuggestions('https://feed.test/', new AbortController().signal, async () => Response.json({ ...highlights, highlights: all }));
+	expect(result.cards.map((card) => card.reason)).toEqual(['Storm of the day', 'Storm of the week', 'Strongest in the Americas today', 'Strongest in Europe today',
+		'Strongest in Africa today', 'Strongest in Asia today', 'Longest this week', 'Most intense this week', 'Largest this week']);
+});
+
 it('rejects malformed highlights and words every reason briefly', () => {
 	const [item] = highlights.highlights;
 	for (const value of [null, { ...highlights, schema_version: '99.0.0' }, { ...highlights, highlights: [{ ...item, kind: 'best' }] },

@@ -24,6 +24,7 @@ from scintille_pipelines.storm_catalog import (
     XMLNS,
     index_pages,
     publish_catalog,
+    read_detail,
     replay_chunks,
     selected_flashes,
     sitemaps,
@@ -147,6 +148,25 @@ def test_highlights_follow_the_effective_snapshot_and_keep_the_previous_file() -
         highlights=lambda _: None,
     )
     assert store.get(HIGHLIGHTS_PATH) == written
+
+
+def test_details_published_by_an_earlier_minor_version_are_still_read() -> None:
+    store, document = Store(), detail()
+    path = f"storms/{document.storm.slug}.json"
+    older = json.loads(document.model_dump_json()) | {"schema_version": "2.4.0"}
+    store.files[path] = json.dumps(older).encode()
+    store.files[PUBLISHED_PATH] = json.dumps([document.storm.slug]).encode()
+    assert read_detail(store.files[path]).storm == document.storm
+    changed = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"flashes": 4})}
+    )
+    result = publish_catalog(
+        store, [changed], chunks(document), [changed.storm], NOW, lambda _: True
+    )
+    assert result["changed"] == 1
+    assert StormDetail.model_validate_json(store.files[path]).storm.flashes == 4
+    with pytest.raises(ValueError, match="unsupported"):
+        read_detail(json.dumps(older | {"schema_version": "1.9.0"}).encode())
 
 
 def test_missing_references_abort_before_writes() -> None:

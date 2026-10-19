@@ -13,7 +13,7 @@ type Kind = Literal["day", "week", "area", "longest", "intense", "largest"]
 type Area = Literal["americas", "europe", "africa", "asia"]
 
 AREAS: tuple[Area, ...] = ("americas", "europe", "africa", "asia")
-#: Display order; each slot takes its best storm not already picked.
+#: Display order; each slot shows its winner unless an earlier slot already shows it.
 SLOTS: tuple[tuple[Kind, Area | None], ...] = (
     ("day", None),
     ("week", None),
@@ -53,13 +53,13 @@ def highlights(
             schema=SUMMARY_SCHEMA,
         ).join(metrics.select(METRICS), on="storm_id")
         by_slug = {storm.slug: storm for storm in published}
-        candidates: dict[tuple[str, str | None], list[str]] = {}
-        for kind, area, slug in ranked(storms, ref).select("kind", "area", "slug").iter_rows():
-            candidates.setdefault((kind, area), []).append(slug)
+        winners = {
+            (kind, area): slug
+            for kind, area, slug in ranked(storms, ref).select("kind", "area", "slug").iter_rows()
+        }
         for kind, area in SLOTS:
-            used = {h.storm.slug for h in chosen}
-            slug = next((s for s in candidates.get((kind, area), []) if s not in used), None)
-            if slug is not None:
+            slug = winners.get((kind, area))
+            if slug is not None and all(h.storm.slug != slug for h in chosen):
                 chosen.append(StormHighlight(kind=kind, area=area, storm=by_slug[slug]))
     return StormHighlights(
         schema_version=SCHEMA_VERSION,

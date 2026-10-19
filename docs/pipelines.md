@@ -269,8 +269,9 @@ After the index, `storms/highlights.json` lists a few published storms worth rep
 over the published snapshot, with windows relative to the latest observation. Storms shorter than
 30 minutes are left out. A storm ranks by its ADR 0009 score, times a duration factor
 (`min(1.5, sqrt(hours / 2))`), 0.8 offshore and 1.25 at night (sun below -6° at its centroid and
-midpoint). Slots, in order, each take their best storm not already picked: the last 24 hours, the
-last 7 days, one per broad area over 24 hours (the Americas, Europe, Africa, Asia, split by centroid
-longitude and latitude), then the longest, most intense (peak per minute) and largest of the week.
+midpoint). Slots, in order, show their winner: the last 24 hours, the last 7 days, one per broad
+area over 24 hours (the Americas, Europe, Africa, Asia, split by centroid longitude and latitude),
+then the longest, most intense (peak per minute) and largest of the week. A storm already shown
+keeps its first title and the slot is left out, so no title goes to a runner up.
 A failure keeps the previous file; the site falls back to recent index pages while none exists.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.

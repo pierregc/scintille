@@ -37,6 +37,7 @@ from .storm_catalog import (
     ObjectCatalogStore,
     publish_catalog,
     published_slugs,
+    read_detail,
     replay_chunks,
     selected_flashes,
 )
@@ -147,9 +148,7 @@ def storm_catalog(
 
     def reject(slug: str) -> None:
         previous = store.get(f"storms/{slug}.json")
-        rejected[slug] = (
-            StormDetail.model_validate_json(previous).storm if previous is not None else None
-        )
+        rejected[slug] = read_detail(previous).storm if previous is not None else None
 
     candidates = {storm.storm_id: storm for storm in summary if storm.storm_id in ids}
     all_tracks = (

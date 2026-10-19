@@ -72,6 +72,14 @@ class ObjectCatalogStore:
             return False
 
 
+def read_detail(body: bytes) -> StormDetail:
+    """A published detail from any minor version of the current major, read as the current one."""
+    value = json.loads(body)
+    if str(value.get("schema_version", "")).split(".")[0] != SCHEMA_VERSION.split(".")[0]:
+        raise ValueError(f"unsupported storm detail version: {value.get('schema_version')}")
+    return StormDetail.model_validate(value | {"schema_version": SCHEMA_VERSION})
+
+
 def published_slugs(store: CatalogStore) -> set[str]:
     return set(json.loads(store.get(PUBLISHED_PATH) or b"[]"))
 
@@ -222,9 +230,7 @@ def publish_catalog(
                 )
                 previous = stored[path]
                 if previous is not None:
-                    previous_summaries[detail.storm.slug] = StormDetail.model_validate_json(
-                        previous
-                    ).storm
+                    previous_summaries[detail.storm.slug] = read_detail(previous).storm
                 continue
             accepted.append(detail)
             bodies[path] = body
@@ -263,7 +269,7 @@ def publish_catalog(
             path = f"storms/{detail.storm.slug}.json"
             previous = stored[path]
             if previous is not None:
-                old = StormDetail.model_validate_json(previous)
+                old = read_detail(previous)
                 if content(old) == content(detail):
                     continue
                 if old.storm.closed:

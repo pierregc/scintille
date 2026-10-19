@@ -51,7 +51,7 @@ def pick(*storms: tuple[StormSummary, dict[str, object]]) -> list[tuple[str, str
     return [(h.kind, h.area, h.storm.slug) for h in result.highlights]
 
 
-def test_each_slot_takes_its_best_storm_not_already_picked() -> None:
+def test_each_slot_shows_its_winner_once() -> None:
     picked = pick(
         storm("paris", 10, 2, score=50),
         storm("rome", 12, 2, score=40, lat=41.9, lon=12.5),
@@ -63,13 +63,17 @@ def test_each_slot_takes_its_best_storm_not_already_picked() -> None:
     )
     assert picked == [
         ("day", None, "paris"),
-        ("week", None, "rome"),
         ("area", "americas", "miami"),
         ("area", "africa", "lagos"),
         ("longest", None, "long"),
         ("intense", None, "intense"),
         ("largest", None, "wide"),
     ]
+
+
+def test_a_runner_up_never_inherits_a_title() -> None:
+    picked = pick(storm("best", 10, 2, score=50), storm("second", 12, 2, score=10))
+    assert picked == [("day", None, "best")]
 
 
 def test_windows_follow_the_latest_observation_not_the_clock() -> None:
