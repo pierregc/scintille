@@ -17,6 +17,7 @@ from scintille_contract.models import (
     SCHEMA_VERSION,
     StormChunkRef,
     StormDetail,
+    StormHighlights,
     StormIndexPage,
     StormReplay,
     StormSummary,
@@ -36,6 +37,7 @@ CHUNK_HEADERS = {
     "Content-Type": "application/octet-stream",
     "Cache-Control": "public, max-age=31536000, immutable",
 }
+HIGHLIGHTS_PATH = "storms/highlights.json"
 PURGE_PATH = "_pipeline/storms/purge.json"
 PUBLISHED_PATH = "_pipeline/storms/published.json"
 log = logging.getLogger(__name__)
@@ -201,6 +203,7 @@ def publish_catalog(
     now: datetime,
     purge: Callable[[list[str]], bool],
     region_codes: Sequence[str] = (),
+    highlights: Callable[[Sequence[StormSummary]], StormHighlights | None] | None = None,
 ) -> dict[str, int]:
     with ThreadPoolExecutor(IO_THREADS) as pool:
         paths = [f"storms/{detail.storm.slug}.json" for detail in details]
@@ -277,6 +280,9 @@ def publish_catalog(
     store.put(PUBLISHED_PATH, json.dumps(sorted(published)).encode(), JSON_HEADERS)
     for page in index_pages(all_storms, now):
         store.put(f"storms/index/{page.page}.json", page.model_dump_json().encode(), JSON_HEADERS)
+    picked = highlights(all_storms) if highlights is not None else None
+    if picked is not None:
+        store.put(HIGHLIGHTS_PATH, picked.model_dump_json().encode(), JSON_HEADERS)
     available_regions = [code for code in region_codes if store.exists(f"regions/{code}.json")]
     for path, body in sitemaps(all_storms, now, available_regions).items():
         store.put(path, body, {"Content-Type": "application/xml", "Cache-Control": "max-age=60"})
@@ -295,4 +301,5 @@ def publish_catalog(
         "storms": len(all_storms),
         "skipped_storms": len(skipped),
         "pending_purge_tags": len(pending),
+        "highlights": len(picked.highlights) if picked is not None else 0,
     }

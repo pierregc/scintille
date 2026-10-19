@@ -18,6 +18,7 @@
 	[data-storm-cards] :global(button) { display: grid; gap: 6px; width: 100%; min-height: 44px; padding: 12px; color: var(--ink); text-align: left; cursor: pointer; background: rgb(255 255 255 / 0.025); border: 1px solid var(--hair); }
 	[data-storm-cards] :global(strong) { font: 300 15px/1.4 var(--sans); }
 	[data-storm-cards] :global(span) { color: var(--soft); font: 300 10px/1.6 var(--mono); }
+	[data-storm-cards] :global(em) { color: var(--soft); font: 300 10px/1.5 var(--mono); font-style: normal; letter-spacing: 0.15em; text-transform: uppercase; }
 	.note { color: var(--dim); font-size: 11px; }
 	[data-catalog-retry] { padding: 8px 0; background: none; border: 0; }
 	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
@@ -57,12 +58,17 @@
 				loaded = true;
 				const date = new Date(result.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 				const stale = Date.now() - result.publishedAt > CATALOG_LIMITS.staleMs;
-				setStatus(!result.storms.length ? 'No published storm replays are available yet.' :
+				setStatus(!result.cards.length ? 'No published storm replays are available yet.' :
 					`Catalog published ${date}.${stale ? ' Recent storms may be missing.' : ''}${result.partial ? ' Only part of the catalog could be loaded.' : ''}`);
-				for (const storm of result.storms) {
+				for (const { storm, reason } of result.cards) {
 					const item = document.createElement('li');
 					const button = document.createElement('button');
 					button.type = 'button';
+					if (reason) {
+						const why = document.createElement('em');
+						why.textContent = reason;
+						button.append(why);
+					}
 					const title = document.createElement('strong');
 					title.textContent = storm.label;
 					const when = document.createElement('span');

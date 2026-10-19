@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,9 +9,16 @@ import numpy as np
 import polars as pl
 import pytest
 from scintille_contract.chunk import decode
-from scintille_contract.models import StormDetail
+from scintille_contract.models import (
+    SCHEMA_VERSION,
+    StormDetail,
+    StormHighlight,
+    StormHighlights,
+    StormSummary,
+)
 from scintille_pipelines.storm_catalog import (
     DETAIL_MAX_BYTES,
+    HIGHLIGHTS_PATH,
     PUBLISHED_PATH,
     PURGE_PATH,
     XMLNS,
@@ -109,6 +117,36 @@ def test_idempotent_details_and_retryable_purge() -> None:
     assert calls == [["region:US", f"storm:{document.storm.slug}", "storms-index"]]
     publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, lambda _: True)
     assert json.loads(store.get(PURGE_PATH) or b"[]") == []
+
+
+def test_highlights_follow_the_effective_snapshot_and_keep_the_previous_file() -> None:
+    store, document = Store(), detail()
+    seen: list[list[str]] = []
+
+    def pick(storms: Sequence[StormSummary]) -> StormHighlights:
+        seen.append([storm.slug for storm in storms])
+        return StormHighlights(
+            schema_version=SCHEMA_VERSION,
+            published_at=NOW,
+            last_observation_time=None,
+            highlights=[StormHighlight(kind="day", area=None, storm=storms[0])],
+        )
+
+    result = publish_catalog(
+        store, [document], chunks(document), [document.storm], NOW, lambda _: True, highlights=pick
+    )
+    assert seen == [[document.storm.slug]] and result["highlights"] == 1
+    written = store.get(HIGHLIGHTS_PATH)
+    publish_catalog(
+        store,
+        [document],
+        chunks(document),
+        [document.storm],
+        NOW,
+        lambda _: True,
+        highlights=lambda _: None,
+    )
+    assert store.get(HIGHLIGHTS_PATH) == written
 
 
 def test_missing_references_abort_before_writes() -> None:

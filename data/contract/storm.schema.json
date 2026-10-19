@@ -344,6 +344,86 @@
         }
       },
       "description": "storms/index/<page>.json: zero-based pages, recent first, read one page per request."
+    },
+    "StormHighlight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "area",
+        "storm"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "area",
+            "longest",
+            "intense",
+            "largest"
+          ],
+          "description": "Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, or a 7 day record."
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "americas",
+                "europe",
+                "africa",
+                "asia"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Broad area from the storm centroid, set when kind is area."
+        },
+        "storm": {
+          "$ref": "#/$defs/StormSummary"
+        }
+      },
+      "description": "One highlighted storm and the reason it was chosen."
+    },
+    "StormHighlights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "published_at",
+        "last_observation_time",
+        "highlights"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/SchemaVersion"
+        },
+        "published_at": {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "last_observation_time": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlights": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/StormHighlight"
+          }
+        }
+      },
+      "description": "storms/highlights.json: a few published storms worth replaying, best first."
     }
   }
 }

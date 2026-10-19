@@ -1,8 +1,8 @@
-import type { StormIndexPage, StormSummary } from '../../contract/types';
+import type { StormHighlight, StormHighlights, StormIndexPage, StormSummary } from '../../contract/types';
 import { boundedBody } from '../clouds/response';
 import { CONTRACT_MAJOR } from '../live/decode';
 
-export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
+export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, highlights: 6, highlightBytes: 64 * 1024, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export function parseCatalogPage(value: unknown, page: number): StormIndexPage {
@@ -12,21 +12,57 @@ export function parseCatalogPage(value: unknown, page: number): StormIndexPage {
 		!Number.isFinite(Date.parse(String(value.published_at))) || !Array.isArray(value.storms) || value.storms.length > 50) {
 		throw new Error('invalid storm catalog');
 	}
-	for (const storm of value.storms as unknown[]) {
-		if (!record(storm) || typeof storm.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(storm.slug) ||
-			typeof storm.label !== 'string' || !storm.label.trim() || typeof storm.level_name !== 'string' ||
-			!Number.isSafeInteger(storm.level) || Number(storm.level) < 1 || Number(storm.level) > 5 ||
-			!Number.isSafeInteger(storm.flashes) || Number(storm.flashes) < 0 ||
-			!Number.isSafeInteger(storm.peak_rate) || Number(storm.peak_rate) < 0 ||
-			(storm.country_code !== null && typeof storm.country_code !== 'string') ||
-			!Number.isFinite(Date.parse(String(storm.t_start))) || !Number.isFinite(Date.parse(String(storm.t_end))) ||
-			Date.parse(String(storm.t_start)) > Date.parse(String(storm.t_end))) throw new Error('invalid storm summary');
-	}
+	for (const storm of value.storms as unknown[]) checkStorm(storm);
 	return value as unknown as StormIndexPage;
 }
 
+function checkStorm(storm: unknown): asserts storm is StormSummary {
+	if (!record(storm) || typeof storm.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(storm.slug) ||
+		typeof storm.label !== 'string' || !storm.label.trim() || typeof storm.level_name !== 'string' ||
+		!Number.isSafeInteger(storm.level) || Number(storm.level) < 1 || Number(storm.level) > 5 ||
+		!Number.isSafeInteger(storm.flashes) || Number(storm.flashes) < 0 ||
+		!Number.isSafeInteger(storm.peak_rate) || Number(storm.peak_rate) < 0 ||
+		(storm.country_code !== null && typeof storm.country_code !== 'string') ||
+		!Number.isFinite(Date.parse(String(storm.t_start))) || !Number.isFinite(Date.parse(String(storm.t_end))) ||
+		Date.parse(String(storm.t_start)) > Date.parse(String(storm.t_end))) throw new Error('invalid storm summary');
+}
+
+const KINDS = ['day', 'week', 'area', 'longest', 'intense', 'largest'];
+const AREAS: Record<string, string> = { americas: 'the Americas', europe: 'Europe', africa: 'Africa', asia: 'Asia' };
+
+export function parseHighlights(value: unknown): StormHighlights {
+	if (!record(value) || Number(String(value.schema_version).split('.')[0]) !== CONTRACT_MAJOR ||
+		!Number.isFinite(Date.parse(String(value.published_at))) || !Array.isArray(value.highlights) || value.highlights.length > 12) {
+		throw new Error('invalid storm highlights');
+	}
+	for (const item of value.highlights as unknown[]) {
+		if (!record(item) || !KINDS.includes(String(item.kind)) || (item.kind === 'area') !== (typeof item.area === 'string' && item.area in AREAS)) {
+			throw new Error('invalid storm highlight');
+		}
+		checkStorm(item.storm);
+	}
+	return value as unknown as StormHighlights;
+}
+
+/** Short reason shown on a card. */
+export function reason(highlight: Pick<StormHighlight, 'kind' | 'area'>): string {
+	switch (highlight.kind) {
+		case 'day': return 'Storm of the day';
+		case 'week': return 'Storm of the week';
+		case 'area': return `Strongest in ${AREAS[highlight.area ?? ''] ?? 'its area'} today`;
+		case 'longest': return 'Longest this week';
+		case 'intense': return 'Most intense this week';
+		case 'largest': return 'Largest this week';
+	}
+}
+
+export interface StormCard {
+	storm: StormSummary;
+	reason: string | null;
+}
+
 export interface StormSuggestions {
-	storms: StormSummary[];
+	cards: StormCard[];
 	publishedAt: number;
 	partial: boolean;
 }
@@ -55,8 +91,20 @@ export function chooseStorms(storms: readonly StormSummary[], count = CATALOG_LI
 	return chosen;
 }
 
+/** Pipeline highlights, or recent index pages while none are published. */
 export async function loadSuggestions(baseUrl: string, signal: AbortSignal, fetchFn: typeof fetch = fetch): Promise<StormSuggestions> {
 	const root = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+	const abort = AbortSignal.any([signal, AbortSignal.timeout(CATALOG_LIMITS.timeoutMs)]);
+	const response = await fetchFn(new URL('storms/highlights.json', root), { signal: abort });
+	if (response.status === 404) return loadRecent(root, signal, fetchFn);
+	if (!response.ok) throw new Error(`highlights HTTP ${response.status}`);
+	const value = parseHighlights(JSON.parse(new TextDecoder().decode(await boundedBody(response, CATALOG_LIMITS.highlightBytes))));
+	signal.throwIfAborted();
+	const cards = value.highlights.slice(0, CATALOG_LIMITS.highlights).map((item) => ({ storm: item.storm, reason: reason(item) }));
+	return cards.length ? { cards, publishedAt: Date.parse(value.published_at), partial: false } : loadRecent(root, signal, fetchFn);
+}
+
+async function loadRecent(root: string, signal: AbortSignal, fetchFn: typeof fetch): Promise<StormSuggestions> {
 	const storms: StormSummary[] = [];
 	let pages = 1, publishedAt = 0, partial = false;
 	for (let page = 0; page < Math.min(pages, CATALOG_LIMITS.pages); page++) {
@@ -74,5 +122,5 @@ export async function loadSuggestions(baseUrl: string, signal: AbortSignal, fetc
 		}
 	}
 	signal.throwIfAborted();
-	return { storms: chooseStorms(storms), publishedAt, partial };
+	return { cards: chooseStorms(storms).map((storm) => ({ storm, reason: null })), publishedAt, partial };
 }

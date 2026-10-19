@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.4.0"]
-SCHEMA_VERSION: Final = "2.4.0"
+SchemaVersion = Literal["2.5.0"]
+SCHEMA_VERSION: Final = "2.5.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -500,6 +500,34 @@ class StormIndexPage(BaseModel):
     total_storms: int = Field(ge=0)
     total_pages: int = Field(ge=1)
     storms: list[StormSummary]
+
+
+class StormHighlight(BaseModel):
+    """One highlighted storm and the reason it was chosen."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["day", "week", "area", "longest", "intense", "largest"] = Field(
+        description=(
+            "Why it was picked: best of the last 24 h or 7 days, best of a broad area "
+            "over 24 h, or a 7 day record."
+        )
+    )
+    area: Literal["americas", "europe", "africa", "asia"] | None = Field(
+        description="Broad area from the storm centroid, set when kind is area."
+    )
+    storm: StormSummary
+
+
+class StormHighlights(BaseModel):
+    """storms/highlights.json: a few published storms worth replaying, best first."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    published_at: UtcTimestamp
+    last_observation_time: UtcTimestamp | None
+    highlights: list[StormHighlight]
 
 
 class StormDetail(BaseModel):

@@ -3,10 +3,12 @@
 import json
 import os
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import duckdb
 import obstore
 import polars as pl
 from dagster import (
@@ -21,7 +23,13 @@ from dagster import (
     define_asset_job,
     schedule,
 )
-from scintille_contract.models import SCHEMA_VERSION, StormBounds, StormDetail, StormSummary
+from scintille_contract.models import (
+    SCHEMA_VERSION,
+    StormBounds,
+    StormDetail,
+    StormHighlights,
+    StormSummary,
+)
 from scintille_lake.tables import FLASHES
 
 from .resources import FeedResource, LakeResource
@@ -33,6 +41,7 @@ from .storm_catalog import (
     selected_flashes,
 )
 from .storm_cells import hourly
+from .storm_highlights import highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
@@ -111,7 +120,7 @@ def summaries(
     deps=[AssetKey(["gold", key]) for key in ("storms", "storm_names", "storm_levels")],
     group_name="feeds",
     pool="storm-tracks",
-    description="Bounded storm metadata, replay, paginated index and sitemaps published in order.",
+    description="Storm metadata, replay, index, highlights and sitemaps, published in order.",
 )
 def storm_catalog(
     context: AssetExecutionContext, lake: LakeResource, feed_bucket: FeedResource
@@ -205,7 +214,18 @@ def storm_catalog(
             for item in batch
             if item["path"].endswith(".json") and item["path"].count("/") == 1
         )
-    metrics = publish_catalog(store, details, objects, visible, now, purge_tags, regions)
+    storm_stats = storm_metrics(storms, levels, names)
+
+    def pick(effective: Sequence[StormSummary]) -> StormHighlights | None:
+        try:
+            return highlights(effective, storm_stats, now)
+        except (ValueError, duckdb.Error):
+            context.log.exception("Highlights failed; the previous file stays published")
+            return None
+
+    metrics = publish_catalog(
+        store, details, objects, visible, now, purge_tags, regions, highlights=pick
+    )
     metrics["invalid_exports"] = len(rejected)
     metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(
