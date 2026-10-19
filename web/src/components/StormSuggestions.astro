@@ -1,5 +1,10 @@
 <details class="suggestions" data-storm-suggestions hidden>
-	<summary>Explore storms</summary>
+	<summary>
+		<svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round" aria-hidden="true"
+			><path d="M7 1 2.5 8H6l-1 5 4.5-7H6z"></path></svg
+		>
+		Explore storms
+	</summary>
 	<div class="panel">
 		<p role="status" data-catalog-status></p>
 		<ul aria-label="Available storm replays" data-storm-cards></ul>
@@ -9,7 +14,7 @@
 </details>
 
 <style>
-	.suggestions { position: fixed; top: calc(var(--gut) + 140px); left: var(--gut); z-index: 3; width: min(22rem, calc(100vw - 2 * var(--gut))); }
+	.suggestions { position: fixed; top: calc(var(--gut) + 62px); left: var(--gut); z-index: 3; width: min(22rem, calc(100vw - 2 * var(--gut))); }
 	.suggestions[open]::before {
 		position: fixed;
 		inset: 0 auto 0 0;
@@ -20,9 +25,9 @@
 		background: linear-gradient(90deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.28) 55%, transparent);
 	}
 	summary, [data-catalog-retry] { color: var(--dim); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
-	summary { min-height: 32px; list-style: none; }
+	summary { display: inline-flex; gap: 10px; align-items: center; min-height: 32px; color: var(--soft); font-size: 12px; letter-spacing: 0.2em; list-style: none; }
 	summary::-webkit-details-marker { display: none; }
-	summary:hover, .suggestions[open] > summary { color: var(--soft); }
+	summary:hover, .suggestions[open] > summary { color: var(--ink); }
 	.panel { margin-top: 10px; max-height: calc(100svh - 300px); overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--hair) transparent; scrollbar-width: thin; }
 	p { margin: 0 0 16px; color: var(--dim); font: 300 11px/1.6 var(--sans); }
 	ul { display: grid; gap: 4px; padding: 0; margin: 0 0 14px; list-style: none; }
@@ -36,9 +41,9 @@
 	[data-catalog-retry]:hover { color: var(--soft); }
 	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
 	[hidden] { display: none !important; }
-	:global(.hud:has([data-storm-suggestions][open]) [data-share-tools]) { visibility: hidden; }
+	:global(.hud:has([data-storm-suggestions][open]) :is([data-share-tools], [data-replay-status])) { visibility: hidden; }
 	@media (max-width: 640px) {
-		.suggestions { top: calc(var(--gut) + 62px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
+		.suggestions { top: calc(var(--gut) + 96px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
 		.suggestions[open]::before { inset: 0; width: auto; background: linear-gradient(180deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.4) 60%, transparent); }
 		.panel { max-height: calc(100svh - 240px); }
 		:global(.hud:has([data-storm-suggestions][open]) [data-layers]) { visibility: hidden; }

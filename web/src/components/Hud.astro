@@ -4,7 +4,6 @@ import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-200.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
 import DebugPanel from './DebugPanel.astro';
-import { legendSteps } from './hud/legend';
 import Timeline from './Timeline.astro';
 import StormSuggestions from './StormSuggestions.astro';
 import Version from './Version.astro';
@@ -18,50 +17,53 @@ import Version from './Version.astro';
 		<p class="tag cap">Lightning · seen from orbit</p>
 	</header>
 
-	<details class="info" data-info>
-		<summary><span class="o" aria-hidden="true">i</span><span class="label cap">About this globe</span></summary>
-		<div class="sheet">
-			<p class="lead">
-				Lightning across the planet, in near real time. Satellites watching the Earth from orbit record the
-				light of each flash they detect, day and night, and every one of them lands here shortly after, on a
-				globe lit by the Sun as it is right now.
-			</p>
+	<div class="corner">
+		<a class="cap" href="/methodology">Methodology</a>
+		<details class="info" data-info>
+			<summary class="cap">About this globe</summary>
+			<div class="sheet">
+				<p class="lead">
+					Lightning across the planet, in near real time. Satellites watching the Earth from orbit record the
+					light of each flash they detect, day and night, and every one of them lands here shortly after, on a
+					globe lit by the Sun as it is right now.
+				</p>
 
-			<h2>What the dots mean</h2>
-			<p>
-				One dot is one lightning flash, detected from orbit by its optical pulse. That includes flashes
-				inside and between clouds, not only those that reach the ground.
-			</p>
-			<p>
-				Brightness follows the optical energy the satellite measured for that flash. The instruments do not
-				measure exactly the same quantity, so their values are brought to a common scale.
-			</p>
-			<p>
-				Coverage has gaps. The satellites see only part of the planet, and detection weakens near the edge of
-				their view. Where there is no data, the globe says so: an empty region is not a region without
-				lightning.
-			</p>
+				<h2>What the dots mean</h2>
+				<p>
+					One dot is one lightning flash, detected from orbit by its optical pulse. That includes flashes
+					inside and between clouds, not only those that reach the ground.
+				</p>
+				<p>
+					Brightness follows the optical energy the satellite measured for that flash. The instruments do not
+					measure exactly the same quantity, so their values are brought to a common scale.
+				</p>
+				<p>
+					Coverage has gaps. The satellites see only part of the planet, and detection weakens near the edge of
+					their view. Where there is no data, the globe says so: an empty region is not a region without
+					lightning.
+				</p>
 
-			<h2>Sources</h2>
-			<ul>
-				<li>
-					<a href="https://www.goes-r.gov/spacesegment/glm.html">NOAA GOES Geostationary Lightning Mapper</a> (GLM), on GOES-East and GOES-West, over the Americas and the surrounding oceans.
-				</li>
-				<li>
-					<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
-				</li>
-			</ul>
-			<p class="attribution">
-				GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.
-				<span data-cloud-credit>Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).</span>
-			</p>
+				<h2>Sources</h2>
+				<ul>
+					<li>
+						<a href="https://www.goes-r.gov/spacesegment/glm.html">NOAA GOES Geostationary Lightning Mapper</a> (GLM), on GOES-East and GOES-West, over the Americas and the surrounding oceans.
+					</li>
+					<li>
+						<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
+					</li>
+				</ul>
+				<p class="attribution">
+					GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.
+					<span data-cloud-credit>Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data).</span>
+				</p>
 
-			<nav aria-label="More about Scintille">
-				<a href="/methodology">Methodology and sources</a>
-			</nav>
-			<Version />
-		</div>
-	</details>
+				<nav aria-label="More about Scintille">
+					<a href="/methodology">Methodology and sources</a>
+				</nav>
+				<Version />
+			</div>
+		</details>
+	</div>
 
 	<DebugPanel />
 	<StormSuggestions />
@@ -95,17 +97,6 @@ import Version from './Version.astro';
 			<span class="cap" id="afterglow-label">Afterglow</span>
 			<div class="opts" role="radiogroup" aria-labelledby="afterglow-label" data-display></div>
 		</div>
-		<details class="legend" data-legend>
-			<summary><span class="cap">Legend</span><i aria-hidden="true"></i></summary>
-			<div class="key">
-				<div class="dots" aria-hidden="true">
-					{legendSteps().map((s) => <i style={`--d: ${s.size}px; --a: ${s.alpha}`} />)}
-				</div>
-				<p class="ends" aria-hidden="true"><span>Weak</span><span>Strong</span></p>
-				<p><strong>Brightness = measured optical energy.</strong> Stronger flashes also look larger.</p>
-				<a href="/methodology">Methodology</a>
-			</div>
-		</details>
 	</div>
 
 	<Timeline />
@@ -306,6 +297,10 @@ import Version from './Version.astro';
 	.sources :global(li[data-state='offline']) {
 		color: var(--soft);
 	}
+	.sources :global(li[data-state='live']),
+	.hud[data-late] .sources {
+		display: none;
+	}
 	.stale {
 		position: fixed;
 		top: var(--gut);
@@ -411,145 +406,61 @@ import Version from './Version.astro';
 		font: 300 9.5px/1 var(--mono);
 		letter-spacing: 0.14em;
 	}
-	.legend {
-		display: grid;
-		justify-items: end;
-		width: min(13rem, calc(100vw - 2 * var(--gut)));
+
+	.corner {
+		position: fixed;
+		right: var(--gut);
+		bottom: var(--gut);
+		z-index: 2;
+		display: flex;
+		gap: 28px;
+		align-items: center;
 	}
-	.legend > summary {
+	.hud[data-mode='replay'] .corner {
+		bottom: calc(var(--gut) + 64px);
+	}
+	.corner .cap {
 		display: inline-flex;
-		gap: 10px;
 		align-items: center;
 		min-height: 24px;
 		color: var(--dim);
-		list-style: none;
+		font-size: 9.5px;
+		text-decoration: none;
 		cursor: pointer;
 	}
-	.legend > summary::-webkit-details-marker {
-		display: none;
-	}
-	.legend > summary .cap {
-		color: inherit;
-	}
-	.legend > summary i {
-		width: 5px;
-		height: 5px;
-		border: solid currentcolor;
-		border-width: 0 1px 1px 0;
-		transform: translateY(-2px) rotate(45deg);
-	}
-	.legend[open] > summary i {
-		transform: translateY(1px) rotate(-135deg);
-	}
-	.legend > summary:hover,
-	.legend[open] > summary {
+	.corner .cap:hover,
+	.info[open] > summary {
 		color: var(--soft);
 	}
-	.key {
-		display: grid;
-		gap: 8px;
-		justify-items: end;
-		margin-top: 8px;
-		color: var(--soft);
-		font: 300 12px/1.55 var(--sans);
-		text-align: right;
-	}
-	.key strong {
-		color: var(--ink);
-		font-weight: 300;
-	}
-	.dots {
-		display: flex;
-		gap: 0;
-		align-items: center;
-		justify-content: space-between;
-		width: 9rem;
-		height: 16px;
-	}
-	.dots i {
-		width: var(--d);
-		height: var(--d);
-		background: radial-gradient(circle, #e4ebff 0 30%, rgb(228 235 255 / 0.25) 60%, transparent 72%);
-		border-radius: 50%;
-		opacity: var(--a);
-	}
-	.ends {
-		display: flex;
-		justify-content: space-between;
-		width: 9rem;
-		color: var(--dim);
-		font: 300 9.5px/1 var(--mono);
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-	}
-	.key a {
-		padding: 4px 0;
-		color: var(--soft);
-		font: 300 10px/1 var(--mono);
-		letter-spacing: 0.2em;
-		text-decoration: none;
-		text-transform: uppercase;
-		border-bottom: 1px solid var(--hair);
-	}
-	.key a:hover {
-		color: var(--ink);
-	}
-
 	.info {
-		position: fixed;
-		top: calc(var(--gut) + 64px);
-		left: var(--gut);
-		z-index: 2;
-		width: min(25rem, calc(100vw - 2 * var(--gut)));
+		position: relative;
 	}
 	.info > summary {
-		display: inline-flex;
-		gap: 12px;
-		align-items: center;
-		min-height: 24px;
-		color: var(--dim);
 		list-style: none;
-		cursor: pointer;
 	}
 	.info > summary::-webkit-details-marker {
 		display: none;
 	}
-	.info > summary .label {
-		color: inherit;
-	}
-	.info > summary .o {
-		display: grid;
-		place-items: center;
-		width: 18px;
-		height: 18px;
-		color: var(--soft);
-		font: 300 10px/1 var(--mono);
-		border: 1px solid var(--hair);
-		border-radius: 50%;
-	}
-	.info > summary:hover,
-	.info[open] > summary {
-		color: var(--soft);
-	}
-	.info[open] > summary .o {
-		color: var(--ink);
-		border-color: var(--soft);
-	}
 	.info[open]::before {
 		position: fixed;
-		inset: 0 auto 0 0;
+		inset: 0 0 0 auto;
 		z-index: -1;
 		width: min(44rem, 100vw);
 		pointer-events: none;
 		content: '';
-		background: linear-gradient(90deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent);
+		background: linear-gradient(270deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent);
 	}
-	.info[open] ~ :global(.debug) {
-		display: none;
+	.hud:has(.info[open]) .layers,
+	.hud:has(.info[open]) :global(.debug) {
+		visibility: hidden;
 	}
 	.sheet {
-		max-height: calc(100svh - 64px - 2 * var(--gut) - 150px);
-		margin-top: 20px;
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 20px);
+		box-sizing: border-box;
+		width: min(25rem, calc(100vw - 2 * var(--gut)));
+		max-height: calc(100svh - 2 * var(--gut) - 220px);
 		padding-right: 10px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
@@ -602,18 +513,25 @@ import Version from './Version.astro';
 	}
 
 	/* No WebGL: the text goes back in flow, above the fallback image. */
-	:global(body:has([data-globe-fallback]:not([hidden]))) .hud :is(.id, .info, .clock) {
+	:global(body:has([data-globe-fallback]:not([hidden]))) .hud :is(.id, .corner, .clock) {
 		position: static;
 		width: auto;
 		margin: var(--gut);
 		text-align: left;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .corner {
+		display: grid;
+		justify-items: start;
 	}
 	:global(body:has([data-globe-fallback]:not([hidden]))) .frame,
 	:global(body:has([data-globe-fallback]:not([hidden]))) .info[open]::before {
 		display: none;
 	}
 	:global(body:has([data-globe-fallback]:not([hidden]))) .sheet {
+		position: static;
+		width: auto;
 		max-height: none;
+		margin-top: 20px;
 	}
 
 	@media (max-width: 640px) {
@@ -648,10 +566,6 @@ import Version from './Version.astro';
 		.layers {
 			top: calc(var(--gut) + 112px);
 		}
-		.sources :global(li[data-state='live']),
-		.hud[data-late] .sources {
-			display: none;
-		}
 		.hud:has(.sources:not([hidden]) :global(li:not([data-state='live']))) .layers {
 			top: calc(var(--gut) + 150px);
 		}
@@ -660,16 +574,12 @@ import Version from './Version.astro';
 			bottom: calc(var(--gut) + 96px);
 			max-width: calc(100vw - 2 * var(--gut));
 		}
-		.info {
-			top: calc(var(--gut) + 30px);
+		.corner {
+			bottom: calc(var(--gut) + 40px);
+			gap: 22px;
 		}
-		.info > summary .label {
-			position: absolute;
-			width: 1px;
-			height: 1px;
-			overflow: hidden;
-			clip-path: inset(50%);
-			white-space: nowrap;
+		.hud[data-mode='replay'] .corner {
+			bottom: calc(var(--gut) + 96px);
 		}
 		.info[open]::before {
 			inset: auto 0 0;
@@ -677,14 +587,9 @@ import Version from './Version.astro';
 			height: 80svh;
 			background: linear-gradient(0deg, rgb(0 0 0 / 0.86), rgb(0 0 0 / 0.7) 70%, transparent);
 		}
-		.info[open] .sheet {
-			position: fixed;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			max-height: 62svh;
-			margin: 0;
-			padding: 0 var(--gut) calc(var(--gut) + env(safe-area-inset-bottom));
+		.sheet {
+			width: calc(100vw - 2 * var(--gut));
+			max-height: 58svh;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
@@ -727,8 +632,6 @@ import Version from './Version.astro';
 		const shareInput = $<HTMLInputElement>('[data-share-url]');
 		const shareStatus = $('[data-share-status]');
 		const display = $('[data-display]');
-		const legend = $<HTMLDetailsElement>('[data-legend]');
-		if (legend) legend.open = matchMedia('(min-width: 641px)').matches;
 		let app: GlobeApp | undefined;
 		let shareStorm: string | undefined;
 

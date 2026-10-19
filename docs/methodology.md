@@ -85,5 +85,4 @@ Both cues multiply the time profile of the flash ([flash-profile.md](flash-profi
 brightness mapping also drives the glow that flashes cast inside the clouds.
 
 **Limits.** Brightness on screen is relative: it depends on the device, the bloom pass and how many
-flashes overlap. It shows which flashes are stronger, not absolute energy values. The legend in the
-HUD is drawn from the same functions as the globe.
+flashes overlap. It shows which flashes are stronger, not absolute energy values.
