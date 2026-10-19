@@ -263,4 +263,18 @@ Storms touched in the current and previous hour always take priority and are not
 that cap. The public index includes only storms whose detail exists; history drains incrementally.
 Invalid exports are logged and counted in run metadata. Oversized or invalid updates retain their
 previous public detail and summary; invalid new storms stay out of the index and sitemap.
+
+After the index, `storms/highlights.json` lists a few published storms worth replaying. DuckDB runs
+[`sql/storm_highlights.sql`](../data/packages/scintille-pipelines/src/scintille_pipelines/sql/storm_highlights.sql)
+over the published snapshot, with windows relative to the latest observation. Only storms with at
+least 1,000 flashes over at least an hour qualify. A storm ranks by its ADR 0009 score, times a
+duration factor (`min(2, sqrt(hours / 2))`), an extent factor (`(max_area_km2 / 2000)^0.25` clamped
+to 0.5..1.5), 0.8 offshore and 1.25 at night (sun below -6° at its centroid and midpoint). Slots, in
+order, show their winner: the last 24 hours, the last 7 days, one per broad area over 24 hours (the
+Americas, Europe, Africa, Asia, split by centroid longitude and latitude), then the longest, most
+intense (peak per minute) and largest of the week, and the most flashes among storms that lasted
+3 hours with every track point within 40 km of their centroid. A storm already shown keeps its
+first title and the slot is left out, so no title goes to a runner up. Each summary carries
+`distance_km`, the length of its centroid track.
+A failure keeps the previous file; the site falls back to the biggest storms of the first index pages while none exists.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.

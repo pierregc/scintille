@@ -3,10 +3,12 @@
 import json
 import os
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import duckdb
 import obstore
 import polars as pl
 from dagster import (
@@ -21,7 +23,13 @@ from dagster import (
     define_asset_job,
     schedule,
 )
-from scintille_contract.models import SCHEMA_VERSION, StormBounds, StormDetail, StormSummary
+from scintille_contract.models import (
+    SCHEMA_VERSION,
+    StormBounds,
+    StormDetail,
+    StormHighlights,
+    StormSummary,
+)
 from scintille_lake.tables import FLASHES
 
 from .resources import FeedResource, LakeResource
@@ -29,10 +37,12 @@ from .storm_catalog import (
     ObjectCatalogStore,
     publish_catalog,
     published_slugs,
+    read_detail,
     replay_chunks,
     selected_flashes,
 )
 from .storm_cells import hourly
+from .storm_highlights import haversine_km, highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
@@ -89,10 +99,24 @@ def publishable(summary: list[StormSummary]) -> list[StormSummary]:
     return [storm for storm in summary if storm.level >= PUBLISHED_MIN_LEVEL]
 
 
+def distances(storms: pl.DataFrame) -> pl.DataFrame:
+    """Kilometres travelled by each storm centroid along its track."""
+    points = storms.select("storm_id", "track").explode("track").unnest("track")
+    steps = points.sort("storm_id", "time").with_columns(
+        haversine_km(
+            pl.col("lat").shift().over("storm_id"),
+            pl.col("lon").shift().over("storm_id"),
+            pl.col("lat"),
+            pl.col("lon"),
+        ).alias("step_km")
+    )
+    return steps.group_by("storm_id").agg(pl.col("step_km").sum().round(1).alias("distance_km"))
+
+
 def summaries(
     storms: pl.DataFrame, names: pl.DataFrame, levels: pl.DataFrame
 ) -> list[StormSummary]:
-    joined = storms.join(
+    joined = storms.join(distances(storms), on="storm_id", how="left").join(
         names.select("storm_id", "slug", "name", "label", "country_code"), on="storm_id"
     )
     joined = joined.join(
@@ -111,7 +135,7 @@ def summaries(
     deps=[AssetKey(["gold", key]) for key in ("storms", "storm_names", "storm_levels")],
     group_name="feeds",
     pool="storm-tracks",
-    description="Bounded storm metadata, replay, paginated index and sitemaps published in order.",
+    description="Storm metadata, replay, index, highlights and sitemaps, published in order.",
 )
 def storm_catalog(
     context: AssetExecutionContext, lake: LakeResource, feed_bucket: FeedResource
@@ -138,9 +162,7 @@ def storm_catalog(
 
     def reject(slug: str) -> None:
         previous = store.get(f"storms/{slug}.json")
-        rejected[slug] = (
-            StormDetail.model_validate_json(previous).storm if previous is not None else None
-        )
+        rejected[slug] = read_detail(previous).storm if previous is not None else None
 
     candidates = {storm.storm_id: storm for storm in summary if storm.storm_id in ids}
     all_tracks = (
@@ -205,7 +227,18 @@ def storm_catalog(
             for item in batch
             if item["path"].endswith(".json") and item["path"].count("/") == 1
         )
-    metrics = publish_catalog(store, details, objects, visible, now, purge_tags, regions)
+    storm_stats = storm_metrics(storms, levels, names)
+
+    def pick(effective: Sequence[StormSummary]) -> StormHighlights | None:
+        try:
+            return highlights(effective, storm_stats, now)
+        except (ValueError, duckdb.Error):
+            context.log.exception("Highlights failed; the previous file stays published")
+            return None
+
+    metrics = publish_catalog(
+        store, details, objects, visible, now, purge_tags, regions, highlights=pick
+    )
     metrics["invalid_exports"] = len(rejected)
     metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(

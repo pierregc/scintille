@@ -1,5 +1,10 @@
 <details class="suggestions" data-storm-suggestions hidden>
-	<summary>Explore storms</summary>
+	<summary>
+		<svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round" aria-hidden="true"
+			><path d="M7 1 2.5 8H6l-1 5 4.5-7H6z"></path></svg
+		>
+		Explore storms
+	</summary>
 	<div class="panel">
 		<p role="status" data-catalog-status></p>
 		<ul aria-label="Available storm replays" data-storm-cards></ul>
@@ -9,29 +14,49 @@
 </details>
 
 <style>
-	.suggestions { position: fixed; top: calc(var(--gut) + 140px); left: var(--gut); z-index: 3; width: min(24rem, calc(100vw - 2 * var(--gut))); }
-	summary, [data-catalog-retry] { color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
-	summary { min-height: 32px; }
-	.panel { padding: 16px; background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); max-height: calc(100svh - 280px); overflow-y: auto; overscroll-behavior: contain; }
-	p { margin: 0 0 12px; color: var(--soft); font: 300 12px/1.6 var(--sans); }
-	ul { display: grid; gap: 8px; padding: 0; margin: 0 0 12px; list-style: none; }
-	[data-storm-cards] :global(button) { display: grid; gap: 6px; width: 100%; min-height: 44px; padding: 12px; color: var(--ink); text-align: left; cursor: pointer; background: rgb(255 255 255 / 0.025); border: 1px solid var(--hair); }
-	[data-storm-cards] :global(strong) { font: 300 15px/1.4 var(--sans); }
-	[data-storm-cards] :global(span) { color: var(--soft); font: 300 10px/1.6 var(--mono); }
-	.note { color: var(--dim); font-size: 11px; }
+	.suggestions { position: fixed; top: calc(var(--gut) + 62px); left: var(--gut); z-index: 3; width: min(22rem, calc(100vw - 2 * var(--gut))); }
+	.suggestions[open]::before {
+		position: fixed;
+		inset: 0 auto 0 0;
+		z-index: -1;
+		width: min(36rem, 100vw);
+		pointer-events: none;
+		content: '';
+		background: linear-gradient(90deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.28) 55%, transparent);
+	}
+	summary, [data-catalog-retry] { color: var(--dim); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
+	summary { display: inline-flex; gap: 10px; align-items: center; min-height: 32px; color: var(--soft); font-size: 12px; letter-spacing: 0.2em; list-style: none; }
+	summary::-webkit-details-marker { display: none; }
+	summary:hover, .suggestions[open] > summary { color: var(--ink); }
+	.panel { margin-top: 10px; max-height: calc(100svh - 300px); overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--hair) transparent; scrollbar-width: thin; }
+	p { margin: 0 0 16px; color: var(--dim); font: 300 11px/1.6 var(--sans); }
+	ul { display: grid; gap: 4px; padding: 0; margin: 0 0 14px; list-style: none; }
+	[data-storm-cards] :global(button) { display: grid; gap: 3px; width: 100%; min-height: 44px; padding: 8px 0 8px 14px; color: var(--soft); text-align: left; cursor: pointer; background: none; border: 0; border-left: 1px solid var(--hair); transition: color 0.4s ease, border-color 0.4s ease; }
+	[data-storm-cards] :global(button:hover) { color: var(--ink); border-left-color: var(--soft); }
+	[data-storm-cards] :global(em) { color: var(--dim); font: 300 9.5px/1.5 var(--mono); font-style: normal; letter-spacing: 0.18em; text-transform: uppercase; }
+	[data-storm-cards] :global(strong) { color: inherit; font: 200 16px/1.35 var(--sans); }
+	[data-storm-cards] :global(span) { color: var(--dim); font: 300 10px/1.6 var(--mono); }
+	.note { font-size: 10.5px; }
 	[data-catalog-retry] { padding: 8px 0; background: none; border: 0; }
+	[data-catalog-retry]:hover { color: var(--soft); }
 	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
 	[hidden] { display: none !important; }
+	:global(.hud:has([data-storm-suggestions][open]) :is([data-share-tools], [data-replay-status])) { visibility: hidden; }
 	@media (max-width: 640px) {
-		.suggestions { top: calc(var(--gut) + 62px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
-		.panel { max-height: calc(100svh - 220px); }
+		.suggestions { top: calc(var(--gut) + 96px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
+		.suggestions[open]::before { inset: 0; width: auto; background: linear-gradient(180deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.4) 60%, transparent); }
+		.panel { max-height: calc(100svh - 240px); }
+		:global(.hud:has([data-storm-suggestions][open]) [data-layers]) { visibility: hidden; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		[data-storm-cards] :global(button) { transition: none; }
 	}
 </style>
 
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { CATALOG_LIMITS, loadSuggestions } from '../globe/replay/catalog';
+	import { CATALOG_LIMITS, loadSuggestions, stormFacts, stormWhen } from '../globe/replay/catalog';
 
 	const root = document.querySelector<HTMLDetailsElement>('[data-storm-suggestions]');
 	if (root) {
@@ -57,18 +82,23 @@
 				loaded = true;
 				const date = new Date(result.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 				const stale = Date.now() - result.publishedAt > CATALOG_LIMITS.staleMs;
-				setStatus(!result.storms.length ? 'No published storm replays are available yet.' :
+				setStatus(!result.cards.length ? 'No published storm replays are available yet.' :
 					`Catalog published ${date}.${stale ? ' Recent storms may be missing.' : ''}${result.partial ? ' Only part of the catalog could be loaded.' : ''}`);
-				for (const storm of result.storms) {
+				for (const { storm, reason } of result.cards) {
 					const item = document.createElement('li');
 					const button = document.createElement('button');
 					button.type = 'button';
+					if (reason) {
+						const why = document.createElement('em');
+						why.textContent = reason;
+						button.append(why);
+					}
 					const title = document.createElement('strong');
 					title.textContent = storm.label;
 					const when = document.createElement('span');
-					when.textContent = new Date(storm.t_start).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+					when.textContent = stormWhen(storm);
 					const metrics = document.createElement('span');
-					metrics.textContent = `${storm.level_name} electrical activity · ${storm.flashes.toLocaleString()} flashes · peak ${storm.peak_rate.toLocaleString()}/min`;
+					metrics.textContent = stormFacts(storm);
 					button.append(title, when, metrics);
 					button.addEventListener('click', async () => {
 						const currentApp = app;

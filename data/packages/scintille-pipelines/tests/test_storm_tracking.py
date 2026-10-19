@@ -11,10 +11,10 @@ from dagster import AssetKey, DagsterInstance, materialize
 from obstore.store import MemoryStore, ObjectStore
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
-from scintille_contract.models import StormDetail
+from scintille_contract.models import StormDetail, StormHighlights
 from scintille_lake.migrate import migrate, sync_table
 from scintille_lake.tables import FLASHES
-from scintille_pipelines import storm_publication
+from scintille_pipelines import storm_highlights, storm_publication
 from scintille_pipelines.clustering import KM_PER_DEGREE, Params
 from scintille_pipelines.definitions import defs
 from scintille_pipelines.resources import FeedResource, LakeResource
@@ -371,6 +371,8 @@ def test_publishes_every_storm_from_shared_flash_scans(
 ) -> None:
     monkeypatch.setattr(storm_publication, "FLASH_WINDOW", window)
     monkeypatch.setattr(storm_publication, "PUBLISHED_MIN_LEVEL", 1)
+    monkeypatch.setattr(storm_highlights, "MIN_FLASHES", 1)
+    monkeypatch.setattr(storm_highlights, "MIN_HOURS", 0)
     monkeypatch.setitem(globals(), "MEMORY", MemoryStore())
     instance = DagsterInstance.ephemeral()
     for key in ("2026-07-15-18:00", "2026-07-15-19:00", "2026-07-15-20:00"):
@@ -413,3 +415,8 @@ def test_publishes_every_storm_from_shared_flash_scans(
         )
         expected = selected_flashes(flashes, tracks.filter(pl.col("storm_id") == storm_id))
         assert detail.replay.flash_count == expected.height > 0
+    picked = StormHighlights.model_validate_json(
+        obstore.get(MEMORY, "storms/highlights.json").bytes().to_bytes()
+    )
+    assert picked.highlights
+    assert {h.storm.slug for h in picked.highlights} <= set(names["slug"].to_list())

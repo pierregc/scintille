@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.4.0"]
-SCHEMA_VERSION: Final = "2.4.0"
+SchemaVersion = Literal["2.5.0"]
+SCHEMA_VERSION: Final = "2.5.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -485,6 +485,13 @@ class StormSummary(BaseModel):
     level_name: str = Field(min_length=1, max_length=80)
     level_rule: str = Field(min_length=1, max_length=2048)
     sources: list[Source]
+    distance_km: float | None | None = Field(
+        default=None,
+        description=(
+            "Distance travelled by the storm centroid along its track; null in files "
+            "older than 2.5.0."
+        ),
+    )
 
 
 class StormIndexPage(BaseModel):
@@ -500,6 +507,35 @@ class StormIndexPage(BaseModel):
     total_storms: int = Field(ge=0)
     total_pages: int = Field(ge=1)
     storms: list[StormSummary]
+
+
+class StormHighlight(BaseModel):
+    """One highlighted storm and the reason it was chosen."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["day", "week", "area", "longest", "intense", "largest", "stationary"] = Field(
+        description=(
+            "Why it was picked: best of the last 24 h or 7 days, best of a broad area "
+            "over 24 h, a 7 day record, or the most active storm that stayed over one "
+            "spot for hours."
+        )
+    )
+    area: Literal["americas", "europe", "africa", "asia"] | None = Field(
+        description="Broad area from the storm centroid, set when kind is area."
+    )
+    storm: StormSummary
+
+
+class StormHighlights(BaseModel):
+    """storms/highlights.json: a few published storms worth replaying, best first."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    published_at: UtcTimestamp
+    last_observation_time: UtcTimestamp | None
+    highlights: list[StormHighlight]
 
 
 class StormDetail(BaseModel):

@@ -3,7 +3,7 @@ import { decodeChunk } from '../../globe/live/decode';
 import { NO_DELAY, SourceDelays } from '../../globe/live/delay';
 import { FlashRing } from '../../globe/live/ring';
 import { encodeChunk, type FakeFlash } from '../../globe/live/testing';
-import { debugEnabled, formatDuration, playedFlashes, qualityFlags, shortSourceLabel, sourceStats } from './stats';
+import { debugEnabled, playedFlashes, shortSourceLabel, sourceStats } from './stats';
 
 const START = 1_800_000_000;
 const T0 = START * 1000;
@@ -60,16 +60,7 @@ describe('playedFlashes', () => {
 });
 
 describe('format', () => {
-	it('names quality bits', () => {
-		expect(qualityFlags(0)).toEqual([]);
-		expect(qualityFlags(0b101)).toEqual(['degraded', 'overlap']);
-	});
-
-	it('writes short source labels and durations', () => {
+	it('writes short source labels', () => {
 		expect([0, 1, 2, 7].map(shortSourceLabel)).toEqual(['GLM E', 'GLM W', 'MTG LI', '#7']);
-		expect(formatDuration(null)).toBe('-');
-		expect(formatDuration(850)).toBe('850ms');
-		expect(formatDuration(12_400)).toBe('12.4s');
-		expect(formatDuration(720_000)).toBe('12.0m');
 	});
 });

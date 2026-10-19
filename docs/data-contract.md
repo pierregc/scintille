@@ -318,7 +318,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.4.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.5.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -326,7 +326,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.4.0`.
+Value: `2.5.0`.
 
 ### UtcTimestamp
 
@@ -711,6 +711,7 @@ Storm metrics and persisted classification.
 | `level_name` | string | yes | minLength `1`, maxLength `80` |  |
 | `level_rule` | string | yes | minLength `1`, maxLength `2048` |  |
 | `sources` | array of [Source](#source) | yes |  |  |
+| `distance_km` | number or null | no |  | Distance travelled by the storm centroid along its track; null in files older than 2.5.0. |
 
 ### StormIndexPage
 
@@ -728,6 +729,31 @@ storms/index/<page>.json: zero-based pages, recent first, read one page per requ
 | `total_storms` | integer | yes | minimum `0` |  |
 | `total_pages` | integer | yes | minimum `1` |  |
 | `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
+
+### StormHighlight
+
+Defined in `data/contract/storm.schema.json`.
+
+One highlighted storm and the reason it was chosen.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
+| `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
+| `storm` | [StormSummary](#stormsummary) | yes |  |  |
+
+### StormHighlights
+
+Defined in `data/contract/storm.schema.json`.
+
+storms/highlights.json: a few published storms worth replaying, best first.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `highlights` | array of [StormHighlight](#stormhighlight) | yes |  |  |
 
 ### StormDetail
 

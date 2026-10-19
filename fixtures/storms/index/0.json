@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.4.0",
+  "schema_version": "2.5.0",
   "published_at": "2026-07-15T19:00:00Z",
   "last_observation_time": "2026-07-15T18:02:00Z",
   "page": 0,
@@ -18,6 +18,7 @@
       "closed": true,
       "flashes": 3,
       "peak_rate": 1,
+      "distance_km": 4.2,
       "level": 1,
       "level_name": "Synthetic",
       "level_rule": "synthetic-fixture-only",

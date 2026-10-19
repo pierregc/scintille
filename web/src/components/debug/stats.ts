@@ -1,4 +1,4 @@
-import { QUALITY_FLAG_VALUES, SOURCE_VALUES } from '../../contract/types';
+import { SOURCE_VALUES } from '../../contract/types';
 import type { SourceDelays } from '../../globe/live/delay';
 import type { FlashRing } from '../../globe/live/ring';
 
@@ -89,18 +89,4 @@ export function playedFlashes(ring: FlashRing, delays: SourceDelays, now: number
 		});
 	}
 	return rows;
-}
-
-/** Names of the quality bits set in `bits`. */
-export function qualityFlags(bits: number): string[] {
-	return QUALITY_FLAG_VALUES.filter((_, i) => bits & (1 << i));
-}
-
-/** `850ms`, `12.4s`, `3.2m`, `5.0h`, `-` when unknown. */
-export function formatDuration(ms: number | null): string {
-	if (ms === null || !Number.isFinite(ms)) return '-';
-	if (Math.abs(ms) < 1000) return `${Math.round(ms)}ms`;
-	if (Math.abs(ms) < 120_000) return `${(ms / 1000).toFixed(1)}s`;
-	if (Math.abs(ms) < 7_200_000) return `${(ms / 60_000).toFixed(1)}m`;
-	return `${(ms / 3_600_000).toFixed(1)}h`;
 }
