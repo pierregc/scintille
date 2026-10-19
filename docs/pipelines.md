@@ -278,3 +278,7 @@ first title and the slot is left out, so no title goes to a runner up. Each summ
 `distance_km`, the length of its centroid track.
 A failure keeps the previous file; the site falls back to the biggest storms of the first index pages while none exists.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.
+
+The remaining deployment prerequisites, schedule decision and dated evidence for #74 are tracked
+in [storm publication acceptance](qa/storm-publication-acceptance.md). Source defaults and unit
+tests do not establish production schedule state or measured publication freshness.

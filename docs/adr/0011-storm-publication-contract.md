@@ -1,6 +1,6 @@
 # 0011 · Storm publication and replay references
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 
 ## Context
@@ -18,7 +18,7 @@ upstream storm detection. A bounds extract can be published now if its provenanc
 
 ## Decision
 
-Propose bounded `storms/<slug>.json` metadata referencing immutable, content-addressed SCNT gzip
+Publish bounded `storms/<slug>.json` metadata referencing immutable, content-addressed SCNT gzip
 chunks under `storms/chunks/`, partitioned by event hour and at most 65,536 flashes each. Paths
 are relative to the public data root. The metadata carries publication and observation times.
 `replay.selection` initially states `track-bounds`; its flash count is separate from the classified
