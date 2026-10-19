@@ -481,6 +481,13 @@ class StormSummary(BaseModel):
     closed: bool
     flashes: int = Field(ge=0)
     peak_rate: int = Field(ge=0)
+    distance_km: float | None | None = Field(
+        default=None,
+        description=(
+            "Distance travelled by the storm centroid along its track; null in files "
+            "older than 2.5.0."
+        ),
+    )
     level: int = Field(ge=1)
     level_name: str = Field(min_length=1, max_length=80)
     level_rule: str = Field(min_length=1, max_length=2048)
@@ -507,10 +514,11 @@ class StormHighlight(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kind: Literal["day", "week", "area", "longest", "intense", "largest"] = Field(
+    kind: Literal["day", "week", "area", "longest", "intense", "largest", "stationary"] = Field(
         description=(
             "Why it was picked: best of the last 24 h or 7 days, best of a broad area "
-            "over 24 h, or a 7 day record."
+            "over 24 h, a 7 day record, or the most active storm that stayed over one "
+            "spot for hours."
         )
     )
     area: Literal["americas", "europe", "africa", "asia"] | None = Field(

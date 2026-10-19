@@ -707,6 +707,7 @@ Storm metrics and persisted classification.
 | `closed` | boolean | yes |  |  |
 | `flashes` | integer | yes | minimum `0` |  |
 | `peak_rate` | integer | yes | minimum `0` |  |
+| `distance_km` | number or null | no |  | Distance travelled by the storm centroid along its track; null in files older than 2.5.0. |
 | `level` | integer | yes | minimum `1` |  |
 | `level_name` | string | yes | minLength `1`, maxLength `80` |  |
 | `level_rule` | string | yes | minLength `1`, maxLength `2048` |  |
@@ -737,7 +738,7 @@ One highlighted storm and the reason it was chosen.
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
-| `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, or a 7 day record. |
+| `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
 | `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
 | `storm` | [StormSummary](#stormsummary) | yes |  |  |
 

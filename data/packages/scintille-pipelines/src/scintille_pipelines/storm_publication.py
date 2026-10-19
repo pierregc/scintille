@@ -42,7 +42,7 @@ from .storm_catalog import (
     selected_flashes,
 )
 from .storm_cells import hourly
-from .storm_highlights import highlights, storm_metrics
+from .storm_highlights import haversine_km, highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
@@ -99,10 +99,24 @@ def publishable(summary: list[StormSummary]) -> list[StormSummary]:
     return [storm for storm in summary if storm.level >= PUBLISHED_MIN_LEVEL]
 
 
+def distances(storms: pl.DataFrame) -> pl.DataFrame:
+    """Kilometres travelled by each storm centroid along its track."""
+    points = storms.select("storm_id", "track").explode("track").unnest("track")
+    steps = points.sort("storm_id", "time").with_columns(
+        haversine_km(
+            pl.col("lat").shift().over("storm_id"),
+            pl.col("lon").shift().over("storm_id"),
+            pl.col("lat"),
+            pl.col("lon"),
+        ).alias("step_km")
+    )
+    return steps.group_by("storm_id").agg(pl.col("step_km").sum().round(1).alias("distance_km"))
+
+
 def summaries(
     storms: pl.DataFrame, names: pl.DataFrame, levels: pl.DataFrame
 ) -> list[StormSummary]:
-    joined = storms.join(
+    joined = storms.join(distances(storms), on="storm_id", how="left").join(
         names.select("storm_id", "slug", "name", "label", "country_code"), on="storm_id"
     )
     joined = joined.join(

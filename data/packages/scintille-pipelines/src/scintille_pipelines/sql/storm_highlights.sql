@@ -1,4 +1,5 @@
 -- Rank published storms for highlights. $ref is the latest observation, not the wall clock.
+-- Only big storms qualify: at least $min_flashes flashes over at least $min_hours hours.
 WITH base AS (
     SELECT
         *,
@@ -11,7 +12,7 @@ WITH base AS (
             ELSE 'asia'
         END AS area
     FROM {storms}
-    WHERE t_end - t_start >= INTERVAL 30 MINUTE
+    WHERE epoch(t_end - t_start) / 3600 >= $min_hours AND flashes >= $min_flashes
 ),
 -- Approximate solar declination and hour angle, good to about a degree.
 sun AS (
@@ -25,7 +26,8 @@ scored AS (
     SELECT
         *,
         score
-            * least(1.5, sqrt(hours / 2))
+            * least(2, sqrt(hours / 2))
+            * least(1.5, greatest(0.5, pow(max_area_km2 / 2000, 0.25)))
             * CASE WHEN offshore THEN 0.8 ELSE 1 END
             * CASE
                 WHEN sin(radians(lat)) * sin(declination)
@@ -51,5 +53,9 @@ candidates AS (
     SELECT 'intense', NULL, slug, row_number() OVER (ORDER BY peak_rate DESC, slug) FROM week
     UNION ALL
     SELECT 'largest', NULL, slug, row_number() OVER (ORDER BY max_area_km2 DESC, slug) FROM week
+    UNION ALL
+    SELECT 'stationary', NULL, slug, row_number() OVER (ORDER BY flashes DESC, slug)
+    FROM week
+    WHERE hours >= $stationary_hours AND drift_km <= $stationary_km
 )
 SELECT kind, area, slug FROM candidates WHERE rank = 1 ORDER BY kind, area

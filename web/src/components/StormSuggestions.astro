@@ -51,7 +51,7 @@
 <script>
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-	import { CATALOG_LIMITS, loadSuggestions } from '../globe/replay/catalog';
+	import { CATALOG_LIMITS, loadSuggestions, stormFacts, stormWhen } from '../globe/replay/catalog';
 
 	const root = document.querySelector<HTMLDetailsElement>('[data-storm-suggestions]');
 	if (root) {
@@ -91,9 +91,9 @@
 					const title = document.createElement('strong');
 					title.textContent = storm.label;
 					const when = document.createElement('span');
-					when.textContent = new Date(storm.t_start).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+					when.textContent = stormWhen(storm);
 					const metrics = document.createElement('span');
-					metrics.textContent = `${storm.level_name} electrical activity · ${storm.flashes.toLocaleString()} flashes · peak ${storm.peak_rate.toLocaleString()}/min`;
+					metrics.textContent = stormFacts(storm);
 					button.append(title, when, metrics);
 					button.addEventListener('click', async () => {
 						const currentApp = app;

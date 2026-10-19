@@ -291,6 +291,8 @@ export interface StormSummary {
   closed: boolean;
   flashes: number;
   peak_rate: number;
+  /** Distance travelled by the storm centroid along its track; null in files older than 2.5.0. */
+  distance_km?: number | null;
   level: number;
   level_name: string;
   level_rule: string;
@@ -311,8 +313,8 @@ export interface StormIndexPage {
 
 /** One highlighted storm and the reason it was chosen. */
 export interface StormHighlight {
-  /** Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, or a 7 day record. */
-  kind: "day" | "week" | "area" | "longest" | "intense" | "largest";
+  /** Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. */
+  kind: "day" | "week" | "area" | "longest" | "intense" | "largest" | "stationary";
   /** Broad area from the storm centroid, set when kind is area. */
   area: "americas" | "europe" | "africa" | "asia" | null;
   storm: StormSummary;

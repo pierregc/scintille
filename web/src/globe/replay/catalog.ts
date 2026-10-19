@@ -27,7 +27,7 @@ function checkStorm(storm: unknown): asserts storm is StormSummary {
 		Date.parse(String(storm.t_start)) > Date.parse(String(storm.t_end))) throw new Error('invalid storm summary');
 }
 
-const KINDS = ['day', 'week', 'area', 'longest', 'intense', 'largest'];
+const KINDS = ['day', 'week', 'area', 'longest', 'intense', 'largest', 'stationary'];
 const AREAS: Record<string, string> = { americas: 'the Americas', europe: 'Europe', africa: 'Africa', asia: 'Asia' };
 
 export function parseHighlights(value: unknown): StormHighlights {
@@ -53,7 +53,21 @@ export function reason(highlight: Pick<StormHighlight, 'kind' | 'area'>): string
 		case 'longest': return 'Longest this week';
 		case 'intense': return 'Most intense this week';
 		case 'largest': return 'Largest this week';
+		case 'stationary': return 'Stalled over one spot this week';
 	}
+}
+
+/** Start time and duration, e.g. "Jul 15, 6:00 PM · 4 h 10". */
+export function stormWhen(storm: Pick<StormSummary, 't_start' | 't_end'>, locale?: string): string {
+	const minutes = Math.round((Date.parse(storm.t_end) - Date.parse(storm.t_start)) / 60_000);
+	const span = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${String(minutes % 60).padStart(2, '0')}` : ''}`;
+	return `${new Date(storm.t_start).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })} · ${span}`;
+}
+
+/** Total flashes and distance travelled. */
+export function stormFacts(storm: Pick<StormSummary, 'flashes' | 'distance_km'>, locale?: string): string {
+	const flashes = `${storm.flashes.toLocaleString(locale)} flashes`;
+	return storm.distance_km == null ? flashes : `${flashes} · ${Math.round(storm.distance_km).toLocaleString(locale)} km travelled`;
 }
 
 export interface StormCard {
@@ -67,12 +81,12 @@ export interface StormSuggestions {
 	partial: boolean;
 }
 
-/** Recency is the tie-breaker after country and electrical-activity variety within the fetched window. */
+/** Biggest storms first, then country and level variety, then recency, within the fetched window. */
 export function chooseStorms(storms: readonly StormSummary[], count = CATALOG_LIMITS.cards): StormSummary[] {
 	const unique = new Map<string, StormSummary>();
 	for (const storm of storms) if (!unique.has(storm.slug)) unique.set(storm.slug, storm);
 	const candidates = [...unique.values()]
-		.sort((a, b) => Date.parse(b.t_start) - Date.parse(a.t_start) || a.slug.localeCompare(b.slug));
+		.sort((a, b) => b.flashes - a.flashes || Date.parse(b.t_start) - Date.parse(a.t_start) || a.slug.localeCompare(b.slug));
 	const chosen: StormSummary[] = [];
 	const regions = new Set<string | null>();
 	const levels = new Set<number>();

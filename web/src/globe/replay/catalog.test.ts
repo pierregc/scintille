@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fixture from '../../../../fixtures/storms/index/0.json';
 import highlights from '../../../../fixtures/storms/highlights.json';
 import type { StormSummary } from '../../contract/types';
-import { CATALOG_LIMITS, chooseStorms, loadSuggestions, parseCatalogPage, parseHighlights, reason } from './catalog';
+import { CATALOG_LIMITS, chooseStorms, loadSuggestions, parseCatalogPage, parseHighlights, reason, stormFacts, stormWhen } from './catalog';
 
 const missing = new Response('', { status: 404 });
 /** Serves index pages through `index`, with no highlights published yet. */
@@ -31,11 +31,11 @@ it('falls back to recent index pages when highlights are empty, and fails on oth
 
 it('shows every published highlight, weekly records included', async () => {
 	const [item] = highlights.highlights;
-	const kinds = [['day', null], ['week', null], ['area', 'americas'], ['area', 'europe'], ['area', 'africa'], ['area', 'asia'], ['longest', null], ['intense', null], ['largest', null]];
+	const kinds = [['day', null], ['week', null], ['area', 'americas'], ['area', 'europe'], ['area', 'africa'], ['area', 'asia'], ['longest', null], ['intense', null], ['largest', null], ['stationary', null]];
 	const all = kinds.map(([kind, area], i) => ({ kind, area, storm: { ...item.storm, slug: `storm-${i}` } }));
 	const result = await loadSuggestions('https://feed.test/', new AbortController().signal, async () => Response.json({ ...highlights, highlights: all }));
 	expect(result.cards.map((card) => card.reason)).toEqual(['Storm of the day', 'Storm of the week', 'Strongest in the Americas today', 'Strongest in Europe today',
-		'Strongest in Africa today', 'Strongest in Asia today', 'Longest this week', 'Most intense this week', 'Largest this week']);
+		'Strongest in Africa today', 'Strongest in Asia today', 'Longest this week', 'Most intense this week', 'Largest this week', 'Stalled over one spot this week']);
 });
 
 it('rejects malformed highlights and words every reason briefly', () => {
@@ -99,11 +99,24 @@ describe('bounded, validated discovery', () => {
 		await expect(loadSuggestions('https://feed.test/', request.signal, async () => Response.json(highlights))).rejects.toThrow();
 		await expect(loadSuggestions('https://feed.test/', request.signal, indexOnly(() => Response.json(fixture)))).rejects.toThrow();
 	});
-	it('favours recent storms and then country/level variety, keeping the first duplicate version', () => {
+	it('breaks ties by country/level variety, then recency, country/level variety, keeping the first duplicate version', () => {
 		const make = (slug: string, country: string, level: number, offset: number): StormSummary => ({ ...fixture.storms[0], slug, country_code: country, level, t_start: new Date(Date.parse(fixture.storms[0].t_start) - offset).toISOString() }) as StormSummary;
 		const newest = make('newest', 'US', 1, 0);
 		const storms = chooseStorms([newest, make('same-region', 'US', 1, 1), make('other-level', 'US', 5, 2), make('other-country', 'BR', 2, 3), { ...newest, flashes: 999 }], 3);
 		expect(storms.map((storm) => storm.slug)).toEqual(['newest', 'other-country', 'other-level']);
 		expect(storms[0].flashes).toBe(newest.flashes);
 	});
+	it('favours the biggest storms over recent small ones', () => {
+		const recent = fixture.storms[0] as StormSummary;
+		const big = { ...recent, slug: 'big', flashes: 50_000, t_start: '2026-07-01T00:00:00Z' };
+		expect(chooseStorms([recent, big], 1).map((storm) => storm.slug)).toEqual(['big']);
+	});
+});
+
+it('words when a storm ran and what it did', () => {
+	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T22:10:00Z' }, 'en-US')).toMatch(/· 4 h 10$/);
+	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T20:00:00Z' }, 'en-US')).toMatch(/· 2 h$/);
+	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T18:45:00Z' }, 'en-US')).toMatch(/· 45 min$/);
+	expect(stormFacts({ flashes: 12345, distance_km: 230.4 }, 'en-US')).toBe('12,345 flashes · 230 km travelled');
+	expect(stormFacts({ flashes: 3, distance_km: null }, 'en-US')).toBe('3 flashes');
 });

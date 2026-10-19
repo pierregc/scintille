@@ -267,6 +267,18 @@
           "type": "integer",
           "minimum": 0
         },
+        "distance_km": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Distance travelled by the storm centroid along its track; null in files older than 2.5.0."
+        },
         "level": {
           "type": "integer",
           "minimum": 1
@@ -362,9 +374,10 @@
             "area",
             "longest",
             "intense",
-            "largest"
+            "largest",
+            "stationary"
           ],
-          "description": "Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, or a 7 day record."
+          "description": "Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours."
         },
         "area": {
           "anyOf": [
