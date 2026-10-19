@@ -1,14 +1,8 @@
 <details class="debug" data-debug open hidden>
 	<summary><span class="cap">Debug</span><i aria-hidden="true"></i></summary>
 	<div class="body">
-		<dl class="feed" data-debug-feed></dl>
-		<table>
-			<thead>
-				<tr><th>Source</th><th>Received</th><th>Last min</th><th>Waiting</th></tr>
-			</thead>
-			<tbody data-debug-sources></tbody>
-		</table>
-		<p class="head"><span>UTC</span><span>Src</span><span>Int</span><span>km²</span><span>ms</span><span>Flags</span></p>
+		<p class="rates" data-debug-rates></p>
+		<p class="head"><span>UTC</span><span>Src</span><span>Int</span><span>km²</span><span>ms</span></p>
 		<ol class="flashes" data-debug-flashes></ol>
 	</div>
 </details>
@@ -16,17 +10,15 @@
 <style>
 	.debug {
 		position: fixed;
-		top: calc(var(--gut) + 104px);
-		left: var(--gut);
-		width: min(20rem, calc(100vw - 2 * var(--gut)));
+		right: var(--gut);
+		bottom: calc(var(--gut) + 120px);
+		display: grid;
+		justify-items: end;
 		color: var(--soft);
-		font: 300 10px/1.5 var(--mono);
+		font: 300 10px/1.6 var(--mono);
 		font-variant-numeric: tabular-nums;
-	}
-	.body {
-		display: flex;
-		flex-direction: column;
-		height: calc(100svh - 2 * var(--gut) - 104px - 24px - 130px);
+		text-align: right;
+		pointer-events: none;
 	}
 	.debug > summary {
 		display: inline-flex;
@@ -34,8 +26,11 @@
 		align-items: center;
 		min-height: 24px;
 		color: var(--dim);
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
 		list-style: none;
 		cursor: pointer;
+		pointer-events: auto;
 	}
 	.debug > summary::-webkit-details-marker {
 		display: none;
@@ -53,76 +48,33 @@
 	.debug[open] > summary i {
 		transform: translateY(1px) rotate(-135deg);
 	}
-	.feed {
-		display: grid;
-		grid-template-columns: max-content 1fr;
-		gap: 0 12px;
-		margin: 8px 0 10px;
+	.debug > summary:hover,
+	.debug[open] > summary {
+		color: var(--soft);
 	}
-	.feed :global(dt) {
-		color: var(--dim);
-	}
-	.feed :global(dd) {
-		margin: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	table {
-		align-self: flex-start;
-		border-collapse: collapse;
-	}
-	th {
-		padding: 0 0 2px 16px;
-		color: var(--dim);
-		font-weight: 300;
-		text-align: right;
-	}
-	th:first-child,
-	table :global(td:first-child) {
-		padding-left: 0;
-		text-align: left;
-	}
-	table :global(td) {
-		padding: 1px 0 1px 16px;
-		text-align: right;
-		white-space: nowrap;
-	}
-	table :global(td:first-child) {
-		padding-left: 0;
+	.rates {
+		margin: 4px 0 8px;
+		color: var(--soft);
 	}
 	.head,
 	.flashes :global(li) {
 		display: grid;
-		grid-template-columns: 8ch 6ch 4ch 5ch 4ch 1fr;
-		gap: 1ch;
+		grid-template-columns: 8ch 6ch 4ch 5ch 4ch;
+		gap: 1.5ch;
+		justify-items: end;
 		white-space: nowrap;
 	}
 	.head {
-		margin-top: 12px;
-		padding-bottom: 3px;
+		margin: 0;
 		color: var(--dim);
-		border-bottom: 1px solid var(--hair);
-	}
-	.head span:nth-child(n + 3):nth-child(-n + 5),
-	.flashes :global(li span:nth-child(n + 3):nth-child(-n + 5)) {
-		text-align: right;
 	}
 	.flashes {
-		flex: 1;
-		min-height: 0;
 		margin: 0;
 		padding: 0;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 		list-style: none;
-		scrollbar-color: var(--hair) transparent;
-		scrollbar-width: thin;
 	}
-	.flashes :global(li span:last-child) {
-		overflow: hidden;
+	.flashes :global(li) {
 		color: var(--dim);
-		text-overflow: ellipsis;
 	}
 	.flashes :global(li.new) {
 		animation: arrive 1.2s ease-out;
@@ -137,92 +89,47 @@
 			display: none;
 		}
 	}
+	@media (prefers-reduced-motion: reduce) {
+		.flashes :global(li.new) {
+			animation: none;
+		}
+	}
 </style>
 
 <script>
 	import { BUILD } from '../version';
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
-		import {
-		debugEnabled,
-		type FlashRow,
-		formatDuration,
-		playedFlashes,
-		qualityFlags,
-		shortSourceLabel,
-		sourceStats,
-	} from './debug/stats';
+	import { debugEnabled, type FlashRow, playedFlashes, shortSourceLabel, sourceStats } from './debug/stats';
 
-	const ROWS = 80;
+	const ROWS = 10;
 	const panel = document.querySelector<HTMLDetailsElement>('[data-debug]');
 	if (panel && debugEnabled(location.search, import.meta.env.DEV || BUILD.pr !== null)) {
 		panel.hidden = false;
-		const feed = panel.querySelector<HTMLElement>('[data-debug-feed]');
-		const sources = panel.querySelector<HTMLElement>('[data-debug-sources]');
+		const rates = panel.querySelector<HTMLElement>('[data-debug-rates]');
 		const list = panel.querySelector<HTMLOListElement>('[data-debug-flashes]');
 		const rows = new Map<string, HTMLLIElement>();
 		const key = (f: FlashRow) => `${f.id}/${f.time}/${f.lat}/${f.lon}`;
 		let app: GlobeApp | undefined;
 		let topTime = Number.NEGATIVE_INFINITY;
 
-		const utc = (ms: number) => new Date(ms).toISOString().slice(11, 23);
-		const cell = (text: string) => {
-			const td = document.createElement('td');
-			td.textContent = text;
-			return td;
-		};
-
-		const showFeed = () => {
-			if (!app || !feed) return;
-			const { ring, client, quality } = app.debug;
-			const now = app.clock.wallTime();
-			const manifest = client.manifest;
-			const start = client.coverageStart();
-			const items: [string, string][] = [
-				['Feed', `${client.manifestUrl.host} · ${client.failures} failed polls`],
-				['Manifest', manifest ? `${formatDuration(now - Date.parse(manifest.generated_at))} old · ${manifest.chunks.length} chunks` : 'none yet'],
-				['Buffer', `${ring.size.toLocaleString('en')} / ${ring.capacity.toLocaleString('en')} · since ${start === null ? '-' : utc(start).slice(0, 8)}`],
-				['Quality', quality()],
-			];
-			feed.replaceChildren(
-				...items.flatMap(([k, v]) => {
-					const dt = document.createElement('dt');
-					const dd = document.createElement('dd');
-					dt.textContent = k;
-					dd.textContent = v;
-					return [dt, dd];
-				}),
-			);
-		};
-
-		const showSources = () => {
-			if (!app || !sources) return;
+		const showRates = () => {
+			if (!app || !rates) return;
 			const { ring, delays } = app.debug;
-			const stats = sourceStats(ring, delays(), app.clock.time());
-			sources.replaceChildren(
-				...stats.map((s) => {
-					const tr = document.createElement('tr');
-					tr.append(
-						cell(s.label),
-						cell(s.held.toLocaleString('en')),
-						cell(s.lastMinute.toLocaleString('en')),
-						cell(s.pending.toLocaleString('en')),
-					);
-					return tr;
-				}),
-			);
+			rates.textContent = sourceStats(ring, delays(), app.clock.time())
+				.map((s) => `${s.label} ${s.lastMinute.toLocaleString('en')}/min`)
+				.join(' · ');
 		};
 
 		const row = (f: FlashRow, fresh: boolean) => {
 			const li = document.createElement('li');
 			if (fresh) li.className = 'new';
 			for (const text of [
-				utc(f.time).slice(0, 8),
+				new Date(f.time).toISOString().slice(11, 19),
 				shortSourceLabel(f.source),
 				f.intensity.toFixed(2),
 				String(Math.round(f.areaKm2)),
 				String(Math.round(f.durationMs)),
-				qualityFlags(f.quality).join(' '),
 			]) {
 				const span = document.createElement('span');
 				span.textContent = text;
@@ -244,25 +151,20 @@
 			}
 		};
 
-		const slow = () => {
-			if (!panel.open || document.hidden) return;
-			showFeed();
-			showSources();
-		};
-		setInterval(slow, 1000);
+		setInterval(() => { if (panel.open && !document.hidden) showRates(); }, 1000);
 		const frame = () => {
 			showFlashes();
 			requestAnimationFrame(frame);
 		};
 		requestAnimationFrame(frame);
 		panel.addEventListener('toggle', () => {
-			slow();
+			showRates();
 			showFlashes();
 		});
 
 		window.addEventListener(GLOBE_READY, (event) => {
 			app = (event as CustomEvent<GlobeApp>).detail;
-			slow();
+			showRates();
 		});
 		window.addEventListener(GLOBE_GONE, () => {
 			app = undefined;
