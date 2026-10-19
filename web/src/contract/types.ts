@@ -291,12 +291,12 @@ export interface StormSummary {
   closed: boolean;
   flashes: number;
   peak_rate: number;
-  /** Distance travelled by the storm centroid along its track; null in files older than 2.5.0. */
-  distance_km?: number | null;
   level: number;
   level_name: string;
   level_rule: string;
   sources: Source[];
+  /** Distance travelled by the storm centroid along its track; null in files older than 2.5.0. */
+  distance_km?: number | null;
 }
 
 /** storms/index/<page>.json: zero-based pages, recent first, read one page per request. */

@@ -481,6 +481,10 @@ class StormSummary(BaseModel):
     closed: bool
     flashes: int = Field(ge=0)
     peak_rate: int = Field(ge=0)
+    level: int = Field(ge=1)
+    level_name: str = Field(min_length=1, max_length=80)
+    level_rule: str = Field(min_length=1, max_length=2048)
+    sources: list[Source]
     distance_km: float | None | None = Field(
         default=None,
         description=(
@@ -488,10 +492,6 @@ class StormSummary(BaseModel):
             "older than 2.5.0."
         ),
     )
-    level: int = Field(ge=1)
-    level_name: str = Field(min_length=1, max_length=80)
-    level_rule: str = Field(min_length=1, max_length=2048)
-    sources: list[Source]
 
 
 class StormIndexPage(BaseModel):

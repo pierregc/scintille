@@ -267,18 +267,6 @@
           "type": "integer",
           "minimum": 0
         },
-        "distance_km": {
-          "anyOf": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Distance travelled by the storm centroid along its track; null in files older than 2.5.0."
-        },
         "level": {
           "type": "integer",
           "minimum": 1
@@ -298,6 +286,18 @@
           "items": {
             "$ref": "common.schema.json#/$defs/Source"
           }
+        },
+        "distance_km": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Distance travelled by the storm centroid along its track; null in files older than 2.5.0."
         }
       },
       "description": "Storm metrics and persisted classification."

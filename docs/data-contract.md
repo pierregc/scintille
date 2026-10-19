@@ -707,11 +707,11 @@ Storm metrics and persisted classification.
 | `closed` | boolean | yes |  |  |
 | `flashes` | integer | yes | minimum `0` |  |
 | `peak_rate` | integer | yes | minimum `0` |  |
-| `distance_km` | number or null | no |  | Distance travelled by the storm centroid along its track; null in files older than 2.5.0. |
 | `level` | integer | yes | minimum `1` |  |
 | `level_name` | string | yes | minLength `1`, maxLength `80` |  |
 | `level_rule` | string | yes | minLength `1`, maxLength `2048` |  |
 | `sources` | array of [Source](#source) | yes |  |  |
+| `distance_km` | number or null | no |  | Distance travelled by the storm centroid along its track; null in files older than 2.5.0. |
 
 ### StormIndexPage
 
