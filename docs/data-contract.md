@@ -318,7 +318,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.5.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.6.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -326,7 +326,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.5.0`.
+Value: `2.6.0`.
 
 ### UtcTimestamp
 
@@ -770,6 +770,101 @@ storms/<slug>.json: bounded metadata and replay references.
 | `bounds` | [StormBounds](#stormbounds) | yes |  |  |
 | `track` | array of [StormTrackPoint](#stormtrackpoint) | yes |  |  |
 | `replay` | [StormReplay](#stormreplay) | yes |  |  |
+
+### SourceFrontier
+
+Defined in `data/contract/active.schema.json`.
+
+How far a source's data reaches.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `source` | [Source](#source) | yes |  |  |
+| `observed_until` | [UtcTimestamp](#utctimestamp) or null | yes |  | End of the newest product file of this source included; null when none is. Its flashes after this time are not in the snapshot yet. |
+
+### PathPoint
+
+Defined in `data/contract/active.schema.json`.
+
+Centroid of a storm's flashes over one 10 minute slice.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `time` | [UtcTimestamp](#utctimestamp) | yes |  | Mean event time of the slice's flashes, never later than the data. |
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `flash_count` | integer | yes | minimum `1` |  |
+
+### ActiveCell
+
+Defined in `data/contract/active.schema.json`.
+
+One active storm and its current cell.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `id` | string | yes | minLength `1`, maxLength `128` | Storm id: the catalog storm_id once provisional is false. |
+| `provisional` | boolean | yes |  | True while the storm started in an hour the catalog has not tracked yet; its id may then be replaced. |
+| `previous_ids` | array of string | yes | minLength `1`, maxLength `128` | Ids this storm had in earlier snapshots, newest first. |
+| `slug` | string or null | yes |  | Catalog slug once the storm is published (storms/<slug>.json), else null. |
+| `name` | string or null | yes |  | Short place name once the catalog has named the storm, else null. |
+| `level` | integer | yes | minimum `1` | ADR 0009 level on the data so far; it only rises and is never below the catalog's. |
+| `flashes` | integer | yes | minimum `0` | Flashes of the storm so far on the source its level is computed from. |
+| `t_start` | [UtcTimestamp](#utctimestamp) | yes |  | First flash of the storm. |
+| `t_end` | [UtcTimestamp](#utctimestamp) | yes |  | Last flash of the storm so far. |
+| `lat` | number | yes | minimum `-90`, maximum `90` | Centroid of the current cell. |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `bounds` | [StormBounds](#stormbounds) | yes |  |  |
+| `area_km2` | number | yes | minimum `0` | Area of the current cell's convex hull. |
+| `hull` | array of array of number | yes | minItems `2`, maxItems `2` | Closed [lon, lat] ring of the current cell's convex hull, at most 33 points. Longitudes stay continuous around the centroid, so they may leave -180..180 near the antimeridian. |
+| `sources` | array of [Source](#source) | yes |  |  |
+| `split_from` | string or null | yes |  | Storm this one split off, when it started that way. |
+| `merged` | array of string | yes | minLength `1`, maxLength `128` | Storms that merged into this one in the open hour. |
+| `path` | array of [PathPoint](#pathpoint) | yes |  | Observed centroids, oldest first, over at most the last two hours. Older positions are in the catalog track. |
+
+### EndReason
+
+Defined in `data/contract/active.schema.json`.
+
+Why a storm left the feed: expired 30 minutes after its last flash (measured on its sources' data), merged into another storm, replaced by another id while provisional, or no data from its sources for an hour. Only a storm ended by source-gap may come back under the same id.
+
+| Index | Value |
+|---|---|
+| 0 | `expired` |
+| 1 | `merged` |
+| 2 | `replaced` |
+| 3 | `source-gap` |
+
+### EndedStorm
+
+Defined in `data/contract/active.schema.json`.
+
+A storm that left the feed, and where to follow it.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `id` | string | yes | minLength `1`, maxLength `128` |  |
+| `reason` | [EndReason](#endreason) | yes |  |  |
+| `into` | string or null | yes |  | Storm that continues it, for merged and replaced; else null. |
+| `t_end` | [UtcTimestamp](#utctimestamp) | yes |  | Last flash seen for it. |
+| `ended_at` | [UtcTimestamp](#utctimestamp) | yes |  | published_at of the first snapshot without it. |
+
+### ActiveStorms
+
+Defined in `data/contract/active.schema.json`.
+
+storms/active.json: storms active now and their current cells, rewritten after each update (ADR 0021).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  | When this snapshot was written. |
+| `authoritative_until` | [UtcTimestamp](#utctimestamp) or null | yes |  | End of the last hour tracked by the storm catalog. A storm that started before it has its final id; null before the first tracked hour. |
+| `update_seconds` | integer | yes | minimum `1` | Typical time between snapshots. Clients judge staleness from published_at, never by assuming this cadence. |
+| `min_level` | integer | yes | minimum `1` | Storms below this intensity level (ADR 0009) are left out of cells and ended. |
+| `sources` | array of [SourceFrontier](#sourcefrontier) | yes |  | Data frontier of each source in this snapshot. |
+| `cells` | array of [ActiveCell](#activecell) | yes |  | Active storms, one current cell each, strongest first. |
+| `ended` | array of [EndedStorm](#endedstorm) | yes |  | Storms that left cells during the last two hours, newest first. |
 
 <!-- END GENERATED REFERENCE -->
 
