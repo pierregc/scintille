@@ -70,7 +70,9 @@ Drains the spool every 5 minutes, up to 200 batches per commit:
 2. writes to `silver.flashes`, then `bronze.ingest_log`, only the batches each table does not hold
    yet; the batch ids go into the snapshot property `scintille.batch_ids`. Each write is one Iceberg
    overwrite filtered on the batches' product files, so an upstream revision of a file (same key,
-   new ETag) replaces the rows of the previous one instead of adding to them;
+   new ETag) replaces the rows of the previous one instead of adding to them. The filter is also
+   bounded in time (event times for silver, product starts for bronze, the last 6 hours of
+   receptions for the quarantine), since product names alone would read every file of a table;
 3. deletes the spool files.
 
 A crash anywhere replays the drain: batches found in a table's snapshots are skipped, so nothing is
