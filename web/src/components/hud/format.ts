@@ -1,3 +1,6 @@
+import { formatAge } from '../../globe/live/freshness';
+import { SAME_TIME_MS, type TrackObservation } from '../../globe/scene-time';
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -68,9 +71,32 @@ export function zoneLabel(timeZone = localZone(), ms = Date.now()): string {
 	return (offset ?? 'GMT').replace('GMT', 'UTC');
 }
 
-/** Caption under the Clouds switch: the observation time shown, or why there is none. */
-export function cloudCaption(visible: boolean, frameTime: number | null, settled: boolean, timeZone?: string): string {
+/** ` · 40 min earlier` or ` · 20 min later` than the scene; empty when close to it. */
+export function ageSuffix(time: number, reference: number): string {
+	const age = reference - time;
+	if (!(Math.abs(age) >= SAME_TIME_MS)) return '';
+	return ` · ${formatAge(Math.abs(age))} ${age > 0 ? 'earlier' : 'later'}`;
+}
+
+/** Caption under the Clouds switch: the observation shown and its age, or why there is none. */
+export function cloudCaption(
+	visible: boolean,
+	frameTime: number | null,
+	settled: boolean,
+	reference: number | null = null,
+	timeZone?: string,
+): string {
 	if (!visible) return '';
-	if (frameTime !== null) return `Observed ${formatTime(frameTime, timeZone).slice(0, 5)}`;
+	if (frameTime !== null) {
+		return `Observed ${formatTime(frameTime, timeZone).slice(0, 5)}${reference === null ? '' : ageSuffix(frameTime, reference)}`;
+	}
 	return settled ? 'No cloud data' : '';
+}
+
+/** Where the storm was last seen at the scene time; empty before its first position. */
+export function positionCaption(observation: TrackObservation, reference: number, timeZone?: string): string {
+	if (observation.time === null) return '';
+	const at = formatTime(observation.time, timeZone).slice(0, 5);
+	if (observation.state === 'lost') return `No position since ${at}`;
+	return `Position observed ${at}${ageSuffix(observation.time, reference)}`;
 }
