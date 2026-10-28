@@ -13,6 +13,7 @@ from dagster import AssetKey, materialize
 from obstore.store import MemoryStore, ObjectStore
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
+from scintille_ingest.backfill import EXPECTED_FILES_PER_DAY
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES, INGEST_LOG
 from scintille_pipelines.definitions import defs
@@ -210,6 +211,15 @@ def materialize_day(lake: LakeResource, r2: FeedResource) -> None:
     checks = result.get_asset_check_evaluations()
     assert len(checks) == sum(len(m.checks) for m in MODELS)
     assert all(c.passed for c in checks), [c.check_name for c in checks if not c.passed]
+
+
+def test_completeness_is_capped_when_a_source_sends_extra_files(
+    lake: LakeResource, r2: FeedResource, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(EXPECTED_FILES_PER_DAY, "glm-east", 2)
+    materialize_day(lake, r2)
+    sla = {r["source"]: r for r in rows_of(lake, SOURCE_SLA_DAILY)}
+    assert sla["glm-east"]["completeness"] == 1.0
 
 
 def test_gold_day_end_to_end(lake: LakeResource, r2: FeedResource) -> None:
