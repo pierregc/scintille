@@ -890,6 +890,35 @@ old pages can remain after a catalog shrinks and must not be exposed beyond that
 files include schema and freshness metadata in XML comments, preserve the sitemap protocol, and
 stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #75 detail file.
 
+## Active storms on R2
+
+`storms/active.json` (`ActiveStorms`, `Cache-Control: public, max-age=30`) lists the storms active
+now, one current cell each, and is rewritten whole after each update
+([ADR 0021](adr/0021-active-storm-cells.md)). Its cells are the open hour of storm tracking,
+recomputed from silver with the catalog's own clustering and linking, so:
+
+- A storm that started in an hour the catalog has tracked (`authoritative_until`) carries its
+  catalog `storm_id`, which no longer changes. A storm that started later is `provisional`: late
+  data or the catalog's run can give it another id. The new cell then lists the old id in
+  `previous_ids` and `ended` says `replaced`, with the new id in `into`.
+- `sources[].observed_until` is the end of the newest product file of each source in the
+  snapshot. A storm is judged on the data of its own sources: it expires 30 minutes of data after
+  its last flash, and when its sources stay silent it stays listed, unchanged, until they have
+  been silent for an hour (`source-gap`). Only such a storm can come back under the same id.
+- `ended` keeps every storm that left `cells` in the last two hours, with the reason (`expired`,
+  `merged`, `replaced`, `source-gap`) and, for merges and replacements, the storm to follow.
+  A split starts a new storm with `split_from`; the main branch keeps the id.
+- `level` follows ADR 0009 on the data so far and only rises. Storms under `min_level` are left
+  out. `path` holds the centroid of each 10 minute slice of observed flashes, at the slice's mean
+  event time, over at most the last two hours; earlier positions are in the catalog track.
+
+Clients poll at their own pace and judge staleness from `published_at`. A storm is shown at the
+earlier of the scene time and its sources' `observed_until`, never extrapolated beyond its last
+path point. `scintille_contract.active` checks a snapshot and two successive snapshots against
+these rules. `fixtures/storms/active/0.json` to `4.json` are five snapshots of one synthetic
+evening (2026-07-15, 18:26 to 19:41 UTC): a late MTG LI file replacing a provisional id, a split,
+a merge, an expiry, provisional ids becoming final, and an MTG LI outage ending two storms.
+
 ## Storm replay data
 
 `GlobeApp.data.openStorm(baseUrl, slug, speed)` loads the published metadata and SCNT gzip

@@ -153,12 +153,19 @@ def dagster_runs() -> dict[str, Any]:
     records = instance.get_run_records(filters=RunsFilter(created_after=since), limit=10000)
     storm_keys = {AssetKey(["gold", "storm_cells"]), AssetKey(["feeds", "storm_catalog"])}
     jobs: dict[str, dict[str, int]] = {}
+    busy: dict[str, list[float]] = {}
+    waits: dict[str, list[float]] = {}
     runs = []
     for record in records:
         run = record.dagster_run
         status = run.status.value
         jobs.setdefault(run.job_name, {}).setdefault(status, 0)
         jobs[run.job_name][status] += 1
+        if record.start_time and record.end_time:
+            busy.setdefault(run.job_name, []).append(record.end_time - record.start_time)
+            waits.setdefault(run.job_name, []).append(
+                record.start_time - record.create_timestamp.timestamp()
+            )
         storm = set(run.asset_selection or ()) & storm_keys or run.job_name.startswith("__")
         if run.job_name != "hourly_storm_catalog" and not storm:
             continue
@@ -210,6 +217,9 @@ def dagster_runs() -> dict[str, Any]:
         )
     return {
         "jobs": jobs,
+        "job_duration_s": {job: pct(v, (50, 95)) for job, v in busy.items()},
+        "job_queue_s": {job: pct(v, (50, 95)) for job, v in waits.items()},
+        "busy_hours_per_day": round(sum(sum(v) for v in busy.values()) / 3600 / RUN_DAYS, 2),
         "summary": summarize_runs(runs),
         "tracked_at": tracked_at(runs),
         "recent": [compact(r) for r in sorted(runs, key=lambda r: r["created"])[-36:]],
