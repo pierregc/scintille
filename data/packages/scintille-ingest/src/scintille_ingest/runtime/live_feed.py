@@ -97,6 +97,25 @@ class ObjectLiveStore:
         await obstore.delete_async(self._store, self._prefix + path)
 
 
+class FileLiveStore:
+    """A local directory with the bucket layout; headers are dropped."""
+
+    def __init__(self, root: Path, prefix: str = "live/") -> None:
+        self._root = root / prefix
+
+    async def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+        target = self._root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    async def get(self, path: str) -> bytes | None:
+        target = self._root / path
+        return target.read_bytes() if target.exists() else None
+
+    async def delete(self, path: str) -> None:
+        (self._root / path).unlink(missing_ok=True)
+
+
 class Outbox:
     """Flashes accepted by `publish()` until a manifest lists their chunk; survives restarts.
 

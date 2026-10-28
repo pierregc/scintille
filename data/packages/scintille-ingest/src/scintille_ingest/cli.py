@@ -20,9 +20,10 @@ from scintille_lake.config import LakeConfig
 from scintille_lake.connect import duckdb_attach, pyiceberg_catalog
 from scintille_lake.locks import partition_locks
 
-from scintille_ingest.clouds import gfs, gmgsi
-from scintille_ingest.clouds.collector import CloudCollector
+from scintille_ingest.clouds import fci, gfs, gmgsi
+from scintille_ingest.clouds.collector import CloudCollector, CompositeCollector
 from scintille_ingest.clouds.publish import CloudPublisher
+from scintille_ingest.clouds.sources import GOES_BUCKETS, HIMAWARI_BUCKET, Sources
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
@@ -34,7 +35,13 @@ from scintille_ingest.runtime import health
 from scintille_ingest.runtime.heartbeat import heartbeat_from_env
 from scintille_ingest.runtime.lake_commit import LakeCommit
 from scintille_ingest.runtime.lake_writer import LakeWriter
-from scintille_ingest.runtime.live_feed import LiveFeed, ObjectLiveStore, StateDelays
+from scintille_ingest.runtime.live_feed import (
+    FileLiveStore,
+    LiveFeed,
+    LiveStore,
+    ObjectLiveStore,
+    StateDelays,
+)
 from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
@@ -77,8 +84,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     probe.add_argument("--max-age", type=float, default=MAX_AGE, help="seconds")
     probe.add_argument("--every", type=float, default=60.0, help="seconds between checks")
     probe.add_argument("--once", action="store_true", help="check once; exit 1 if not fresh")
-    clouds = commands.add_parser("clouds", help="publish GMGSI cloud textures to the live bucket")
+    clouds = commands.add_parser("clouds", help="publish cloud frames to the live bucket")
     clouds.add_argument("--port", type=int, default=8081, help="/healthz and /metrics")
+    clouds.add_argument(
+        "--source",
+        choices=("gmgsi", "composite"),
+        default=os.environ.get("SCINTILLE_CLOUD_SOURCE", "gmgsi"),
+    )
+    clouds.add_argument(
+        "--slot", type=_utc, help="composite: render this hour once instead of running"
+    )
+    clouds.add_argument(
+        "--out", type=Path, help="with --slot: write the bucket layout here instead of R2"
+    )
     calibrate = commands.add_parser(
         "calibrate", help="fit the intensity calibration on silver.flashes and write it"
     )
@@ -91,6 +109,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "live-probe":
         return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "clouds":
+        if args.source == "composite":
+            return asyncio.run(run_composite(args.port, args.slot, args.out))
         return asyncio.run(run_clouds(args.port))
     if args.command == "live":
         return asyncio.run(run_live(args.spool, args.port))
@@ -208,6 +228,73 @@ async def run_clouds(port: int) -> int:
     async with server:
         await collector.start()
     return 0
+
+
+COMPOSITE_ATTRIBUTION = (
+    "Clouds: NOAA GOES-East and GOES-West, JMA Himawari-9 via NOAA, contains modified EUMETSAT "
+    "Meteosat data {year}; gaps from NOAA NESDIS GMGSI"
+)
+
+
+async def run_composite(port: int, slot: datetime | None, out: Path | None) -> int:
+    """Hourly composite (ADR 0022): GOES and Himawari from AWS, MTG FCI from the EUMETSAT Data
+    Store (`SCINTILLE_EUMETSAT_*`); workers `SCINTILLE_CLOUD_WORKERS`, scratch space
+    `SCINTILLE_CLOUD_WORK_DIR`."""
+    configure_json_logs()
+    live: LiveStore
+    archive: LiveStore
+    if out is not None:
+        live, archive = FileLiveStore(out, "live/clouds/"), FileLiveStore(out, "archive/clouds/")
+    else:
+        bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+        if not bucket:
+            log.error("SCINTILLE_LIVE_BUCKET is not set")
+            return 2
+        store = live_store(bucket)
+        live = ObjectLiveStore(store, prefix="live/clouds/")
+        archive = ObjectLiveStore(store, prefix="archive/clouds/")
+    key = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_KEY")
+    secret = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_SECRET")
+    mtg = (
+        mtg_discovery.EumdacStore(key, secret, collection=fci.COLLECTION)
+        if key and secret
+        else None
+    )
+    if mtg is None:
+        log.warning("EUMETSAT credentials are not set: no FCI, Europe and Africa from GMGSI")
+    year = (slot or datetime.now(UTC)).year
+    metrics = Metrics()
+    collector = CompositeCollector(
+        Sources(
+            {sat: public_store(bucket) for sat, bucket in GOES_BUCKETS.items()},
+            public_store(HIMAWARI_BUCKET),
+            mtg,
+        ),
+        gfs.GfsSkin(public_store(gfs.BUCKET)),
+        public_store(gmgsi.BUCKET),
+        CloudPublisher(live, archive, attribution=COMPOSITE_ATTRIBUTION.format(year=year)),
+        Path(os.environ.get("SCINTILLE_CLOUD_WORK_DIR", "/tmp/scintille-clouds")),
+        workers=int(os.environ.get("SCINTILLE_CLOUD_WORKERS", "2")),
+        metrics=metrics,
+    )
+    if slot is not None:
+        await collector.publisher.restore()
+        files = await asyncio.to_thread(collector.sources.find, slot)
+        if not files.complete_satellites:
+            log.error("no satellite delivered this slot")
+            return 1
+        await collector.process(files)
+        return 0
+    server = await health.serve(port, collector.healthy, metrics.render)
+    _stop_on_signals(collector.stop)
+    async with server:
+        await collector.start()
+    return 0
+
+
+def _utc(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
 
 def live_store(bucket: str) -> S3Store:

@@ -1,14 +1,17 @@
 """Cloud frames on R2: immutable textures per tier under `live/clouds/`, a short-lived manifest,
 and the same textures under `archive/clouds/` for replay."""
 
+import asyncio
 import hashlib
 import json
 import logging
 import re
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from scintille_contract.cloud_archive import (
+    ARCHIVE_DETAIL_PATTERN,
     ARCHIVE_SCHEMA_VERSION,
     ARCHIVE_TEXTURE_PATTERN,
     CLOUD_TIERS,
@@ -18,11 +21,13 @@ from scintille_contract.cloud_archive import (
 
 from scintille_ingest.runtime.live_feed import LiveStore
 
+from . import tiles
 from .texture import TIERS
 
 log = logging.getLogger("scintille_ingest.clouds")
 
 ATTRIBUTION = "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)"
+UPLOADS = 16
 WINDOW = timedelta(hours=6)
 ARCHIVE_RETENTION = timedelta(days=30)
 TEXTURE_HEADERS = {
@@ -40,6 +45,22 @@ class CloudTexture(BaseModel):
     size_bytes: int = Field(strict=True, ge=1, le=MAX_CLOUD_FRAME_BYTES)
 
 
+class CloudDetail(BaseModel):
+    """Finer tiles of the same frame, for close views (ADR 0022)."""
+
+    path: str
+    """Relative to the manifest, with `{z}`, `{y}` and `{x}` to fill in."""
+    tile_size: int
+    border: int
+    """Texels each tile repeats from its neighbours on every side."""
+    levels: list[int]
+    """Every level but the finest has all its tiles within ±`max_latitude`."""
+    max_latitude: float
+    fine: str
+    """Finest level tiles present: base64 bitmap, row-major from the north-west, low bit first."""
+    size_bytes: int = Field(strict=True, ge=0)
+
+
 class CloudFrameRef(BaseModel):
     time: AwareDatetime
     """Observation time of the mosaic, for the HUD."""
@@ -49,6 +70,7 @@ class CloudFrameRef(BaseModel):
     reference: str
     """Surface temperature field the opacity was computed against."""
     textures: dict[str, CloudTexture]
+    detail: CloudDetail | None = None
 
 
 class CloudManifest(BaseModel):
@@ -72,6 +94,8 @@ class ArchiveCloudFrame(CloudFrameRef):
                 or not 1 <= texture.size_bytes <= MAX_CLOUD_FRAME_BYTES
             ):
                 raise ValueError("invalid archive cloud texture")
+        if self.detail and not re.fullmatch(ARCHIVE_DETAIL_PATTERN, self.detail.path):
+            raise ValueError("invalid archive cloud detail")
         return self
 
 
@@ -104,13 +128,25 @@ def archive_path(tier: str, time: datetime, name: str) -> str:
     return f"{tier}/{time:%Y/%m/%d}/{name}"
 
 
+def detail_root(time: datetime, name: str) -> str:
+    """Tiles of a frame, under the archive root: written once, read by both manifests."""
+    return f"detail/{time:%Y/%m/%d}/{name.removesuffix('.webp')}"
+
+
 class CloudPublisher:
     """`live` and `archive` are stores rooted at `live/clouds/` and `archive/clouds/`."""
 
-    def __init__(self, live: LiveStore, archive: LiveStore, window: timedelta = WINDOW) -> None:
+    def __init__(
+        self,
+        live: LiveStore,
+        archive: LiveStore,
+        window: timedelta = WINDOW,
+        attribution: str = ATTRIBUTION,
+    ) -> None:
         self.live = live
         self.archive = archive
         self.window = window
+        self.attribution = attribution
         self.frames: list[CloudFrameRef] = []
         self.expired: set[str] = set()
 
@@ -129,11 +165,13 @@ class CloudPublisher:
         reference: str,
         textures: dict[str, bytes],
         now: datetime,
+        detail: Mapping[tiles.Key, bytes] | None = None,
     ) -> CloudFrameRef:
-        """Textures, then the manifest, then the archive copies. Live textures that left the
-        window are deleted on the next publish, so cached manifests still resolve."""
+        """Detail tiles, textures, then the manifest, then the archive copies. Live textures that
+        left the window are deleted on the next publish, so cached manifests still resolve."""
         time = time.astimezone(UTC)
         name = texture_name(time, product)
+        detail_ref = await self._detail(time, name, detail) if detail else None
         refs = {}
         for tier, data in textures.items():
             path = f"{tier}/{name}"
@@ -143,7 +181,14 @@ class CloudPublisher:
                 path=path, width=width, height=width // 2, size_bytes=len(data)
             )
         frame = CloudFrameRef(
-            time=time, published_at=now, product=product, reference=reference, textures=refs
+            time=time,
+            published_at=now,
+            product=product,
+            reference=reference,
+            textures=refs,
+            detail=detail_ref.model_copy(update={"path": f"../../archive/clouds/{detail_ref.path}"})
+            if detail_ref
+            else None,
         )
         before = self.frames
         frames = sorted([f for f in before if f.time != time] + [frame], key=lambda f: f.time)
@@ -156,19 +201,45 @@ class CloudPublisher:
         for path in self.expired - kept:
             await self._delete(path)
         self.expired = {t.path for f in before for t in f.textures.values()} - kept
-        await self._archive(frame, textures, now)
+        await self._archive(frame, textures, now, detail_ref)
         return frame
+
+    async def _detail(
+        self, time: datetime, name: str, detail: Mapping[tiles.Key, bytes]
+    ) -> CloudDetail:
+        """Uploads every tile; the returned path is relative to the archive root."""
+        root = detail_root(time, name)
+        limit = asyncio.Semaphore(UPLOADS)
+
+        async def put(key: tiles.Key, data: bytes) -> None:
+            async with limit:
+                await self.archive.put(f"{root}/{key.path}", data, TEXTURE_HEADERS)
+
+        await asyncio.gather(*(put(k, d) for k, d in detail.items()))
+        return CloudDetail(
+            path=root + "/{z}/{y}/{x}.webp",
+            tile_size=tiles.TILE,
+            border=tiles.BORDER,
+            levels=list(tiles.LEVELS),
+            max_latitude=tiles.MAX_LATITUDE,
+            fine=tiles.bitmap(detail, tiles.FINE_LEVEL),
+            size_bytes=sum(len(d) for d in detail.values()),
+        )
 
     def manifest(self, now: datetime) -> CloudManifest:
         return CloudManifest(
             generated_at=now,
             window_seconds=int(self.window.total_seconds()),
-            attribution=ATTRIBUTION,
+            attribution=self.attribution,
             frames=self.frames,
         )
 
     async def _archive(
-        self, frame: CloudFrameRef, textures: dict[str, bytes], now: datetime
+        self,
+        frame: CloudFrameRef,
+        textures: dict[str, bytes],
+        now: datetime,
+        detail: CloudDetail | None = None,
     ) -> None:
         try:
             key = f"manifests/{frame.time:%Y-%m-%d}.json"
@@ -194,8 +265,9 @@ class CloudPublisher:
                 refs[tier] = frame.textures[tier].model_copy(update={"path": f"../{path}"})
             kept = [f for f in frames if f.time != frame.time and f.expires_at > now]
             archived = ArchiveCloudFrame(
-                **frame.model_dump(exclude={"textures"}),
+                **frame.model_dump(exclude={"textures", "detail"}),
                 textures=refs,
+                detail=detail.model_copy(update={"path": f"../{detail.path}"}) if detail else None,
                 expires_at=now + ARCHIVE_RETENTION,
             )
             combined = sorted([*kept, archived], key=lambda f: f.time)
@@ -208,6 +280,7 @@ class CloudPublisher:
             manifest = ArchiveCloudManifest(
                 day=frame.time.date(),
                 generated_at=now,
+                attribution=self.attribution,
                 frames=combined,
             )
             await self.archive.put(key, manifest.model_dump_json().encode(), MANIFEST_HEADERS)
