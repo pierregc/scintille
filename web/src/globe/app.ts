@@ -262,14 +262,15 @@ export function createGlobeApp(
 		stars.setTime(now);
 		data.update(now);
 		const delays = playbackDelays();
+		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
+		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
 		lightning.stormView = clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading);
+		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		thunder.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (post) {
-			// Bloom follows the camera height only, so a view never pumps with its own flashes.
-			const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
 			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength));
 			post.render();
 		} else renderer.render(scene, camera);

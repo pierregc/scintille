@@ -4,10 +4,8 @@ import { glslFloat, spread } from './profile';
 export const CHANNEL = {
 	/** Channel half-length relative to the flash radius, always physical. */
 	lengthScale: 2.2,
-	/** Rendering choices, not satellite classifications. */
+	/** Share of cloud-to-ground looks: a rendering choice, not a satellite classification. */
 	groundShare: 0.25,
-	cloudBaseKm: 7,
-	heightExaggeration: 2.5,
 	/** The channel fades out this long after the flicker phase, seconds. */
 	fade: 0.15,
 	/** Branches light once, when reached: their decay constant for ground and in-cloud flashes, seconds. */
@@ -16,15 +14,17 @@ export const CHANNEL = {
 	/** Share of an in-cloud path lit at the first pulse; the leaders then cover the rest. */
 	cloudStart: 0.2,
 	/** In-cloud channels blur over this much cloud, km, and keep this share of their light. */
-	veilKm: 2,
-	veilLevel: 0.6,
+	veilKm: 0.6,
+	veilLevel: 0.45,
+	/** Share of a channel's light left over sunlit clouds, which outshine a thin channel seen from orbit. */
+	dayLevel: 0.3,
 	/** In-cloud light drifts along the channel over the flash, this many observed radii either side of the position. */
 	drift: 0.6,
-	/** Share of the glow held back while the channel shows, so the cloud does not wash it out; in-cloud flashes keep more. */
+	/** Share of the glow held back while the channel shows, so the cloud does not wash it out. */
 	glowDip: 0.6,
 	haloGlowDip: 0.9,
-	cloudGlowDip: 0.6,
-	haloCapacity: 512,
+	cloudGlowDip: 0.75,
+	haloCapacity: 256,
 	haloFadeStartKm: 1500,
 	haloFadeEndKm: 6000,
 } as const;

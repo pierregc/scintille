@@ -13,6 +13,7 @@ uniform float duration;
 uniform float flicker;
 uniform vec4 window;
 uniform float splat;
+uniform float level;
 uniform float spreadKm;
 uniform float minSplatKm;
 uniform float wrap;
@@ -57,7 +58,7 @@ void main() {
 	gl_PointSize = 2.0 * max(pixels.x, pixels.y);
 	gl_Position = vec4(center, 0.0, 1.0);
 	vScale = gl_PointSize * 0.5 / pixels;
-	vBrightness = brightness;
+	vBrightness = brightness * level;
 }
 `;
 

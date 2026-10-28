@@ -4,8 +4,12 @@ import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { budgetStart, createLightning, lightWindow } from './index';
+import { MAX_SEGMENTS } from './skeleton';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 describe('3D channel integration', () => {
 	it('shares bloom layers and retires channels while the afterglow remains', () => {
@@ -18,10 +22,11 @@ describe('3D channel integration', () => {
 		lightning.mesh.layers.enable(1);
 		expect(child.layers.mask).toBe(lightning.mesh.layers.mask);
 		lightning.setTime(100_100);
-		expect(child.geometry.instanceCount).toBe(1);
+		expect(child.geometry.instanceCount).toBe(MAX_SEGMENTS);
 		const halo = lightning.mesh.children[1];
-		if (!(halo instanceof Mesh) || !(halo.geometry instanceof InstancedBufferGeometry)) throw new Error('missing halo');
-		expect(halo.geometry.instanceCount).toBe(1);
+		if (!(halo instanceof Mesh)) throw new Error('missing halo');
+		expect(halo.geometry).toBe(child.geometry);
+		expect(halo.visible).toBe(true);
 		expect(halo.layers.mask).toBe(lightning.mesh.layers.mask);
 		lightning.setTime(101_000);
 		expect(child.geometry.instanceCount).toBe(0);
@@ -33,17 +38,20 @@ describe('3D channel integration', () => {
 		expect(disposed).toHaveBeenCalledOnce();
 	});
 
-	it('budgets the halo and restores the round glow during a burst', () => {
+	it('budgets the halo during a burst and builds no channel too far away to read', () => {
 		const ring = new FlashRing(1024);
-		ring.push(decodeChunk(encodeChunk(100, Array.from({ length: 513 }, () => ({ offsetMs: 0, lat: 0, lon: 0 }))).buffer));
+		ring.push(decodeChunk(encodeChunk(100, Array.from({ length: 300 }, (_, i) => ({ offsetMs: 0, lat: (i % 60) * 0.5, lon: Math.floor(i / 60) }))).buffer));
 		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
-		lightning.setTime(100_100);
+		let wall = 0;
+		vi.spyOn(performance, 'now').mockImplementation(() => (wall += 100));
+		for (let frame = 0; frame < 16; frame++) lightning.setTime(100_100);
 		const halo = lightning.mesh.children[1];
-		if (!(halo instanceof Mesh) || !(halo.geometry instanceof InstancedBufferGeometry)) throw new Error('missing halo');
-		expect(halo.geometry.instanceCount).toBe(0);
-		expect(halo.geometry.index?.count).toBe(8 * 6);
-		if (!(halo.material instanceof ShaderMaterial)) throw new Error('missing halo material');
+		if (!(halo instanceof Mesh) || !(halo.material instanceof ShaderMaterial)) throw new Error('missing halo');
 		expect(halo.material.uniforms.haloStrength.value).toBe(0);
+		expect(halo.visible).toBe(false);
+		lightning.viewKmPerPx = 12;
+		lightning.setTime(100_100);
+		expect(halo.geometry.instanceCount).toBe(0);
 		lightning.dispose();
 	});
 
@@ -70,7 +78,7 @@ describe('3D channel integration', () => {
 		if (!(channel instanceof Mesh)) throw new Error('missing channel mesh');
 		lightning.setTime(100_000, undefined, 60);
 		lightning.setTime(106_000, undefined, 60);
-		expect(channel.geometry.instanceCount).toBe(1);
+		expect(channel.geometry.instanceCount).toBe(MAX_SEGMENTS);
 		lightning.setTime(130_000, undefined, 60);
 		expect(channel.geometry.instanceCount).toBe(0);
 		lightning.dispose();
