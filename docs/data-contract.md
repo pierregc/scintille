@@ -894,8 +894,9 @@ stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #7
 
 `storms/active.json` (`ActiveStorms`, `Cache-Control: public, max-age=30`) lists the storms active
 now, one current cell each, and is rewritten whole after each update
-([ADR 0021](adr/0021-active-storm-cells.md)). Its cells are the open hour of storm tracking,
-recomputed from silver with the catalog's own clustering and linking, so:
+([ADR 0021](adr/0021-active-storm-cells.md)) every 5 minutes. Its cells are the hours the catalog
+has not tracked yet, recomputed from silver and the flashes not yet committed to it with the
+catalog's own clustering and linking, so:
 
 - A storm that started in an hour the catalog has tracked (`authoritative_until`) carries its
   catalog `storm_id`, which no longer changes. A storm that started later is `provisional`: late
