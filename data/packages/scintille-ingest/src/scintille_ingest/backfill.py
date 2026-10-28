@@ -17,13 +17,13 @@ from scintille_lake.tables import FLASHES, FLASHES_QUARANTINE, INGEST_LOG
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.intensity import CURRENT
 from scintille_ingest.runtime.lake_commit import QUARANTINE_COLUMNS, to_ingest_log, to_silver
+from scintille_ingest.runtime.ops import EXPECTED_FILES_PER_HOUR
 from scintille_ingest.runtime.sources import Product
 from scintille_ingest.validate import quarantine_rows, validate
 
 log = logging.getLogger("scintille_ingest.backfill")
 
-# GLM writes one product every 20 s.
-EXPECTED_FILES_PER_DAY = {"glm-east": 4320, "glm-west": 4320, "mtg-li": 2880}
+EXPECTED_FILES_PER_DAY = {source: 24 * n for source, n in EXPECTED_FILES_PER_HOUR.items()}
 MIN_COMPLETENESS = 0.99
 # Files that start before midnight can hold flashes of the next day, and the other way round.
 EDGE = timedelta(minutes=2)
