@@ -117,6 +117,13 @@ pnpm -C web r2:upload textures
 The files are immutable: after regenerating them with different content, bump the version in
 `web/scripts/r2-upload.mjs` and in the default of `texturesRoot` (`web/src/globe/earth.ts`).
 
+The surface pyramid goes to `textures/v3/` the same way, tiles first and its manifest last, once
+`check-tiles.mjs` has passed ([assets](assets.md#surface-pyramid)):
+
+```sh
+pnpm -C web r2:upload surface
+```
+
 `data.scintille.app` (public custom domain on `scintille-live`) and its CORS policy are declared in
 [infra/terraform](../infra/terraform/README.md). Until they are applied, the production globe has
 neither textures nor live data.

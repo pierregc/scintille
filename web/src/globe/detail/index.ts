@@ -18,6 +18,7 @@ export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPix
 export interface SurfaceDetailOptions {
 	earth: ShaderMaterial;
 	root: string;
+	surfaceRoot: string;
 	radius: number;
 	baseTexelKm: number;
 	anisotropy: number;
@@ -35,7 +36,7 @@ export class SurfaceDetail {
 	constructor(private readonly options: SurfaceDetailOptions) {
 		this.#mode = options.mode;
 		this.tiles = new SurfaceTiles(options.earth, {
-			root: `${options.root}/tiles`,
+			root: options.surfaceRoot,
 			radius: options.radius,
 			baseTexelKm: options.baseTexelKm,
 			texelPixels: options.texelPixels,

@@ -26,6 +26,12 @@ describe('Presence', () => {
 		expect(presence.has('night', { z: 2, x: 0, y: 0 })).toBe(false);
 		expect(presence.has('day', { z: 3, x: 0, y: 0 })).toBe(false);
 	});
+
+	it('reads a level without night lights as having none', () => {
+		const presence = new Presence({ ...manifest, levels: { 5: { ...level(192, [3]), layers: { day: level(192, [3]).layers.day } } } });
+		expect(presence.has('day', { z: 5, x: 3, y: 0 })).toBe(true);
+		expect(presence.has('night', { z: 5, x: 3, y: 0 })).toBe(false);
+	});
 });
 
 describe('nearestPoint', () => {
