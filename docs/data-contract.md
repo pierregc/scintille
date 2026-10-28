@@ -144,7 +144,7 @@ archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 ```
 
 - A **frame** is one hourly observation turned into cloud opacity, from the GMGSI mosaic
-  ([ADR 0007](adr/0007-cloud-source.md)) or the composite ([ADR 0022](adr/0022-composite-clouds.md)):
+  ([ADR 0007](adr/0007-cloud-source.md)) or the composite ([ADR 0023](adr/0023-composite-clouds.md)):
   an equirectangular grayscale WebP (west edge at 180° W, top row at 90° N; 0 clear, 255 opaque;
   0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and `4k` (4096 × 2048).
 - The **manifest** lists the frames of the last 6 hours, oldest first. Paths are relative to the
@@ -176,7 +176,7 @@ flash contract yet.
 
 ### Cloud detail tiles
 
-Composite frames add an optional `detail` block ([ADR 0022](adr/0022-composite-clouds.md)); clients
+Composite frames add an optional `detail` block ([ADR 0023](adr/0023-composite-clouds.md)); clients
 that ignore it keep the global textures:
 
 ```json

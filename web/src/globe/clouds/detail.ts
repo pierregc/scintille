@@ -18,7 +18,7 @@ import { boundedBody } from './response';
 const EARTH_RADIUS_KM = 6371;
 const DEG = Math.PI / 180;
 
-/** Finer tiles of one frame, as published next to its global texture (ADR 0022). */
+/** Finer tiles of one frame, as published next to its global texture (ADR 0023). */
 export interface CloudDetailRef {
 	path: string;
 	tile_size: number;

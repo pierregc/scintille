@@ -1,4 +1,4 @@
-"""Detail tiles: equirectangular pyramid levels of about 4, 2 and 1 km (ADR 0022)."""
+"""Detail tiles: equirectangular pyramid levels of about 4, 2 and 1 km (ADR 0023)."""
 
 import base64
 import io

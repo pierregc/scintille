@@ -1,4 +1,4 @@
-"""Finds, downloads and decodes the satellite files of one hourly composite slot (ADR 0022)."""
+"""Finds, downloads and decodes the satellite files of one hourly composite slot (ADR 0023)."""
 
 import logging
 import threading

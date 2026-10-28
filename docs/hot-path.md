@@ -107,7 +107,7 @@ The manifest is the only state: on restart the service continues it. A failing p
   object → published, which should stay under 2 minutes).
 
 With `--source composite` (or `SCINTILLE_CLOUD_SOURCE=composite`), it builds the hourly composite of
-[ADR 0022](adr/0022-composite-clouds.md) instead:
+[ADR 0023](adr/0023-composite-clouds.md) instead:
 
 1. **wait** for the full disk scans starting at the hour: GOES-19 and GOES-18 ABI bands 2 and 13
    (`noaa-goes19`, `noaa-goes18`), Himawari-9 AHI bands 3 and 13 (`noaa-himawari9`, ten segments

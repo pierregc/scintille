@@ -1,4 +1,4 @@
-# 0022 · Composite clouds of about 1 km, served as detail tiles
+# 0023 · Composite clouds of about 1 km, served as detail tiles
 
 - Status: proposed
 - Date: 2026-10-28
@@ -126,4 +126,5 @@ Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive
   read by range would cut them to a few thousand if the bill matters.
 - The 30 day lifecycle on `archive/clouds/` also bounds the detail of replays.
 - Offline rendering (`/render`) keeps the global frames; it does not load detail yet.
-- The texture array with page tables is generic: the ground detail of #252 and #253 can reuse it.
+- The texture array with page tables is generic: the ground detail of
+  [ADR 0022](0022-surface-imagery.md) (#252, #253) can reuse it to draw in one pass.

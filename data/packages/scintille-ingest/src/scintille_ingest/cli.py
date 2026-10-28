@@ -237,7 +237,7 @@ COMPOSITE_ATTRIBUTION = (
 
 
 async def run_composite(port: int, slot: datetime | None, out: Path | None) -> int:
-    """Hourly composite (ADR 0022): GOES and Himawari from AWS, MTG FCI from the EUMETSAT Data
+    """Hourly composite (ADR 0023): GOES and Himawari from AWS, MTG FCI from the EUMETSAT Data
     Store (`SCINTILLE_EUMETSAT_*`); workers `SCINTILLE_CLOUD_WORKERS`, scratch space
     `SCINTILLE_CLOUD_WORK_DIR`."""
     configure_json_logs()

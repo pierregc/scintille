@@ -46,7 +46,7 @@ class CloudTexture(BaseModel):
 
 
 class CloudDetail(BaseModel):
-    """Finer tiles of the same frame, for close views (ADR 0022)."""
+    """Finer tiles of the same frame, for close views (ADR 0023)."""
 
     path: str
     """Relative to the manifest, with `{z}`, `{y}` and `{x}` to fill in."""

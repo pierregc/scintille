@@ -1,4 +1,4 @@
-"""Blends geostationary disks into cloud opacity on a latitude-longitude grid (ADR 0022)."""
+"""Blends geostationary disks into cloud opacity on a latitude-longitude grid (ADR 0023)."""
 
 import math
 from collections.abc import Callable, Sequence

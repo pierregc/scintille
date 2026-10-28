@@ -152,7 +152,7 @@ def hour_slots(now: datetime, window: timedelta) -> list[datetime]:
 
 class CompositeCollector:
     """Renders each hourly slot once every satellite has delivered it, or once `deadline` has
-    passed with what arrived (ADR 0022). Gaps fall back to the latest GMGSI mosaic."""
+    passed with what arrived (ADR 0023). Gaps fall back to the latest GMGSI mosaic."""
 
     def __init__(
         self,
