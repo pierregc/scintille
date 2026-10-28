@@ -10,7 +10,6 @@ from dagster import (
     AssetCheckSpec,
     AssetExecutionContext,
     AssetKey,
-    BackfillPolicy,
     MaterializeResult,
     asset,
 )
@@ -30,7 +29,7 @@ from scintille_lake.tables import gold_table
 
 from .geocoding import Geocoder, base_slug, geodata_version, unique_slugs
 from .resources import LakeResource
-from .storm_cells import hourly
+from .storm_cells import BACKFILL, hourly
 from .storms import STORMS, STORMS_CHECK, _between, _scan
 
 STORM_NAMES = gold_table(
@@ -104,7 +103,7 @@ def check_names(names: pl.DataFrame) -> AssetCheckResult:
     key=NAMES_CHECK.asset_key,
     partitions_def=hourly,
     deps=[STORMS_CHECK.asset_key],
-    backfill_policy=BackfillPolicy.single_run(),
+    backfill_policy=BACKFILL,
     pool="storm-tracks",
     group_name="gold",
     check_specs=[NAMES_CHECK],

@@ -14,5 +14,11 @@ concurrency:
     granularity: run
     default_limit: 1
 
+# A run whose worker died with the daemon (a deploy) stays STARTED: it is failed past its limit.
+run_monitoring:
+  enabled: true
+  start_timeout_seconds: 600
+  max_runtime_seconds: 21600
+
 telemetry:
   enabled: false

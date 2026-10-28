@@ -10,7 +10,6 @@ from dagster import (
     AssetDep,
     AssetExecutionContext,
     AssetKey,
-    BackfillPolicy,
     Config,
     Failure,
     MaterializeResult,
@@ -36,7 +35,7 @@ from scintille_lake.migrate import sync_table
 from scintille_lake.tables import gold_table
 
 from .resources import LakeResource
-from .storm_cells import STORM_CELLS, hourly
+from .storm_cells import BACKFILL, STORM_CELLS, hourly
 from .tracking import HOUR, TRACK_SCHEMA, TrackParams, summarize_storms, track_range
 
 
@@ -184,7 +183,7 @@ def check_tracks(tracks: pl.DataFrame, cells: int) -> AssetCheckResult:
             partition_mapping=TimeWindowPartitionMapping(start_offset=-1, end_offset=-1),
         ),
     ],
-    backfill_policy=BackfillPolicy.single_run(),
+    backfill_policy=BACKFILL,
     pool="storm-tracks",
     group_name="gold",
     check_specs=[TRACKS_CHECK],
@@ -254,7 +253,7 @@ def check_storms(storms: pl.DataFrame) -> AssetCheckResult:
     key=STORMS_CHECK.asset_key,
     partitions_def=hourly,
     deps=[TRACKS_CHECK.asset_key],
-    backfill_policy=BackfillPolicy.single_run(),
+    backfill_policy=BACKFILL,
     pool="storm-tracks",
     group_name="gold",
     check_specs=[STORMS_CHECK],
