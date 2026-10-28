@@ -4,8 +4,8 @@
 	"poses": {
 		"globe": { "altitude": 20000, "tilt": 0 },
 		"regional": "framed",
-		"close": { "altitude": 250, "tilt": 55 },
-		"deck": { "altitude": 100, "tilt": 72 }
+		"iss": { "altitude": 400, "tilt": 1 },
+		"window": { "altitude": 740, "tilt": 60 }
 	},
 	"storms": [
 		{
