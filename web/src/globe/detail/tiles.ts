@@ -37,6 +37,8 @@ export interface SurfaceTilesOptions {
 	texelPixels: number;
 	/** A tile is requested once wanted this long, so flights do not load what they pass through. */
 	dwellMs: number;
+	/** Finer tiles reuse their ancestor's night lights at this level: VIIRS pixels are 742 m. */
+	nightMaxLevel: number;
 	anisotropy: number;
 	maxTextures: number;
 	concurrency: number;
@@ -58,6 +60,8 @@ interface Entry {
 	textures: Partial<Record<Layer, Texture>>;
 	loading: Partial<Record<Layer, AbortController>>;
 	mesh?: Mesh;
+	/** Where the night texture comes from when this level is finer than the night lights. */
+	night?: Entry;
 	used: number;
 	wanted: number;
 	since: number;
@@ -144,7 +148,7 @@ export class SurfaceTiles {
 			const sines = samples.map((p) => p.dot(sun) / this.options.radius);
 			const layers: Layer[] = [];
 			if (Math.max(...sines) > DAY_MIN_SIN && presence.has('day', key)) layers.push('day');
-			if (Math.min(...sines) < NIGHT_MAX_SIN && presence.has('night', key)) layers.push('night');
+			if (Math.min(...sines) < NIGHT_MAX_SIN && presence.has('night', this.#nightKey(key))) layers.push('night');
 			if (layers.length) wanted.push({ key, layers, distanceKm });
 		};
 
@@ -166,10 +170,19 @@ export class SurfaceTiles {
 			if (entry.wanted !== this.#frame - 1) entry.since = now;
 			entry.wanted = this.#frame;
 			entry.used = this.#frame;
-			for (const layer of layers) {
-				if (!entry.textures[layer] && !entry.loading[layer] && now - entry.since >= this.options.dwellMs) this.#enqueue(entry, layer, key.z * 1e6 - distanceKm);
+			const nightKey = this.#nightKey(key);
+			entry.night = nightKey === key ? undefined : this.#entry(nightKey);
+			if (entry.night) {
+				if (entry.night.wanted !== this.#frame) entry.night.since = Math.min(entry.night.wanted === this.#frame - 1 ? entry.night.since : now, entry.since);
+				entry.night.wanted = this.#frame;
+				entry.night.used = this.#frame;
 			}
-			if (layers.every((layer) => entry.textures[layer])) {
+			const source = (layer: Layer) => (layer === 'night' && entry.night ? entry.night : entry);
+			for (const layer of layers) {
+				const from = source(layer);
+				if (!from.textures[layer] && !from.loading[layer] && now - entry.since >= this.options.dwellMs) this.#enqueue(from, layer, key.z * 1e6 - distanceKm);
+			}
+			if (layers.every((layer) => source(layer).textures[layer])) {
 				draw.add(entry);
 				deepest = Math.max(deepest, key.z);
 				continue;
@@ -191,6 +204,11 @@ export class SurfaceTiles {
 		let textures = 0;
 		for (const entry of this.#entries.values()) textures += Object.keys(entry.textures).length;
 		this.#stats = { wanted: wanted.length, drawn: draw.size, textures, pending: this.#queue.length + this.#active, loaded: this.#loaded, failed: this.#failed, deepest };
+	}
+
+	#nightKey(key: TileKey): TileKey {
+		const shift = key.z - this.options.nightMaxLevel;
+		return shift > 0 ? { z: this.options.nightMaxLevel, x: key.x >> shift, y: key.y >> shift } : key;
 	}
 
 	#entry(key: TileKey): Entry {
@@ -258,8 +276,9 @@ export class SurfaceTiles {
 		const mesh = entry.mesh ?? this.#create(entry, manifest);
 		const material = mesh.material as ShaderMaterial;
 		material.uniforms.tileDay.value = entry.textures.day ?? this.#black;
-		material.uniforms.tileNight.value = entry.textures.night ?? this.#black;
-		(material.uniforms.tileLayers.value as Vector2).set(entry.textures.day ? 1 : 0, entry.textures.night ? 1 : 0);
+		const night = (entry.night ?? entry).textures.night;
+		material.uniforms.tileNight.value = night ?? this.#black;
+		(material.uniforms.tileLayers.value as Vector2).set(entry.textures.day ? 1 : 0, night ? 1 : 0);
 		mesh.visible = true;
 	}
 
@@ -281,6 +300,8 @@ export class SurfaceTiles {
 				tileNight: { value: this.#black },
 				tileLayers: { value: new Vector2() },
 				tileInset: { value: new Vector2(manifest.tileTexels / span, manifest.border / span) },
+				tileSize: { value: span },
+				nightRect: { value: this.#nightRect(entry.key) },
 			},
 			polygonOffset: true,
 			polygonOffsetFactor: -1,
@@ -291,6 +312,13 @@ export class SurfaceTiles {
 		this.group.add(mesh);
 		entry.mesh = mesh;
 		return mesh;
+	}
+
+	/** Offset and scale of a tile inside its night ancestor, in texture coordinates (v up). */
+	#nightRect({ z, x, y }: TileKey): Vector3 {
+		const shift = Math.max(0, z - this.options.nightMaxLevel);
+		const n = 2 ** shift;
+		return new Vector3((x % n) / n, (n - 1 - (y % n)) / n, 1 / n);
 	}
 
 	#evict() {

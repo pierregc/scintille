@@ -6,12 +6,13 @@ import { SurfaceVectors } from './vectors';
 export type SurfaceMode = 'base' | 'tiles' | 'vectors' | 'both';
 export const SURFACE_MODES: readonly SurfaceMode[] = ['base', 'tiles', 'vectors', 'both'];
 
-/** `?surface=base|tiles|vectors|both`, and `?texel=<css px>` for the refinement threshold. */
-export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number } {
+/** `?surface=base|tiles|vectors|both`, `?texel=<css px>` for the refinement threshold, `?nightlevel=` for the finest night level. */
+export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number; nightMaxLevel: number } {
 	const params = new URLSearchParams(search);
 	const mode = params.get('surface') as SurfaceMode;
 	const texel = Number(params.get('texel'));
-	return { mode: SURFACE_MODES.includes(mode) ? mode : 'base', texelPixels: texel > 0 ? texel : 2 };
+	const night = Number(params.get('nightlevel'));
+	return { mode: SURFACE_MODES.includes(mode) ? mode : 'base', texelPixels: texel > 0 ? texel : 2, nightMaxLevel: night >= 2 && night <= 5 ? night : 4 };
 }
 
 export interface SurfaceDetailOptions {
@@ -23,6 +24,7 @@ export interface SurfaceDetailOptions {
 	pixelRatio: () => number;
 	mode: SurfaceMode;
 	texelPixels: number;
+	nightMaxLevel: number;
 }
 
 export class SurfaceDetail {
@@ -39,6 +41,7 @@ export class SurfaceDetail {
 			texelPixels: options.texelPixels,
 			anisotropy: options.anisotropy,
 			dwellMs: 300,
+			nightMaxLevel: options.nightMaxLevel,
 			maxTextures: 96,
 			concurrency: 6,
 		});

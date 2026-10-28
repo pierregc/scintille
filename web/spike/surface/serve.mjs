@@ -6,7 +6,8 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import https from 'node:https';
-import { fileURLToPath } from 'node:url';
+import process from 'node:process';
+import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const WEB = fileURLToPath(new URL('../..', import.meta.url));
@@ -42,9 +43,9 @@ createServer(async (req, res) => {
 		https.get(target, { headers }, (upstream) => {
 			res.writeHead(upstream.statusCode ?? 502, { ...upstream.headers, 'access-control-allow-origin': '*' });
 			upstream.pipe(res);
-		}).on('error', () => res.writeHead(502).end());
+		}).on('error', () => (res.headersSent ? res.destroy() : res.writeHead(502).end()));
 		return;
 	}
 	if (await file(res, join(values.site, path))) return;
 	res.writeHead(404).end();
-}).listen(Number(values.port), () => console.log(`http://localhost:${values.port}/`));
+}).listen(Number(values.port), () => process.stdout.write(`http://localhost:${values.port}/\n`));

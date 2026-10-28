@@ -38,6 +38,32 @@ uniform sampler2D tileDay;
 uniform sampler2D tileNight;
 uniform vec2 tileLayers;
 uniform vec2 tileInset;
+uniform float tileSize;
+uniform vec3 nightRect;
+
+// Cubic B-spline in four bilinear taps: night lights are 742 m sensor pixels, shown as soft points.
+vec3 bicubic(sampler2D map, vec2 uv) {
+	vec2 gx = dFdx(uv);
+	vec2 gy = dFdy(uv);
+	vec2 st = uv * tileSize - 0.5;
+	vec2 i = floor(st);
+	vec2 f = st - i;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 g0 = w0 + w1;
+	vec2 g1 = w2 + w3;
+	vec2 h0 = (i - 0.5 + w1 / g0) / tileSize;
+	vec2 h1 = (i + 1.5 + w3 / g1) / tileSize;
+	vec3 a = textureGrad(map, vec2(h0.x, h0.y), gx, gy).rgb;
+	vec3 b = textureGrad(map, vec2(h1.x, h0.y), gx, gy).rgb;
+	vec3 c = textureGrad(map, vec2(h0.x, h1.y), gx, gy).rgb;
+	vec3 d = textureGrad(map, vec2(h1.x, h1.y), gx, gy).rgb;
+	return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * c + g1.x * d);
+}
 #endif
 
 varying vec2 vUv;
@@ -78,7 +104,7 @@ void main() {
 		day = texel.rgb;
 		water = texel.a;
 	}
-	if (tileLayers.y > 0.5) night = texture2D(tileNight, tileUv).rgb;
+	if (tileLayers.y > 0.5) night = bicubic(tileNight, (vUv * nightRect.z + nightRect.xy) * tileInset.x + tileInset.y);
 	#endif
 
 	float direct = sqrt(max(s, 0.0)) * smoothstep(-0.02, 0.15, s);
