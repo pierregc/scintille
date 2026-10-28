@@ -70,6 +70,10 @@ then the chosen view on the reference storms. Pressing it again
 returns to the storm frame; any camera input leaves it. Above the cloud tops only: below them the
 scene is not observed.
 
+Cost, `bench.mjs` desktop headless, 60×, afterglow 0, R1, R2, R5: frame cost p95 9.2 to 11.8 ms at the
+horizon view against 11.8 to 14.6 ms at `window` in the same run, no frame interval over 16.8 ms at p95.
+Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
+
 ## Scale
 
 1 world unit is the Earth radius, 6,371 km (`kmToWorld`). The vertical field of view is 35°, so

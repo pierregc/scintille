@@ -175,7 +175,8 @@ describe('calibration poses after real control limits', () => {
 				const below = Math.asin(-forward.dot(rig.camera.position.clone().normalize()));
 				expect(below - horizon).toBeLessThan((35 / 2) * Math.PI / 180);
 				expect(below - horizon).toBeGreaterThan(0);
-				const storm = new Vector3(...latLonToVector(...item.points[1] ?? item.points[0])).project(rig.camera);
+				const [lat, lon] = item.points[1] ?? item.points[0];
+				const storm = new Vector3(...latLonToVector(lat, lon)).project(rig.camera);
 				expect(storm.y).toBeLessThan(0);
 				expect(storm.y).toBeGreaterThan(-1);
 				expect(Math.abs(storm.x)).toBeLessThan(0.2);
