@@ -89,7 +89,9 @@ Adopt (a); do not adopt (b).
 2. **Layout.** Equirectangular tiles of 450 texels plus one border texel copied from the neighbours
    (452 × 452), longitudes wrapping, poles repeating their last row. Levels 2 to 5 cover 15°, 7.5°,
    3.75° and 1.875°; level 5 is the native 15″ grid, never upsampled. The 4k global textures stay the
-   fallback underneath. Night stops at level 4 (0.93 km), sampled with a cubic B-spline.
+   fallback underneath. Night stops at level 4 (0.93 km), sampled with a cubic B-spline. This amends
+   ADR 0020 for night lights only: their texels cover up to 4 CSS px at the floor, smoothed like
+   clouds, because finer texels would only repeat the 742 m sensor pixels as squares.
 3. **Format.** WebP: day RGB at q85 with the water mask as lossless alpha (colour kept under it),
    night RGB at q85. Tiles with nothing their ancestors lack (open water by day, unlit dark by night)
    are left out; a versioned manifest lists the levels and a presence bitset per layer. KTX2 is not
