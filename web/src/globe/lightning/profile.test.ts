@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	continuingCurrent,
 	flashLife,
 	flashProfile,
 	flickerLength,
@@ -11,6 +12,7 @@ import {
 	pulseGap,
 	pulseStarts,
 	pulseTau,
+	spread,
 } from './profile';
 
 const seeds = Array.from({ length: 400 }, (_, i) => (i * 0.6180339887) % 1);
@@ -113,5 +115,40 @@ describe('glslFloat', () => {
 	it('always prints a float literal', () => {
 		expect(glslFloat(1)).toBe('1.0');
 		expect(glslFloat(0.04)).toBe('0.04');
+	});
+});
+
+describe('flash kinds', () => {
+	const ground = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, true);
+	const cloud = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, false);
+
+	it('darkens between the strokes of a cloud-to-ground flash and keeps a cloud flash glowing', () => {
+		for (const seed of seeds.slice(0, 40)) {
+			const lows = (f: (t: number, s: number) => number) =>
+				Math.min(...Array.from({ length: 30 }, (_, i) => f(0.05 + i * 0.01, seed)));
+			expect(lows(cloud)).toBeGreaterThan(0.2 * PROFILE.cloudGlow);
+			if (!continuingCurrent(seed)) expect(lows(ground)).toBeLessThan(PROFILE.afterglow);
+		}
+	});
+
+	it('holds a continuing current after a stroke in some cloud-to-ground flashes', () => {
+		const share = seeds.filter((seed) => continuingCurrent(seed)).length / seeds.length;
+		expect(share).toBeGreaterThan(PROFILE.currentShare - 0.1);
+		expect(share).toBeLessThan(PROFILE.currentShare + 0.1);
+		const seed = seeds.find((s) => {
+			const c = continuingCurrent(s);
+			return c && pulseStarts(0.4, s).length > c.stroke && c.duration > 0.1;
+		});
+		const current = seed === undefined ? null : continuingCurrent(seed);
+		if (seed === undefined || !current) throw new Error('no seed with a long current');
+		const start = pulseStarts(0.4, seed)[current.stroke];
+		expect(ground(start + 0.08, seed)).toBeGreaterThanOrEqual(current.level * 0.99);
+	});
+
+	it('spreads in-cloud leaders over the flicker and ground leaders at once', () => {
+		expect(spread(0, 0.5, false)).toBe(0);
+		expect(spread(0.2, 0.5, false)).toBeGreaterThan(0.5);
+		expect(spread(0.4, 0.5, false)).toBe(1);
+		expect(spread(0.02, 0.5, true)).toBe(1);
 	});
 });

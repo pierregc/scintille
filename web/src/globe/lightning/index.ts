@@ -128,7 +128,7 @@ export function createLightning(
 	);
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
-	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 3, 4));
+	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 4, 4));
 	geometry.instanceCount = 0;
 
 	const time = new NumberUniform();
@@ -162,8 +162,7 @@ export function createLightning(
 	const channelGeometry = ribbonGeometry(3, 16);
 	const channelBuffer = new InstancedInterleavedBuffer(channels.data, CHANNEL_STRIDE).setUsage(DynamicDrawUsage);
 	channelGeometry.setAttribute('flash', new InterleavedBufferAttribute(channelBuffer, 4, 0));
-	channelGeometry.setAttribute('flashShape', new InterleavedBufferAttribute(channelBuffer, 3, 4));
-	channelGeometry.setAttribute('channelSeed', new InterleavedBufferAttribute(channelBuffer, 1, 7));
+	channelGeometry.setAttribute('flashShape', new InterleavedBufferAttribute(channelBuffer, 4, 4));
 	channelGeometry.instanceCount = 0;
 	const channelMaterial = new ShaderMaterial({
 		vertexShader: ribbonVertex(16),
@@ -189,7 +188,7 @@ export function createLightning(
 	};
 
 	const haloGeometry = ribbonGeometry(0, 8);
-	for (const name of ['flash', 'flashShape', 'channelSeed']) {
+	for (const name of ['flash', 'flashShape']) {
 		haloGeometry.setAttribute(name, channelGeometry.getAttribute(name));
 	}
 	haloGeometry.instanceCount = 0;
@@ -300,15 +299,6 @@ export function createLightning(
 	};
 }
 
-/** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */
-export function lightWindow(target: { lat: number; lon: number }, heightKm: number, out = new Vector4()): Vector4 {
-	const halfLat = Math.min(Math.PI / 2, (LIGHT_WINDOW.heightScale * heightKm) / EARTH_RADIUS_KM);
-	const lat = Math.min(Math.max(target.lat, -Math.PI / 2 + halfLat), Math.PI / 2 - halfLat);
-	// Wide enough at the poleward edge too, up to the whole circle at a pole.
-	const halfLon = Math.min(Math.PI, (2 * halfLat) / Math.max(Math.cos(Math.abs(lat) + halfLat), 1e-3));
-	return out.set(target.lon, lat, halfLon, halfLat);
-}
-
 export const LIGHT_WINDOW = {
 	/** Half height of the window over the camera height. */
 	heightScale: 3,
@@ -318,6 +308,16 @@ export const LIGHT_WINDOW = {
 	farSpreadKm: 150,
 } as const;
 
+/** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */
+export function lightWindow(target: { lat: number; lon: number }, heightKm: number, out = new Vector4()): Vector4 {
+	const halfLat = Math.min(Math.PI / 2, (LIGHT_WINDOW.heightScale * heightKm) / EARTH_RADIUS_KM);
+	const lat = Math.min(Math.max(target.lat, -Math.PI / 2 + halfLat), Math.PI / 2 - halfLat);
+	// Wide enough at the poleward edge too, up to the whole circle at a pole.
+	const halfLon = Math.min(Math.PI, (2 * halfLat) / Math.max(Math.cos(Math.abs(lat) + halfLat), 1e-3));
+	return out.set(target.lon, lat, halfLon, halfLat);
+}
+
+
 /** Renders the flashes into an equirectangular glow map around what the camera looks at, wrapped at the antimeridian. */
 function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number, radius: number) {
 	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, format: RedFormat, depthBuffer: false });
@@ -326,7 +326,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
 	const { time, duration, flicker, speed, pivot, pivotSpeed } = flashes.uniforms;
-	const window = new Vector4(0, 0, Math.PI, Math.PI / 2);
+	const bounds = new Vector4(0, 0, Math.PI, Math.PI / 2);
 	const splat = { value: LIGHT_WINDOW.farSplat as number };
 	const spread = { value: LIGHT_WINDOW.farSpreadKm as number };
 	const minSplat = { value: 0 };
@@ -344,7 +344,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 					speed,
 					pivot,
 					pivotSpeed,
-					window: { value: window },
+					window: { value: bounds },
 					splat,
 					spreadKm: spread,
 					minSplatKm: minSplat,
@@ -367,7 +367,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	const aim = { lat: 0, lon: 0 };
 	return {
 		target,
-		light: { map: target.texture, window },
+		light: { map: target.texture, window: bounds },
 		blend(alone: boolean) {
 			for (const material of materials) blendFlashes(material, alone ? 'max' : 'add');
 		},
@@ -383,11 +383,11 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 			point.normalize();
 			aim.lat = Math.asin(Math.min(1, Math.max(-1, point.y)));
 			aim.lon = Math.atan2(-point.z, point.x);
-			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, window);
-			const whole = window.w / (Math.PI / 2);
+			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, bounds);
+			const whole = bounds.w / (Math.PI / 2);
 			splat.value = LIGHT_WINDOW.nearSplat + (LIGHT_WINDOW.farSplat - LIGHT_WINDOW.nearSplat) * whole;
 			spread.value = LIGHT_WINDOW.farSpreadKm * whole * whole;
-			minSplat.value = (4 * window.w * EARTH_RADIUS_KM) / (width / 2);
+			minSplat.value = (4 * bounds.w * EARTH_RADIUS_KM) / (width / 2);
 			const previous = renderer.getRenderTarget();
 			renderer.getClearColor(clearColor);
 			const clearAlpha = renderer.getClearAlpha();

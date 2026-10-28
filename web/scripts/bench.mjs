@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--no-clouds] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--headed] [--video]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -20,6 +20,7 @@ const { values } = parseArgs({
 		profile: { type: 'string', default: 'desktop' },
 		gl: { type: 'string', default: 'gpu' },
 		seconds: { type: 'string', default: '8' },
+		speed: { type: 'string' },
 		storm: { type: 'string' },
 		afterglow: { type: 'string' },
 		clouds: { type: 'boolean', default: true },
@@ -393,7 +394,11 @@ async function benchStorm(browser, storm, outDir) {
 		const exposure = brightness(await page.screenshot({ path: shot }));
 		const view = new URL(await page.evaluate(() => globalThis.scintilleBench.app.shareUrl())).searchParams.get('view');
 		const paused = frameStats(await record(page, 2000, true));
-		await page.evaluate(() => globalThis.scintilleBench.app.clock.play());
+		await page.evaluate((speed) => {
+			const { clock } = globalThis.scintilleBench.app;
+			if (speed) clock.setSpeed(speed);
+			clock.play();
+		}, values.speed === undefined ? null : Number(values.speed));
 		const playing = frameStats(await record(page, seconds * 500));
 		const playingCost = frameStats(await record(page, seconds * 500, true));
 		const flashes = await page.evaluate(activeFlashes);
@@ -440,6 +445,7 @@ const report = {
 	url: base,
 	profile: values.profile,
 	afterglow: values.afterglow ?? 'per storm',
+	speed: values.speed ?? 'opened at 60',
 	clouds: values.clouds,
 	gl: values.gl,
 	headed: values.headed,

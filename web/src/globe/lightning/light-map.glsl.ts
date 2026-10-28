@@ -1,11 +1,12 @@
+import { channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
-import { flashProfileGlsl } from './profile';
+import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
 
 /** Splats each flash as a soft point sprite over an equirectangular window of the globe, in SphereGeometry UV angles. */
 export const lightMapVertexShader = /* glsl */ `
 attribute vec4 flash;
-attribute vec3 flashShape;
+attribute vec4 flashShape;
 
 uniform float time;
 uniform float duration;
@@ -23,6 +24,8 @@ varying float vBrightness;
 ${playbackGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
+${channelGlsl}
+${cloudDriftGlsl}
 void main() {
 	float sceneAge = time - flash.w;
 	if (sceneAge < 0.0) {
@@ -30,16 +33,20 @@ void main() {
 		return;
 	}
 	vec3 d = normalize(flash.xyz);
+	float seed = flashShape.w;
+	bool ground = isGround(seed);
+	float age = wallAge(time, flash.w);
 	float lat = asin(clamp(d.y, -1.0, 1.0));
-	float lon = atan(-d.z, d.x);
+	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, ground) / 6371.0;
+	lat += drift.y;
+	float lon = atan(-d.z, d.x) + drift.x / max(cos(lat), 0.05);
 	float relative = mod(lon - window.x + 3.14159265, 6.28318531) - 3.14159265;
 	// Flashes near the antimeridian of the window are drawn a second time on the other side.
 	relative += wrap * (relative > 0.0 ? -6.28318531 : 6.28318531);
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-		brightness = flashProfile(wallAge(time, flash.w), sceneAge, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x);
+		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

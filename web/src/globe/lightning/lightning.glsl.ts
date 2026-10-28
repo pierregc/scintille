@@ -1,4 +1,4 @@
-import { CHANNEL } from './channel';
+import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -6,7 +6,7 @@ import { zoomGlsl } from './zoom';
 
 export const lightningVertexShader = /* glsl */ `
 attribute vec4 flash;
-attribute vec3 flashShape;
+attribute vec4 flashShape;
 
 uniform float time;
 uniform float duration;
@@ -25,13 +25,16 @@ ${playbackGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
+${channelGlsl}
+${cloudDriftGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
-	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+	float seed = flashShape.w;
+	bool ground = isGround(seed);
 	float age = wallAge(time, flash.w);
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -47,8 +50,9 @@ void main() {
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float channel = channelReveal(flashShape.y, kmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
-	vDip = mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) * channel;
-	vec3 world = center + (east * position.x + north * position.y) * size;
+	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
+	vec2 drift = cloudDrift(age, end, flashShape.y, seed, ground) * kmToWorld;
+	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;
 	vBrightness = brightness;

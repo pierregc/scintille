@@ -4,6 +4,7 @@ import { SourceDelays } from '../live/delay';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { latLonToVector } from '../sun';
+import { flashSeed } from './channel';
 import { FLASH_STRIDE, FlashInstances, REBASE_MS } from './instances';
 
 function push(ring: FlashRing, startSeconds: number, count: number, lat = 0, lon = 0) {
@@ -23,7 +24,7 @@ function setup(ringCapacity: number, capacity: number, lookbackMs = 0) {
 }
 
 describe('FlashInstances', () => {
-	it('stores direction, relative time, intensity, radius and duration', () => {
+	it('stores direction, relative time, intensity, radius, duration and seed', () => {
 		const { ring, instances } = setup(8, 4);
 		push(ring, 100, 1, 30, -60);
 		instances.sync(100_000);
@@ -36,6 +37,7 @@ describe('FlashInstances', () => {
 		expect(d[4]).toBeCloseTo(1);
 		expect(d[5]).toBeCloseTo(Math.sqrt(100 / Math.PI));
 		expect(d[6]).toBe(250);
+		expect(d[7]).toBeCloseTo(flashSeed(100_000, ring.lat[0], ring.lon[0]), 6);
 		expect(instances.origin).toBe(100_000);
 	});
 
