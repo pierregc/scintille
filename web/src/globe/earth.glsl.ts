@@ -32,6 +32,13 @@ uniform float glintCap;
 uniform float terminatorTint;
 uniform sampler2D coverageMap;
 uniform float coverageShade;
+uniform vec4 uvRect;
+#ifdef TILE
+uniform sampler2D tileDay;
+uniform sampler2D tileNight;
+uniform vec2 tileLayers;
+uniform vec2 tileInset;
+#endif
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -60,9 +67,19 @@ void main() {
 	float s = dot(n, sun);
 	float level = twilight(s);
 
-	vec3 day = texture2D(dayMap, vUv).rgb;
-	vec3 night = texture2D(nightMap, vUv).rgb;
-	float water = texture2D(oceanMask, vUv).r;
+	vec2 uv = uvRect.xy + vUv * uvRect.zw;
+	vec3 day = texture2D(dayMap, uv).rgb;
+	vec3 night = texture2D(nightMap, uv).rgb;
+	float water = texture2D(oceanMask, uv).r;
+	#ifdef TILE
+	vec2 tileUv = vUv * tileInset.x + tileInset.y;
+	if (tileLayers.x > 0.5) {
+		vec4 texel = texture2D(tileDay, tileUv);
+		day = texel.rgb;
+		water = texel.a;
+	}
+	if (tileLayers.y > 0.5) night = texture2D(tileNight, tileUv).rgb;
+	#endif
 
 	float direct = sqrt(max(s, 0.0)) * smoothstep(-0.02, 0.15, s);
 	vec3 color = day * mix(twilightFloor * level, 1.0, direct);
@@ -76,7 +93,7 @@ void main() {
 	color += vec3(0.92, 0.95, 1.0) * specular * water * glint(n, sun, view) * smoothstep(0.0, 0.2, s);
 
 	// No lightning data here: desaturated, dimmed and finely hatched, visible by day and by night.
-	float gap = texture2D(coverageMap, vUv).r * coverageShade;
+	float gap = texture2D(coverageMap, uv).r * coverageShade;
 	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	color = mix(color, vec3(luma) * 0.55, 0.8 * gap);
 	float hatch = smoothstep(2.3, 3.5, abs(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0) - 3.5));
