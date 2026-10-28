@@ -7,8 +7,8 @@ import { fitDistance } from '../viewport';
 
 export const REPLAY_FRAME = { duration: 2800, tilt: 20, viewportFraction: 0.62 };
 
-/** Look toward the horizon from the camera floor (ADR 0020 `window` pose). */
-export const GRAZE = { duration: 3200, tilt: 60 };
+/** Look toward the horizon from the camera floor: horizon in the upper third, storm below the centre. */
+export const GRAZE = { duration: 3200, tilt: 72, leadKm: 200 };
 
 /** A spherical cap enclosing the full geographic box, including wrapped longitude intervals. */
 export function stormCap(bounds: StormBounds): { lat: number; lon: number; angle: number } {
@@ -76,8 +76,18 @@ export function grazeStorm(detail: Pick<StormDetail, 'track' | 'bounds'>, time: 
 	const from = track[Math.max(index - 1, 0)];
 	const to = track[Math.min(index + 1, track.length - 1)];
 	const heading = from && to && from !== to ? bearing(from, to) : 0;
+	const target = ahead({ lat, lon }, heading, GRAZE.leadKm);
 	const tilt = (GRAZE.tilt * Math.PI) / 180;
-	return { lat, lon, altitude: worldToKm(floorRange(tilt, 1), 1) + 1, tilt: GRAZE.tilt, heading, duration: GRAZE.duration };
+	return { ...target, altitude: worldToKm(floorRange(tilt, 1), 1) + 1, tilt: GRAZE.tilt, heading, duration: GRAZE.duration };
+}
+
+function ahead({ lat, lon }: { lat: number; lon: number }, headingDeg: number, km: number): { lat: number; lon: number } {
+	const rad = Math.PI / 180;
+	const d = km / 6371;
+	const b = headingDeg * rad;
+	const lat2 = Math.asin(Math.sin(lat * rad) * Math.cos(d) + Math.cos(lat * rad) * Math.sin(d) * Math.cos(b));
+	const lon2 = lon * rad + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat * rad), Math.cos(d) - Math.sin(lat * rad) * Math.sin(lat2));
+	return { lat: lat2 / rad, lon: ((lon2 / rad + 540) % 360) - 180 };
 }
 
 function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {

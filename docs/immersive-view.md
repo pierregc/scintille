@@ -36,25 +36,39 @@ The lightning is fixed; everything else follows from it.
 | Zoom floor | camera 400 km above the ground (ISS altitude) | 0.23 km per screen pixel, view about 450 km wide: a storm fills the screen, an LI pixel is 19 px. Lower only magnifies the lightning data |
 | Ground | 500 m per texel (day, night lights, water mask); night lights from 0.93 km texels, close to their 0.74 km sensor pixels ([ADR 0022](adr/0022-surface-imagery.md)) | At most 2 px per texel at the floor: no visible pixel |
 | Clouds | about 1 km (2 km accepted where only that exists) | At most 4 px per texel at the floor with bicubic filtering |
-| Immersive view | chosen on captures once ground and clouds are upgraded | #126, after #253 and #131 |
+| Immersive view | horizon view: from the floor, tilt 72°, aimed 200 km ahead of the storm along its motion | #126, chosen on captures with today's ground and clouds; revisit after #253 and #131 |
 
 With today's assets, texels become visible (more than 2 px for the ground, 4 px for clouds) below
 about 8,400 km for the 4k Earth, 4,200 km for the 8k Earth and 3,400 km for GMGSI clouds.
 
 ## Poses
 
-`view` in a share URL is `lat,lon,altitude,tilt`: with tilt 0 the altitude is the camera height above
-the ground; with a tilt it is the range from the target point to the camera.
+`view` in a share URL is `lat,lon,altitude,tilt[,heading]`: with tilt 0 the altitude is the camera
+height above the ground; with a tilt it is the range from the target point to the camera. Heading is
+degrees clockwise from north, left out when north.
 
 | Pose | View | Camera height | View width at target (16:9) | Purpose |
 |---|---|---|---|---|
 | `globe` | storm centre, 20,000 km, tilt 0 | 20,000 km | whole disc | Activity across the planet |
-| `regional` | M3 storm framing (`frameStorm`, tilt 20°, at least 300 km) | 300 to 6,000 km | the storm bounds | Choose and read one storm |
+| `regional` | M3 storm framing (`frameStorm`, tilt 20°, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
 | `iss` | storm centre, range 400 km, tilt 1° | 400 km | 450 km | The floor, looking down |
 | `window` | storm centre, range 740 km, tilt 60° | 400 km | 830 km, horizon in view | The floor, looking toward the horizon |
 
 Heading is north. The storm centre is the track point of the reference hour. `iss` uses a 1° tilt
 because the orbit camera stops at 1,274 km; the surface camera takes over with any tilt.
+
+### Horizon view
+
+The `Horizon` switch of an open storm (`grazeStorm`) flies to the floor and looks toward the
+horizon: tilt 72° (range 1,054 km), aimed 200 km ahead of the storm's position at the scene time,
+facing its motion (bearing between the neighbouring track points, north without motion). The
+horizon sits in the upper third, the storm below the centre and the limb glows above the ground.
+`window` (tilt 60°) leaves the horizon at the top edge, and leads over 300 km push long storms out
+of the bottom. Captures in [`immersive/horizon/`](immersive/horizon/): `R1-tilt-60-66-72-78.jpg`
+(no lead), `R1-tilt-lead.jpg` (68° and 100 km, 70° and 150 km, 72° and 200 km, 72° and 100 km),
+then the chosen view on the reference storms. Pressing it again
+returns to the storm frame; any camera input leaves it. Above the cloud tops only: below them the
+scene is not observed.
 
 ## Scale
 
@@ -194,7 +208,8 @@ clouds, missing frames, absent positions, scrubbing) and the round trip test in
 Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay:
 
 - Camera: orbit controls down to 0.2 Earth radius (1,274 km), then the surface camera
-  (`surface.ts`): 15 km floor, 20 km minimum range, tilt up to 80°. Clip planes follow the closest
+  (`surface.ts`): 400 km floor (#126; 15 km before), tilt up to 80°. Zooming in stops at the floor
+  without changing the tilt; flights are lifted to the floor where their path would dip under it. Clip planes follow the closest
   shell (`orbit.ts`).
 - Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and high).
 - Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, lit from inside by a
