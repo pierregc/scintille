@@ -26,6 +26,74 @@ ln -s ../scripts/textures/out web/public/textures
 
 For production, upload them to R2 with `pnpm -C web r2:upload textures` ([deploy](deploy.md#textures)).
 
+## Surface pyramid
+
+The detail under the global textures ([ADR 0022](adr/0022-surface-imagery.md)): equirectangular
+WebP tiles of 450 texels plus a one texel border, levels 2 to 5 by day, 2 to 4 by night. Built by
+`web/scripts/textures/tiles.mjs`, checked by `check-tiles.mjs`, published to `textures/v3/` on R2.
+
+```sh
+cd web
+node scripts/textures/tiles.mjs        # 588 MB of sources, about 3.5 min, out/surface/
+node scripts/textures/check-tiles.mjs  # about 1.5 min, out/surface-check.json
+pnpm r2:upload surface                 # tiles, then the manifest
+```
+
+- **Sources**: the 8 Blue Marble Next Generation tiles (August 2004, topography without bathymetry)
+  and the 8 Black Marble 2016 tiles at 15″, plus Natural Earth 10m ocean and lakes, pinned by size and
+  SHA-256 in `tiles.mjs` and listed in the manifest with the attribution.
+- **Tiles**: `{layer}/{z}/{x}-{y}.webp`, x from 180° W, y from the north pole. Day carries the water
+  mask in a lossless alpha channel (255 water), colour kept under it. Borders repeat the neighbour's
+  texels, across the antimeridian too; at a pole the border repeats the last row.
+- **Left out**: tiles with nothing the global texture lacks (open water by day, unlit dark by night),
+  unless a finer tile under them is kept. A missing tile means: draw the parent, or the global texture.
+- **Manifest** (`manifest.json`, 12 kB): levels, a presence bitset per layer and level, byte counts,
+  sources, attribution, encoder versions and a digest of every tile. The same sources and encoder
+  versions give the same digest: two builds on 2026-10-28 gave identical manifests.
+
+| Level | Tile | Texel | Day tiles | Day size | Night tiles | Night size |
+|---|---|---|---|---|---|---|
+| 2 | 15° | 3.7 km | 246 / 288 | 4.6 MB | 288 / 288 | 1.6 MB |
+| 3 | 7.5° | 1.86 km | 813 / 1,152 | 14.9 MB | 1,035 / 1,152 | 5.1 MB |
+| 4 | 3.75° | 0.93 km | 2,651 / 4,608 | 48.3 MB | 2,761 / 4,608 | 16.4 MB |
+| 5 | 1.875° | 0.46 km | 9,115 / 18,432 | 138.0 MB | | |
+| | | | | | **Total** | **16,909 files, 229.0 MB** |
+
+Build on the reference Mac: 197 s with cached sources (day 2 min, night 25 s), 230 s with the
+download, 8.9 GB peak memory.
+
+### Checks
+
+`check-tiles.mjs` fails on any of these, and `r2:upload surface` refuses a pyramid that has not passed:
+
+- every listed tile exists, nothing else does, byte counts and digest match, and a kept tile's parent is kept;
+- every border texel matches the texel it repeats, on 61,079 border lines: the water mask exactly, the
+  colour within WebP noise (1 to 2 levels out of 255) and no worse at the antimeridian, at the seams
+  between source files or at the poles than inside them;
+- coastlines of the mask against the edges of the day colour and the night lights, on up to 240 coast
+  tiles per level, peak within one texel;
+- level 2 reduced to 4k against the published global textures: no shift (under 0.02 texel).
+
+Measured: day and mask agree within half a 15″ pixel (the imagery sits about 230 m south of
+Natural Earth, at every level); night within about one 15″ pixel, under its 742 m sensor pixel.
+At the 400 km floor that is at most one CSS pixel.
+
+### Costs
+
+R2 prices of 2026-10 ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)): storage
+$0.015 per GB-month, writes $4.50 per million, reads $0.36 per million, no egress fee; 10 GB, 1 million
+writes and 10 million reads free each month.
+
+- Storage: 0.23 GB, $0.003 a month, inside the free tier.
+- Publication: 16,910 writes, $0.08 outside the free tier, once per version.
+- Transfer: a cold dive from `globe` to `iss` loads at most 0.92 MB desktop and 0.32 MB mobile (ADR 0022),
+  about 50 tiles. Tiles are immutable and cached at the edge; even if every request reached R2, the
+  free reads cover about 200,000 cold dives a month, then $0.36 per 20,000.
+
+A rebuild with other content goes to a new version (`SURFACE_VERSION` in
+`web/scripts/textures/surface.mjs` and `surfaceRoot` in `web/src/globe/earth.ts`); the upload refuses
+to overwrite a published version with another digest.
+
 ## Sources and licenses
 
 | Texture | Source | Resolution | License |

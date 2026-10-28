@@ -11,7 +11,7 @@ development and PR previews only:
 Run from `web/`:
 
 ```sh
-node scripts/textures/tiles.mjs      # 1.2 GB of sources, about 3 min, out/tiles/
+node scripts/textures/tiles.mjs      # 588 MB of sources, out/surface/ (docs/assets.md)
 node scripts/textures/vectors.mjs    # out/vectors/lines.bin
 mkdir -p scripts/textures/out/4k && for n in day night mask; do curl -so scripts/textures/out/4k/$n.webp https://data.scintille.app/textures/v2/4k/$n.webp; done
 SCINTILLE_PR=125 PUBLIC_TEXTURES_URL=/textures PUBLIC_LIVE_BASE_URL=/data/ pnpm build
