@@ -20,7 +20,7 @@ function setup(search: string, initialView?: NavigationHost['initialView']) {
 		live: vi.fn().mockImplementation(async () => { clock.live(); }),
 	};
 	let view = { lat: 28.5, lon: -81.3, altitude: 2000, tilt: 12 };
-	const controls = { cancelFlight: vi.fn(), view: () => view, flyTo: vi.fn().mockImplementation(async (options) => { view = { ...view, ...options }; return true; }) };
+	const controls = { cancelFlight: vi.fn(), isAt: () => false, view: () => view, flyTo: vi.fn().mockImplementation(async (options) => { view = { ...view, ...options }; return true; }) };
 	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
 	const host: NavigationHost = { initialView, url: () => url, write: (next, push) => { url = next; writes.push({ url, push }); }, onPop: (listener) => { pop = listener; return () => { pop = () => {}; }; } };
 	const navigation = new ReplayNavigation(replay, clock, controls, host);
@@ -113,13 +113,13 @@ describe('replay browser navigation', () => {
 	});
 
 	it('restores a verified final-frame checkpoint only on the first load and keeps it out of the URL', async () => {
-		const view = { lat: 28.5, lon: -81.3, altitude: 306, tilt: REPLAY_FRAME.tilt };
+		const view = { lat: 28.5, lon: -81.3, altitude: 432.4986, tilt: REPLAY_FRAME.tilt };
 		const checkpoint = vi.fn(() => view);
 		const x = setup(`?storm=${fixture.storm.slug}`, checkpoint);
 		try {
 			await x.navigation.restore();
 			expect(checkpoint).toHaveBeenCalledWith(fixture.storm.slug);
-			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ ...view, lon: expect.closeTo(-81.3, 5), altitude: expect.closeTo(306, 3), duration: 0 }));
+			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ ...view, lon: expect.closeTo(-81.3, 5), altitude: expect.closeTo(432.4986, 3), duration: 0 }));
 			expect(x.url().searchParams.has('view')).toBe(false);
 			await x.navigation.restore();
 			expect(checkpoint).toHaveBeenCalledOnce();

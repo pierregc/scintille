@@ -4,13 +4,13 @@ import { atmosphereParameters } from '../atmosphere';
 import { cloudShellRadius } from '../clouds';
 import { createGlobeControls } from '../controls';
 import { CLOUD_TOP_KM } from '../lightning';
-import { kmToWorld } from '../flight';
+import { CAMERA_FLOOR_KM, kmToWorld, worldToKm } from '../flight';
 import { clipPlanes } from '../orbit';
 import { latLonToVector } from '../sun';
 import { framingFixtures, scatterDegrees, TRACK_STEP_MS, trackAt } from '../../../scripts/framing-fixtures';
 import { stormSource } from '../archive/storm';
 import { parseCatalogPage } from './catalog';
-import { frameStorm, REPLAY_FRAME } from './framing';
+import { frameStorm, GRAZE, grazeStorm, REPLAY_FRAME } from './framing';
 import cases from './framing-cases.json';
 import { trackGeometry } from './track';
 import { decodeChunk, CHUNK_SCALES } from '../live/decode';
@@ -23,7 +23,7 @@ it('keeps five explicitly synthetic reproducible cases with desktop and portrait
 			const view = frameStorm(item.bounds, 35, aspect);
 			expect(view.duration).toBeLessThan(4000);
 			expect(view.tilt).toBeLessThanOrEqual(REPLAY_FRAME.tilt);
-			expect(view.altitude).toBeGreaterThanOrEqual(300);
+			expect(view.altitude).toBeGreaterThanOrEqual(400);
 		}
 	}
 });
@@ -139,6 +139,47 @@ describe('calibration poses after real control limits', () => {
 				for (const vertices of [track.positions, track.observations]) {
 					for (let i = 0; i < vertices.length; i += 3) check(new Vector3().fromArray(vertices, i));
 				}
+			} finally { rig.controls.dispose(); }
+		},
+	);
+
+	it.each(cases.flatMap((item) => [16 / 9, 9 / 16].map((aspect) => ({ ...item, aspect }))))(
+		'dives from the globe to the $slug frame, its horizon view and back above the floor at aspect $aspect', async (item) => {
+			const rig = cameraRig(item.aspect);
+			const shells = [cloudShellRadius(1), 1 + kmToWorld(CLOUD_TOP_KM, 1), atmosphereParameters(1).atmosphereRadius];
+			const track = item.points.map(([lat, lon], i) => ({ lat, lon, time: new Date(Date.parse(item.start) + i * TRACK_STEP_MS).toISOString(), flash_count: 3, area_km2: 1 }));
+			const graze = grazeStorm({ track, bounds: item.bounds }, Date.parse(item.start) + TRACK_STEP_MS * 1.5);
+			const frame = frameStorm(item.bounds, 35, item.aspect);
+			try {
+				for (const destination of [frame, graze, frame]) {
+					const flight = rig.controls.flyTo(destination);
+					for (let t = 0; t <= destination.duration; t += 16) {
+						rig.step(16);
+						const height = worldToKm(rig.camera.position.length() - 1, 1);
+						expect(height).toBeGreaterThan(CAMERA_FLOOR_KM - 1e-3);
+						const { near } = clipPlanes(rig.camera.position.length(), 1, shells);
+						expect(worldToKm(near, 1)).toBeLessThan(height - CLOUD_TOP_KM);
+					}
+					await expect(flight).resolves.toBe(true);
+				}
+				const back = rig.controls.flyTo({ ...graze, duration: 0 });
+				rig.step(0);
+				await expect(back).resolves.toBe(true);
+				const view = rig.controls.view();
+				expect(view.tilt).toBeCloseTo(GRAZE.tilt, 3);
+				expect(Math.abs((((view.heading ?? 0) - graze.heading + 540) % 360) - 180)).toBeLessThan(1e-3);
+				expect(worldToKm(rig.camera.position.length() - 1, 1)).toBeLessThan(CAMERA_FLOOR_KM + 2);
+				rig.camera.updateMatrixWorld();
+				const horizon = Math.acos(1 / rig.camera.position.length());
+				const forward = new Vector3(0, 0, -1).applyQuaternion(rig.camera.quaternion);
+				const below = Math.asin(-forward.dot(rig.camera.position.clone().normalize()));
+				expect(below - horizon).toBeLessThan((35 / 2) * Math.PI / 180);
+				expect(below - horizon).toBeGreaterThan(0);
+				const [lat, lon] = item.points[1] ?? item.points[0];
+				const storm = new Vector3(...latLonToVector(lat, lon)).project(rig.camera);
+				expect(storm.y).toBeLessThan(0);
+				expect(storm.y).toBeGreaterThan(-1);
+				expect(Math.abs(storm.x)).toBeLessThan(0.2);
 			} finally { rig.controls.dispose(); }
 		},
 	);

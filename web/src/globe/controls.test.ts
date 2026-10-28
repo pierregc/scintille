@@ -167,7 +167,7 @@ describe('createGlobeControls flight handoff', () => {
 			drag(2000, { button: 2 });
 			const original = controls.view();
 			expect(original.tilt).toBeCloseTo(0, 4);
-			expect(original.altitude).toBeCloseTo(306, 1);
+			expect(original.altitude).toBeCloseTo(432.5, 1);
 			const shared = navigation.shareUrl();
 			for (const fresh of [false, true]) {
 				if (fresh) await replay.live();
@@ -239,14 +239,14 @@ describe('createGlobeControls flight handoff', () => {
 				expect(camera.position.distanceTo(start)).toBeGreaterThan(0.01);
 				step(1400);
 				await restoring;
-				expect(controls.view().altitude).toBeCloseTo(306, 1);
+				expect(controls.view().altitude).toBeCloseTo(432.5, 1);
 				expect(controls.view().tilt).toBeCloseTo(REPLAY_FRAME.tilt, 4);
 				expect(url.searchParams.has('view')).toBe(false);
 			} finally { fresh.dispose(); }
 	});
 
 	it('finishes immediately when already at the requested pose, but reframes a changed heading', async () => {
-		const target = { lat: 28.5, lon: -81.3, altitude: 306, tilt: 12, duration: 2800 };
+		const target = { lat: 28.5, lon: -81.3, altitude: 500, tilt: 12, duration: 2800 };
 		await settle(controls.flyTo({ ...target, duration: 0 }));
 		const position = camera.position.clone();
 		const rotation = camera.quaternion.clone();

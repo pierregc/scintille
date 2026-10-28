@@ -1,11 +1,11 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { FLIGHT, kmToWorld, poseAt, worldToKm } from './flight';
-import { SURFACE, maxTilt, panSurface, surfaceFromPose, surfacePose, tiltSurface, zoomSurface } from './surface';
+import { CAMERA_FLOOR_KM, FLIGHT, kmToWorld, poseAt, worldToKm } from './flight';
+import { floorRange, maxTilt, panSurface, surfaceFromPose, surfacePose, tiltSurface, zoomSurface } from './surface';
 
 const R = 1;
 const view = () => {
-	const pose = poseAt(30, 10, kmToWorld(400, R), 40, R);
+	const pose = poseAt(30, 10, kmToWorld(800, R), 40, R);
 	return surfaceFromPose(pose.position, pose.quaternion, pose.target);
 };
 const height = (position: Vector3) => worldToKm(position.length() - R, R);
@@ -25,11 +25,11 @@ describe('surface view', () => {
 		expect(surfacePose(down, R).quaternion.angleTo(pose.quaternion)).toBeLessThan(1e-6);
 	});
 
-	it.each([kmToWorld(20, R), kmToWorld(100, R), 0.5, 3])('never tilts below the minimum height at range %s', (range) => {
+	it.each([kmToWorld(400, R), kmToWorld(740, R), 0.5, 3])('never tilts below the floor at range %s', (range) => {
 		const tilt = maxTilt(range, R);
 		expect(tilt).toBeLessThanOrEqual((FLIGHT.maxTiltDeg * Math.PI) / 180 + 1e-12);
 		const { position } = surfacePose({ ...view(), range, tilt }, R);
-		expect(height(position)).toBeGreaterThan(SURFACE.minHeightKm - 1e-6);
+		expect(height(position)).toBeGreaterThan(CAMERA_FLOOR_KM - 1e-6);
 	});
 
 	it('tilts toward the horizon when dragging up, within limits', () => {
@@ -48,10 +48,16 @@ describe('surface view', () => {
 		expect(moved.range).toBe(start.range);
 	});
 
-	it('zooms in no closer than the minimum range and lowers the tilt to stay clear', () => {
-		const start = { ...view(), tilt: maxTilt(view().range, R) };
+	it.each([0, 40, 60, 80])('zooms in down to the floor and keeps a tilt of %s degrees', (deg) => {
+		const start = { ...view(), range: kmToWorld(5000, R), tilt: (deg * Math.PI) / 180 };
 		const close = zoomSurface(start, -1e5, R);
-		expect(worldToKm(close.range, R)).toBeCloseTo(SURFACE.minRangeKm, 6);
-		expect(height(surfacePose(close, R).position)).toBeGreaterThan(SURFACE.minHeightKm - 1e-6);
+		expect(close.range).toBeCloseTo(floorRange(start.tilt, R), 12);
+		expect(close.tilt).toBeCloseTo(start.tilt, 12);
+		expect(height(surfacePose(close, R).position)).toBeCloseTo(CAMERA_FLOOR_KM, 6);
+	});
+
+	it('puts the window pose of ADR 0020 at the floor', () => {
+		expect(worldToKm(floorRange(Math.PI / 3, R), R)).toBeCloseTo(740, -1);
+		expect(worldToKm(floorRange(0, R), R)).toBeCloseTo(CAMERA_FLOOR_KM, 9);
 	});
 });

@@ -1,12 +1,11 @@
 import { type PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { type CameraPose, easeInOut, Flight, type FlyToOptions, kmToWorld, lookRotation, poseAt } from './flight';
+import { type CameraPose, type CameraView, easeInOut, Flight, type FlyToOptions, headingOf, kmToWorld, lookRotation, poseAt } from './flight';
 import { IdleRotation } from './idle';
 import { rescaleDistance, rotateSpeedFor, type ZoomLimits, zoomLimits } from './orbit';
 import { latLonToVector } from './sun';
 import {
-	maxTilt,
-	minRange,
+	floorRange,
 	panSurface,
 	surfaceFromPose,
 	surfacePose,
@@ -35,7 +34,7 @@ export interface GlobeControls {
 	flyTo(options: FlyToOptions, restore?: { preserveRange?: boolean }): Promise<boolean>;
 	isAt(options: FlyToOptions): boolean;
 	cancelFlight(): void;
-	view(): Required<Omit<FlyToOptions, 'duration'>>;
+	view(): CameraView;
 	dispose(): void;
 }
 
@@ -262,16 +261,15 @@ export function createGlobeControls(
 		controls.update();
 	};
 
-	const destination = ({ lat, lon, altitude, tilt = 0 }: FlyToOptions, preserveRange = false) => {
+	const destination = ({ lat, lon, altitude, tilt = 0, heading = 0 }: FlyToOptions, preserveRange = false) => {
 		const requested = altitude === undefined ? camera.position.length() - radius : kmToWorld(altitude, radius);
 		const orbitMin = limits?.min ?? controls.minDistance;
 		const onSurface = tilt > 0 || (preserveRange && requested + radius < orbitMin);
 		const base = onSurface ? 0 : radius;
-		const lowest = onSurface ? minRange(radius) : orbitMin;
+		const lowest = onSurface ? floorRange((tilt * Math.PI) / 180, radius) : orbitMin;
 		const range = Math.min(Math.max(requested + base, lowest), limits?.max ?? controls.maxDistance);
-		const clear = onSurface ? Math.min(tilt, (maxTilt(range, radius) * 180) / Math.PI) : 0;
-		const pose = poseAt(lat, lon, range - base, clear, radius);
-		if (onSurface && clear === 0) pose.target.copy(pose.position).setLength(radius);
+		const pose = poseAt(lat, lon, range - base, onSurface ? tilt : 0, radius, onSurface ? heading : 0);
+		if (onSurface && tilt === 0) pose.target.copy(pose.position).setLength(radius);
 		return pose;
 	};
 	const isAtPose = (pose: CameraPose) => camera.position.distanceTo(pose.position) < radius * 1e-6
@@ -286,6 +284,7 @@ export function createGlobeControls(
 				lon: -Math.atan2(direction.z, direction.x) * 180 / Math.PI,
 				altitude: (surface ? surface.range : camera.position.length() - radius) / radius * 6371,
 				tilt: surface ? surface.tilt * 180 / Math.PI : 0,
+				heading: surface ? headingOf(surface.normal, surface.heading) : 0,
 			};
 		},
 		resize() {

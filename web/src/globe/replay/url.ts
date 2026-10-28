@@ -1,11 +1,11 @@
-import type { FlyToOptions } from '../flight';
+import type { CameraView } from '../flight';
 
 export interface ReplayLocation {
 	slug: string;
 	time?: number;
 	speed: number;
 	paused: boolean;
-	view?: Required<Omit<FlyToOptions, 'duration'>>;
+	view?: CameraView;
 }
 
 const KEYS = ['storm', 'time', 'speed', 'paused', 'view'];
@@ -23,9 +23,12 @@ export function parseReplayLocation(url: URL): ReplayLocation | null {
 	const rawView = url.searchParams.get('view');
 	const fields = rawView?.split(',');
 	let view: ReplayLocation['view'];
-	if (fields?.length === 4 && fields.every((field) => field.trim() !== '' && Number.isFinite(Number(field)))) {
-		const [lat, lon, altitude, tilt] = fields.map(Number);
-		if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) view = { lat, lon, altitude: clamp(altitude, 20, 200_000), tilt: clamp(tilt, 0, 80) };
+	if (fields && (fields.length === 4 || fields.length === 5) && fields.every((field) => field.trim() !== '' && Number.isFinite(Number(field)))) {
+		const [lat, lon, altitude, tilt, heading] = fields.map(Number);
+		if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+			view = { lat, lon, altitude: clamp(altitude, 20, 200_000), tilt: clamp(tilt, 0, 80) };
+			if (heading !== undefined) view.heading = ((heading % 360) + 360) % 360;
+		}
 	}
 	return { slug, time: Number.isFinite(time) ? time : undefined, speed, paused: url.searchParams.get('paused') === '1', view };
 }
@@ -40,8 +43,10 @@ export function replayUrl(base: URL, state: ReplayLocation | null): URL {
 	url.searchParams.set('speed', String(state.speed));
 	if (state.paused) url.searchParams.set('paused', '1');
 	if (state.view) {
-		const { lat, lon, altitude, tilt } = state.view;
-		url.searchParams.set('view', [lat.toFixed(5), lon.toFixed(5), altitude.toFixed(3), tilt.toFixed(3)].join(','));
+		const { lat, lon, altitude, tilt, heading = 0 } = state.view;
+		const fields = [lat.toFixed(5), lon.toFixed(5), altitude.toFixed(3), tilt.toFixed(3)];
+		if (Math.abs(((heading + 180) % 360) - 180) >= 5e-4) fields.push(heading.toFixed(3));
+		url.searchParams.set('view', fields.join(','));
 	}
 	return url;
 }

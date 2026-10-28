@@ -45,7 +45,7 @@ function setup() {
 		}),
 		live: vi.fn(async () => { clock.live(); }),
 	};
-	const controls = { cancelFlight: vi.fn(), view: () => ({ lat: 28.5, lon: -81.3, altitude: 2000, tilt: 0 }), flyTo: vi.fn(async () => true) };
+	const controls = { cancelFlight: vi.fn(), isAt: () => false, view: () => ({ lat: 28.5, lon: -81.3, altitude: 2000, tilt: 0 }), flyTo: vi.fn(async () => true) };
 	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
 	const navigation = new ReplayNavigation(replay, clock, controls, {
 		url: () => url,

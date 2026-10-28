@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { parseReplayLocation, replayUrl } from './url';
 
+it('round trips a heading and leaves north out of the link', () => {
+	const view = { lat: 28.5, lon: -81.3, altitude: 740, tilt: 60, heading: 97.5 };
+	const url = replayUrl(new URL('https://scintille.app/'), { slug: 'storm-one', speed: 60, paused: false, view });
+	expect(url.searchParams.get('view')).toBe('28.50000,-81.30000,740.000,60.000,97.500');
+	expect(parseReplayLocation(url)?.view).toEqual(view);
+	const north = replayUrl(url, { slug: 'storm-one', speed: 60, paused: false, view: { ...view, heading: 0 } });
+	expect(north.searchParams.get('view')?.split(',')).toHaveLength(4);
+	expect(parseReplayLocation(new URL('https://scintille.app/?storm=a&view=1,2,740,60,-90'))?.view?.heading).toBe(270);
+});
+
 it('round trips time, speed, paused state and supported camera values while retaining unrelated parameters', () => {
 	const state = { slug: 'storm-one', time: Date.parse('2026-07-15T18:01:02.123Z'), speed: 30, paused: true,
 		view: { lat: 28.5, lon: -81.3, altitude: 2000, tilt: 12 } };
