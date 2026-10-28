@@ -36,7 +36,7 @@ WebP tiles of 450 texels plus a one texel border, levels 2 to 5 by day, 2 to 4 b
 cd web
 node scripts/textures/tiles.mjs        # 588 MB of sources, about 3.5 min, out/surface/
 node scripts/textures/check-tiles.mjs  # about 1.5 min, out/surface-check.json
-pnpm r2:upload surface                 # tiles, then the manifest
+pnpm r2:upload surface                 # tiles, then the manifest (deploy.md)
 ```
 
 - **Sources**: the 8 Blue Marble Next Generation tiles (August 2004, topography without bathymetry)

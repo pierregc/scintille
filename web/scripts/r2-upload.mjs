@@ -73,15 +73,26 @@ async function assertSurfaceReady() {
 	return false;
 }
 
-/** Objects already published, read through the public domain: R2's own API has no listing in Wrangler. */
+/**
+ * Objects not published yet, read through the public domain (Wrangler cannot list a bucket). Paced
+ * under the zone's rate limit of 300 requests per 10 s per IP, waiting out a 429 when one comes.
+ */
 async function unpublished(entries) {
 	const left = [];
 	let next = 0;
-	await Promise.all(Array.from({ length: 16 }, async () => {
+	await Promise.all(Array.from({ length: 4 }, async () => {
 		while (next < entries.length) {
 			const entry = entries[next++];
-			const res = await fetch(`${PUBLIC}/${entry.key}`, { method: 'HEAD' });
-			if (!res.ok) left.push(entry);
+			for (;;) {
+				await sleep(200);
+				const res = await fetch(`${PUBLIC}/${entry.key}`, { method: 'HEAD' });
+				if (res.status === 429) {
+					await sleep(10_000);
+					continue;
+				}
+				if (!res.ok) left.push(entry);
+				break;
+			}
 		}
 	}));
 	return left;
