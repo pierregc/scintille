@@ -110,9 +110,11 @@ Its inputs:
 - live chunks: 1 to 2 minutes behind, but without `flash_id`, so no id could ever match the
   catalog's;
 - silver plus the spool batches `lake-writer` has not committed yet: the same rows with the same
-  `flash_id`, available seconds after reception. The spool is a directory of Parquet files written
-  atomically by `ingest-live` and deleted by `lake-writer` after each commit. Ids are as stable as
-  with silver alone (above); only the age changes.
+  `flash_id`, available seconds after reception, and ids as stable as with silver alone (above).
+  But the spool is `lake-writer`'s private directory, deleted after each commit: a second reader
+  turns it into a hidden contract and has to survive deletes in the middle of its reads. Silver is
+  the contract ADR 0006 gives the batch side, and its delay is a fault to fix there (5 minutes by
+  design, 15 measured).
 
 Where it runs: a Dagster job started by a sensor shares the two run slots with `daily_gold`, which
 starts on the same silver snapshots, and with the catalog, whose wait already reaches 4 minutes;
@@ -123,16 +125,20 @@ and reports its own health.
 ## Decision
 
 A long-running `active-storms` service recomputes the hours the catalog has not tracked every
-5 minutes, from silver plus the uncommitted spool batches, with the catalog's own clustering,
-linking and levels, and rewrites one object, `storms/active.json` (contract 2.6.0).
+5 minutes, from silver, with the catalog's own clustering, linking and levels, and rewrites one
+object, `storms/active.json` (contract 2.6.0).
 
-**Inputs.** At each update the service first reads the spool batches present (read-only mount of
-the `spool` volume), then loads the current silver snapshot, then reads the flashes of its window
-from silver. Rows are deduplicated by `flash_id`, silver first, so a batch committed during the
-read is counted once and none is missed: a batch deleted from the spool was committed before the
-snapshot was loaded. Spool files older than the window, by modification time, are skipped. If the
-spool cannot be read the service continues from silver alone, and `observed_until` shows the
-delay. It never writes to the spool, silver or gold.
+**Inputs.** At each update the service loads the current silver snapshot and reads the flashes of
+its window. It never writes to silver or gold. The freshness targets below need GLM flashes in
+silver within 2 minutes at p95 (18 minutes measured), which is the lake's fix to make, not this
+service's.
+
+**Spool, as a transition only.** If silver misses that bar when #257 is measured, the service
+also reads the spool batches not committed yet, until silver meets it for a week; then that code
+is removed. Read-only mount, spool first and then the silver snapshot, rows deduplicated by
+`flash_id` with silver first, files older than the window skipped by modification time, and a file
+deleted during the read skipped, since it is then in silver. If the spool cannot be read, the
+service goes on from silver alone and `observed_until` shows the delay.
 
 **Hours.** The catalog's last tracked hour sets `authoritative_until`. The service recomputes the
 open hour and each closed hour after `authoritative_until` until it is 15 minutes past its end
@@ -167,8 +173,8 @@ gzipped in this contract's format. Each snapshot and each transition is checked 
 |---|---|---|
 | Update interval (`update_seconds`) | 300 s | |
 | Processing, update start to object written | p95 90 s, max 180 s | read 5 to 7 s, clustering up to 26 s at 324 k flashes; peak windows reach 544 k |
-| Age at publication (`published_at - observed_until`), GLM | p95 150 s | 20 s files, 26 s p95 delivery |
-| Age at publication, MTG LI | p95 780 s | 10 min files, 81 s p95 delivery |
+| Age at publication (`published_at - observed_until`), GLM | p95 240 s | 26 s p95 delivery, 2 min to silver |
+| Age at publication, MTG LI | p95 900 s | 10 min files, 81 s p95 delivery, 2 min to silver |
 | Flashes whose storm already has its final id | 85 % at each update, 90 % over each hour | worst update 86 %, worst hour 91 % |
 | Snapshot size | 256 KiB gzipped, 1 MiB raw | about 180 B gzipped per storm, estimated |
 | Stale alarm, `published_at` older than | 900 s | three missed updates |
@@ -188,8 +194,8 @@ show each storm's age from its sources' `observed_until`. A storm is drawn at th
 scene time and that time, never extrapolated: no forecast.
 
 **GLM and MTG LI.** GLM files cover 20 s and arrive about 15 s after their end; MTG LI files cover
-10 minutes and arrive about a minute after theirs. So a GLM storm is about 2 minutes old at
-publication and an MTG LI storm up to 13, and the contract carries one `observed_until` per source
+10 minutes and arrive about a minute after theirs. So a GLM storm is 2 to 4 minutes old at
+publication and an MTG LI storm up to 15, and the contract carries one `observed_until` per source
 so each storm is judged on its own data. A lower MTG LI latency (#204) or a lower live latency
 (#115) shortens these ages without any change here. Neither is a prerequisite, and neither is the
 limit today: silver is.
@@ -200,14 +206,14 @@ limit today: silver is.
   so about 2 CPU hours a day on the VPS; 288 writes a day to R2 and one object stored.
   Each update loads silver's metadata and reads its window from R2: the number of data files read
   per update is the cost to watch.
-- Viewers see a GLM storm about 2 to 8 minutes old, against roughly 9 to 30 minutes with silver
-  alone at today's commit interval.
-- Freshness of active cells no longer depends on how often `lake-writer` commits. The silver
-  interval, 15 minutes instead of the 5 in ADR 0006 and growing by about 45 s a day, still delays
-  the catalog and `daily_gold`; if it keeps growing, the catalog's run at `H + 1 h 20 min` will
-  miss flashes and replace provisional ids that were right.
-- The spool gains a second, read-only reader. `lake-writer` stays its only owner; a change of the
-  spool's file layout has to keep `active-storms` reading.
+- Viewers see a GLM storm about 3 to 9 minutes old once silver meets its bar, against roughly 9
+  to 30 minutes at today's commit interval.
+- Freshness of active cells depends on how fast silver commits. Today's interval, 15 minutes
+  instead of the 5 in ADR 0006 and growing by about 45 s a day, also delays the catalog and
+  `daily_gold`; if it keeps growing, the catalog's run at `H + 1 h 20 min` will miss flashes and
+  replace provisional ids that were right.
+- If the spool transition is needed, `lake-writer` stays the spool's only owner, the transition is
+  written as temporary in #257, and it ends when silver meets the bar for a week.
 - Provisional ids can change: a viewer following a provisional storm may see it continue under
   another id, which the client follows through `previous_ids` and `ended`.
 - The catalog's chain is a single point of failure for final ids, as the week measured shows. The
