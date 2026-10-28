@@ -143,10 +143,10 @@ live/clouds/4k/20261010T000000Z-1a2b3c4d.webp
 archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 ```
 
-- A **frame** is one hourly GMGSI mosaic turned into cloud opacity
-  ([ADR 0007](adr/0007-cloud-source.md)): an equirectangular grayscale WebP (west edge at 180° W,
-  top row at 90° N; 0 clear, 255 opaque; 0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and
-  `4k` (4096 × 2048).
+- A **frame** is one hourly observation turned into cloud opacity, from the GMGSI mosaic
+  ([ADR 0007](adr/0007-cloud-source.md)) or the composite ([ADR 0022](adr/0022-composite-clouds.md)):
+  an equirectangular grayscale WebP (west edge at 180° W, top row at 90° N; 0 clear, 255 opaque;
+  0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and `4k` (4096 × 2048).
 - The **manifest** lists the frames of the last 6 hours, oldest first. Paths are relative to the
   manifest and opaque; a revised upstream file gets a new path. Clients poll it (a new frame
   appears about once an hour) and show `time`, the observation time, next to the lightning time.
@@ -173,6 +173,34 @@ archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 
 The model is `CloudManifest` in `scintille_ingest.clouds.publish`; it is not part of the versioned
 flash contract yet.
+
+### Cloud detail tiles
+
+Composite frames add an optional `detail` block ([ADR 0022](adr/0022-composite-clouds.md)); clients
+that ignore it keep the global textures:
+
+```json
+"detail": {
+  "path": "../../archive/clouds/detail/2026/10/18/20261018T140000Z-f41ef6e0/{z}/{y}/{x}.webp",
+  "tile_size": 640,
+  "border": 2,
+  "levels": [3, 4, 5],
+  "max_latitude": 72.7,
+  "fine": "AAAA…",
+  "size_bytes": 31591162
+}
+```
+
+- Tile `x`, `y` of level `z` covers `180 / 2^z` degrees square from 180° W and 90° N, with
+  `2^(z+1)` columns and `2^z` rows: texels of about 3.9, 2.0 and 0.98 km. Each tile is a grayscale
+  WebP of `tile_size + 2 × border` texels square; the border repeats the neighbouring texels so a
+  cubic filter needs no other tile.
+- Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
+  1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
+  significant bit first.
+- Tiles are written once, before the manifests, under `archive/clouds/detail/` (30 day lifecycle);
+  the live manifest and the daily archive index both point there, each with a path relative to
+  itself (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
 
 The globe polls the manifest every minute, loads the newest 3 frames of its quality tier (`2k` on
 the low preset, `4k` above) and cross-fades them on the scene clock. It hides the layer when the

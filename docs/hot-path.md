@@ -106,6 +106,23 @@ The manifest is the only state: on restart the service continues it. A failing p
   `cloud_frame_age_seconds` (nominal time → published) and `cloud_publish_delay_seconds` (upstream
   object → published, which should stay under 2 minutes).
 
+With `--source composite` (or `SCINTILLE_CLOUD_SOURCE=composite`), it builds the hourly composite of
+[ADR 0022](adr/0022-composite-clouds.md) instead:
+
+1. **wait** for the full disk scans starting at the hour: GOES-19 and GOES-18 ABI bands 2 and 13
+   (`noaa-goes19`, `noaa-goes18`), Himawari-9 AHI bands 3 and 13 (`noaa-himawari9`, ten segments
+   each) and the MTG FCI high resolution repeat cycle of the hour (EUMETSAT Data Store, 40 chunks,
+   `SCINTILLE_EUMETSAT_*`). After 45 minutes it goes on with the satellites that arrived;
+2. **decode** each disk into memory-mapped arrays under `SCINTILLE_CLOUD_WORK_DIR`: 1 km
+   reflectance (0.5 km bands averaged), 2 km (1 km for FCI) brightness temperature;
+3. **render** tiles of levels 3 to 5 in `SCINTILLE_CLOUD_WORKERS` processes: parallax-corrected,
+   view-angle weighted blend, opacity against the GFS skin temperature, visible detail by day,
+   GMGSI where no disk sees well;
+4. **publish** the tiles under `archive/clouds/detail/`, then the `2k` and `4k` textures and the
+   manifests as above. The work directory is emptied after each frame.
+
+`cloud_render_seconds` reports the decode and render time of the last frame.
+
 ## Run locally
 
 ```sh
