@@ -167,9 +167,11 @@ class CompositeCollector:
         cadence: float = 60.0,
         max_backoff: float = 600.0,
         deadline: timedelta = timedelta(minutes=45),
+        download_timeout: timedelta = timedelta(minutes=20),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.sources = sources
+        self.download_timeout = download_timeout
         self.skin = skin
         self.fallback = fallback
         self.publisher = publisher
@@ -209,7 +211,10 @@ class CompositeCollector:
         directory = self.work_dir / f"{files.slot:%Y%m%dT%H%M}"
         started = self._clock()
         try:
-            downloaded = await asyncio.to_thread(self.sources.download, files, directory / "raw")
+            downloaded = await asyncio.wait_for(
+                asyncio.to_thread(self.sources.download, files, directory / "raw"),
+                self.download_timeout.total_seconds(),
+            )
             fetched = self._clock()
             skin = await self.skin.at(files.slot)
             fallback = await asyncio.to_thread(self._fallback, files.slot)

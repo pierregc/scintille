@@ -1,6 +1,8 @@
 """Finds, downloads and decodes the satellite files of one hourly composite slot (ADR 0022)."""
 
 import logging
+import threading
+import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -25,6 +27,9 @@ HIMAWARI_BUCKET = "noaa-himawari9"
 SCAN = timedelta(minutes=10)
 """Each satellite's full disk scan that starts within this time after the slot is used."""
 DOWNLOADS = 8
+ATTEMPTS = 3
+_datastore = threading.BoundedSemaphore(4)
+"""The EUMETSAT Data Store throttles parallel downloads; the live LI ingest shares the account."""
 
 
 class FciStore(Protocol):
@@ -130,8 +135,20 @@ class Sources:
 
         def run(job: tuple[str, Callable[[Path], None], Path]) -> tuple[str, Path]:
             name, write, target = job
-            write(target)
-            return name, target
+            for attempt in range(ATTEMPTS):
+                try:
+                    if name == "mtg-i1/chunks":
+                        with _datastore:
+                            write(target)
+                    else:
+                        write(target)
+                    return name, target
+                except Exception:
+                    if attempt == ATTEMPTS - 1:
+                        raise
+                    log.warning("cloud download retried", extra={"fields": {"file": target.name}})
+                    time.sleep(2**attempt)
+            raise AssertionError("unreachable")
 
         out: dict[str, list[Path]] = {}
         with ThreadPoolExecutor(DOWNLOADS) as pool:

@@ -531,3 +531,25 @@ def test_collector_clears_work_left_by_a_restart(tmp_path: Path) -> None:
 
     asyncio.run(run_once())
     assert not (tmp_path / "20261018T1300").exists()
+
+
+def test_a_failed_chunk_is_downloaded_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scintille_ingest.clouds.sources as sources_module
+
+    monkeypatch.setattr(sources_module.time, "sleep", lambda _: None)
+    src = sources(segments=9)
+    assert src.mtg is not None
+    fetch = src.mtg.fetch
+    failures = {"left": 2}
+
+    def flaky(product: str, entry: str) -> bytes:
+        if failures["left"] > 0:
+            failures["left"] -= 1
+            raise ConnectionError("reset")
+        return fetch(product, entry)
+
+    src.mtg.fetch = flaky  # type: ignore[method-assign]
+    downloaded = src.download(src.find(SLOT), tmp_path)
+    assert len(downloaded["mtg-i1/chunks"]) == 40 and failures["left"] == 0
