@@ -9,6 +9,7 @@ import { URL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { chromium, devices } from 'playwright';
+import sharp from 'sharp';
 
 const { values } = parseArgs({
 	allowNegative: true,
@@ -312,6 +313,19 @@ function posesAt({ lat, lon }) {
 	return Object.fromEntries(Object.entries(refs.poses).map(([name, pose]) => [name, pose === 'framed' ? pose : { lat, lon, ...pose }]));
 }
 
+/** Mean luminance (0 to 255) and share of near white pixels of a screenshot. */
+async function brightness(png) {
+	const { data, info } = await sharp(png).resize({ width: 640 }).greyscale().raw().toBuffer({ resolveWithObject: true });
+	let sum = 0;
+	let white = 0;
+	for (const value of data) {
+		sum += value;
+		if (value >= 245) white++;
+	}
+	const pixels = info.width * info.height;
+	return { mean: Math.round(sum / pixels), nearWhite: Math.round((white / pixels) * 1000) / 1000 };
+}
+
 function parseView(param) {
 	const [lat, lon, altitude, tilt] = (param ?? '').split(',').map(Number);
 	return [lat, lon, altitude, tilt].every(Number.isFinite) ? { lat, lon, altitude, tilt } : null;
@@ -374,7 +388,7 @@ async function benchStorm(browser, storm, outDir) {
 		}, target);
 		await transfer.idle();
 		const shot = join(outDir, `${storm.id}-${name}.png`);
-		await page.screenshot({ path: shot });
+		const exposure = brightness(await page.screenshot({ path: shot }));
 		const view = new URL(await page.evaluate(() => globalThis.scintilleBench.app.shareUrl())).searchParams.get('view');
 		const paused = frameStats(await record(page, 2000, true));
 		await page.evaluate(() => globalThis.scintilleBench.app.clock.play());
@@ -398,6 +412,7 @@ async function benchStorm(browser, storm, outDir) {
 			quality: await page.evaluate(() => document.querySelector('canvas')?.dataset.quality ?? null),
 			memory: await page.evaluate(() => globalThis.scintilleBench.memory()),
 			screenshot: shot,
+			exposure: await exposure,
 		};
 		process.stdout.write(`${storm.id} ${name}: interval p95 ${playing.intervalP95Ms} ms, cost p50 ${playingCost.workP50Ms} p95 ${playingCost.workP95Ms} ms, ${flashes.active} active flashes\n`);
 	}
