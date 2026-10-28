@@ -1,6 +1,8 @@
 import {
-	AdditiveBlending,
+	CustomBlending,
 	HalfFloatType,
+	OneFactor,
+	OneMinusDstColorFactor,
 	type Object3D,
 	type PerspectiveCamera,
 	type Scene,
@@ -21,6 +23,8 @@ export const BLOOM = { strength: 0.9, radius: 0.55, threshold: 0 };
 
 export interface PostProcessing {
 	render(): void;
+	/** Bloom strength, BLOOM.strength by default. */
+	setBloom(strength: number): void;
 	setSize(width: number, height: number, pixelRatio: number): void;
 	dispose(): void;
 }
@@ -69,7 +73,15 @@ export function createPostProcessing(
 	bloomComposer.addPass(bloom);
 
 	const quad = new FullScreenQuad(
-		new ShaderMaterial({ ...addBloom, blending: AdditiveBlending, depthTest: false, depthWrite: false }),
+		// Screen blend: the bloom lights the dark sky fully but barely lifts sunlit clouds, which it would whiten.
+		new ShaderMaterial({
+			...addBloom,
+			blending: CustomBlending,
+			blendSrc: OneMinusDstColorFactor,
+			blendDst: OneFactor,
+			depthTest: false,
+			depthWrite: false,
+		}),
 	);
 	// Bloom only: the composer buffer also holds the flashes, already drawn by the main pass.
 	(quad.material as ShaderMaterial).uniforms.bloomTexture.value = bloom.renderTargetsHorizontal[0].texture;
@@ -87,6 +99,9 @@ export function createPostProcessing(
 			renderer.autoClear = false;
 			quad.render(renderer);
 			renderer.autoClear = autoClear;
+		},
+		setBloom(strength) {
+			bloom.strength = strength;
 		},
 		setSize(width, height, pixelRatio) {
 			bloomComposer.setPixelRatio(pixelRatio);

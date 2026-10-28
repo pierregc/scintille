@@ -1,0 +1,1551 @@
+{
+  "now": "2026-10-28T15:23:23.191412+00:00",
+  "end": "2026-10-28T14:00:00+00:00",
+  "hours": 72,
+  "host": {
+    "cpus": 4,
+    "loadavg": [
+      1.150390625,
+      1.39306640625,
+      1.3876953125
+    ],
+    "MemTotal": "7944052 kB",
+    "MemAvailable": "4360912 kB",
+    "/sys/fs/cgroup/cpu.max": "max 100000",
+    "/sys/fs/cgroup/memory.max": "max"
+  },
+  "silver_commits": {
+    "batches": 140453,
+    "commits": 1763,
+    "first": "2026-10-12T17:43:29+00:00",
+    "interval_s": {
+      "p50": 928.0,
+      "p90": 1068.4,
+      "p95": 1137.3,
+      "p99": 1489.2,
+      "max": 1592.0,
+      "n": 284
+    }
+  },
+  "dagster": {
+    "jobs": {
+      "daily_gold": {
+        "STARTING": 1,
+        "SUCCESS": 717,
+        "FAILURE": 7
+      },
+      "hourly_storm_catalog": {
+        "FAILURE": 168
+      },
+      "silver_hourly_checks": {
+        "SUCCESS": 103,
+        "FAILURE": 65
+      },
+      "silver_daily_checks": {
+        "SUCCESS": 7
+      },
+      "lake_weekly_maintenance": {
+        "FAILURE": 1
+      }
+    },
+    "job_duration_s": {
+      "hourly_storm_catalog": {
+        "p50": 77.5,
+        "p95": 120.0,
+        "max": 132.4,
+        "n": 168
+      },
+      "daily_gold": {
+        "p50": 176.5,
+        "p95": 278.4,
+        "max": 445.5,
+        "n": 724
+      },
+      "silver_hourly_checks": {
+        "p50": 41.2,
+        "p95": 52.6,
+        "max": 68.6,
+        "n": 168
+      },
+      "silver_daily_checks": {
+        "p50": 91.6,
+        "p95": 121.1,
+        "max": 131.3,
+        "n": 7
+      },
+      "lake_weekly_maintenance": {
+        "p50": 227143.8,
+        "p95": 227143.8,
+        "max": 227143.8,
+        "n": 1
+      }
+    },
+    "job_queue_s": {
+      "hourly_storm_catalog": {
+        "p50": 8.9,
+        "p95": 146.8,
+        "max": 248.1,
+        "n": 168
+      },
+      "daily_gold": {
+        "p50": 8.5,
+        "p95": 10.9,
+        "max": 176.0,
+        "n": 724
+      },
+      "silver_hourly_checks": {
+        "p50": 8.2,
+        "p95": 141.8,
+        "max": 243.2,
+        "n": 168
+      },
+      "silver_daily_checks": {
+        "p50": 10.0,
+        "p95": 11.3,
+        "max": 11.8,
+        "n": 7
+      },
+      "lake_weekly_maintenance": {
+        "p50": 9.3,
+        "p95": 9.3,
+        "max": 9.3,
+        "n": 1
+      }
+    },
+    "busy_hours_per_day": 15.47,
+    "summary": {
+      "scheduled": 168,
+      "scheduled_success": 0,
+      "scheduled_failure": 168,
+      "duration_s": null,
+      "queue_s": null,
+      "boot_s": null,
+      "end_after_partition_end_s": null,
+      "steps_s": {}
+    },
+    "tracked_at": {},
+    "recent": [
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-03:00",
+        "start": "2026-10-27T04:22:27.954921+00:00",
+        "duration_s": 58.5,
+        "steps_s": {
+          "gold__storm_cells": 47.6,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 141185,
+              "hotspots": 10,
+              "cells": 468,
+              "clustered_flashes": 125796
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-04:00",
+        "start": "2026-10-27T05:22:23.202134+00:00",
+        "duration_s": 54.4,
+        "steps_s": {
+          "gold__storm_cells": 43.6,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 116751,
+              "hotspots": 9,
+              "cells": 426,
+              "clustered_flashes": 102147
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-05:00",
+        "start": "2026-10-27T06:20:10.264391+00:00",
+        "duration_s": 54.8,
+        "steps_s": {
+          "gold__storm_cells": 44.3,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 114162,
+              "hotspots": 9,
+              "cells": 405,
+              "clustered_flashes": 99233
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-06:00",
+        "start": "2026-10-27T07:22:48.312665+00:00",
+        "duration_s": 52.4,
+        "steps_s": {
+          "gold__storm_cells": 41.9,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 102295,
+              "hotspots": 10,
+              "cells": 356,
+              "clustered_flashes": 88147
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-07:00",
+        "start": "2026-10-27T08:20:06.783694+00:00",
+        "duration_s": 50.0,
+        "steps_s": {
+          "gold__storm_cells": 39.4,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 86339,
+              "hotspots": 10,
+              "cells": 369,
+              "clustered_flashes": 71739
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-08:00",
+        "start": "2026-10-27T09:20:06.758485+00:00",
+        "duration_s": 53.9,
+        "steps_s": {
+          "gold__storm_cells": 43.0,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 89350,
+              "hotspots": 10,
+              "cells": 423,
+              "clustered_flashes": 73945
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-09:00",
+        "start": "2026-10-27T10:20:06.840193+00:00",
+        "duration_s": 55.4,
+        "steps_s": {
+          "gold__storm_cells": 44.3,
+          "gold__storm_tracks": 0.3
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 113936,
+              "hotspots": 10,
+              "cells": 452,
+              "clustered_flashes": 95158
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-10:00",
+        "start": "2026-10-27T11:20:06.854877+00:00",
+        "duration_s": 56.5,
+        "steps_s": {
+          "gold__storm_cells": 45.6,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 155318,
+              "hotspots": 10,
+              "cells": 556,
+              "clustered_flashes": 136620
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-11:00",
+        "start": "2026-10-27T12:20:07.445792+00:00",
+        "duration_s": 63.2,
+        "steps_s": {
+          "gold__storm_cells": 52.3,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 237497,
+              "hotspots": 9,
+              "cells": 666,
+              "clustered_flashes": 217815
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-12:00",
+        "start": "2026-10-27T13:20:08.348361+00:00",
+        "duration_s": 78.7,
+        "steps_s": {
+          "gold__storm_cells": 67.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 322689,
+              "hotspots": 9,
+              "cells": 831,
+              "clustered_flashes": 301864
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-13:00",
+        "start": "2026-10-27T14:20:10.870383+00:00",
+        "duration_s": 95.0,
+        "steps_s": {
+          "gold__storm_cells": 84.0,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 428653,
+              "hotspots": 9,
+              "cells": 900,
+              "clustered_flashes": 405708
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-14:00",
+        "start": "2026-10-27T15:20:06.837809+00:00",
+        "duration_s": 98.1,
+        "steps_s": {
+          "gold__storm_cells": 86.8,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 531477,
+              "hotspots": 9,
+              "cells": 944,
+              "clustered_flashes": 510724
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-15:00",
+        "start": "2026-10-27T16:20:09.090777+00:00",
+        "duration_s": 108.9,
+        "steps_s": {
+          "gold__storm_cells": 97.6,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 543706,
+              "hotspots": 10,
+              "cells": 877,
+              "clustered_flashes": 524379
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-16:00",
+        "start": "2026-10-27T17:20:09.437217+00:00",
+        "duration_s": 132.4,
+        "steps_s": {
+          "gold__storm_cells": 121.4,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 456557,
+              "hotspots": 9,
+              "cells": 870,
+              "clustered_flashes": 437007
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-17:00",
+        "start": "2026-10-27T18:20:07.400095+00:00",
+        "duration_s": 129.6,
+        "steps_s": {
+          "gold__storm_cells": 118.5,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 394270,
+              "hotspots": 9,
+              "cells": 863,
+              "clustered_flashes": 370965
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-18:00",
+        "start": "2026-10-27T19:20:07.900814+00:00",
+        "duration_s": 119.8,
+        "steps_s": {
+          "gold__storm_cells": 108.3,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 382900,
+              "hotspots": 9,
+              "cells": 959,
+              "clustered_flashes": 357110
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-19:00",
+        "start": "2026-10-27T20:20:09.494239+00:00",
+        "duration_s": 125.1,
+        "steps_s": {
+          "gold__storm_cells": 113.5,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 411462,
+              "hotspots": 9,
+              "cells": 964,
+              "clustered_flashes": 385114
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-20:00",
+        "start": "2026-10-27T21:20:09.469280+00:00",
+        "duration_s": 122.9,
+        "steps_s": {
+          "gold__storm_cells": 112.0,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 402621,
+              "hotspots": 9,
+              "cells": 1025,
+              "clustered_flashes": 376801
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-21:00",
+        "start": "2026-10-27T22:20:08.875660+00:00",
+        "duration_s": 72.9,
+        "steps_s": {
+          "gold__storm_cells": 62.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 358264,
+              "hotspots": 9,
+              "cells": 933,
+              "clustered_flashes": 333439
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-22:00",
+        "start": "2026-10-27T23:20:09.385301+00:00",
+        "duration_s": 79.8,
+        "steps_s": {
+          "gold__storm_cells": 69.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 284512,
+              "hotspots": 8,
+              "cells": 720,
+              "clustered_flashes": 260828
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-27-23:00",
+        "start": "2026-10-28T00:20:08.889174+00:00",
+        "duration_s": 72.5,
+        "steps_s": {
+          "gold__storm_cells": 61.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 219207,
+              "hotspots": 8,
+              "cells": 663,
+              "clustered_flashes": 198558
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-00:00",
+        "start": "2026-10-28T01:20:08.739980+00:00",
+        "duration_s": 131.9,
+        "steps_s": {
+          "gold__storm_cells": 120.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 178512,
+              "hotspots": 8,
+              "cells": 589,
+              "clustered_flashes": 158818
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-01:00",
+        "start": "2026-10-28T02:20:07.510315+00:00",
+        "duration_s": 76.2,
+        "steps_s": {
+          "gold__storm_cells": 65.2,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 152610,
+              "hotspots": 8,
+              "cells": 582,
+              "clustered_flashes": 133913
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-02:00",
+        "start": "2026-10-28T03:20:07.032808+00:00",
+        "duration_s": 66.8,
+        "steps_s": {
+          "gold__storm_cells": 55.9,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 131661,
+              "hotspots": 8,
+              "cells": 502,
+              "clustered_flashes": 113993
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-03:00",
+        "start": "2026-10-28T04:20:07.241197+00:00",
+        "duration_s": 61.4,
+        "steps_s": {
+          "gold__storm_cells": 50.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 104415,
+              "hotspots": 8,
+              "cells": 410,
+              "clustered_flashes": 75335
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-04:00",
+        "start": "2026-10-28T05:20:07.348848+00:00",
+        "duration_s": 63.0,
+        "steps_s": {
+          "gold__storm_cells": 52.2,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 133205,
+              "hotspots": 7,
+              "cells": 466,
+              "clustered_flashes": 116508
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-05:00",
+        "start": "2026-10-28T06:20:10.745924+00:00",
+        "duration_s": 60.2,
+        "steps_s": {
+          "gold__storm_cells": 49.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 117002,
+              "hotspots": 7,
+              "cells": 477,
+              "clustered_flashes": 100186
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-06:00",
+        "start": "2026-10-28T07:20:09.194591+00:00",
+        "duration_s": 59.4,
+        "steps_s": {
+          "gold__storm_cells": 49.0,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 103593,
+              "hotspots": 7,
+              "cells": 459,
+              "clustered_flashes": 86750
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-07:00",
+        "start": "2026-10-28T08:20:09.058932+00:00",
+        "duration_s": 59.3,
+        "steps_s": {
+          "gold__storm_cells": 48.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 93818,
+              "hotspots": 7,
+              "cells": 489,
+              "clustered_flashes": 76164
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-08:00",
+        "start": "2026-10-28T09:20:08.316714+00:00",
+        "duration_s": 58.8,
+        "steps_s": {
+          "gold__storm_cells": 48.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 87789,
+              "hotspots": 7,
+              "cells": 390,
+              "clustered_flashes": 70244
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-09:00",
+        "start": "2026-10-28T10:20:08.261792+00:00",
+        "duration_s": 58.6,
+        "steps_s": {
+          "gold__storm_cells": 48.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 79275,
+              "hotspots": 8,
+              "cells": 402,
+              "clustered_flashes": 63258
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-10:00",
+        "start": "2026-10-28T11:20:08.057401+00:00",
+        "duration_s": 62.3,
+        "steps_s": {
+          "gold__storm_cells": 51.8,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 107682,
+              "hotspots": 8,
+              "cells": 459,
+              "clustered_flashes": 91264
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-11:00",
+        "start": "2026-10-28T12:20:09.500729+00:00",
+        "duration_s": 68.1,
+        "steps_s": {
+          "gold__storm_cells": 56.6,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 142250,
+              "hotspots": 9,
+              "cells": 555,
+              "clustered_flashes": 125000
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-12:00",
+        "start": "2026-10-28T13:20:09.381719+00:00",
+        "duration_s": 77.4,
+        "steps_s": {
+          "gold__storm_cells": 66.7,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 151272,
+              "hotspots": 9,
+              "cells": 565,
+              "clustered_flashes": 136098
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-13:00",
+        "start": "2026-10-28T14:20:08.733267+00:00",
+        "duration_s": 73.6,
+        "steps_s": {
+          "gold__storm_cells": 62.5,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 42635,
+              "hotspots": 9,
+              "cells": 150,
+              "clustered_flashes": 11102
+            }
+          ]
+        }
+      },
+      {
+        "kind": "schedule",
+        "status": "FAILURE",
+        "partition": "2026-10-28-14:00",
+        "start": "2026-10-28T15:20:07.398583+00:00",
+        "duration_s": 78.8,
+        "steps_s": {
+          "gold__storm_cells": 68.1,
+          "gold__storm_tracks": 0.2
+        },
+        "metadata": {
+          "gold/storm_cells": [
+            {
+              "flashes": 23369,
+              "hotspots": 9,
+              "cells": 170,
+              "clustered_flashes": 14301
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "public": {
+    "manifest": {
+      "generated_age_s": -7,
+      "chunks": 120,
+      "sources": [
+        {
+          "source": "glm-east",
+          "state": "live",
+          "last_event_time": "2026-10-28T15:22:59.012363Z",
+          "last_ingest_time": "2026-10-28T15:23:10.008068Z"
+        },
+        {
+          "source": "glm-west",
+          "state": "live",
+          "last_event_time": "2026-10-28T15:22:59.280922Z",
+          "last_ingest_time": "2026-10-28T15:23:10.108196Z"
+        },
+        {
+          "source": "mtg-li",
+          "state": "offline",
+          "last_event_time": "2026-10-28T12:40:04.842700Z",
+          "last_ingest_time": "2026-10-28T12:41:06.442482Z"
+        }
+      ]
+    },
+    "metrics": {
+      "generated_at": "2026-10-28T15:22:46.000604Z",
+      "freshness": {
+        "live_feed_age_seconds": 16.0,
+        "silver_lag_seconds": 289.3,
+        "gold_age_seconds": 86.2
+      },
+      "sources": [
+        {
+          "source": "glm-east",
+          "series_start": "2026-10-28T14:23:00Z",
+          "flashes_per_minute": [
+            225,
+            161,
+            179,
+            129,
+            252,
+            199,
+            126,
+            197,
+            269,
+            211,
+            178,
+            226,
+            209,
+            211,
+            144,
+            314,
+            229,
+            243,
+            228,
+            268,
+            263,
+            270,
+            294,
+            261,
+            196,
+            359,
+            276,
+            267,
+            276,
+            180,
+            373,
+            290,
+            281,
+            286,
+            289,
+            283,
+            290,
+            199,
+            443,
+            344,
+            340,
+            314,
+            317,
+            322,
+            309,
+            327,
+            336,
+            347,
+            226,
+            447,
+            233,
+            463,
+            226,
+            475,
+            357,
+            346,
+            242,
+            487,
+            370,
+            131
+          ],
+          "latency_p50_seconds": 42.2,
+          "latency_p95_seconds": 60.8,
+          "completeness": 1.0,
+          "last_file_time": "2026-10-28T15:22:38.777311Z",
+          "error_budget_remaining": 1.0
+        },
+        {
+          "source": "glm-west",
+          "series_start": "2026-10-28T14:23:00Z",
+          "flashes_per_minute": [
+            87,
+            47,
+            53,
+            32,
+            45,
+            66,
+            31,
+            74,
+            54,
+            63,
+            67,
+            76,
+            43,
+            64,
+            63,
+            59,
+            58,
+            78,
+            62,
+            52,
+            70,
+            80,
+            75,
+            76,
+            45,
+            87,
+            77,
+            73,
+            44,
+            47,
+            84,
+            49,
+            54,
+            70,
+            49,
+            58,
+            60,
+            38,
+            88,
+            64,
+            43,
+            79,
+            68,
+            67,
+            66,
+            56,
+            70,
+            75,
+            43,
+            67,
+            73,
+            67,
+            77,
+            60,
+            71,
+            63,
+            60,
+            63,
+            61,
+            22
+          ],
+          "latency_p50_seconds": 41.0,
+          "latency_p95_seconds": 59.6,
+          "completeness": 0.9889,
+          "last_file_time": "2026-10-28T15:22:17.076189Z",
+          "error_budget_remaining": 1.0
+        },
+        {
+          "source": "mtg-li",
+          "series_start": "2026-10-28T14:23:00Z",
+          "flashes_per_minute": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_p50_seconds": null,
+          "latency_p95_seconds": null,
+          "completeness": 0.0,
+          "last_file_time": "2026-10-28T12:41:06.604825Z",
+          "error_budget_remaining": -0.2151
+        }
+      ]
+    },
+    "index": {
+      "published_age_s": 762912,
+      "last_observation_age_s": 797003,
+      "total_storms": 13816
+    },
+    "recent_details": [
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34093,
+        "last_observation_age_s": 797006
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34097,
+        "last_observation_age_s": 797009
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34096,
+        "last_observation_age_s": 797009
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34113,
+        "last_observation_age_s": 797025
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34092,
+        "last_observation_age_s": 797005
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34105,
+        "last_observation_age_s": 797017
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34091,
+        "last_observation_age_s": 797004
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34099,
+        "last_observation_age_s": 797011
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34110,
+        "last_observation_age_s": 797023
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34337,
+        "last_observation_age_s": 797249
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34103,
+        "last_observation_age_s": 797016
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34096,
+        "last_observation_age_s": 797009
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34105,
+        "last_observation_age_s": 797017
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34092,
+        "last_observation_age_s": 797004
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34093,
+        "last_observation_age_s": 797005
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34126,
+        "last_observation_age_s": 797039
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34120,
+        "last_observation_age_s": 797033
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34094,
+        "last_observation_age_s": 797007
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34096,
+        "last_observation_age_s": 797008
+      },
+      {
+        "closed": false,
+        "published_after_last_observation_s": 34092,
+        "last_observation_age_s": 797005
+      }
+    ],
+    "highlights_published_age_s": 762912
+  },
+  "gold": {
+    "windows": 0,
+    "per_window": {
+      "storms": null,
+      "new": null,
+      "splits": null,
+      "merged": null,
+      "level_2_plus": null,
+      "level_3_plus": null,
+      "hour_flashes_100_plus": null
+    },
+    "cells_per_window": {
+      "p50": 589.0,
+      "p95": 969.4,
+      "max": 1034.0,
+      "n": 72
+    },
+    "hull_vertices": {
+      "p50": 8.0,
+      "p95": 14.0,
+      "p99": 17.0,
+      "max": 26.0,
+      "n": 46331
+    },
+    "hull_bytes": {
+      "p50": 162.0,
+      "p95": 275.0,
+      "p99": 333.0,
+      "max": 522.0,
+      "n": 46331
+    },
+    "storm_steps": null,
+    "storm_steps_level_3_plus": null,
+    "storms": 0,
+    "level_counts": {}
+  },
+  "files": {
+    "files": {
+      "glm-west": {
+        "count": 12938,
+        "received_after_product_end_s": {
+          "p50": 14.9,
+          "p90": 23.6,
+          "p95": 26.3,
+          "p99": 31.9,
+          "p99.9": 48.2,
+          "max": 82.7,
+          "n": 12938
+        },
+        "committed_after_received_s": {
+          "p50": 494.7,
+          "p90": 898.6,
+          "p95": 985.1,
+          "p99": 1302.3,
+          "p99.9": 1510.0,
+          "max": 1616.1,
+          "n": 12938
+        },
+        "committed_after_product_end_s": {
+          "p50": 510.8,
+          "p90": 914.4,
+          "p95": 1001.6,
+          "p99": 1318.6,
+          "p99.9": 1522.6,
+          "max": 1626.8,
+          "n": 12938
+        },
+        "product_seconds": {
+          "p50": 20.0,
+          "max": 20.0,
+          "n": 12938
+        }
+      },
+      "glm-east": {
+        "count": 12947,
+        "received_after_product_end_s": {
+          "p50": 15.3,
+          "p90": 24.0,
+          "p95": 26.6,
+          "p99": 32.3,
+          "p99.9": 49.3,
+          "max": 150.2,
+          "n": 12947
+        },
+        "committed_after_received_s": {
+          "p50": 495.4,
+          "p90": 899.3,
+          "p95": 985.6,
+          "p99": 1301.7,
+          "p99.9": 1506.5,
+          "max": 1615.6,
+          "n": 12947
+        },
+        "committed_after_product_end_s": {
+          "p50": 511.4,
+          "p90": 915.3,
+          "p95": 1002.0,
+          "p99": 1320.5,
+          "p99.9": 1522.5,
+          "max": 1626.8,
+          "n": 12947
+        },
+        "product_seconds": {
+          "p50": 20.0,
+          "max": 20.0,
+          "n": 12947
+        }
+      },
+      "mtg-li": {
+        "count": 421,
+        "received_after_product_end_s": {
+          "p50": 58.5,
+          "p90": 74.8,
+          "p95": 81.1,
+          "p99": 214.4,
+          "p99.9": 1666.9,
+          "max": 1876.2,
+          "n": 421
+        },
+        "committed_after_received_s": {
+          "p50": 486.9,
+          "p90": 911.9,
+          "p95": 980.3,
+          "p99": 1263.3,
+          "p99.9": 1513.1,
+          "max": 1516.3,
+          "n": 421
+        },
+        "committed_after_product_end_s": {
+          "p50": 551.9,
+          "p90": 983.6,
+          "p95": 1097.8,
+          "p99": 1452.4,
+          "p99.9": 2137.6,
+          "max": 2389.6,
+          "n": 421
+        },
+        "product_seconds": {
+          "p50": 600.0,
+          "max": 600.0,
+          "n": 421
+        }
+      }
+    },
+    "commit_matched": {
+      "glm-west": 1.0,
+      "glm-east": 1.0,
+      "mtg-li": 1.0
+    }
+  },
+  "silver": {
+    "window": [
+      "2026-10-25T14:00:00+00:00",
+      "2026-10-28T14:00:00+00:00"
+    ],
+    "backfilled": {},
+    "event_to_received_s": {
+      "glm-east": {
+        "p50": 26.6,
+        "p90": 37.5,
+        "p95": 40.8,
+        "p99": 47.1,
+        "p99.9": 59.6,
+        "max": 171.0,
+        "n": 3815753
+      },
+      "glm-west": {
+        "p50": 26.1,
+        "p90": 37.0,
+        "p95": 40.4,
+        "p99": 46.3,
+        "p99.9": 58.4,
+        "max": 103.0,
+        "n": 343038
+      },
+      "mtg-li": {
+        "p50": 365.2,
+        "p90": 606.2,
+        "p95": 636.2,
+        "p99": 670.6,
+        "p99.9": 1969.6,
+        "max": 2476.5,
+        "n": 6935349
+      }
+    },
+    "event_to_silver_s": {
+      "glm-east": null,
+      "glm-west": null,
+      "mtg-li": null
+    },
+    "late_share": {
+      "glm-east": {
+        "uncommitted": 1.0,
+        "received_after_0m": 0.00706,
+        "received_after_5m": 0.0,
+        "received_after_10m": 0.0,
+        "received_after_15m": 0.0,
+        "received_after_20m": 0.0,
+        "received_after_25m": 0.0,
+        "received_after_30m": 0.0,
+        "received_after_60m": 0.0,
+        "silver_after_0m": 0.0,
+        "silver_after_5m": 0.0,
+        "silver_after_10m": 0.0,
+        "silver_after_15m": 0.0,
+        "silver_after_20m": 0.0,
+        "silver_after_25m": 0.0,
+        "silver_after_30m": 0.0,
+        "silver_after_60m": 0.0
+      },
+      "glm-west": {
+        "uncommitted": 1.0,
+        "received_after_0m": 0.00674,
+        "received_after_5m": 0.0,
+        "received_after_10m": 0.0,
+        "received_after_15m": 0.0,
+        "received_after_20m": 0.0,
+        "received_after_25m": 0.0,
+        "received_after_30m": 0.0,
+        "received_after_60m": 0.0,
+        "silver_after_0m": 0.0,
+        "silver_after_5m": 0.0,
+        "silver_after_10m": 0.0,
+        "silver_after_15m": 0.0,
+        "silver_after_20m": 0.0,
+        "silver_after_25m": 0.0,
+        "silver_after_30m": 0.0,
+        "silver_after_60m": 0.0
+      },
+      "mtg-li": {
+        "uncommitted": 1.0,
+        "received_after_0m": 0.16247,
+        "received_after_5m": 0.00024,
+        "received_after_10m": 0.0,
+        "received_after_15m": 0.0,
+        "received_after_20m": 0.0,
+        "received_after_25m": 0.0,
+        "received_after_30m": 0.0,
+        "received_after_60m": 0.0,
+        "silver_after_0m": 0.0,
+        "silver_after_5m": 0.0,
+        "silver_after_10m": 0.0,
+        "silver_after_15m": 0.0,
+        "silver_after_20m": 0.0,
+        "silver_after_25m": 0.0,
+        "silver_after_30m": 0.0,
+        "silver_after_60m": 0.0
+      }
+    },
+    "flashes_per_hour": {
+      "glm-east": {
+        "p50": 42326.0,
+        "p95": 120332.0,
+        "max": 142021.0,
+        "n": 72
+      },
+      "glm-west": {
+        "p50": 3875.0,
+        "p95": 11645.3,
+        "max": 17829.0,
+        "n": 72
+      },
+      "mtg-li": {
+        "p50": 75305.0,
+        "p95": 227550.0,
+        "max": 345779.0,
+        "n": 71
+      }
+    },
+    "flashes_per_hour_all": {
+      "p50": 133045.5,
+      "p95": 281906.2,
+      "max": 364479.0,
+      "n": 72
+    }
+  },
+  "replay": {
+    "timings": {
+      "hotspot_scan_s": 49.0,
+      "hotspots": 9
+    },
+    "samples": [
+      {
+        "hour": "2026-10-28T13:00:00+00:00",
+        "skipped": "not tracked"
+      },
+      {
+        "hour": "2026-10-28T09:00:00+00:00",
+        "skipped": "not tracked"
+      },
+      {
+        "hour": "2026-10-28T05:00:00+00:00",
+        "skipped": "not tracked"
+      },
+      {
+        "hour": "2026-10-28T01:00:00+00:00",
+        "skipped": "not tracked"
+      },
+      {
+        "hour": "2026-10-27T21:00:00+00:00",
+        "skipped": "not tracked"
+      },
+      {
+        "hour": "2026-10-27T17:00:00+00:00",
+        "skipped": "not tracked"
+      }
+    ]
+  }
+}

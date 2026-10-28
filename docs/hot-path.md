@@ -30,7 +30,8 @@ like any other, so the failure shows in `bronze.ingest_log`.
 
 States live in Postgres (`ingest_files`) and only move forward, so a step replayed after a crash
 changes nothing. It never calls the catalog. A failing source backs off exponentially (5 s to 5 min)
-without delaying the others. SIGTERM lets files in progress finish (30 s).
+without delaying the others; a listing or download that hangs is abandoned after 5 minutes, and a
+silent socket times out after 60 s. SIGTERM lets files in progress finish (30 s).
 
 - `GET :8080/healthz`: 200 while every loop runs (container healthcheck).
 - Heartbeat: a Healthchecks.io ping every minute when `SCINTILLE_HEALTHCHECK_URL` is set
@@ -69,7 +70,9 @@ Drains the spool every 5 minutes, up to 200 batches per commit:
 2. writes to `silver.flashes`, then `bronze.ingest_log`, only the batches each table does not hold
    yet; the batch ids go into the snapshot property `scintille.batch_ids`. Each write is one Iceberg
    overwrite filtered on the batches' product files, so an upstream revision of a file (same key,
-   new ETag) replaces the rows of the previous one instead of adding to them;
+   new ETag) replaces the rows of the previous one instead of adding to them. The filter is also
+   bounded in time (event times for silver, product starts for bronze, the last 6 hours of
+   receptions for the quarantine), since product names alone would read every file of a table;
 3. deletes the spool files.
 
 A crash anywhere replays the drain: batches found in a table's snapshots are skipped, so nothing is

@@ -13,6 +13,7 @@ from dagster import AssetKey, materialize
 from obstore.store import MemoryStore, ObjectStore
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
+from scintille_ingest.backfill import EXPECTED_FILES_PER_DAY
 from scintille_lake.migrate import migrate
 from scintille_lake.tables import FLASHES, INGEST_LOG
 from scintille_pipelines.definitions import defs
@@ -212,6 +213,15 @@ def materialize_day(lake: LakeResource, r2: FeedResource) -> None:
     assert all(c.passed for c in checks), [c.check_name for c in checks if not c.passed]
 
 
+def test_completeness_is_capped_when_a_source_sends_extra_files(
+    lake: LakeResource, r2: FeedResource, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(EXPECTED_FILES_PER_DAY, "glm-east", 2)
+    materialize_day(lake, r2)
+    sla = {r["source"]: r for r in rows_of(lake, SOURCE_SLA_DAILY)}
+    assert sla["glm-east"]["completeness"] == 1.0
+
+
 def test_gold_day_end_to_end(lake: LakeResource, r2: FeedResource) -> None:
     materialize_day(lake, r2)
 
@@ -235,6 +245,7 @@ def test_gold_day_end_to_end(lake: LakeResource, r2: FeedResource) -> None:
     assert sla.keys() == {"glm-east", "glm-west", "mtg-li"}
     mtg = sla["mtg-li"]
     assert (mtg["files"], mtg["completeness"], mtg["latency_p50_s"]) == (0, 0.0, None)
+    assert mtg["expected_files"] == 144
     east = sla["glm-east"]
     assert (east["files"], east["failed_files"], east["expected_files"]) == (4, 1, 4320)
     assert east["completeness"] == pytest.approx(3 / 4320)

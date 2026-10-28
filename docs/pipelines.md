@@ -77,9 +77,8 @@ dropped as noise.
   as WKT with its area, sources, and the parameters used. Bbox and time range are the query bounds
   of the cell's flashes. `minute_counts` holds the in-hour flashes per source and minute, for
   [storm levels](#storm-levels).
-- **Writes.** Each run overwrites its hours. A backfill is a single run over the whole range that
-  reads one day at a time, and the `storm-cells` pool keeps one run at a time. No schedule
-  or sensor yet; they come with storm tracking.
+- **Writes.** Each run overwrites its hours. Backfills run 6 hours per run, like every storm asset,
+  and the `storm-cells` pool keeps one run at a time.
 - **Parameters** (run config, defaults below), tuned on GLM data of 2026-10-08 (2.5 M flashes) in
   three contrasted regions: a subtropical mesoscale convective system over Argentina and Uruguay,
   scattered tropical cells over the Andes and the Amazon, and coastal cells off Mexico.
@@ -119,8 +118,8 @@ previous partition (a self-dependency), so storms carry over hours and days.
   cell's time range). `closed` is set once a later hour has been tracked without the storm.
 - **Writes.** Tracks overwrite their hours. Storms are rebuilt from the tracks for every storm that
   started at or after the earliest start among the storms active in the run's hours or the hour
-  before, so the run is idempotent. Backfills are single runs and the `storm-tracks` pool keeps one
-  run at a time, since each hour needs the previous one. A run fails when the hour before it was
+  before, so the run is idempotent. Backfills run 6 hours per run and the `storm-tracks` pool keeps
+  one run at a time, since each hour needs the previous one. A run fails when the hour before it was
   never tracked; `new_chain` starts storms from scratch instead.
 
 | Parameter | Default | Note |
@@ -223,7 +222,11 @@ store, probes the DuckDB write path, tests the Postgres lock and runs a job on D
 
 `feeds/storm_catalog` exports `storms/<slug>.json`, immutable replay chunks, zero-based index pages
 of 50 summaries and XML sitemaps. `hourly_storm_catalog` materializes its upstream storm assets;
-`storm_catalog_schedule` targets the previous hour at minute 20 UTC and is **stopped by default**.
+`storm_catalog_schedule` runs at minute 20 UTC and is **stopped by default**. It requests the hours
+after the last published one, up to the previous hour, at most 6 per run, and skips while a catalog
+run is queued or running: a failed hour is caught up at the next tick. Each step retries 3 times
+(30 s, then exponential), and run monitoring fails a run still going after an hour, such as one
+orphaned by a deploy, which frees the `storm-tracks` pool.
 A storm starting at the beginning of an hour therefore reaches publication after 80 minutes when
 silver is available and the run succeeds, within the two-hour target.
 
@@ -231,8 +234,9 @@ Classification (#183/#72) is on main and ADR 0009 is accepted. Before activation
 missing historical `minute_counts` and levels, and bootstrap tracking sequentially
 through the hour before the schedule's first run. The publisher requires a name and persisted
 classification for every indexed storm; it never supplies classification defaults. A missing
-upstream partition stops the run rather than silently starting a new storm chain. Recovery runs
-should cover skipped hours in order; an hourly schedule alone does not repair missing partitions.
+upstream partition stops the run rather than silently starting a new storm chain. The schedule
+catches up 5 hours per hour; after a long outage, a job backfill from the first missing hour is
+faster, 6 hours per run in order.
 
 Replay uses event-time hour chunks of at most 65,536 flashes, encoded with the live SCNT layout.
 Metadata is at most 256 KiB. An oversized export is logged and skipped, retaining its previous

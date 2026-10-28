@@ -68,6 +68,8 @@ class Settings:
     )
     """Overrides for sources slower than that: MTG LI delivers one file per 10 min."""
     heartbeat_every: float = 60.0
+    fetch_timeout: float = 300.0
+    """Seconds before a hung listing or download is abandoned and retried."""
 
 
 class Crash(Exception):
@@ -109,7 +111,9 @@ class IngestLive:
 
     async def poll(self, source: Source) -> int:
         """One listing of `source`; processes every file not spooled yet. Returns how many."""
-        products = await source.list_recent(self._clock())
+        products = await asyncio.wait_for(
+            source.list_recent(self._clock()), self.settings.fetch_timeout
+        )
         done = self.state.spooled_keys(source.name, {p.key: p.etag for p in products})
         todo = sorted((p for p in products if p.key not in done), key=lambda p: (p.start, p.key))
         for product in todo:
@@ -119,7 +123,7 @@ class IngestLive:
         return len(todo)
 
     async def process(self, source: Source, product: Product) -> None:
-        data = await source.fetch(product)
+        data = await asyncio.wait_for(source.fetch(product), self.settings.fetch_timeout)
         received_at = self._clock()
         identity = FileIdentity.of(product.key, data)
         record = self.state.get(identity)
@@ -259,7 +263,11 @@ class IngestLive:
 
     async def disk_loop(self, every: float = 60.0) -> None:
         while not self._stop.is_set():
-            self.check_disk()
+            try:
+                self.check_disk()
+            except Exception:
+                self.metrics.inc("disk_check_errors_total")
+                log.exception("disk check failed")
             await self._sleep(every)
 
     async def heartbeat_loop(self, heartbeat: Pinger) -> None:

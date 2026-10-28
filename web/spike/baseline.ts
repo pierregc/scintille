@@ -35,7 +35,7 @@ void main() {
 	float facing = dot(normal, normalize(cameraPosition - center));
 	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 	float age = time - flash.w;
-	float brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float brightness = flashProfile(age, age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

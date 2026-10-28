@@ -28,6 +28,8 @@ LOG_COLUMNS = [f.name for f in INGEST_LOG.schema.fields]
 QUARANTINE_COLUMNS = [f.name for f in FLASHES_QUARANTINE.schema.fields]
 # Flashes of a product lie within its time window; the margin only widens partition pruning.
 SCOPE_MARGIN = timedelta(hours=1)
+# A product stays listed an hour or two, so an earlier revision was received shortly before.
+REVISION_WINDOW = timedelta(hours=6)
 ALL = AlwaysTrue()
 
 Locker = Callable[[Iterable[str]], AbstractContextManager[object]]
@@ -69,6 +71,15 @@ def silver_scope(products: pl.DataFrame) -> BooleanExpression:
         pl.col("product_start").min() - SCOPE_MARGIN, pl.col("product_end").max() + SCOPE_MARGIN
     ).row(0)
     return And(In(term=Reference("source"), values=sources), _between("event_time", *window))
+
+
+def quarantine_scope(products: pl.DataFrame) -> BooleanExpression:
+    """Quarantine files recent enough to hold an earlier revision; names alone match every file."""
+    if products.is_empty():
+        return ALL
+    since = products["received_at"].min()
+    assert isinstance(since, datetime)
+    return parse(f"ingest_time >= '{(since - REVISION_WINDOW).isoformat()}'")
 
 
 def bronze_scope(products: pl.DataFrame) -> BooleanExpression:
@@ -130,7 +141,10 @@ class LakeCommit:
         }
         files = {b: logs[b]["key"].to_list() for b in batches}
         products = pl.concat(
-            [f.select("source", "product_start", "product_end") for f in logs.values()],
+            [
+                f.select("source", "product_start", "product_end", "received_at")
+                for f in logs.values()
+            ],
             how="vertical_relaxed",
         )
         with self.locker(locks):
@@ -145,7 +159,9 @@ class LakeCommit:
             quarantined = {
                 b: empty if f is None else f.select(QUARANTINE_COLUMNS) for b, f in rejected.items()
             }
-            self._replace(quarantine, "product_file", names, quarantined)
+            self._replace(
+                quarantine, "product_file", names, quarantined, quarantine_scope(products)
+            )
             self.after_commit("quarantine")
         for batch in batches:
             spool.delete(batch)

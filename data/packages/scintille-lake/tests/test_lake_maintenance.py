@@ -5,6 +5,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 from pyiceberg.catalog import Catalog
+from pyiceberg.manifest import ManifestFile
 from pyiceberg.table import Table
 from scintille_lake.cli import main
 from scintille_lake.maintenance import (
@@ -106,3 +107,25 @@ def test_inventory_skips_recent_files() -> None:
 def test_cli_prints_policy(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["maintenance"]) == 0
     assert "--older-than-days 3" in capsys.readouterr().out
+
+
+def test_inventory_reads_each_manifest_once(
+    catalog: Catalog,
+    flash_rows: Callable[[str, Table], pa.Table],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    migrate(catalog)
+    table = catalog.load_table(FLASHES.identifier)
+    for name in ("a.nc", "b.nc", "c.nc", "d.nc"):
+        table.append(flash_rows(name, table))
+    table = catalog.load_table(FLASHES.identifier)
+    reads: list[str] = []
+    fetch = ManifestFile.fetch_manifest_entry
+
+    def counted(self: ManifestFile, *args: object, **kwargs: object) -> object:
+        reads.append(self.manifest_path)
+        return fetch(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ManifestFile, "fetch_manifest_entry", counted)
+    referenced_keys(table)
+    assert len(reads) == len(set(reads)) == 4

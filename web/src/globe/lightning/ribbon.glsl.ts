@@ -1,107 +1,118 @@
 import { CHANNEL, channelGlsl } from './channel';
 import { intensityGlsl } from './intensity';
+import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { zoomGlsl } from './zoom';
 
-export const ribbonVertex = (segments: number) => /* glsl */ `
-attribute vec4 rib;
+/** One channel segment per instance, from the skeletons of `ChannelPool`, drawn as a screen-space ribbon. */
+export const ribbonVertex = /* glsl */ `
+attribute vec2 corner;
+attribute vec4 segA;
+attribute vec4 segB;
+attribute vec4 segC;
 attribute vec4 flash;
-attribute vec3 flashShape;
+attribute vec4 flashShape;
 uniform float time;
+uniform float poolShift;
 uniform float duration;
 uniform float flicker;
 uniform float radius;
 uniform float kmToWorld;
-attribute float channelSeed;
 uniform vec2 viewport;
-uniform float widthPx;
 uniform float halo;
 uniform float haloStrength;
+uniform vec3 sunDirection;
 
 varying vec2 vLocal;
 varying float vLength;
 varying float vLight;
+varying vec3 vTint;
 
+${playbackGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
+${zoomGlsl}
 ${channelGlsl}
-const float S = 16.0;
-const float SAMPLE = ${f(16 / segments)};
 
-// Both kinds keep the same horizontal walk; only their altitude differs.
-vec3 walk(float b, float i, float seed, float L) {
-	float heading = channelHash(seed, 1.0) * 6.2831853;
-	vec3 dir = vec3(cos(heading), sin(heading), 0.0);
-	vec3 p = vec3(-dir.xy * L, 10.0);
-	float stepLen = L * 2.0 / S;
-	float origin = 0.0;
-	if (b > 0.5) {
-		origin = floor(S * (0.15 + 0.6 * channelHash(seed, 10.0 + b)));
-		for (float j = 0.0; j < S; j++) {
-			if (j >= origin) break;
-			p += dir * stepLen + (vec3(channelHash(seed, 100.0 + j), channelHash(seed, 200.0 + j), channelHash(seed, 300.0 + j)) - 0.5) * stepLen * vec3(1.6, 1.6, 0.4);
-		}
-		float turn = (channelHash(seed, 20.0 + b) - 0.5) * 2.4;
-		dir = vec3(cos(heading + turn), sin(heading + turn), 0.0);
-		stepLen *= 0.25 + 0.35 * channelHash(seed, 30.0 + b);
-	}
-	for (float j = 0.0; j < S; j++) {
-		if (j >= i) break;
-		float k = b * 1000.0 + j;
-		p += dir * stepLen + (vec3(channelHash(seed, 100.0 + k), channelHash(seed, 200.0 + k), channelHash(seed, 300.0 + k)) - 0.5) * stepLen * vec3(1.6, 1.6, 0.4);
-	}
-	bool ground = channelHash(seed, 2.0) < ${f(CHANNEL.groundShare)};
-	if (ground) {
-		float progress = (origin + i * (1.0 - origin / S)) / S;
-		p.z = ${f(CHANNEL.cloudBaseKm * CHANNEL.heightExaggeration)} * max(0.0, 1.0 - progress);
-	} else {
-		p.z = clamp(p.z, 8.0, 11.5);
-	}
-	return p;
+void cull() {
+	gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 }
 
 void main() {
-	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
-	vec3 base = (modelMatrix * vec4(flash.xyz * radius, 1.0)).xyz;
-	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-	float age = time - flash.w;
-	float facing = dot(normal, normalize(cameraPosition - base));
-	float brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
-	float end = min(clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), duration * 0.6);
-	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
-	float branchLevel = rib.x > 0.5 ? exp(-age / ${f(CHANNEL.branchTau)}) * 0.7 : 1.0;
-	float light = brightness * fade * branchLevel;
-	if (halo > 0.5) {
-		float distanceKm = length(cameraPosition - base) / kmToWorld;
-		light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distanceKm));
-	}
-	if (light < 0.002) {
-		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+	float seed = flashShape.w;
+	bool ground = isGround(seed);
+	bool branch = segC.z > 0.5;
+	bool inCloud = segC.w > 0.5;
+	// Halos follow the main channel of ground flashes in clear air only; fainter paths keep a bare core.
+	if (segA.w <= 0.0 || (halo > 0.5 && (!ground || branch || inCloud))) {
+		cull();
 		return;
 	}
-	float L = flashShape.y * ${f(CHANNEL.lengthScale)};
+	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
+	vec3 base = (modelMatrix * vec4(flash.xyz * radius, 1.0)).xyz;
+	float at = flash.w + poolShift;
+	float age = wallAge(time, at);
+	float facing = dot(normal, normalize(cameraPosition - base));
+	float distance = length(cameraPosition - base);
+	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
+	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, ground)
+		* intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
+	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
+	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
+
+	// Leaders light the path as they go: in-cloud ones crawl over the flash, ground ones drop at once.
+	float reached = flicker < 0.5 ? 1.0 : ground ? spread(age, end, true) : ${f(CHANNEL.cloudStart)} + ${f(1 - CHANNEL.cloudStart)} * spread(age, end, false);
+	float grown = clamp((reached - segC.x) / max(segC.y - segC.x, 1e-4), 0.0, 1.0);
+	// Branches light once, when the leader reaches them; main channels light again with every pulse.
+	float lit = 1.0;
+	if (branch) {
+		float q = clamp((segC.x - ${f(CHANNEL.cloudStart)}) / ${f(1 - CHANNEL.cloudStart)}, 0.0, 1.0);
+		float reachedAt = ground ? 0.0 : (1.0 - sqrt(1.0 - q)) * ${f(PROFILE.cloudSpread)} * end;
+		lit = exp(-max(age - reachedAt, 0.0) / (ground ? ${f(CHANNEL.branchTau)} : ${f(CHANNEL.cloudBranchTau)}));
+	}
+	float light = brightness * fade * lit * segB.w * channelReveal(flashShape.y, kmPerPx) * step(0.001, grown);
+	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
+	light *= mix(1.0, ${f(CHANNEL.dayLevel)}, smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection))));
+	float width = segA.w;
+	// Inside the cloud a channel is seen through it: wider, softer and dimmer.
+	if (inCloud) {
+		float veiled = max(width, ${f(CHANNEL.veilKm)} / kmPerPx);
+		light *= ${f(CHANNEL.veilLevel)} * sqrt(width / veiled);
+		width = veiled;
+	}
+	// Hairlines draw a pixel wide and give up light instead, so they never break into dashes.
+	if (width < 0.75) {
+		light *= width / 0.75;
+		width = 0.75;
+	}
+	if (light < 0.002) {
+		cull();
+		return;
+	}
 	vec3 east = abs(normal.y) > 0.999 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), normal));
 	vec3 north = cross(normal, east);
-	float distance = length(cameraPosition - base);
-	float pixel = distance / (projectionMatrix[1][1] * viewport.y);
-	float scale = max(kmToWorld, ${f(CHANNEL.minPixels)} * pixel / L);
-	vec3 a = walk(rib.x, rib.y * SAMPLE, channelSeed, L);
-	vec3 b = walk(rib.x, (rib.y + 1.0) * SAMPLE, channelSeed, L);
-	mat3 frame = mat3(east * scale, north * scale, normal * kmToWorld);
+	mat3 frame = mat3(east, north, normal) * kmToWorld;
+	vec3 a = segA.xyz;
+	vec3 b = mix(a, segB.xyz, grown);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);
 	vec4 cb = projectionMatrix * viewMatrix * vec4(base + frame * b, 1.0);
 	vec2 sa = ca.xy / ca.w * viewport;
 	vec2 sb = cb.xy / cb.w * viewport;
 	vec2 t = sb - sa;
 	t = dot(t, t) > 1e-8 ? normalize(t) : vec2(1.0, 0.0);
-	vec4 c = rib.z > 0.5 ? cb : ca;
-	float taper = rib.x > 0.5 ? 1.0 - 0.7 * (rib.y + rib.z) / S : 1.0;
-	float w = widthPx * (halo > 0.5 ? 8.0 : 1.0) * max(taper, 0.5);
-	float along = rib.z > 0.5 ? 1.0 : -1.0;
-	c.xy += (vec2(-t.y, t.x) * rib.w + t * along) * w / viewport * c.w;
+	vec4 c = corner.x > 0.5 ? cb : ca;
+	float w = width * (halo > 0.5 ? 8.0 : 1.0);
+	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, so they never bead.
+	float cap = halo > 0.5 ? 1.0 : 0.5;
+	float along = corner.x > 0.5 ? cap : -cap;
+	c.xy += (vec2(-t.y, t.x) * corner.y + t * along) * w / viewport * c.w;
 	gl_Position = c;
 	vLength = length(sb - sa) / w;
-	vLocal = vec2(rib.z > 0.5 ? vLength + 1.0 : -1.0, rib.w);
-	vLight = light * taper;
+	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
+	vLight = light;
+	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
+	float hue = pulseHash(seed, 120.0);
+	vTint = hue < 0.15 ? vec3(1.0, 0.86, 0.95) : hue < 0.3 ? vec3(1.0, 0.94, 0.86) : vec3(0.86, 0.9, 1.0);
 }
 `;
 
@@ -113,13 +124,21 @@ uniform float halo;
 varying vec2 vLocal;
 varying float vLength;
 varying float vLight;
+varying vec3 vTint;
 void main() {
-	vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
-	float x2 = min(dot(d, d), 1.0);
-	float light = halo > 0.5 ? 0.3 * exp(-x2 * 5.0) * (1.0 - x2) : exp(-x2 * 3.0) * (1.0 - x2);
-	gl_FragColor = vec4(color * exposure * vLight * light, 1.0);
+	float light;
+	if (halo > 0.5) {
+		vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
+		float x2 = min(dot(d, d), 1.0);
+		light = 0.3 * exp(-x2 * 5.0) * (1.0 - x2);
+	} else {
+		float y2 = min(vLocal.y * vLocal.y, 1.0);
+		float ends = clamp((vLocal.x + 0.5), 0.0, 1.0) * clamp((vLength + 0.5 - vLocal.x), 0.0, 1.0);
+		light = exp(-y2 * 3.0) * (1.0 - y2) * ends;
+	}
+	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
+	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }
 `;
-

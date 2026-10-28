@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.5.0"]
-SCHEMA_VERSION: Final = "2.5.0"
+SchemaVersion = Literal["2.6.0"]
+SCHEMA_VERSION: Final = "2.6.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -550,3 +550,158 @@ class StormDetail(BaseModel):
     bounds: StormBounds
     track: list[StormTrackPoint]
     replay: StormReplay
+
+
+class SourceFrontier(BaseModel):
+    """How far a source's data reaches."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Source
+    observed_until: UtcTimestamp | None = Field(
+        description=(
+            "End of the newest product file of this source included; null when none is. "
+            "Its flashes after this time are not in the snapshot yet."
+        )
+    )
+
+
+class PathPoint(BaseModel):
+    """Centroid of a storm's flashes over one 10 minute slice."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    time: UtcTimestamp = Field(
+        description="Mean event time of the slice's flashes, never later than the data."
+    )
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    flash_count: int = Field(ge=1)
+
+
+class ActiveCell(BaseModel):
+    """One active storm and its current cell."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Storm id: the catalog storm_id once provisional is false.",
+    )
+    provisional: bool = Field(
+        description=(
+            "True while the storm started in an hour the catalog has not tracked yet; its"
+            " id may then be replaced."
+        )
+    )
+    previous_ids: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
+        description="Ids this storm had in earlier snapshots, newest first."
+    )
+    slug: str | None = Field(
+        description="Catalog slug once the storm is published (storms/<slug>.json), else null."
+    )
+    name: str | None = Field(
+        description="Short place name once the catalog has named the storm, else null."
+    )
+    level: int = Field(
+        ge=1,
+        description=(
+            "ADR 0009 level on the data so far; it only rises and is never below the catalog's."
+        ),
+    )
+    flashes: int = Field(
+        ge=0, description="Flashes of the storm so far on the source its level is computed from."
+    )
+    t_start: UtcTimestamp = Field(description="First flash of the storm.")
+    t_end: UtcTimestamp = Field(description="Last flash of the storm so far.")
+    lat: float = Field(ge=-90, le=90, description="Centroid of the current cell.")
+    lon: float = Field(ge=-180, le=180)
+    bounds: StormBounds
+    area_km2: float = Field(ge=0, description="Area of the current cell's convex hull.")
+    hull: list[Annotated[list[float], Field(min_length=2, max_length=2)]] = Field(
+        description=(
+            "Closed [lon, lat] ring of the current cell's convex hull, at most 33 points."
+            " Longitudes stay continuous around the centroid, so they may leave -180..180"
+            " near the antimeridian."
+        )
+    )
+    sources: list[Source]
+    split_from: str | None = Field(
+        description="Storm this one split off, when it started that way."
+    )
+    merged: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
+        description="Storms that merged into this one in the open hour."
+    )
+    path: list[PathPoint] = Field(
+        description=(
+            "Observed centroids, oldest first, over at most the last two hours. Older "
+            "positions are in the catalog track."
+        )
+    )
+
+
+EndReason = Literal["expired", "merged", "replaced", "source-gap"]
+END_REASON_VALUES: Final[tuple[EndReason, ...]] = (
+    "expired",
+    "merged",
+    "replaced",
+    "source-gap",
+)
+"""Why a storm left the feed: expired 30 minutes after its last flash (measured on its sources'
+data), merged into another storm, replaced by another id while provisional, or no data from its
+sources for an hour. Only a storm ended by source-gap may come back under the same id.
+"""
+
+
+class EndedStorm(BaseModel):
+    """A storm that left the feed, and where to follow it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(min_length=1, max_length=128)
+    reason: EndReason
+    into: str | None = Field(
+        description="Storm that continues it, for merged and replaced; else null."
+    )
+    t_end: UtcTimestamp = Field(description="Last flash seen for it.")
+    ended_at: UtcTimestamp = Field(description="published_at of the first snapshot without it.")
+
+
+class ActiveStorms(BaseModel):
+    """storms/active.json: storms active now and their current cells, rewritten after each update
+    (ADR 0021).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    published_at: UtcTimestamp = Field(description="When this snapshot was written.")
+    authoritative_until: UtcTimestamp | None = Field(
+        description=(
+            "End of the last hour tracked by the storm catalog. A storm that started "
+            "before it has its final id; null before the first tracked hour."
+        )
+    )
+    update_seconds: int = Field(
+        ge=1,
+        description=(
+            "Typical time between snapshots. Clients judge staleness from published_at, "
+            "never by assuming this cadence."
+        ),
+    )
+    min_level: int = Field(
+        ge=1,
+        description=(
+            "Storms below this intensity level (ADR 0009) are left out of cells and ended."
+        ),
+    )
+    sources: list[SourceFrontier] = Field(
+        description="Data frontier of each source in this snapshot."
+    )
+    cells: list[ActiveCell] = Field(
+        description="Active storms, one current cell each, strongest first."
+    )
+    ended: list[EndedStorm] = Field(
+        description="Storms that left cells during the last two hours, newest first."
+    )
