@@ -2,7 +2,8 @@ import type { StormDetail } from '../../contract/types';
 import type { SceneData } from '../archive';
 import type { SceneClock } from '../clock';
 import type { GlobeControls } from '../controls';
-import { frameStorm } from './framing';
+import type { FlyToOptions } from '../flight';
+import { frameStorm, grazeStorm } from './framing';
 import type { ReplayLocation } from './url';
 import { sameFrame } from './checkpoint';
 
@@ -21,11 +22,12 @@ export class StormReplay {
 	#disposed = false;
 	readonly #offMode: () => void;
 	readonly #listeners = new Set<(origin: Origin) => void>();
+	#graze: { pose: Required<FlyToOptions>; flying: boolean } | null = null;
 
 	constructor(
 		readonly data: Pick<SceneData, 'openStorm' | 'live'>,
 		readonly clock: SceneClock,
-		readonly controls: Pick<GlobeControls, 'flyTo' | 'cancelFlight'>,
+		readonly controls: Pick<GlobeControls, 'flyTo' | 'cancelFlight' | 'isAt'>,
 		readonly baseUrl: string,
 		readonly view: () => { fov: number; aspect: number },
 	) {
@@ -47,6 +49,7 @@ export class StormReplay {
 		if (this.#disposed) return false;
 		const revision = ++this.#revision;
 		this.controls.cancelFlight();
+		this.#graze = null;
 		this.#state = { ...this.#state, loading: slug, error: null };
 		try {
 			const detail = await this.data.openStorm(this.baseUrl, slug, speed);
@@ -90,6 +93,25 @@ export class StormReplay {
 		if (this.clock.mode === 'replay' && !restore?.paused) this.clock.play();
 	}
 
+	/** True while the camera flies to or stays at the horizon view of the open storm. */
+	get grazing(): boolean {
+		const graze = this.#graze;
+		return Boolean(graze && this.#state.selected && (graze.flying || this.controls.isAt(graze.pose)));
+	}
+
+	/** Flies to the horizon view over the storm's current position, or back to the whole storm. */
+	async graze(on: boolean): Promise<boolean> {
+		const detail = this.#state.selected;
+		if (!detail || this.#state.loading || this.#disposed) return false;
+		const { fov, aspect } = this.view();
+		const pose = on ? grazeStorm(detail, this.clock.time()) : frameStorm(detail.bounds, fov, aspect);
+		const graze = on ? { pose, flying: true } : null;
+		this.#graze = graze;
+		const arrived = await this.controls.flyTo(pose);
+		if (graze) graze.flying = false;
+		return arrived;
+	}
+
 	live(origin: Origin = 'user'): Promise<void> {
 		this.#clear();
 		const returning = this.data.live();
@@ -101,6 +123,7 @@ export class StormReplay {
 		const hadState = Boolean(this.#state.selected || this.#state.loading || this.#state.error);
 		this.#revision++;
 		this.controls.cancelFlight();
+		this.#graze = null;
 		this.#state = { selected: null, loading: null, error: null };
 		return hadState;
 	}
