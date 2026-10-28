@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { PerspectiveCamera, Scene, Vector2, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
@@ -15,12 +15,13 @@ import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
 import { createEarth } from './earth';
-import { kmToWorld } from './flight';
+import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
+import { bloomStrength } from './lightning/zoom';
 import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
-import { createPostProcessing, type PostProcessing } from './post';
+import { BLOOM, createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
@@ -55,7 +56,7 @@ export interface GlobeApp {
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
 	readonly thunder: Thunder;
-	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
+	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
@@ -159,7 +160,7 @@ export function createGlobeApp(
 		lightMapWidth: preset.cloudLight ? 1024 : 0,
 	});
 	scene.add(lightning.mesh);
-	clouds.setFlashLight(lightning.lightMap);
+	clouds.setFlashLight(lightning.light);
 	const thunder = createThunder(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
@@ -210,6 +211,7 @@ export function createGlobeApp(
 
 	const playbackDelays = () => (clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY);
 
+	const viewport = new Vector2();
 	const fitClipPlanes = () => {
 		const { near, far } = clipPlanes(camera.position.length(), RADIUS, SHELLS);
 		if (near === camera.near && far === camera.far) return;
@@ -231,12 +233,17 @@ export function createGlobeApp(
 		stars.setTime(now);
 		data.update(now);
 		const delays = playbackDelays();
-		lightning.setTime(now, delays);
+		lightning.stormView = clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading);
+		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		thunder.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
-		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer);
-		if (post) post.render();
-		else renderer.render(scene, camera);
+		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
+		if (post) {
+			// Bloom follows the camera height only, so a view never pumps with its own flashes.
+			const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
+			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength));
+			post.render();
+		} else renderer.render(scene, camera);
 	};
 	if (!renderParams) renderer.setAnimationLoop(draw);
 	const render = renderParams

@@ -1,12 +1,11 @@
 /** Thin lightning channel drawn over the glow while a flash flickers; see docs/flash-profile.md. */
 export const CHANNEL = {
-	/** Channel half-length relative to the flash radius, and its floor in pixels so shapes stay readable from far. */
+	/** Channel half-length relative to the flash radius, always physical. */
 	lengthScale: 2.2,
 	/** Rendering choices, not satellite classifications. */
 	groundShare: 0.25,
 	cloudBaseKm: 7,
 	heightExaggeration: 2.5,
-	minPixels: 6,
 	/** The channel fades out this long after the flicker phase, seconds. */
 	fade: 0.15,
 	/** Branches only light on the first pulse: their decay constant, seconds. */

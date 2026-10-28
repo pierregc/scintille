@@ -1,10 +1,12 @@
 import {
+	AddEquation,
 	AdditiveBlending,
 	BufferAttribute,
 	Color,
 	CustomBlending,
 	MaxEquation,
 	OneFactor,
+	OneMinusSrcColorFactor,
 	DynamicDrawUsage,
 	HalfFloatType,
 	InstancedBufferGeometry,
@@ -15,8 +17,12 @@ import {
 	Points,
 	Scene,
 	ShaderMaterial,
+	type Camera,
+	RedFormat,
 	type Texture,
 	Vector2,
+	Vector3,
+	Vector4,
 	WebGLRenderTarget,
 	type WebGLRenderer,
 } from 'three';
@@ -30,6 +36,8 @@ import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
+import { FlashPlayback } from './playback';
+import { MAX_LIFE } from './profile';
 
 export { DISPLAY_MINUTES } from './display';
 export { FlashInstances } from './instances';
@@ -47,18 +55,29 @@ export interface LightningOptions {
 	lightMapWidth?: number;
 }
 
+/** Glow of recent flashes over an equirectangular window: centre longitude and latitude, half extents, radians. */
+export interface FlashLight {
+	map: Texture;
+	window: Vector4;
+}
+
 export interface Lightning {
 	mesh: Mesh;
-	/** Uploads new flashes and sets the scene time (UTC ms) flashes are aged against, each source `delays` behind. */
-	setTime(utcMs: number, delays?: SourceDelays): void;
-	/** Minutes of scene time a flash stays on screen. */
+	/**
+	 * Uploads new flashes and sets the scene time (UTC ms) flashes are aged against, each source `delays`
+	 * behind; `speed` is the replay speed, which flickers never follow.
+	 */
+	setTime(utcMs: number, delays?: SourceDelays, speed?: number): void;
+	/** Afterglow chosen for the globe overview, minutes of scene time. */
 	readonly displayMinutes: number;
-	/** Changes how long flashes stay on screen, from the data already loaded, and remembers the choice. */
+	/** Changes the afterglow, from the data already loaded, and remembers the choice. */
 	setDisplayMinutes(minutes: number): void;
-	/** Glow of recent flashes in Earth UV space, or null when disabled. */
-	lightMap: Texture | null;
-	/** Redraws the light map; call once per frame before the main render. */
-	renderLightMap(renderer: WebGLRenderer): void;
+	/** A storm view shows each flash alone, whatever the afterglow chosen. */
+	stormView: boolean;
+	/** Null when disabled. */
+	light: FlashLight | null;
+	/** Redraws the light map around what `camera` looks at; call once per frame before the main render. */
+	renderLightMap(renderer: WebGLRenderer, camera: Camera): void;
 	dispose(): void;
 }
 
@@ -67,12 +86,30 @@ class NumberUniform {
 	value = 0.5;
 }
 
+/** Seconds for the channel halo to fade in or out when the channel count crosses its budget. */
+const HALO_FADE = 0.25;
+
+/**
+ * Overlapping flashes add up on the globe. A storm view shows a minute of flashes at once at 60×:
+ * glows screen-blend, so they never pile up into white and still show on sunlit clouds, and the
+ * cloud light keeps the brightest flash at each point.
+ */
+function blendFlashes(material: ShaderMaterial, mode: 'add' | 'max' | 'screen'): void {
+	material.blending = mode === 'add' ? AdditiveBlending : CustomBlending;
+	material.blendEquation = mode === 'max' ? MaxEquation : AddEquation;
+	material.blendSrc = OneFactor;
+	material.blendDst = mode === 'screen' ? OneMinusSrcColorFactor : OneFactor;
+}
+
 /** All flashes of the ring in one instanced draw call, aged on the GPU. */
 export function createLightning(
 	ring: FlashRing,
 	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024 }: LightningOptions = {},
 ): Lightning {
 	let displayMinutes = readDisplayMinutes(storage);
+	let stormView = false;
+	const shownMinutes = () => (stormView ? 0 : displayMinutes);
+	const playback = new FlashPlayback();
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute(
 		'position',
@@ -95,17 +132,21 @@ export function createLightning(
 	geometry.instanceCount = 0;
 
 	const time = new NumberUniform();
+	const speed = new NumberUniform();
+	const pivot = new NumberUniform();
+	const pivotSpeed = new NumberUniform();
 	const material = new ShaderMaterial({
 		vertexShader: lightningVertexShader,
 		fragmentShader: lightningFragmentShader,
 		uniforms: {
 			time,
+			speed,
+			pivot,
+			pivotSpeed,
 			duration: { value: displayMs(displayMinutes) / 1000 },
 			radius: { value: radius },
 			lift: { value: CLOUD_TOP_KM / EARTH_RADIUS_KM },
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
-			glowScale: { value: 4 },
-			minPixels: { value: 5 },
 			viewportHeight: { value: 1 },
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
@@ -169,7 +210,7 @@ export function createLightning(
 	channelMesh.renderOrder = 3;
 	haloMesh.onBeforeRender = channelMesh.onBeforeRender;
 
-	const lightMap = lightMapWidth > 0 ? createLightMap(geometry, material, lightMapWidth) : null;
+	const lightMap = lightMapWidth > 0 ? createLightMap(geometry, material, lightMapWidth, radius) : null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
 	const applyMotion = () => {
@@ -189,17 +230,34 @@ export function createLightning(
 		material.uniforms.viewportHeight.value = renderer.getSize(size).y;
 	};
 
+	const applyDisplay = () => {
+		const ms = displayMs(shownMinutes());
+		instances.lookbackMs = ms;
+		material.uniforms.duration.value = ms / 1000;
+	};
+	let lastWall = Number.NaN;
+
 	return {
 		mesh,
-		setTime(utcMs, delays) {
+		setTime(utcMs, delays, replaySpeed = 1) {
+			playback.update(utcMs, replaySpeed);
+			instances.lookbackMs = Math.max(displayMs(shownMinutes()), playback.span(MAX_LIFE, utcMs));
 			instances.sync(utcMs, delays);
 			geometry.instanceCount = instances.count;
 			time.value = (utcMs - instances.origin) / 1000;
-			channels.sync(utcMs, instances.origin, displayMs(displayMinutes) / 1000, delays);
+			speed.value = playback.speed;
+			pivot.value = Number.isFinite(playback.pivot) ? (playback.pivot - instances.origin) / 1000 : -1e9;
+			pivotSpeed.value = playback.pivotSpeed;
+			channels.sync(utcMs, instances.origin, playback, delays);
 			channelGeometry.instanceCount = channels.count;
-			const haloEnabled = channels.count <= CHANNEL.haloCapacity;
-			haloGeometry.instanceCount = haloEnabled ? channels.count : 0;
-			material.uniforms.haloStrength.value = haloEnabled ? 1 : 0;
+			const now = performance.now();
+			const step = Number.isFinite(lastWall) ? Math.min((now - lastWall) / 1000, HALO_FADE) : HALO_FADE;
+			lastWall = now;
+			const haloTarget = channels.count <= CHANNEL.haloCapacity ? 1 : 0;
+			const halo = material.uniforms.haloStrength;
+			if (haloTarget > halo.value) halo.value = Math.min(1, halo.value + step / HALO_FADE);
+			else if (haloTarget < halo.value) halo.value = Math.max(0, halo.value - step / HALO_FADE);
+			haloGeometry.instanceCount = halo.value > 0 ? channels.count : 0;
 			if (channels.count > 0) {
 				channelBuffer.clearUpdateRanges();
 				channelBuffer.addUpdateRange(0, channels.count * CHANNEL_STRIDE);
@@ -212,13 +270,22 @@ export function createLightning(
 		setDisplayMinutes(minutes) {
 			assertDisplayMinutes(minutes);
 			displayMinutes = minutes;
-			instances.lookbackMs = displayMs(minutes);
-			material.uniforms.duration.value = displayMs(minutes) / 1000;
+			applyDisplay();
 			writeDisplayMinutes(storage, minutes);
 		},
-		lightMap: lightMap?.target.texture ?? null,
-		renderLightMap(renderer) {
-			lightMap?.render(renderer);
+		get stormView() {
+			return stormView;
+		},
+		set stormView(on) {
+			if (on === stormView) return;
+			stormView = on;
+			applyDisplay();
+			blendFlashes(material, on ? 'screen' : 'add');
+			lightMap?.blend(on);
+		},
+		light: lightMap?.light ?? null,
+		renderLightMap(renderer, camera) {
+			lightMap?.render(renderer, camera);
 		},
 		dispose() {
 			lightMap?.dispose();
@@ -233,14 +300,36 @@ export function createLightning(
 	};
 }
 
-/** Renders the flashes into a low-resolution equirectangular glow map, wrapped at the dateline. */
-function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number) {
-	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, depthBuffer: false });
+/** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */
+export function lightWindow(target: { lat: number; lon: number }, heightKm: number, out = new Vector4()): Vector4 {
+	const halfLat = Math.min(Math.PI / 2, (LIGHT_WINDOW.heightScale * heightKm) / EARTH_RADIUS_KM);
+	const lat = Math.min(Math.max(target.lat, -Math.PI / 2 + halfLat), Math.PI / 2 - halfLat);
+	// Wide enough at the poleward edge too, up to the whole circle at a pole.
+	const halfLon = Math.min(Math.PI, (2 * halfLat) / Math.max(Math.cos(Math.abs(lat) + halfLat), 1e-3));
+	return out.set(target.lon, lat, halfLon, halfLat);
+}
+
+export const LIGHT_WINDOW = {
+	/** Half height of the window over the camera height. */
+	heightScale: 3,
+	/** Splat radius over the observed radius, near and far, and the splat floor far away, km. */
+	nearSplat: 2,
+	farSplat: 3,
+	farSpreadKm: 150,
+} as const;
+
+/** Renders the flashes into an equirectangular glow map around what the camera looks at, wrapped at the antimeridian. */
+function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number, radius: number) {
+	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, format: RedFormat, depthBuffer: false });
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
-	const { time, duration, flicker } = flashes.uniforms;
+	const { time, duration, flicker, speed, pivot, pivotSpeed } = flashes.uniforms;
+	const window = new Vector4(0, 0, Math.PI, Math.PI / 2);
+	const splat = { value: LIGHT_WINDOW.farSplat as number };
+	const spread = { value: LIGHT_WINDOW.farSpreadKm as number };
+	const minSplat = { value: 0 };
 	const scene = new Scene();
 	const camera = new OrthographicCamera();
 	const materials = [0, 1].map(
@@ -252,7 +341,13 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 					time,
 					duration,
 					flicker,
-					spreadKm: { value: 150 },
+					speed,
+					pivot,
+					pivotSpeed,
+					window: { value: window },
+					splat,
+					spreadKm: spread,
+					minSplatKm: minSplat,
 					wrap: { value: wrap },
 					mapSize: { value: new Vector2(width, width / 2) },
 				},
@@ -267,9 +362,32 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 		scene.add(points);
 	}
 	const clearColor = new Color();
+	const eye = new Vector3();
+	const forward = new Vector3();
+	const aim = { lat: 0, lon: 0 };
 	return {
 		target,
-		render(renderer: WebGLRenderer) {
+		light: { map: target.texture, window },
+		blend(alone: boolean) {
+			for (const material of materials) blendFlashes(material, alone ? 'max' : 'add');
+		},
+		render(renderer: WebGLRenderer, view: Camera) {
+			view.getWorldPosition(eye);
+			view.getWorldDirection(forward);
+			const height = Math.max(0, eye.length() - radius);
+			// The point looked at, or the one below the camera when looking past the globe.
+			const b = eye.dot(forward);
+			const c = eye.lengthSq() - radius * radius;
+			const hit = b * b - c;
+			const point = hit > 0 && b < 0 ? forward.multiplyScalar(-b - Math.sqrt(hit)).add(eye) : forward.copy(eye);
+			point.normalize();
+			aim.lat = Math.asin(Math.min(1, Math.max(-1, point.y)));
+			aim.lon = Math.atan2(-point.z, point.x);
+			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, window);
+			const whole = window.w / (Math.PI / 2);
+			splat.value = LIGHT_WINDOW.nearSplat + (LIGHT_WINDOW.farSplat - LIGHT_WINDOW.nearSplat) * whole;
+			spread.value = LIGHT_WINDOW.farSpreadKm * whole * whole;
+			minSplat.value = (4 * window.w * EARTH_RADIUS_KM) / (width / 2);
 			const previous = renderer.getRenderTarget();
 			renderer.getClearColor(clearColor);
 			const clearAlpha = renderer.getClearAlpha();

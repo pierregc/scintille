@@ -290,22 +290,24 @@ async function record(page, ms, sync = false) {
 	return page.evaluate(() => { const b = globalThis.scintilleBench; b.recording = false; return b.frames; });
 }
 
-/** Flashes inside the display window at the current scene time, from the app's ring. */
+/** Flashes on screen at the current scene time, from the app's ring: a wall clock second of flashes, or the afterglow window. */
 function activeFlashes() {
 	const app = globalThis.scintilleBench.app;
 	const { ring, delays } = app.debug;
 	const now = app.clock.time();
 	const d = delays();
-	const span = Math.max(1, app.lightning.displayMinutes) * 60_000;
+	const minutes = app.lightning.stormView ? 0 : app.lightning.displayMinutes;
+	const speed = app.clock.mode === 'replay' ? app.clock.speed : 1;
+	const span = Math.max(minutes * 60_000, 1000 * speed);
 	let active = 0;
 	let flicker = 0;
 	for (let i = 0; i < ring.size; i++) {
 		const s = ring.slot(i);
 		const age = now - (ring.time[s] + d.ms[ring.source[s]]);
 		if (age >= 0 && age < span) active++;
-		if (age >= 0 && age < 750) flicker++;
+		if (age >= 0 && age < 750 * speed) flicker++;
 	}
-	return { held: ring.size, active, flicker, displayMinutes: app.lightning.displayMinutes, sceneTime: new Date(now).toISOString() };
+	return { held: ring.size, active, flicker, displayMinutes: minutes, speed, sceneTime: new Date(now).toISOString() };
 }
 
 /** Pose templates from the reference file, centred on the storm. */

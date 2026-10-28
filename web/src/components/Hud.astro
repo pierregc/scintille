@@ -93,7 +93,7 @@ import Version from './Version.astro';
 			<p class="frame" data-cloud-time hidden></p>
 			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
 		</div>
-		<div class="afterglow">
+		<div class="afterglow" data-afterglow>
 			<span class="cap" id="afterglow-label">Afterglow</span>
 			<div class="opts" role="radiogroup" aria-labelledby="afterglow-label" data-display></div>
 		</div>
@@ -401,6 +401,12 @@ import Version from './Version.astro';
 		color: var(--ink);
 		border-bottom-color: var(--soft);
 	}
+	.opts :global(button:disabled) {
+		cursor: default;
+	}
+	.opts :global(button:disabled:not([aria-checked='true']):hover) {
+		color: var(--dim);
+	}
 	.opts :global(small) {
 		color: var(--dim);
 		font: 300 9.5px/1 var(--mono);
@@ -632,6 +638,7 @@ import Version from './Version.astro';
 		const shareInput = $<HTMLInputElement>('[data-share-url]');
 		const shareStatus = $('[data-share-status]');
 		const display = $('[data-display]');
+		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
 		let shareStorm: string | undefined;
 
@@ -696,14 +703,18 @@ import Version from './Version.astro';
 			const credit = app?.cloudStatus().attribution?.trim().replace(/\.+$/, '');
 			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
 			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
+			const stormView = app?.lightning.stormView ?? false;
+			if (afterglow) afterglow.title = stormView ? 'Storm views show each flash alone' : '';
 			for (const { minutes, button } of displayButtons) {
-				const checked = app?.lightning.displayMinutes === minutes;
+				const checked = (stormView ? 0 : app?.lightning.displayMinutes) === minutes;
 				button.setAttribute('aria-checked', String(checked));
+				button.disabled = stormView;
 				button.tabIndex = checked ? 0 : -1;
 			}
 		};
 
 		const chooseDisplay = (index: number) => {
+			if (app?.lightning.stormView) return;
 			const choice = displayButtons[(index + displayButtons.length) % displayButtons.length];
 			app?.lightning.setDisplayMinutes(choice.minutes);
 			tick();

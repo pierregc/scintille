@@ -55,7 +55,7 @@ void main() {
 	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 	float age = time - flash.w;
 	float facing = dot(normal, normalize(cameraPosition - base));
-	float brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float brightness = flashProfile(age, age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
 	float end = min(clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), duration * 0.6);
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 	float branchLevel = rib.x > 0.5 ? exp(-age / ${f(CHANNEL.branchTau)}) * 0.7 : 1.0;
@@ -69,7 +69,7 @@ void main() {
 	vec3 north = cross(normal, east);
 	float distance = length(cameraPosition - base);
 	float pixel = distance / (projectionMatrix[1][1] * viewport.y);
-	float scale = max(kmToWorld, ${f(CHANNEL.minPixels)} * pixel / L);
+	float scale = max(kmToWorld, 6.0 * pixel / L);
 	vec3 a = walk(rib.x, rib.y, channelSeed, L);
 	vec3 b = walk(rib.x, rib.y + 1.0, channelSeed, L);
 	mat3 frame = mat3(east * scale, north * scale, normal * kmToWorld);

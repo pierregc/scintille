@@ -1,5 +1,6 @@
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import { CHANNEL, channelHash } from './channel';
+import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 
 export const CHANNEL_STRIDE = 8;
@@ -15,9 +16,9 @@ export class ChannelInstances {
 		this.data = new Float32Array(capacity * CHANNEL_STRIDE);
 	}
 
-	sync(sceneTime: number, origin: number, displaySeconds: number, delays: SourceDelays = NO_DELAY): void {
+	sync(sceneTime: number, origin: number, playback = new FlashPlayback(), delays: SourceDelays = NO_DELAY): void {
 		const ring = this.ring;
-		const cutoff = sceneTime - (PROFILE.maxFlicker + CHANNEL.fade) * 1000 - delays.max;
+		const cutoff = sceneTime - playback.span(PROFILE.maxFlicker + CHANNEL.fade, sceneTime) - delays.max;
 		let lo = 0;
 		let hi = ring.size;
 		while (lo < hi) {
@@ -30,9 +31,9 @@ export class ChannelInstances {
 			const s = ring.slot(i);
 			if (ring.time[s] > sceneTime - delays.min) break;
 			const playsAt = ring.time[s] + delays.ms[ring.source[s]];
-			const age = (sceneTime - playsAt) / 1000;
-			const end = Math.min(flickerLength(ring.durationMs[s]), displaySeconds * 0.6) + CHANNEL.fade;
-			if (age < 0 || age >= end) continue;
+			if (playsAt > sceneTime) continue;
+			const age = playback.age(playsAt, sceneTime);
+			if (age >= flickerLength(ring.durationMs[s]) + CHANNEL.fade) continue;
 			const lat = ring.lat[s] * Math.PI / 180;
 			const lon = ring.lon[s] * Math.PI / 180;
 			const o = (this.count % this.capacity) * CHANNEL_STRIDE;

@@ -122,6 +122,9 @@ function build(c: Case) {
 	const fl = makeFlashes(c.active, c.glowing, TIME, DISPLAY, c.altitudeKm > 5000 ? 30 : 6);
 	const common = {
 		time: { value: TIME },
+		speed: { value: 1 },
+		pivot: { value: -1e9 },
+		pivotSpeed: { value: 1 },
 		duration: { value: DISPLAY },
 		flicker: { value: 1 },
 		haloStrength: { value: c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? 1 : 0 },
