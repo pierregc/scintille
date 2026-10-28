@@ -18,6 +18,7 @@ import { twilightUniforms } from './twilight';
 
 export interface Earth {
 	mesh: Mesh;
+	material: ShaderMaterial;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
 	/** Equirectangular mask of the areas without lightning data (red channel), shaded on the surface. */
@@ -61,6 +62,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 			terminatorTint: { value: 0.5 },
 			coverageMap: { value: noGaps },
 			coverageShade: { value: 1 },
+			uvRect: { value: new Vector4(0, 0, 1, 1) },
 		},
 	});
 	const mesh = new Mesh(geometry, material);
@@ -93,6 +95,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 
 	return {
 		mesh,
+		material,
 		setTime(utcMs) {
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
 		},

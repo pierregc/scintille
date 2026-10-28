@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--no-clouds] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--no-clouds] [--surface base|tiles|vectors|both] [--headed] [--video]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -22,6 +22,7 @@ const { values } = parseArgs({
 		seconds: { type: 'string', default: '8' },
 		storm: { type: 'string' },
 		afterglow: { type: 'string' },
+		surface: { type: 'string' },
 		clouds: { type: 'boolean', default: true },
 		headed: { type: 'boolean', default: false },
 		video: { type: 'boolean', default: false },
@@ -357,6 +358,7 @@ async function benchStorm(browser, storm, outDir) {
 	first.searchParams.set('storm', storm.slug);
 	first.searchParams.set('time', storm.time);
 	first.searchParams.set('paused', '1');
+	if (values.surface) first.searchParams.set('surface', values.surface);
 	const started = performance.now();
 	await page.goto(first.href);
 	await page.waitForFunction(() => globalThis.scintilleBench?.app && !globalThis.scintilleBench.app.replay.state.loading && globalThis.scintilleBench.app.replay.state.selected);
@@ -402,7 +404,7 @@ async function benchStorm(browser, storm, outDir) {
 		}, storm.time);
 		result.poses[name] = {
 			view,
-			share: `${base}?storm=${storm.slug}&time=${storm.time}&paused=1&view=${view ?? (target ? viewParam(target) : '')}`,
+			share: `${base}?storm=${storm.slug}&time=${storm.time}&paused=1&view=${view ?? (target ? viewParam(target) : '')}${values.surface ? `&surface=${values.surface}` : ''}`,
 			flight: { arrived: flight.arrived, ms: Math.round(flight.ms), ...frameStats(flight.frames) },
 			transferBytes: transfer.take(),
 			paused,
@@ -411,6 +413,7 @@ async function benchStorm(browser, storm, outDir) {
 			flashes,
 			quality: await page.evaluate(() => document.querySelector('canvas')?.dataset.quality ?? null),
 			memory: await page.evaluate(() => globalThis.scintilleBench.memory()),
+			surface: await page.evaluate(() => globalThis.scintilleBench.app.surface?.stats() ?? null),
 			screenshot: shot,
 			exposure: await exposure,
 		};
@@ -438,6 +441,7 @@ const report = {
 	url: base,
 	profile: values.profile,
 	afterglow: values.afterglow ?? 'per storm',
+	surface: values.surface ?? null,
 	clouds: values.clouds,
 	gl: values.gl,
 	headed: values.headed,
