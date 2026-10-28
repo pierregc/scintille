@@ -514,3 +514,20 @@ def test_collector_renders_complete_slots_at_once(tmp_path: Path) -> None:
     assert not any(tmp_path.iterdir())
     manifest = json.loads(asyncio.run(c.publisher.live.get("manifest.json")) or b"{}")
     assert manifest["frames"][-1]["detail"]["levels"] == [3, 4, 5]
+
+
+def test_collector_clears_work_left_by_a_restart(tmp_path: Path) -> None:
+    left = tmp_path / "20261018T1300" / "raw"
+    left.mkdir(parents=True)
+    (left / "disk.nc").write_bytes(b"x")
+    c = collector(sources(with_fci=False), SLOT + timedelta(minutes=20), tmp_path)
+    c.cadence = 0.01
+
+    async def run_once() -> None:
+        task = asyncio.create_task(c.run())
+        await asyncio.sleep(0.05)
+        c.stop()
+        await task
+
+    asyncio.run(run_once())
+    assert not (tmp_path / "20261018T1300").exists()

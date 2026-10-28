@@ -245,6 +245,11 @@ class CompositeCollector:
             },
         )
 
+    def _clear_work(self) -> None:
+        """Frames cut short by a restart leave gigabytes behind."""
+        for directory in self.work_dir.glob("[0-9]" * 8 + "T" + "[0-9]" * 4):
+            shutil.rmtree(directory, ignore_errors=True)
+
     def _fallback(self, slot: datetime) -> Mosaic | None:
         """The newest GMGSI mosaic at most two hours before the slot, if any."""
         if self.fallback is None:
@@ -278,6 +283,7 @@ class CompositeCollector:
 
     async def run(self) -> None:
         await self.publisher.restore()
+        await asyncio.to_thread(self._clear_work)
         failures = 0
         while not self._stop.is_set():
             try:
