@@ -5,6 +5,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { SURFACE_VERSION } from './textures/surface.mjs';
 
 const WEB = join(import.meta.dirname, '..');
@@ -72,17 +73,42 @@ async function assertSurfaceReady() {
 	return false;
 }
 
-async function upload(bucket, groups, location) {
+/** Objects already published, read through the public domain: R2's own API has no listing in Wrangler. */
+async function unpublished(entries) {
+	const left = [];
+	let next = 0;
+	await Promise.all(Array.from({ length: 16 }, async () => {
+		while (next < entries.length) {
+			const entry = entries[next++];
+			const res = await fetch(`${PUBLIC}/${entry.key}`, { method: 'HEAD' });
+			if (!res.ok) left.push(entry);
+		}
+	}));
+	return left;
+}
+
+/**
+ * One `wrangler r2 bulk put` per group of headers. With `resume`, a failed group (rate limit, gateway
+ * timeout) waits, then sends only what is not published yet.
+ */
+async function upload(bucket, groups, location, { resume = false, attempts = 3 } = {}) {
 	const dir = await mkdtemp(join(tmpdir(), 'scintille-r2-'));
 	try {
 		for (const [i, group] of groups.entries()) {
 			const list = join(dir, `${i}.json`);
-			await writeFile(list, JSON.stringify(group.entries));
-			const args = ['r2', 'bulk', 'put', bucket, '--filename', list, location];
-			args.push('--content-type', group.type, '--cache-control', group.cache);
-			console.log(`${bucket}: ${group.entries.length} objects (${group.type})`);
-			const run = spawnSync('wrangler', args, { cwd: WEB, stdio: 'inherit', shell: false });
-			if (run.status !== 0) throw new Error(`wrangler exited with ${run.status ?? run.signal}`);
+			for (let attempt = 1; ; attempt++) {
+				const entries = resume ? await unpublished(group.entries) : group.entries;
+				if (entries.length === 0) break;
+				await writeFile(list, JSON.stringify(entries));
+				const args = ['r2', 'bulk', 'put', bucket, '--filename', list, location, '--concurrency', resume ? '4' : '20'];
+				args.push('--content-type', group.type, '--cache-control', group.cache);
+				console.log(`${bucket}: ${entries.length} objects (${group.type})`);
+				const run = spawnSync('wrangler', args, { cwd: WEB, stdio: 'inherit', shell: false });
+				if (run.status === 0) break;
+				if (attempt === attempts) throw new Error(`wrangler exited with ${run.status ?? run.signal}`);
+				console.warn(`${bucket}: wrangler exited with ${run.status ?? run.signal}, retrying in a minute`);
+				await sleep(60_000);
+			}
 		}
 	} finally {
 		await rm(dir, { recursive: true, force: true });
@@ -103,7 +129,9 @@ async function main([what, flag]) {
 	if (what === 'surface' && flag === undefined) {
 		const groups = surfacePlan(await files(SURFACE));
 		if (!(await assertSurfaceReady())) return;
-		return upload('scintille-live', groups, '--remote');
+		const [tiles, manifest] = groups;
+		await upload('scintille-live', [tiles], '--remote', { resume: true, attempts: 30 });
+		return upload('scintille-live', [manifest], '--remote');
 	}
 	throw new Error('usage: r2-upload.mjs fixtures --local | fixtures --preview | textures | surface');
 }
