@@ -89,6 +89,10 @@ class NumberUniform {
 /** Seconds for the channel halo to fade in or out when the channel count crosses its budget. */
 const HALO_FADE = 0.25;
 
+/** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
+export const STORM_VIEW_FLASHES = 500;
+const BUDGET_FADE = 0.15;
+
 /**
  * Overlapping flashes add up on the globe. A storm view shows a minute of flashes at once at 60×:
  * glows screen-blend, so they never pile up into white and still show on sunlit clouds, and the
@@ -135,6 +139,8 @@ export function createLightning(
 	const speed = new NumberUniform();
 	const pivot = new NumberUniform();
 	const pivotSpeed = new NumberUniform();
+	const budgetFrom = new NumberUniform();
+	const budgetFade = new NumberUniform();
 	const material = new ShaderMaterial({
 		vertexShader: lightningVertexShader,
 		fragmentShader: lightningFragmentShader,
@@ -143,6 +149,8 @@ export function createLightning(
 			speed,
 			pivot,
 			pivotSpeed,
+			budgetFrom,
+			budgetFade,
 			duration: { value: displayMs(displayMinutes) / 1000 },
 			radius: { value: radius },
 			lift: { value: CLOUD_TOP_KM / EARTH_RADIUS_KM },
@@ -247,6 +255,10 @@ export function createLightning(
 			speed.value = playback.speed;
 			pivot.value = Number.isFinite(playback.pivot) ? (playback.pivot - instances.origin) / 1000 : -1e9;
 			pivotSpeed.value = playback.pivotSpeed;
+			// At high replay speeds a storm view would show thousands of flashes at once: keep the newest.
+			const from = stormView ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
+			budgetFrom.value = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
+			budgetFade.value = BUDGET_FADE * playback.speed;
 			channels.sync(utcMs, instances.origin, playback, delays);
 			channelGeometry.instanceCount = channels.count;
 			const now = performance.now();
@@ -308,6 +320,18 @@ export const LIGHT_WINDOW = {
 	farSpreadKm: 150,
 } as const;
 
+/** Scene time (UTC ms) of the `count`-th newest flash played by `now`, or -Infinity when fewer have played. */
+export function budgetStart(ring: FlashRing, now: number, count: number): number {
+	let lo = 0;
+	let hi = ring.size;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (ring.time[ring.slot(mid)] <= now) lo = mid + 1;
+		else hi = mid;
+	}
+	return lo > count ? ring.time[ring.slot(lo - count)] : Number.NEGATIVE_INFINITY;
+}
+
 /** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */
 export function lightWindow(target: { lat: number; lon: number }, heightKm: number, out = new Vector4()): Vector4 {
 	const halfLat = Math.min(Math.PI / 2, (LIGHT_WINDOW.heightScale * heightKm) / EARTH_RADIUS_KM);
@@ -325,7 +349,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
-	const { time, duration, flicker, speed, pivot, pivotSpeed } = flashes.uniforms;
+	const { time, duration, flicker, speed, pivot, pivotSpeed, budgetFrom, budgetFade } = flashes.uniforms;
 	const bounds = new Vector4(0, 0, Math.PI, Math.PI / 2);
 	const splat = { value: LIGHT_WINDOW.farSplat as number };
 	const spread = { value: LIGHT_WINDOW.farSpreadKm as number };
@@ -344,6 +368,8 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 					speed,
 					pivot,
 					pivotSpeed,
+					budgetFrom,
+					budgetFade,
 					window: { value: bounds },
 					splat,
 					spreadKm: spread,

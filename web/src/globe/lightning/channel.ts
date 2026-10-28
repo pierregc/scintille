@@ -23,7 +23,7 @@ export const CHANNEL = {
 	/** Share of the glow held back while the channel shows, so the cloud does not wash it out; in-cloud flashes keep more. */
 	glowDip: 0.6,
 	haloGlowDip: 0.9,
-	cloudGlowDip: 0.5,
+	cloudGlowDip: 0.6,
 	haloCapacity: 512,
 	haloFadeStartKm: 1500,
 	haloFadeEndKm: 6000,

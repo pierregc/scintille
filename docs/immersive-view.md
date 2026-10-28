@@ -130,6 +130,25 @@ Physical scale and compensation:
   blending, the cloud light keeps the brightest flash, and bloom and cloud light scale with how
   dark the scene is, so overlaps and sunlit clouds never turn white.
 
+Measured on 2026-10-28 with a local production build of #254 against production data, on the same
+Mac as the baseline; captures at the four poses in [`immersive/lightning-scale/`](immersive/lightning-scale/).
+The Mac also ran other GPU jobs that evening, so frame costs swung by up to 3 times between runs of the
+same build; the figures below compare builds run back to back.
+
+| | #254 | `main` |
+|---|---|---|
+| Frame cost, desktop, 60×, quiet repetitions of interleaved runs (R1, R2, R5; `regional`, `iss`, `window`) | 7.3 to 9.1 ms | 6.8 to 7.8 ms |
+| Frame cost p95, mobile emulation, 60×, all storms and poses | 2.8 to 6.4 ms, tier `medium` | 2.2 to 5.5 ms |
+| 3 s flights | no interval over 50 ms | same |
+| Near white pixels, bench screenshot (paused at 60×) | at most 0.9 % (R1 `iss`), desktop | 0 % |
+| Flashes on screen at once, 60× | up to about 360 (R1) | under a second of scene time |
+| GPU textures and buffers | 283 MB desktop, 243 MB mobile | 285 MB, 245 MB |
+| First load, zoom transfer | unchanged | |
+
+At 600× and 3600×, the 500 flash budget keeps the frame cost at 10 to 15 ms and the tier at `high` on
+R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but near white pixels reach
+12 % (600×) and 22 % (3600×) at `iss`: those speeds show ten minutes or an hour per second.
+
 ## Observed, procedural, assumed
 
 | Element | Status | Source in the renderer |

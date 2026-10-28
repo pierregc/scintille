@@ -39,12 +39,17 @@ export class FlashPlayback {
 	}
 }
 
-/** GLSL twin of `FlashPlayback.age`; `time`, `pivot` in seconds from the instance origin. */
+/** GLSL twin of `FlashPlayback.age`; `time`, `pivot` in seconds from the instance origin. `onScreen` fades out flashes started before `budgetFrom`. */
 export const playbackGlsl = /* glsl */ `
 uniform float speed;
 uniform float pivot;
 uniform float pivotSpeed;
+uniform float budgetFrom;
+uniform float budgetFade;
 float wallAge(float time, float at) {
 	return at >= pivot || time < pivot ? (time - at) / speed : (time - pivot) / speed + (pivot - at) / pivotSpeed;
+}
+float onScreen(float at) {
+	return smoothstep(budgetFrom - budgetFade, budgetFrom, at);
 }
 `;

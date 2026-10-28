@@ -70,12 +70,12 @@ void main() {
 	float facing = dot(normal, normalize(cameraPosition - base));
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 
 	// Leaders light the path as they go: in-cloud ones crawl over the flash, ground ones drop at once.
-	float reached = ground ? spread(age, end, true) : ${f(CHANNEL.cloudStart)} + ${f(1 - CHANNEL.cloudStart)} * spread(age, end, false);
+	float reached = flicker < 0.5 ? 1.0 : ground ? spread(age, end, true) : ${f(CHANNEL.cloudStart)} + ${f(1 - CHANNEL.cloudStart)} * spread(age, end, false);
 	float head = reached * S;
 	float origin = rib.x > 0.5 ? floor(S * (0.15 + 0.6 * channelHash(seed, 10.0 + rib.x))) : 0.0;
 	float pace = rib.x > 0.5 ? 0.5 : 1.0;

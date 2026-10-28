@@ -37,7 +37,7 @@ void main() {
 	bool ground = isGround(seed);
 	float age = wallAge(time, flash.w);
 	float lat = asin(clamp(d.y, -1.0, 1.0));
-	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, ground) / 6371.0;
+	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, ground) / 6371.0 * flicker;
 	lat += drift.y;
 	float lon = atan(-d.z, d.x) + drift.x / max(cos(lat), 0.05);
 	float relative = mod(lon - window.x + 3.14159265, 6.28318531) - 3.14159265;
@@ -46,7 +46,7 @@ void main() {
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x);
+		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

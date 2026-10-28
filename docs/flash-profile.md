@@ -40,7 +40,7 @@ cannot tell them apart, so this split, like the patterns below, is procedural.
 - **Cloud-to-ground** flashes flash in distinct strokes and go dark in between, as return strokes do. In
   40 % of them, the first or second subsequent stroke holds a continuing current: a steady 20 to 30 %
   glow for up to 250 ms, within the observed duration.
-- **In-cloud** flashes glow between their pulses (21 to 35 % of the first pulse) while their leaders
+- **In-cloud** flashes glow between their pulses (15 to 25 % of the first pulse) while their leaders
   spread, and fade 80 ms after the observed duration.
 
 Leaders light the channel as they go. In-cloud ones start from a fifth of the path and cover it by
@@ -65,6 +65,11 @@ At 60×, a storm view shows about a minute of flashes at once. Glows there use s
 shows over sunlit clouds without whitening them. The cloud light keeps the brightest flash at each point.
 On the globe overview, flashes keep adding up, so active regions glow brighter.
 
+A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
+time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
+shortens each flash to its first pulses, at 3600× to a frame or two: the cost stays bounded, but near
+the floor the image still whitens at those speeds.
+
 ## Channel
 
 While a flash flickers, a screen-space ribbon follows a 3D random walk. The vertex shader generates its
@@ -82,7 +87,7 @@ core widens to at least 2 km and keeps 60 % of its light, scaled down as it wide
 halo. Ground channels stay sharp.
 
 While a channel shows, the round glow steps back so the lit cloud does not wash it out: to 40 % for a
-ground flash (10 % with its halo), to 75 % for an in-cloud one, scaled by the channel opacity.
+ground flash (10 % with its halo), to 40 % for an in-cloud one, scaled by the channel opacity.
 
 A seed selects about 25 % cloud-to-ground looks: a downward channel from a nominal 7 km cloud base to the
 surface, with downward branches. Its height alone is exaggerated by 2.5× (17.5 km on screen), so it reads
@@ -115,4 +120,4 @@ The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
 ## Reduced motion
 
 With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms, falling with
-a 250 ms time constant, then following the same glow.
+a 250 ms time constant, then following the same glow. Light does not drift and channels show whole.

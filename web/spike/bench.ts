@@ -125,6 +125,8 @@ function build(c: Case) {
 		speed: { value: 1 },
 		pivot: { value: -1e9 },
 		pivotSpeed: { value: 1 },
+		budgetFrom: { value: -1e6 },
+		budgetFade: { value: 1 },
 		duration: { value: DISPLAY },
 		flicker: { value: 1 },
 		haloStrength: { value: c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? 1 : 0 },
