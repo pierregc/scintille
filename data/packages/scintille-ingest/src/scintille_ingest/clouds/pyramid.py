@@ -5,6 +5,7 @@ import multiprocessing
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from functools import cached_property
 
 import numpy as np
 from numpy.typing import NDArray
@@ -32,19 +33,29 @@ class Inputs:
     fallback: Mosaic | None = None
     """Coarser global mosaic for what no disk sees well."""
 
+    @cached_property
+    def _skin_wrapped(self) -> Array:
+        return np.concatenate([self.skin, self.skin[:, :1]], axis=1)
+
+    @cached_property
+    def _fallback_wrapped(self) -> Array | None:
+        if self.fallback is None:
+            return None
+        return np.concatenate([self.fallback.bt, self.fallback.bt[:, :1]], axis=1)
+
     def skin_at(self, lat: NDArray[np.float64], lon: NDArray[np.float64]) -> Array:
         rows = np.clip((90 - lat) / 0.25, 0, self.skin.shape[0] - 1)
         cols = np.mod(lon, 360) / 0.25
-        return bilinear(np.concatenate([self.skin, self.skin[:, :1]], axis=1), rows, cols)
+        return bilinear(self._skin_wrapped, rows, cols)
 
     def fallback_at(self, lat: NDArray[np.float64], lon: NDArray[np.float64]) -> Array | None:
-        mosaic = self.fallback
-        if mosaic is None:
+        mosaic, wrapped = self.fallback, self._fallback_wrapped
+        if mosaic is None or wrapped is None:
             return None
         rows = np.interp(-lat, -mosaic.lat, np.arange(mosaic.lat.size, dtype=np.float64))
         step = (mosaic.lon[-1] - mosaic.lon[0]) / (mosaic.lon.size - 1)
         cols = np.mod((lon - mosaic.lon[0]) / step, mosaic.lon.size)
-        bt = bilinear(np.concatenate([mosaic.bt, mosaic.bt[:, :1]], axis=1), rows, cols)
+        bt = bilinear(wrapped, rows, cols)
         bt[(lat > mosaic.lat.max()) | (lat < mosaic.lat.min())] = np.nan
         return np.nan_to_num(smoothstep(*OPACITY_KELVIN, self.skin_at(lat, lon) - bt), nan=0.0)
 
