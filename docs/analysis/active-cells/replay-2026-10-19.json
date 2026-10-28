@@ -1,0 +1,1215 @@
+{
+  "now": "2026-10-19T11:30:00+00:00",
+  "end": "2026-10-19T10:00:00+00:00",
+  "hours": 72,
+  "files": {
+    "files": {
+      "mtg-li": {
+        "count": 419,
+        "received_after_product_end_s": {
+          "p50": 58.3,
+          "p90": 77.2,
+          "p95": 83.4,
+          "p99": 985.8,
+          "p99.9": 3392.2,
+          "max": 4603.0,
+          "n": 419
+        },
+        "committed_after_received_s": {
+          "p50": 710.3,
+          "p90": 3695.8,
+          "p95": 4021.4,
+          "p99": 4457.5,
+          "p99.9": 4853.6,
+          "max": 5090.2,
+          "n": 419
+        },
+        "committed_after_product_end_s": {
+          "p50": 1094.1,
+          "p90": 3769.5,
+          "p95": 4115.6,
+          "p99": 4557.1,
+          "p99.9": 5077.9,
+          "max": 5167.5,
+          "n": 419
+        },
+        "product_seconds": {
+          "p50": 600.0,
+          "max": 600.0,
+          "n": 419
+        }
+      },
+      "glm-west": {
+        "count": 12952,
+        "received_after_product_end_s": {
+          "p50": 15.6,
+          "p90": 26.9,
+          "p95": 52.0,
+          "p99": 4392.8,
+          "p99.9": 6262.7,
+          "max": 6506.7,
+          "n": 12952
+        },
+        "committed_after_received_s": {
+          "p50": 808.8,
+          "p90": 3703.6,
+          "p95": 4019.8,
+          "p99": 4559.9,
+          "p99.9": 6738.7,
+          "max": 6977.9,
+          "n": 12952
+        },
+        "committed_after_product_end_s": {
+          "p50": 1472.2,
+          "p90": 3831.7,
+          "p95": 4167.5,
+          "p99": 5223.7,
+          "p99.9": 6746.2,
+          "max": 7005.2,
+          "n": 12952
+        },
+        "product_seconds": {
+          "p50": 20.0,
+          "max": 20.0,
+          "n": 12952
+        }
+      },
+      "glm-east": {
+        "count": 12945,
+        "received_after_product_end_s": {
+          "p50": 15.9,
+          "p90": 27.1,
+          "p95": 54.3,
+          "p99": 4386.1,
+          "p99.9": 6267.4,
+          "max": 6511.2,
+          "n": 12945
+        },
+        "committed_after_received_s": {
+          "p50": 802.7,
+          "p90": 3700.2,
+          "p95": 4023.7,
+          "p99": 4553.5,
+          "p99.9": 6732.9,
+          "max": 6992.2,
+          "n": 12945
+        },
+        "committed_after_product_end_s": {
+          "p50": 1471.7,
+          "p90": 3831.7,
+          "p95": 4165.8,
+          "p99": 5253.1,
+          "p99.9": 6746.3,
+          "max": 7005.2,
+          "n": 12945
+        },
+        "product_seconds": {
+          "p50": 20.0,
+          "max": 20.0,
+          "n": 12945
+        }
+      }
+    },
+    "commit_matched": {
+      "mtg-li": 1.0,
+      "glm-west": 1.0,
+      "glm-east": 1.0
+    }
+  },
+  "replay": {
+    "timings": {
+      "hotspot_scan_s": 75.1,
+      "hotspots": 9
+    },
+    "samples": [
+      {
+        "hour": "2026-10-19T09:00:00+00:00",
+        "window_flashes": 76174,
+        "read_s": 6.0,
+        "full_compute_s": 2.0,
+        "previous_hour_tracked_after_s": 1800,
+        "cells": 388,
+        "gold_cells": 388,
+        "gold_storm_ids_matched": 388,
+        "steps": {
+          "committed+10": {
+            "partial_storms": 118,
+            "stable": 104,
+            "renamed_new": 3,
+            "renamed_continuing": 11,
+            "orphan": 0,
+            "stable_flash_share": 0.9628,
+            "published_stable_flash_share": 0.9765,
+            "final_detectable": 144,
+            "final_detectable_with_final_id": 106,
+            "published_detectable": 64,
+            "published_detectable_with_final_id": 48,
+            "compute_s": 2.77,
+            "flashes": 27211,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 301,
+              "glm-west": 302
+            }
+          },
+          "committed+20": {
+            "partial_storms": 197,
+            "stable": 174,
+            "renamed_new": 4,
+            "renamed_continuing": 19,
+            "orphan": 0,
+            "stable_flash_share": 0.9633,
+            "published_stable_flash_share": 0.9748,
+            "final_detectable": 194,
+            "final_detectable_with_final_id": 177,
+            "published_detectable": 73,
+            "published_detectable_with_final_id": 72,
+            "compute_s": 3.07,
+            "flashes": 35308,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 301,
+              "glm-west": 301,
+              "mtg-li": 592
+            }
+          },
+          "committed+30": {
+            "partial_storms": 247,
+            "stable": 215,
+            "renamed_new": 13,
+            "renamed_continuing": 19,
+            "orphan": 0,
+            "stable_flash_share": 0.9533,
+            "published_stable_flash_share": 0.9609,
+            "final_detectable": 242,
+            "final_detectable_with_final_id": 224,
+            "published_detectable": 86,
+            "published_detectable_with_final_id": 84,
+            "compute_s": 1.18,
+            "flashes": 42640,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 381,
+              "glm-west": 362
+            },
+            "snapshot_bytes": 128692,
+            "snapshot_gzip": 37331,
+            "snapshot_selected_storms": 87,
+            "snapshot_selected_gzip": 15381
+          },
+          "committed+45": {
+            "partial_storms": 315,
+            "stable": 305,
+            "renamed_new": 6,
+            "renamed_continuing": 4,
+            "orphan": 0,
+            "stable_flash_share": 0.9895,
+            "published_stable_flash_share": 0.9931,
+            "final_detectable": 316,
+            "final_detectable_with_final_id": 308,
+            "published_detectable": 94,
+            "published_detectable_with_final_id": 94,
+            "compute_s": 1.59,
+            "flashes": 58407,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 292,
+              "glm-east": 121,
+              "glm-west": 122
+            }
+          },
+          "committed+60": {
+            "partial_storms": 357,
+            "stable": 349,
+            "renamed_new": 7,
+            "renamed_continuing": 1,
+            "orphan": 0,
+            "stable_flash_share": 0.9946,
+            "published_stable_flash_share": 0.9966,
+            "final_detectable": 355,
+            "final_detectable_with_final_id": 350,
+            "published_detectable": 97,
+            "published_detectable_with_final_id": 96,
+            "compute_s": 1.71,
+            "flashes": 67316,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-west": 461,
+              "glm-east": 461
+            },
+            "snapshot_bytes": 192461,
+            "snapshot_gzip": 55543,
+            "snapshot_selected_storms": 98,
+            "snapshot_selected_gzip": 19367
+          },
+          "committed+80": {
+            "partial_storms": 388,
+            "stable": 388,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 388,
+            "final_detectable_with_final_id": 388,
+            "published_detectable": 97,
+            "published_detectable_with_final_id": 97,
+            "compute_s": 2.01,
+            "flashes": 76174,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 1200,
+              "mtg-li": 1200,
+              "glm-west": 1201
+            }
+          },
+          "ingest+10": {
+            "partial_storms": 133,
+            "stable": 118,
+            "renamed_new": 3,
+            "renamed_continuing": 12,
+            "orphan": 0,
+            "stable_flash_share": 0.9571,
+            "published_stable_flash_share": 0.9694,
+            "final_detectable": 159,
+            "final_detectable_with_final_id": 120,
+            "published_detectable": 65,
+            "published_detectable_with_final_id": 49,
+            "compute_s": 2.89,
+            "flashes": 29411,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-west": 22,
+              "mtg-li": 592,
+              "glm-east": 21
+            }
+          },
+          "ingest+20": {
+            "partial_storms": 205,
+            "stable": 180,
+            "renamed_new": 4,
+            "renamed_continuing": 21,
+            "orphan": 0,
+            "stable_flash_share": 0.9616,
+            "published_stable_flash_share": 0.9751,
+            "final_detectable": 201,
+            "final_detectable_with_final_id": 185,
+            "published_detectable": 75,
+            "published_detectable_with_final_id": 74,
+            "compute_s": 3.05,
+            "flashes": 37317,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 21,
+              "glm-west": 21,
+              "mtg-li": 592
+            }
+          },
+          "ingest+30": {
+            "partial_storms": 258,
+            "stable": 224,
+            "renamed_new": 14,
+            "renamed_continuing": 20,
+            "orphan": 0,
+            "stable_flash_share": 0.9511,
+            "published_stable_flash_share": 0.9602,
+            "final_detectable": 251,
+            "final_detectable_with_final_id": 233,
+            "published_detectable": 87,
+            "published_detectable_with_final_id": 84,
+            "compute_s": 1.25,
+            "flashes": 45038,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 21,
+              "mtg-li": 592,
+              "glm-west": 22
+            }
+          },
+          "ingest+45": {
+            "partial_storms": 321,
+            "stable": 313,
+            "renamed_new": 6,
+            "renamed_continuing": 2,
+            "orphan": 0,
+            "stable_flash_share": 0.993,
+            "published_stable_flash_share": 0.9934,
+            "final_detectable": 322,
+            "final_detectable_with_final_id": 315,
+            "published_detectable": 94,
+            "published_detectable_with_final_id": 94,
+            "compute_s": 1.53,
+            "flashes": 59185,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 21,
+              "mtg-li": 292,
+              "glm-west": 21
+            }
+          },
+          "ingest+60": {
+            "partial_storms": 372,
+            "stable": 366,
+            "renamed_new": 5,
+            "renamed_continuing": 1,
+            "orphan": 0,
+            "stable_flash_share": 0.9962,
+            "published_stable_flash_share": 0.9978,
+            "final_detectable": 371,
+            "final_detectable_with_final_id": 367,
+            "published_detectable": 97,
+            "published_detectable_with_final_id": 96,
+            "compute_s": 1.85,
+            "flashes": 70627,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 21,
+              "mtg-li": 592,
+              "glm-west": 22
+            }
+          },
+          "ingest+80": {
+            "partial_storms": 388,
+            "stable": 388,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 388,
+            "final_detectable_with_final_id": 388,
+            "published_detectable": 97,
+            "published_detectable_with_final_id": 97,
+            "compute_s": 2.11,
+            "flashes": 76174,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 1200,
+              "glm-east": 1200,
+              "glm-west": 1201
+            }
+          }
+        }
+      },
+      {
+        "hour": "2026-10-19T03:00:00+00:00",
+        "window_flashes": 98927,
+        "read_s": 6.5,
+        "full_compute_s": 2.5,
+        "previous_hour_tracked_after_s": 1800,
+        "cells": 455,
+        "gold_cells": 455,
+        "gold_storm_ids_matched": 455,
+        "steps": {
+          "committed+10": {
+            "partial_storms": 160,
+            "stable": 127,
+            "renamed_new": 7,
+            "renamed_continuing": 26,
+            "orphan": 0,
+            "stable_flash_share": 0.8453,
+            "published_stable_flash_share": 0.8371,
+            "final_detectable": 202,
+            "final_detectable_with_final_id": 133,
+            "published_detectable": 114,
+            "published_detectable_with_final_id": 88,
+            "compute_s": 4.26,
+            "flashes": 37654,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 421,
+              "mtg-li": 592,
+              "glm-west": 401
+            }
+          },
+          "committed+20": {
+            "partial_storms": 257,
+            "stable": 221,
+            "renamed_new": 8,
+            "renamed_continuing": 28,
+            "orphan": 0,
+            "stable_flash_share": 0.9061,
+            "published_stable_flash_share": 0.9,
+            "final_detectable": 244,
+            "final_detectable_with_final_id": 227,
+            "published_detectable": 120,
+            "published_detectable_with_final_id": 116,
+            "compute_s": 4.27,
+            "flashes": 48774,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 481,
+              "glm-west": 481,
+              "mtg-li": 592
+            }
+          },
+          "committed+30": {
+            "partial_storms": 293,
+            "stable": 262,
+            "renamed_new": 16,
+            "renamed_continuing": 15,
+            "orphan": 0,
+            "stable_flash_share": 0.9563,
+            "published_stable_flash_share": 0.9555,
+            "final_detectable": 279,
+            "final_detectable_with_final_id": 268,
+            "published_detectable": 126,
+            "published_detectable_with_final_id": 125,
+            "compute_s": 1.64,
+            "flashes": 59482,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-west": 521,
+              "glm-east": 521
+            },
+            "snapshot_bytes": 160413,
+            "snapshot_gzip": 47323,
+            "snapshot_selected_storms": 129,
+            "snapshot_selected_gzip": 24480
+          },
+          "committed+45": {
+            "partial_storms": 354,
+            "stable": 321,
+            "renamed_new": 19,
+            "renamed_continuing": 14,
+            "orphan": 0,
+            "stable_flash_share": 0.9724,
+            "published_stable_flash_share": 0.9728,
+            "final_detectable": 336,
+            "final_detectable_with_final_id": 328,
+            "published_detectable": 137,
+            "published_detectable_with_final_id": 136,
+            "compute_s": 1.87,
+            "flashes": 72964,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 501,
+              "mtg-li": 892,
+              "glm-west": 481
+            }
+          },
+          "committed+60": {
+            "partial_storms": 425,
+            "stable": 410,
+            "renamed_new": 9,
+            "renamed_continuing": 6,
+            "orphan": 0,
+            "stable_flash_share": 0.9747,
+            "published_stable_flash_share": 0.9745,
+            "final_detectable": 418,
+            "final_detectable_with_final_id": 414,
+            "published_detectable": 150,
+            "published_detectable_with_final_id": 149,
+            "compute_s": 2.23,
+            "flashes": 92421,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 261,
+              "mtg-li": 592,
+              "glm-west": 261
+            },
+            "snapshot_bytes": 237226,
+            "snapshot_gzip": 68981,
+            "snapshot_selected_storms": 157,
+            "snapshot_selected_gzip": 31726
+          },
+          "committed+80": {
+            "partial_storms": 455,
+            "stable": 455,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 455,
+            "final_detectable_with_final_id": 455,
+            "published_detectable": 156,
+            "published_detectable_with_final_id": 156,
+            "compute_s": 2.59,
+            "flashes": 98927,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 1200,
+              "mtg-li": 1200,
+              "glm-west": 1202
+            }
+          },
+          "ingest+10": {
+            "partial_storms": 181,
+            "stable": 150,
+            "renamed_new": 9,
+            "renamed_continuing": 22,
+            "orphan": 0,
+            "stable_flash_share": 0.8634,
+            "published_stable_flash_share": 0.8479,
+            "final_detectable": 220,
+            "final_detectable_with_final_id": 155,
+            "published_detectable": 117,
+            "published_detectable_with_final_id": 91,
+            "compute_s": 4.35,
+            "flashes": 41827,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 21,
+              "glm-west": 21
+            }
+          },
+          "ingest+20": {
+            "partial_storms": 272,
+            "stable": 234,
+            "renamed_new": 10,
+            "renamed_continuing": 28,
+            "orphan": 0,
+            "stable_flash_share": 0.9092,
+            "published_stable_flash_share": 0.902,
+            "final_detectable": 261,
+            "final_detectable_with_final_id": 242,
+            "published_detectable": 122,
+            "published_detectable_with_final_id": 118,
+            "compute_s": 4.45,
+            "flashes": 53312,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 21,
+              "glm-west": 21
+            }
+          },
+          "ingest+30": {
+            "partial_storms": 314,
+            "stable": 287,
+            "renamed_new": 16,
+            "renamed_continuing": 11,
+            "orphan": 0,
+            "stable_flash_share": 0.9771,
+            "published_stable_flash_share": 0.9774,
+            "final_detectable": 301,
+            "final_detectable_with_final_id": 292,
+            "published_detectable": 131,
+            "published_detectable_with_final_id": 130,
+            "compute_s": 1.68,
+            "flashes": 64284,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-west": 21,
+              "glm-east": 21
+            }
+          },
+          "ingest+45": {
+            "partial_storms": 384,
+            "stable": 354,
+            "renamed_new": 14,
+            "renamed_continuing": 16,
+            "orphan": 0,
+            "stable_flash_share": 0.9633,
+            "published_stable_flash_share": 0.9654,
+            "final_detectable": 374,
+            "final_detectable_with_final_id": 364,
+            "published_detectable": 144,
+            "published_detectable_with_final_id": 143,
+            "compute_s": 2.21,
+            "flashes": 81851,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-west": 21,
+              "glm-east": 21,
+              "mtg-li": 292
+            }
+          },
+          "ingest+60": {
+            "partial_storms": 440,
+            "stable": 428,
+            "renamed_new": 6,
+            "renamed_continuing": 6,
+            "orphan": 0,
+            "stable_flash_share": 0.9773,
+            "published_stable_flash_share": 0.9771,
+            "final_detectable": 435,
+            "final_detectable_with_final_id": 432,
+            "published_detectable": 153,
+            "published_detectable_with_final_id": 152,
+            "compute_s": 2.44,
+            "flashes": 94582,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 21,
+              "glm-west": 24
+            }
+          },
+          "ingest+80": {
+            "partial_storms": 455,
+            "stable": 455,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 455,
+            "final_detectable_with_final_id": 455,
+            "published_detectable": 156,
+            "published_detectable_with_final_id": 156,
+            "compute_s": 2.59,
+            "flashes": 98927,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 1200,
+              "mtg-li": 1200,
+              "glm-west": 1202
+            }
+          }
+        }
+      },
+      {
+        "hour": "2026-10-18T21:00:00+00:00",
+        "window_flashes": 323690,
+        "read_s": 6.3,
+        "full_compute_s": 14.01,
+        "previous_hour_tracked_after_s": 1800,
+        "cells": 769,
+        "gold_cells": 769,
+        "gold_storm_ids_matched": 769,
+        "steps": {
+          "committed+10": {
+            "partial_storms": 339,
+            "stable": 274,
+            "renamed_new": 15,
+            "renamed_continuing": 50,
+            "orphan": 0,
+            "stable_flash_share": 0.8528,
+            "published_stable_flash_share": 0.8513,
+            "final_detectable": 379,
+            "final_detectable_with_final_id": 285,
+            "published_detectable": 240,
+            "published_detectable_with_final_id": 194,
+            "compute_s": 22.43,
+            "flashes": 128416,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 261,
+              "glm-west": 261,
+              "mtg-li": 592
+            }
+          },
+          "committed+20": {
+            "partial_storms": 504,
+            "stable": 406,
+            "renamed_new": 41,
+            "renamed_continuing": 57,
+            "orphan": 0,
+            "stable_flash_share": 0.8648,
+            "published_stable_flash_share": 0.8625,
+            "final_detectable": 445,
+            "final_detectable_with_final_id": 419,
+            "published_detectable": 257,
+            "published_detectable_with_final_id": 249,
+            "compute_s": 24.37,
+            "flashes": 166500,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 241,
+              "mtg-li": 592,
+              "glm-west": 242
+            }
+          },
+          "committed+30": {
+            "partial_storms": 559,
+            "stable": 478,
+            "renamed_new": 38,
+            "renamed_continuing": 43,
+            "orphan": 0,
+            "stable_flash_share": 0.891,
+            "published_stable_flash_share": 0.8879,
+            "final_detectable": 513,
+            "final_detectable_with_final_id": 493,
+            "published_detectable": 271,
+            "published_detectable_with_final_id": 267,
+            "compute_s": 9.45,
+            "flashes": 202774,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 221,
+              "glm-west": 223,
+              "mtg-li": 592
+            },
+            "snapshot_bytes": 312404,
+            "snapshot_gzip": 91726,
+            "snapshot_selected_storms": 291,
+            "snapshot_selected_gzip": 54057
+          },
+          "committed+45": {
+            "partial_storms": 614,
+            "stable": 543,
+            "renamed_new": 30,
+            "renamed_continuing": 41,
+            "orphan": 0,
+            "stable_flash_share": 0.9038,
+            "published_stable_flash_share": 0.9012,
+            "final_detectable": 578,
+            "final_detectable_with_final_id": 562,
+            "published_detectable": 285,
+            "published_detectable_with_final_id": 281,
+            "compute_s": 10.83,
+            "flashes": 236141,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 541,
+              "mtg-li": 892,
+              "glm-west": 541
+            }
+          },
+          "committed+60": {
+            "partial_storms": 733,
+            "stable": 716,
+            "renamed_new": 12,
+            "renamed_continuing": 5,
+            "orphan": 0,
+            "stable_flash_share": 0.985,
+            "published_stable_flash_share": 0.9844,
+            "final_detectable": 723,
+            "final_detectable_with_final_id": 718,
+            "published_detectable": 332,
+            "published_detectable_with_final_id": 331,
+            "compute_s": 13.09,
+            "flashes": 301471,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-east": 241,
+              "glm-west": 242
+            },
+            "snapshot_bytes": 418336,
+            "snapshot_gzip": 122023,
+            "snapshot_selected_storms": 340,
+            "snapshot_selected_gzip": 67131
+          },
+          "committed+80": {
+            "partial_storms": 769,
+            "stable": 769,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 769,
+            "final_detectable_with_final_id": 769,
+            "published_detectable": 338,
+            "published_detectable_with_final_id": 338,
+            "compute_s": 13.67,
+            "flashes": 323690,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 1200,
+              "mtg-li": 1200,
+              "glm-west": 1200
+            }
+          },
+          "ingest+10": {
+            "partial_storms": 359,
+            "stable": 290,
+            "renamed_new": 22,
+            "renamed_continuing": 47,
+            "orphan": 0,
+            "stable_flash_share": 0.8596,
+            "published_stable_flash_share": 0.858,
+            "final_detectable": 393,
+            "final_detectable_with_final_id": 302,
+            "published_detectable": 242,
+            "published_detectable_with_final_id": 198,
+            "compute_s": 22.98,
+            "flashes": 136642,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-west": 26,
+              "glm-east": 21,
+              "mtg-li": 592
+            }
+          },
+          "ingest+20": {
+            "partial_storms": 520,
+            "stable": 423,
+            "renamed_new": 41,
+            "renamed_continuing": 56,
+            "orphan": 0,
+            "stable_flash_share": 0.8645,
+            "published_stable_flash_share": 0.8616,
+            "final_detectable": 461,
+            "final_detectable_with_final_id": 436,
+            "published_detectable": 259,
+            "published_detectable_with_final_id": 252,
+            "compute_s": 25.65,
+            "flashes": 173680,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 21,
+              "mtg-li": 592,
+              "glm-west": 22
+            }
+          },
+          "ingest+30": {
+            "partial_storms": 562,
+            "stable": 492,
+            "renamed_new": 32,
+            "renamed_continuing": 38,
+            "orphan": 0,
+            "stable_flash_share": 0.9033,
+            "published_stable_flash_share": 0.9004,
+            "final_detectable": 524,
+            "final_detectable_with_final_id": 504,
+            "published_detectable": 274,
+            "published_detectable_with_final_id": 270,
+            "compute_s": 10.05,
+            "flashes": 208954,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-west": 23,
+              "glm-east": 21
+            }
+          },
+          "ingest+45": {
+            "partial_storms": 670,
+            "stable": 613,
+            "renamed_new": 31,
+            "renamed_continuing": 26,
+            "orphan": 0,
+            "stable_flash_share": 0.9462,
+            "published_stable_flash_share": 0.9444,
+            "final_detectable": 643,
+            "final_detectable_with_final_id": 629,
+            "published_detectable": 306,
+            "published_detectable_with_final_id": 301,
+            "compute_s": 12.14,
+            "flashes": 266507,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 292,
+              "glm-east": 21,
+              "glm-west": 22
+            }
+          },
+          "ingest+60": {
+            "partial_storms": 748,
+            "stable": 735,
+            "renamed_new": 9,
+            "renamed_continuing": 4,
+            "orphan": 0,
+            "stable_flash_share": 0.9905,
+            "published_stable_flash_share": 0.9902,
+            "final_detectable": 740,
+            "final_detectable_with_final_id": 737,
+            "published_detectable": 334,
+            "published_detectable_with_final_id": 334,
+            "compute_s": 13.68,
+            "flashes": 307403,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-west": 21,
+              "glm-east": 21,
+              "mtg-li": 592
+            }
+          },
+          "ingest+80": {
+            "partial_storms": 769,
+            "stable": 769,
+            "renamed_new": 0,
+            "renamed_continuing": 0,
+            "orphan": 0,
+            "stable_flash_share": 1.0,
+            "published_stable_flash_share": 1.0,
+            "final_detectable": 769,
+            "final_detectable_with_final_id": 769,
+            "published_detectable": 338,
+            "published_detectable_with_final_id": 338,
+            "compute_s": 14.4,
+            "flashes": 323690,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-west": 1200,
+              "glm-east": 1200,
+              "mtg-li": 1200
+            }
+          }
+        }
+      },
+      {
+        "hour": "2026-10-18T15:00:00+00:00",
+        "window_flashes": 203646,
+        "read_s": 5.2,
+        "full_compute_s": 8.5,
+        "previous_hour_tracked_after_s": 1800,
+        "cells": 1096,
+        "gold_cells": 1096,
+        "gold_storm_ids_matched": 1096,
+        "steps": {
+          "committed+10": {
+            "partial_storms": 262,
+            "stable": 223,
+            "renamed_new": 4,
+            "renamed_continuing": 35,
+            "orphan": 0,
+            "stable_flash_share": 0.8137,
+            "published_stable_flash_share": 0.8062,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 231,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 178,
+            "compute_s": 16.84,
+            "flashes": 107506,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "mtg-li": 592,
+              "glm-west": 522,
+              "glm-east": 521
+            }
+          },
+          "committed+20": {
+            "partial_storms": 262,
+            "stable": 223,
+            "renamed_new": 4,
+            "renamed_continuing": 35,
+            "orphan": 0,
+            "stable_flash_share": 0.8137,
+            "published_stable_flash_share": 0.8062,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 231,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 178,
+            "compute_s": 17.33,
+            "flashes": 107506,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "mtg-li": 1192,
+              "glm-east": 1121,
+              "glm-west": 1122
+            }
+          },
+          "committed+30": {
+            "partial_storms": 262,
+            "stable": 222,
+            "renamed_new": 4,
+            "renamed_continuing": 36,
+            "orphan": 0,
+            "stable_flash_share": 0.8077,
+            "published_stable_flash_share": 0.7995,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 230,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 177,
+            "compute_s": 4.04,
+            "flashes": 107506,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "mtg-li": 1792,
+              "glm-east": 1721,
+              "glm-west": 1722
+            },
+            "snapshot_bytes": 141188,
+            "snapshot_gzip": 41772,
+            "snapshot_selected_storms": 193,
+            "snapshot_selected_gzip": 32133
+          },
+          "committed+45": {
+            "partial_storms": 262,
+            "stable": 222,
+            "renamed_new": 4,
+            "renamed_continuing": 36,
+            "orphan": 0,
+            "stable_flash_share": 0.8077,
+            "published_stable_flash_share": 0.7995,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 230,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 177,
+            "compute_s": 4.07,
+            "flashes": 107506,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 2621,
+              "mtg-li": 2692,
+              "glm-west": 2622
+            }
+          },
+          "committed+60": {
+            "partial_storms": 262,
+            "stable": 222,
+            "renamed_new": 4,
+            "renamed_continuing": 36,
+            "orphan": 0,
+            "stable_flash_share": 0.8077,
+            "published_stable_flash_share": 0.7995,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 230,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 177,
+            "compute_s": 4.12,
+            "flashes": 107506,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 3521,
+              "glm-west": 3522,
+              "mtg-li": 3592
+            },
+            "snapshot_bytes": 141188,
+            "snapshot_gzip": 41772,
+            "snapshot_selected_storms": 193,
+            "snapshot_selected_gzip": 32133
+          },
+          "committed+80": {
+            "partial_storms": 262,
+            "stable": 222,
+            "renamed_new": 4,
+            "renamed_continuing": 36,
+            "orphan": 0,
+            "stable_flash_share": 0.8077,
+            "published_stable_flash_share": 0.7995,
+            "final_detectable": 484,
+            "final_detectable_with_final_id": 230,
+            "published_detectable": 315,
+            "published_detectable_with_final_id": 177,
+            "compute_s": 3.99,
+            "flashes": 107506,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 4721,
+              "mtg-li": 4792,
+              "glm-west": 4722
+            }
+          },
+          "ingest+10": {
+            "partial_storms": 312,
+            "stable": 259,
+            "renamed_new": 13,
+            "renamed_continuing": 40,
+            "orphan": 0,
+            "stable_flash_share": 0.7807,
+            "published_stable_flash_share": 0.7752,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 269,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 189,
+            "compute_s": 17.28,
+            "flashes": 111192,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 121,
+              "mtg-li": 592,
+              "glm-west": 122
+            }
+          },
+          "ingest+20": {
+            "partial_storms": 312,
+            "stable": 259,
+            "renamed_new": 13,
+            "renamed_continuing": 40,
+            "orphan": 0,
+            "stable_flash_share": 0.7807,
+            "published_stable_flash_share": 0.7752,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 269,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 189,
+            "compute_s": 17.21,
+            "flashes": 111192,
+            "own_previous_hour": true,
+            "newest_age_s": {
+              "glm-east": 721,
+              "glm-west": 722,
+              "mtg-li": 1192
+            }
+          },
+          "ingest+30": {
+            "partial_storms": 312,
+            "stable": 258,
+            "renamed_new": 13,
+            "renamed_continuing": 41,
+            "orphan": 0,
+            "stable_flash_share": 0.7793,
+            "published_stable_flash_share": 0.7735,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 268,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 188,
+            "compute_s": 4.33,
+            "flashes": 111192,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 1321,
+              "mtg-li": 1792,
+              "glm-west": 1322
+            }
+          },
+          "ingest+45": {
+            "partial_storms": 312,
+            "stable": 258,
+            "renamed_new": 13,
+            "renamed_continuing": 41,
+            "orphan": 0,
+            "stable_flash_share": 0.7793,
+            "published_stable_flash_share": 0.7735,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 268,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 188,
+            "compute_s": 4.12,
+            "flashes": 111192,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 2221,
+              "mtg-li": 2692,
+              "glm-west": 2222
+            }
+          },
+          "ingest+60": {
+            "partial_storms": 312,
+            "stable": 258,
+            "renamed_new": 13,
+            "renamed_continuing": 41,
+            "orphan": 0,
+            "stable_flash_share": 0.7793,
+            "published_stable_flash_share": 0.7735,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 268,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 188,
+            "compute_s": 4.19,
+            "flashes": 111192,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-west": 3122,
+              "mtg-li": 3592,
+              "glm-east": 3121
+            }
+          },
+          "ingest+80": {
+            "partial_storms": 312,
+            "stable": 258,
+            "renamed_new": 13,
+            "renamed_continuing": 41,
+            "orphan": 0,
+            "stable_flash_share": 0.7793,
+            "published_stable_flash_share": 0.7735,
+            "final_detectable": 498,
+            "final_detectable_with_final_id": 268,
+            "published_detectable": 318,
+            "published_detectable_with_final_id": 188,
+            "compute_s": 4.26,
+            "flashes": 111192,
+            "own_previous_hour": false,
+            "newest_age_s": {
+              "glm-east": 4321,
+              "glm-west": 4322,
+              "mtg-li": 4792
+            }
+          }
+        }
+      }
+    ]
+  }
+}

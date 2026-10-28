@@ -1,0 +1,58 @@
+## nproc
+4
+## free -m
+               total        used        free      shared  buff/cache   available
+Mem:            7757        3759        1657         141        2795        3998
+Swap:              0           0           0
+## uptime
+ 15:23:30 up 19 days,  1:35,  2 users,  load average: 1.38, 1.44, 1.40
+## df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        74G   32G   40G  44% /
+## docker stats --no-stream
+CONTAINER ID   NAME                                 CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O        PIDS
+79c5da04efec   scintille-data-dagster-daemon-1      206.34%   1.605GiB / 7.576GiB   21.18%    244GB / 28.7GB    8.45GB / 255MB   1529
+6f2d1b6447e1   scintille-data-dagster-webserver-1   55.18%    1.137GiB / 7.576GiB   15.01%    45.3MB / 23.5MB   45.1MB / 4.1kB   51
+14fb33964bd4   scintille-data-ingest-1              0.06%     590.3MiB / 7.576GiB   7.61%     43.2GB / 27.9GB   426MB / 16.3GB   38
+79ef36ea0fb8   scintille-data-lake-writer-1         0.00%     547.9MiB / 7.576GiB   7.06%     40.7GB / 8.63GB   375MB / 0B       45
+ec20ee25536f   scintille-data-clouds-1              0.00%     878.6MiB / 7.576GiB   11.33%    1.91GB / 639MB    32.3MB / 0B      17
+bd8e02e25727   scintille-data-live-probe-1          0.00%     128.3MiB / 7.576GiB   1.65%     423MB / 33.6MB    999kB / 0B       12
+006e4d974bf0   scintille-data-postgres-1            49.54%    354.9MiB / 7.576GiB   4.57%     20.1GB / 22.9GB   413GB / 36.8GB   14
+## docker compose ps
+SERVICE             IMAGE                                                                           STATUS
+clouds              ghcr.io/pierregc/scintille-ingest:c3efc3d23cf5249de9d1cb75b98859092536cb1c      Up 8 days (healthy)
+dagster-daemon      ghcr.io/pierregc/scintille-pipelines:c3efc3d23cf5249de9d1cb75b98859092536cb1c   Up 8 days (healthy)
+dagster-webserver   ghcr.io/pierregc/scintille-pipelines:c3efc3d23cf5249de9d1cb75b98859092536cb1c   Up 8 days (healthy)
+ingest              ghcr.io/pierregc/scintille-ingest:c3efc3d23cf5249de9d1cb75b98859092536cb1c      Up 8 days (unhealthy)
+lake-writer         ghcr.io/pierregc/scintille-ingest:c3efc3d23cf5249de9d1cb75b98859092536cb1c      Up 8 days
+live-probe          ghcr.io/pierregc/scintille-ingest:c3efc3d23cf5249de9d1cb75b98859092536cb1c      Up 8 days
+postgres            mirror.gcr.io/library/postgres:17                                               Up 2 weeks (healthy)
+## lake-writer batches committed (24h count)
+88
+## last 5
+lake-writer-1  | {"time": "2026-10-28T14:43:22.030056+00:00", "level": "info", "logger": "scintille_ingest.lake_writer", "message": "batches committed", "batches": 58, "rows": 2626}
+lake-writer-1  | {"time": "2026-10-28T14:52:59.878427+00:00", "level": "info", "logger": "scintille_ingest.lake_writer", "message": "batches committed", "batches": 58, "rows": 3214}
+lake-writer-1  | {"time": "2026-10-28T15:02:55.216055+00:00", "level": "info", "logger": "scintille_ingest.lake_writer", "message": "batches committed", "batches": 58, "rows": 3331}
+lake-writer-1  | {"time": "2026-10-28T15:12:41.634989+00:00", "level": "info", "logger": "scintille_ingest.lake_writer", "message": "batches committed", "batches": 60, "rows": 3836}
+lake-writer-1  | {"time": "2026-10-28T15:22:26.532551+00:00", "level": "info", "logger": "scintille_ingest.lake_writer", "message": "batches committed", "batches": 57, "rows": 3995}
+## ingest mtg-li (last 20)
+ingest-1  | {"time": "2026-10-28T11:10:56.747186+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028111022_L2PF_OPE_20261028110005_20261028111005_N__O_0067_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028111020_L2PF_OPE_20261028110005_20261028111005_N__O_0067_0001.nc", "flashes": 12509, "lag_s": 651.7, "batch_id": "09c23dcfd6b9e4a714be9a03efe61ed3"}
+ingest-1  | {"time": "2026-10-28T11:11:00.677123+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 12008, "median_latency_s": 344.7}
+ingest-1  | {"time": "2026-10-28T11:21:16.146128+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028112022_L2PF_OPE_20261028111005_20261028112005_N__O_0068_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028112020_L2PF_OPE_20261028111005_20261028112005_N__O_0068_0001.nc", "flashes": 13018, "lag_s": 671.1, "batch_id": "a6f84ac7e5f99ac01fd5147ea3424290"}
+ingest-1  | {"time": "2026-10-28T11:21:30.652836+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 12554, "median_latency_s": 389.0}
+ingest-1  | {"time": "2026-10-28T11:31:01.779429+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028113023_L2PF_OPE_20261028112005_20261028113005_N__O_0069_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028113021_L2PF_OPE_20261028112005_20261028113005_N__O_0069_0001.nc", "flashes": 13670, "lag_s": 656.8, "batch_id": "64f3cfc443e62fdaa192a99270dea9b7"}
+ingest-1  | {"time": "2026-10-28T11:31:30.714789+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 13286, "median_latency_s": 375.8}
+ingest-1  | {"time": "2026-10-28T11:41:03.941639+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028114022_L2PF_OPE_20261028113005_20261028114005_N__O_0070_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028114020_L2PF_OPE_20261028113005_20261028114005_N__O_0070_0001.nc", "flashes": 14945, "lag_s": 658.9, "batch_id": "e34f1dc240bc9438901ee6804eb83279"}
+ingest-1  | {"time": "2026-10-28T11:41:30.638013+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 14535, "median_latency_s": 379.4}
+ingest-1  | {"time": "2026-10-28T11:51:19.138539+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028115023_L2PF_OPE_20261028114005_20261028115005_N__O_0071_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028115021_L2PF_OPE_20261028114005_20261028115005_N__O_0071_0001.nc", "flashes": 16226, "lag_s": 674.1, "batch_id": "7ea99da411e6ad1b89e00387850344c2"}
+ingest-1  | {"time": "2026-10-28T11:51:30.646562+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 15858, "median_latency_s": 379.4}
+ingest-1  | {"time": "2026-10-28T12:00:42.363468+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028120023_L2PF_OPE_20261028115005_20261028120005_N__O_0072_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028120021_L2PF_OPE_20261028115005_20261028120005_N__O_0072_0001.nc", "flashes": 17144, "lag_s": 637.4, "batch_id": "d8de522972be152c05a8c001c1f960fb"}
+ingest-1  | {"time": "2026-10-28T12:01:00.606396+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 16777, "median_latency_s": 347.5}
+ingest-1  | {"time": "2026-10-28T12:10:49.762489+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028121023_L2PF_OPE_20261028120005_20261028121005_N__O_0073_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028121021_L2PF_OPE_20261028120005_20261028121005_N__O_0073_0001.nc", "flashes": 18910, "lag_s": 644.8, "batch_id": "8c869971bd96ab8169b7ac550a883ea2"}
+ingest-1  | {"time": "2026-10-28T12:11:00.660568+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 18526, "median_latency_s": 349.2}
+ingest-1  | {"time": "2026-10-28T12:20:58.667824+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028122023_L2PF_OPE_20261028121005_20261028122005_N__O_0074_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028122021_L2PF_OPE_20261028121005_20261028122005_N__O_0074_0001.nc", "flashes": 19724, "lag_s": 653.7, "batch_id": "709a9a9b6701b83e59b5c2d0ef41dbe5"}
+ingest-1  | {"time": "2026-10-28T12:21:00.741137+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 19321, "median_latency_s": 356.6}
+ingest-1  | {"time": "2026-10-28T12:31:01.826758+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028123023_L2PF_OPE_20261028122005_20261028123005_N__O_0075_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028123021_L2PF_OPE_20261028122005_20261028123005_N__O_0075_0001.nc", "flashes": 20911, "lag_s": 656.8, "batch_id": "5cfa8e0ca7dcb38effb9e9368b8e86be"}
+ingest-1  | {"time": "2026-10-28T12:31:30.847949+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 20452, "median_latency_s": 377.0}
+ingest-1  | {"time": "2026-10-28T12:41:06.605937+00:00", "level": "info", "logger": "scintille_ingest.live", "message": "file spooled", "source": "mtg-li", "key": "W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--x-x--ARC-x_C_EUMT_20261028124023_L2PF_OPE_20261028123005_20261028124005_N__O_0076_0000/W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+LI-2-LFL--FD--CHK-BODY--ARC-NC4E_C_EUMT_20261028124021_L2PF_OPE_20261028123005_20261028124005_N__O_0076_0001.nc", "flashes": 23398, "lag_s": 661.6, "batch_id": "93d0019f7e5bf619be47b1e38d1bee66"}
+ingest-1  | {"time": "2026-10-28T12:41:30.677689+00:00", "level": "info", "logger": "scintille_ingest.live_feed", "message": "manifest published", "source": "mtg-li", "flashes": 22948, "median_latency_s": 378.3}
