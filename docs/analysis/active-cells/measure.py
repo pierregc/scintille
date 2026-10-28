@@ -727,7 +727,7 @@ def public_feed() -> dict[str, Any]:
     }
     metrics = get("live/metrics.json") or {}
     out["metrics"] = {k: metrics.get(k) for k in ("generated_at", "freshness", "sources")}
-    index = get("storms/index/0.json") or {}
+    index = get("storms/index/latest.json") or {}
     out["index"] = {
         "published_age_s": age(index.get("published_at")),
         "last_observation_age_s": age(index.get("last_observation_time")),

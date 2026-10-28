@@ -94,5 +94,6 @@ export function framingFixtures(): Map<string, Uint8Array> {
 	const page: StormIndexPage = { schema_version: SCHEMA_VERSION, published_at: new Date(Date.parse(summaries[0].t_end) + 3_600_000).toISOString(), last_observation_time: summaries[0].t_end,
 		page: 0, page_size: 50, total_pages: 1, total_storms: summaries.length, storms: summaries };
 	files.set('storms/index/0.json', json(page));
+	files.set('storms/index/latest.json', json(page));
 	return files;
 }

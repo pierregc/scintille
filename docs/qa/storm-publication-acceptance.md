@@ -91,7 +91,7 @@ purge is configured; an empty outbox is not proof that all prerequisites ran.
 
 ## Public reference audit
 
-From a network that reaches the public feed, first fetch `https://data.scintille.app/storms/index/0.json`.
+From a network that reaches the public feed, first fetch `https://data.scintille.app/storms/index/latest.json`.
 Validate the current contract with the generated `StormIndexPage`/`StormDetail` models. Traverse the
 advertised zero-based pages sequentially, deduplicate slugs and record the page/slug count. Resolve
 chunk paths against the public data root, never the storm metadata directory. For each public
