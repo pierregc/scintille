@@ -14,7 +14,7 @@ import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
-import { createEarth, texturesRoot } from './earth';
+import { createEarth, surfaceRoot, texturesRoot } from './earth';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomStrength } from './lightning/zoom';
@@ -114,6 +114,7 @@ export function createGlobeApp(
 		? new SurfaceDetail({
 				earth: earth.material,
 				root: texturesRoot(),
+				surfaceRoot: surfaceRoot(),
 				radius: RADIUS,
 				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
 				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),

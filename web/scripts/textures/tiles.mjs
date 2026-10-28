@@ -1,5 +1,5 @@
-// Builds the surface tile pyramid from the 500 m Blue Marble and Black Marble releases (#125 spike).
-// Day tiles carry the water mask in alpha. Usage: node scripts/textures/tiles.mjs [--sources B2,C1] [--levels 2,3,4,5]
+// Builds the surface tile pyramid of ADR 0022 from the 500 m Blue Marble and Black Marble releases.
+// Usage: node scripts/textures/tiles.mjs [--sources B2,C1] [--out <dir>]
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -9,18 +9,13 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
+import { BORDER, COLUMNS, LAYERS, LEVELS, MAX_LEVEL, PATH, ROWS, SOURCE_PX, SURFACE_VERSION, TILE, columns, rows, tilePath } from './surface.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(ROOT, '.cache');
-const OUT_DIR = join(ROOT, 'out', 'tiles');
 
 const NASA_EO = 'https://assets.science.nasa.gov/content/dam/science/esd/eo/images';
 const NATURAL_EARTH = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson';
-
-/** 90° × 90° source tiles at 15 arc seconds (463 m at the equator): columns A to D from 180° W, rows 1 and 2 from the north pole. */
-const SOURCE_PX = 21600;
-const COLUMNS = ['A', 'B', 'C', 'D'];
-const ROWS = ['1', '2'];
 
 const SOURCES = {
 	day: {
@@ -53,32 +48,31 @@ const SOURCES = {
 	lakes: { url: `${NATURAL_EARTH}/ne_10m_lakes.geojson`, bytes: 5043554, sha256: '2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9' },
 };
 
-/** Tile content in texels, plus one border texel on each side copied from the neighbours for seamless filtering. */
-const TILE = 450;
-const BORDER = 1;
-const MAX_LEVEL = 5;
-/** Source pixels added around each source tile, enough for one border texel at the coarsest level. */
-const PAD = 8;
+const ATTRIBUTION = {
+	day: 'NASA Earth Observatory, Blue Marble Next Generation, August 2004 (public domain)',
+	night: 'NASA Earth Observatory, Black Marble 2016, Suomi NPP VIIRS (public domain)',
+	water: 'Natural Earth 10m ocean and lakes v5.1.2 (public domain)',
+};
+
+/** Source pixels added around each source tile: the Lanczos support of the coarsest level plus its border texel. */
+const PAD = 32;
 
 const { values } = parseArgs({
 	options: {
 		sources: { type: 'string' },
-		levels: { type: 'string', default: '2,3,4,5' },
+		out: { type: 'string', default: join(ROOT, 'out', 'surface') },
 		concurrency: { type: 'string', default: '12' },
 	},
 });
-const LEVELS = values.levels.split(',').map(Number).sort((a, b) => b - a);
-if (LEVELS.some((z) => !(z >= 2 && z <= MAX_LEVEL))) throw new Error(`levels must be within 2 and ${MAX_LEVEL}`);
+const OUT_DIR = values.out;
 const ONLY = values.sources ? new Set(values.sources.split(',')) : null;
 
-async function sha256File(path) {
-	return createHash('sha256').update(await readFile(path)).digest('hex');
-}
+const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
-async function fetchPinned(url, bytes, sha256, dir) {
+async function fetchPinned(url, bytes, hash, dir) {
 	const file = join(dir, url.split('/').pop());
 	try {
-		if ((await stat(file)).size === bytes && (await sha256File(file)) === sha256) return file;
+		if ((await stat(file)).size === bytes && sha256(await readFile(file)) === hash) return file;
 	} catch {
 		// Not cached yet.
 	}
@@ -87,8 +81,8 @@ async function fetchPinned(url, bytes, sha256, dir) {
 	if (!res.ok || !res.body) throw new Error(`download failed (${res.status}): ${url}`);
 	const part = `${file}.part`;
 	await pipeline(Readable.fromWeb(res.body), createWriteStream(part));
-	const got = [(await stat(part)).size, await sha256File(part)];
-	if (got[0] !== bytes || got[1] !== sha256) {
+	const got = [(await stat(part)).size, sha256(await readFile(part))];
+	if (got[0] !== bytes || got[1] !== hash) {
 		await rm(part);
 		throw new Error(`checksum mismatch for ${url}: got ${got.join(' ')}`);
 	}
@@ -98,7 +92,7 @@ async function fetchPinned(url, bytes, sha256, dir) {
 
 async function decode(file) {
 	const { data, info } = await sharp(file, { limitInputPixels: false }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-	if (info.width !== SOURCE_PX || info.height !== SOURCE_PX) throw new Error(`${file}: ${info.width}x${info.height}`);
+	if (info.width !== SOURCE_PX || info.height !== SOURCE_PX || info.channels !== 3) throw new Error(`${file}: ${info.width}x${info.height}x${info.channels}`);
 	return data;
 }
 
@@ -128,12 +122,9 @@ function padded(data, channels, neighbour) {
 			src.data.copy(out, ((y0 + y) * size + x0) * channels, from, from + w * channels);
 		}
 	};
-	const self = { w: SOURCE_PX, data };
-	put(PAD, PAD, self, 0, 0, SOURCE_PX, SOURCE_PX);
-	const w = neighbour(-1, 0);
-	const e = neighbour(1, 0);
-	put(0, PAD, w.right, 0, 0, PAD, SOURCE_PX);
-	put(PAD + SOURCE_PX, PAD, e.left, 0, 0, PAD, SOURCE_PX);
+	put(PAD, PAD, { w: SOURCE_PX, data }, 0, 0, SOURCE_PX, SOURCE_PX);
+	put(0, PAD, neighbour(-1, 0).right, 0, 0, PAD, SOURCE_PX);
+	put(PAD + SOURCE_PX, PAD, neighbour(1, 0).left, 0, 0, PAD, SOURCE_PX);
 	for (const [dy, y0, side] of [[-1, 0, 'bottom'], [1, PAD + SOURCE_PX, 'top']]) {
 		const n = neighbour(0, dy);
 		if (n) {
@@ -148,39 +139,35 @@ function padded(data, channels, neighbour) {
 	return out;
 }
 
-/** Natural Earth ocean and lakes, water = 255, rasterized over a padded source tile in quarters. */
+/** Natural Earth ocean and lakes over a source tile, water = 255, rasterized in quarters. */
 async function waterMask(geo, column, row) {
-	const size = SOURCE_PX + 2 * PAD;
 	const lon0 = -180 + 90 * column;
 	const lat0 = 90 - 90 * row;
 	const deg = 90 / SOURCE_PX;
-	const half = size / 2;
-	const out = Buffer.alloc(size * size);
+	const half = SOURCE_PX / 2;
+	const out = Buffer.alloc(SOURCE_PX * SOURCE_PX);
 	for (const [qx, qy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-		const x0 = qx * half - PAD;
-		const y0 = qy * half - PAD;
-		const west = lon0 + x0 * deg;
-		const north = lat0 - y0 * deg;
+		const west = lon0 + qx * half * deg;
+		const north = lat0 - qy * half * deg;
 		const east = west + half * deg;
 		const south = north - half * deg;
 		const parts = [];
-		for (const shift of [-360, 0, 360]) {
-			for (const ring of geo.rings) {
-				const [minX, minY, maxX, maxY] = ring.bbox;
-				if (maxX + shift < west || minX + shift > east || maxY < south || minY > north) continue;
-				let d = '';
-				for (let i = 0; i < ring.points.length; i += 2) {
-					const x = (ring.points[i] + shift - west) / deg;
-					const y = (north - ring.points[i + 1]) / deg;
-					d += `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
-				}
-				parts.push(`${d}Z`);
+		for (const ring of geo.rings) {
+			const [minX, minY, maxX, maxY] = ring.bbox;
+			if (maxX < west || minX > east || maxY < south || minY > north) continue;
+			let d = '';
+			for (let i = 0; i < ring.points.length; i += 2) {
+				const x = (ring.points[i] - west) / deg;
+				const y = (north - ring.points[i + 1]) / deg;
+				d += `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
 			}
+			parts.push(`${d}Z`);
 		}
 		const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${half}" height="${half}">` +
 			`<rect width="100%" height="100%" fill="#000"/><path fill="#fff" fill-rule="evenodd" d="${parts.join('')}"/></svg>`;
-		const quarter = await sharp(Buffer.from(svg), { limitInputPixels: false, unlimited: true }).greyscale().raw().toBuffer();
-		for (let y = 0; y < half; y++) quarter.copy(out, (qy * half + y) * size + qx * half, y * half, (y + 1) * half);
+		const { data, info } = await sharp(Buffer.from(svg), { limitInputPixels: false, unlimited: true }).toColourspace('b-w').raw().toBuffer({ resolveWithObject: true });
+		if (info.channels !== 1) throw new Error(`water mask: ${info.channels} channels`);
+		for (let y = 0; y < half; y++) data.copy(out, (qy * half + y) * SOURCE_PX + qx * half, y * half, (y + 1) * half);
 	}
 	return out;
 }
@@ -210,19 +197,25 @@ async function loadGeo() {
 	return { rings };
 }
 
+/** Centred Lanczos 3 reduction; one-channel input must be forced back to one channel. */
 async function downsample(data, channels, factor) {
 	const size = SOURCE_PX + 2 * PAD;
 	if (factor === 1) return data;
-	return sharp(data, { raw: { width: size, height: size, channels }, limitInputPixels: false })
-		.resize(size / factor, size / factor, { kernel: 'lanczos3' })
-		.raw()
-		.toBuffer();
+	let image = sharp(data, { raw: { width: size, height: size, channels }, limitInputPixels: false }).resize(size / factor, size / factor, { kernel: 'lanczos3' });
+	if (channels === 1) image = image.toColourspace('b-w');
+	const { data: out, info } = await image.raw().toBuffer({ resolveWithObject: true });
+	if (info.channels !== channels) throw new Error(`downsample: ${info.channels} channels instead of ${channels}`);
+	return out;
 }
 
-function cut(data, channels, size, x0, y0) {
+/** One tile with its border; at a pole the border row repeats the last row of content. */
+function cut(data, channels, size, x0, y0, pole) {
 	const span = TILE + 2 * BORDER;
-	const out = Buffer.alloc(span * span * channels);
-	for (let y = 0; y < span; y++) data.copy(out, y * span * channels, ((y0 + y) * size + x0) * channels, ((y0 + y) * size + x0 + span) * channels);
+	const row = span * channels;
+	const out = Buffer.alloc(span * row);
+	for (let y = 0; y < span; y++) data.copy(out, y * row, ((y0 + y) * size + x0) * channels, ((y0 + y) * size + x0 + span) * channels);
+	if (pole === 'north') out.copy(out, 0, BORDER * row, (BORDER + 1) * row);
+	if (pole === 'south') out.copy(out, (span - 1) * row, (span - 1 - BORDER) * row, (span - BORDER) * row);
 	return out;
 }
 
@@ -241,11 +234,24 @@ function stats(rgb, mask) {
 	return { range: max - min, max, water: mask ? water / n : null };
 }
 
-/** A tile is left out when it holds no detail its ancestors lack: open water by day, unlit dark by night. */
+/** A tile holds nothing the global texture lacks: open water by day, unlit dark by night. */
 const FLAT = {
 	day: (s) => s.water === 1 && s.range <= 6,
 	night: (s) => s.max <= 24 && s.range <= 8,
 };
+
+function encode(rgb, mask) {
+	const span = TILE + 2 * BORDER;
+	if (!mask) return sharp(rgb, { raw: { width: span, height: span, channels: 3 } }).webp({ quality: 85, effort: 4 }).toBuffer();
+	const rgba = Buffer.alloc(span * span * 4);
+	for (let k = 0; k < span * span; k++) {
+		rgba[k * 4] = rgb[k * 3];
+		rgba[k * 4 + 1] = rgb[k * 3 + 1];
+		rgba[k * 4 + 2] = rgb[k * 3 + 2];
+		rgba[k * 4 + 3] = mask[k];
+	}
+	return sharp(rgba, { raw: { width: span, height: span, channels: 4 } }).webp({ quality: 85, alphaQuality: 100, exact: true, effort: 4 }).toBuffer();
+}
 
 async function pool(items, limit, work) {
 	let next = 0;
@@ -256,110 +262,118 @@ async function pool(items, limit, work) {
 
 async function main() {
 	const started = performance.now();
-	const geo = await loadGeo();
 	const sourceDir = join(CACHE_DIR, '500m');
 	await mkdir(sourceDir, { recursive: true });
-	const manifest = {
-		version: 1,
-		generated: new Date().toISOString(),
-		tileTexels: TILE,
-		border: BORDER,
-		maxLevel: MAX_LEVEL,
-		levels: {},
-		sources: {},
-	};
-	const totals = { day: {}, night: {} };
-	const present = { day: {}, night: {} };
+	const geo = await loadGeo();
+	await rm(OUT_DIR, { recursive: true, force: true });
+	const sources = {};
+	for (const name of ['ocean', 'lakes']) sources[`water/${name}`] = { url: SOURCES[name].url, bytes: SOURCES[name].bytes, sha256: SOURCES[name].sha256 };
+	/** layer → level → { tiles, kept, bytes, hashes: Map<index, sha256> } */
+	const built = {};
+	const timings = {};
 
-	for (const layer of ['day', 'night']) {
+	for (const [layer, { levels }] of Object.entries(LAYERS)) {
 		const files = {};
-		for (const [tile, [bytes, sha256]] of Object.entries(SOURCES[layer].files)) {
-			files[tile] = await fetchPinned(SOURCES[layer].url(tile), bytes, sha256, sourceDir);
-			manifest.sources[`${layer}/${tile}`] = { url: SOURCES[layer].url(tile), bytes, sha256 };
+		for (const [tile, [bytes, hash]] of Object.entries(SOURCES[layer].files)) {
+			files[tile] = await fetchPinned(SOURCES[layer].url(tile), bytes, hash, sourceDir);
+			sources[`${layer}/${tile}`] = { url: SOURCES[layer].url(tile), bytes, sha256: hash };
 		}
-		console.log(`${layer}: reading edges`);
+		const t0 = performance.now();
 		const strips = {};
-		for (const tile of Object.keys(files)) strips[tile] = edges(await decode(files[tile]), 3);
+		const maskStrips = {};
+		for (const tile of Object.keys(files)) {
+			strips[tile] = edges(await decode(files[tile]), 3);
+			if (LAYERS[layer].mask) maskStrips[tile] = edges(await waterMask(geo, COLUMNS.indexOf(tile[0]), ROWS.indexOf(tile[1])), 1);
+		}
+		built[layer] = Object.fromEntries(levels.map((z) => [z, { tiles: 0, kept: 0, bytes: 0, hashes: new Map() }]));
 
 		for (const [column, c] of COLUMNS.entries()) {
 			for (const [row, r] of ROWS.entries()) {
 				const name = `${c}${r}`;
 				if (ONLY && !ONLY.has(name)) continue;
-				const t0 = performance.now();
-				const neighbour = (dx, dy) => {
+				const t1 = performance.now();
+				const neighbour = (from) => (dx, dy) => {
 					const rr = row + dy;
 					if (rr < 0 || rr >= ROWS.length) return null;
-					return strips[`${COLUMNS[(column + dx + 4) % 4]}${ROWS[rr]}`];
+					return from[`${COLUMNS[(column + dx + 4) % 4]}${ROWS[rr]}`];
 				};
-				const rgb = padded(await decode(files[name]), 3, neighbour);
-				const mask = layer === 'day' ? await waterMask(geo, column, row) : null;
-				for (const z of LEVELS) {
+				const rgb = padded(await decode(files[name]), 3, neighbour(strips));
+				const mask = LAYERS[layer].mask ? padded(await waterMask(geo, column, row), 1, neighbour(maskStrips)) : null;
+				// Finest level first, so a tile is kept whenever one of its children is.
+				for (const z of [...levels].sort((a, b) => b - a)) {
 					const factor = 2 ** (MAX_LEVEL - z);
 					const size = (SOURCE_PX + 2 * PAD) / factor;
 					const color = await downsample(rgb, 3, factor);
 					const water = mask ? await downsample(mask, 1, factor) : null;
 					const perSource = SOURCE_PX / factor / TILE;
-					const dir = join(OUT_DIR, layer, String(z));
-					await mkdir(dir, { recursive: true });
+					const children = built[layer][z + 1]?.hashes;
 					const jobs = [];
 					for (let j = 0; j < perSource; j++) for (let i = 0; i < perSource; i++) jobs.push([i, j]);
-					totals[layer][z] ??= { tiles: 0, kept: 0, bytes: 0 };
-					present[layer][z] ??= new Set();
+					const level = built[layer][z];
 					await pool(jobs, Number(values.concurrency), async ([i, j]) => {
 						const x0 = PAD / factor + TILE * i - BORDER;
 						const y0 = PAD / factor + TILE * j - BORDER;
-						const tileRgb = cut(color, 3, size, x0, y0);
-						const tileMask = water ? cut(water, 1, size, x0, y0) : null;
-						const s = stats(tileRgb, tileMask);
-						totals[layer][z].tiles++;
-						if (FLAT[layer](s)) return;
 						const x = column * perSource + i;
 						const y = row * perSource + j;
-						const span = TILE + 2 * BORDER;
-						let image;
-						if (tileMask) {
-							const rgba = Buffer.alloc(span * span * 4);
-							for (let k = 0; k < span * span; k++) {
-								rgba[k * 4] = tileRgb[k * 3];
-								rgba[k * 4 + 1] = tileRgb[k * 3 + 1];
-								rgba[k * 4 + 2] = tileRgb[k * 3 + 2];
-								rgba[k * 4 + 3] = tileMask[k];
-							}
-							image = sharp(rgba, { raw: { width: span, height: span, channels: 4 } }).webp({ quality: 85, alphaQuality: 100, exact: true, effort: 4 });
-						} else {
-							image = sharp(tileRgb, { raw: { width: span, height: span, channels: 3 } }).webp({ quality: 85, effort: 4 });
-						}
-						const file = join(dir, `${x}-${y}.webp`);
-						const { size: bytes } = await image.toFile(file);
-						totals[layer][z].kept++;
-						totals[layer][z].bytes += bytes;
-						present[layer][z].add(y * perSource * 4 + x);
+						const pole = y === 0 ? 'north' : y === rows(z) - 1 ? 'south' : null;
+						const tileRgb = cut(color, 3, size, x0, y0, pole);
+						const tileMask = water ? cut(water, 1, size, x0, y0, pole) : null;
+						level.tiles++;
+						const hasChild = children && [0, 1].some((dy) => [0, 1].some((dx) => children.has((2 * y + dy) * columns(z + 1) + 2 * x + dx)));
+						if (!hasChild && FLAT[layer](stats(tileRgb, tileMask))) return;
+						const webp = await encode(tileRgb, tileMask);
+						const file = join(OUT_DIR, tilePath(layer, z, x, y));
+						await mkdir(dirname(file), { recursive: true });
+						await writeFile(file, webp);
+						level.kept++;
+						level.bytes += webp.length;
+						level.hashes.set(y * columns(z) + x, sha256(webp));
 					});
 				}
-				console.log(`${layer} ${name}: ${((performance.now() - t0) / 1000).toFixed(0)} s`);
+				console.log(`${layer} ${name}: ${((performance.now() - t1) / 1000).toFixed(0)} s`);
 			}
 		}
+		timings[layer] = Math.round((performance.now() - t0) / 1000);
 	}
 
+	const digest = createHash('sha256');
+	const manifest = {
+		version: SURFACE_VERSION,
+		path: PATH,
+		tileTexels: TILE,
+		border: BORDER,
+		maxLevel: MAX_LEVEL,
+		attribution: ATTRIBUTION,
+		layers: Object.fromEntries(Object.entries(LAYERS).map(([layer, l]) => [layer, { levels: l.levels, encoding: l.encoding }])),
+		levels: {},
+		sources,
+		tools: { node: process.versions.node, sharp: sharp.versions.sharp, vips: sharp.versions.vips, webp: sharp.versions.webp },
+	};
 	for (const z of LEVELS) {
-		const columns = 4 * SOURCE_PX / TILE / 2 ** (MAX_LEVEL - z);
-		const rows = columns / 2;
-		const entry = { columns, rows, degrees: 360 / columns, layers: {} };
-		for (const layer of ['day', 'night']) {
-			const bits = new Uint8Array(Math.ceil((columns * rows) / 8));
-			for (const index of present[layer][z] ?? []) bits[index >> 3] |= 1 << (index & 7);
-			entry.layers[layer] = { ...totals[layer][z], present: Buffer.from(bits).toString('base64') };
+		const entry = { columns: columns(z), rows: rows(z), degrees: 360 / columns(z), texelKm: Number(((40075 / columns(z)) / TILE).toFixed(3)), layers: {} };
+		for (const layer of Object.keys(LAYERS)) {
+			const level = built[layer][z];
+			if (!level) continue;
+			const bits = new Uint8Array(Math.ceil((columns(z) * rows(z)) / 8));
+			for (const index of [...level.hashes.keys()].sort((a, b) => a - b)) {
+				bits[index >> 3] |= 1 << (index & 7);
+				digest.update(`${layer}/${z}/${index} ${level.hashes.get(index)}\n`);
+			}
+			entry.layers[layer] = { tiles: level.tiles, kept: level.kept, bytes: level.bytes, present: Buffer.from(bits).toString('base64') };
 		}
 		manifest.levels[z] = entry;
 	}
-	manifest.buildSeconds = Math.round((performance.now() - started) / 1000);
+	manifest.digest = digest.digest('hex');
 	await writeFile(join(OUT_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, '\t')}\n`);
+	const seconds = Math.round((performance.now() - started) / 1000);
+	await writeFile(join(OUT_DIR, '..', 'surface-build.json'), `${JSON.stringify({ seconds, layers: timings, digest: manifest.digest }, null, '\t')}\n`);
+
 	const mb = (b) => `${(b / 1e6).toFixed(1)} MB`;
-	console.table(Object.fromEntries(LEVELS.flatMap((z) => ['day', 'night'].map((layer) => {
-		const t = totals[layer][z] ?? { tiles: 0, kept: 0, bytes: 0 };
-		return [`${layer} z${z}`, { tiles: t.tiles, kept: t.kept, size: mb(t.bytes), perTile: `${(t.bytes / Math.max(1, t.kept) / 1e3).toFixed(0)} kB` }];
+	console.table(Object.fromEntries(LEVELS.flatMap((z) => Object.keys(LAYERS).filter((l) => built[l][z]).map((layer) => {
+		const t = built[layer][z];
+		return [`${layer} z${z}`, { tiles: t.tiles, kept: t.kept, size: mb(t.bytes), perTile: `${(t.bytes / Math.max(1, t.kept) / 1e3).toFixed(1)} kB` }];
 	}))));
-	console.log(`${manifest.buildSeconds} s, output: ${OUT_DIR}`);
+	console.log(`${seconds} s, digest ${manifest.digest.slice(0, 16)}, output: ${OUT_DIR}`);
 }
 
 main().catch((error) => {

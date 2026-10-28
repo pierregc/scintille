@@ -34,6 +34,12 @@ export function texturesRoot(configured: unknown = import.meta.env.PUBLIC_TEXTUR
 	return dev ? '/textures' : 'https://data.scintille.app/textures/v2';
 }
 
+/** Surface pyramid root: next to the local textures in dev or when they are configured, else its published version on R2. */
+export function surfaceRoot(configured: unknown = import.meta.env.PUBLIC_TEXTURES_URL, dev = import.meta.env.DEV): string {
+	if (dev || (typeof configured === 'string' && configured !== '')) return `${texturesRoot(configured, dev)}/surface`;
+	return 'https://data.scintille.app/textures/v3';
+}
+
 export function texturesUrl(name: 'day' | 'night' | 'mask', root = texturesRoot(), tier: TextureTier = '4k'): string {
 	return `${root}/${tier}/${name}.webp`;
 }
