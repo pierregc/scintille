@@ -6,7 +6,21 @@ against this page and the baseline below.
 
 ## Reference storms
 
-<!-- REFERENCE_STORMS -->
+Five storms of 2026-10-18 from the published catalog, each with its archived clouds. Times are UTC,
+at the busiest hour of the track; sun elevation at the storm centre.
+
+| Id | Storm | Reference time | Why | Sources | Sun | Extent | Flashes |
+|---|---|---|---|---|---|---|---|
+| R1 | [Minas Gerais](https://scintille.app/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1) | 23:15 | large, land, night, tropics | GLM, LI | -33° | 568 × 303 km | 38,579 |
+| R2 | [Mato Grosso](https://scintille.app/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1) | 19:15 | largest, land, day, near the equator | GLM, LI | 38° | 680 × 550 km | 36,849 |
+| R3 | [North Atlantic](https://scintille.app/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1) | 23:15 | ocean, night, subtropics | GLM | -38° | 295 × 256 km | 28,916 |
+| R4 | [Ngaoundéré](https://scintille.app/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1) | 12:15 | compact, land, high sun, Africa | LI | 63° | 88 × 66 km | 1,009 |
+| R5 | [Ibiza](https://scintille.app/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1) | 14:15 | mid latitude, island and sea, low sun | LI | 29° | 160 × 105 km | 11,366 |
+
+Replays of storms seen by both GLM and LI hold about twice the storm's flash count: the
+track-bounds selection keeps both instruments ([ADR 0011](adr/0011-storm-publication-contract.md)).
+Archived clouds expire after 30 days (`archive/clouds/` lifecycle): without a longer retention,
+these storms lose their clouds around 2026-11-17 and later runs compare lightning only.
 
 Each storm opens on its share URL, paused at the reference time. The machine readable list, with
 poses, is [`immersive/references.json`](immersive/references.json).
@@ -23,7 +37,7 @@ the ground; with a tilt it is the range from the target point to the camera.
 | `close` | storm centre, range 250 km, tilt 55° | 147 km | 280 km | A few cells, oblique like the ISS |
 | `deck` | storm centre, range 100 km, tilt 72° | 32 km | 112 km | Lowest view, just above the cloud deck |
 
-Heading is north. The storm centre is the track point closest to the reference time.
+Heading is north. The storm centre is the track point of the reference hour.
 
 ## Scale
 
@@ -31,12 +45,12 @@ Heading is north. The storm centre is the track point closest to the reference t
 at a range `d` one CSS pixel of a 1080 px tall view covers `d × 0.000584` km at the centre; with a
 tilt, that is across the view, and `1 / cos(tilt)` times more along it.
 
-| Pose | km per CSS px | GLM pixel (8 km) | LI pixel (4.5 km) | Earth 4k texel (9.8 km) | Cloud 2k texel (19.6 km) | Glow, r = 8 km | Channel half length |
+| Pose | km per CSS px | GLM pixel (8 km) | LI pixel (4.5 km) | Earth 4k texel (9.8 km) | Cloud texel, 2k / 4k | Glow, r = 8 km | Channel half length |
 |---|---|---|---|---|---|---|---|
-| `globe` (20,000 km) | 11.7 | 0.7 px | 0.4 px | 0.8 px | 1.7 px | 2.7 px | 1.5 px, floor 3 px |
-| `regional` (1,500 km) | 0.88 | 9 px | 5 px | 11 px | 22 px | 36 px | 20 px |
-| `close` (250 km) | 0.15 | 55 px | 31 px | 67 px | 134 px | 219 px | 120 px |
-| `deck` (100 km) | 0.058 | 137 px | 77 px | 168 px | 336 px | 548 px | 301 px |
+| `globe` (20,000 km) | 11.7 | 0.7 px | 0.4 px | 0.8 px | 1.7 / 0.8 px | 2.7 px | 1.5 px, floor 3 px |
+| `regional` (1,500 km) | 0.88 | 9 px | 5 px | 11 px | 22 / 11 px | 36 px | 20 px |
+| `close` (250 km) | 0.15 | 55 px | 31 px | 67 px | 134 / 67 px | 219 px | 120 px |
+| `deck` (100 km) | 0.058 | 137 px | 77 px | 168 px | 336 / 168 px | 548 px | 301 px |
 
 Glow radius is 4 times the observed radius `r = √(area / π)` at mid intensity (0.6 to 1.4 times
 with intensity), at least 5 physical px. Channel half length is 2.2 `r`, at least 6 physical px.
@@ -46,7 +60,7 @@ What the table says:
 
 - At `globe`, every source is at or below one pixel: flashes are points, compensation is required.
 - From `regional` down, every source is magnified. At `close`, one GLM pixel is about 55 px and
-  one Earth texel about 67 px: the 4k Earth and 2k clouds are soft blocks, and the glow (4 times
+  one Earth texel about 67 px: the Earth and clouds are soft blocks, and the glow (4 times
   the footprint) covers a large part of the view.
 - At `deck`, the scene is mostly procedural: channels, cloud texture filtering and atmosphere.
   Detail must come from #125 (surface down to 500 m per texel, 2 px per texel at `close`) and
@@ -109,11 +123,65 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
 
 ## Budgets
 
-<!-- BUDGETS -->
+Measured with `bench.mjs` on the five storms, four poses, clouds on, at afterglow 0 (the default)
+and 30 minutes (the heaviest choice). Every M5 PR touching the scene runs it before and after.
+
+| Metric | Desktop | Mobile |
+|---|---|---|
+| Device | MacBook Pro M4 Max (32 core GPU), Chromium 1248 headed on Metal, 1920 × 1080 CSS at DPR 2, 120 Hz | Real phone not measured yet; iPhone 15 emulation on the same Mac as a proxy |
+| Frame cost p95 (GPU synchronized) | ≤ 10 ms at every pose, tier kept at `high` | ≤ 10 ms in emulation, tier kept at `medium`; frame interval p95 ≤ 33 ms on a phone (#259) |
+| 3 s flight between poses | no interval over 50 ms, p95 ≤ 17 ms | same, in emulation |
+| GPU textures and buffers | ≤ 384 MB | ≤ 256 MB |
+| Initial load transfer | ≤ 10 MB | ≤ 8 MB |
+| Time to globe, to storm framed | ≤ 1 s, ≤ 5 s (broadband) | same, plus a 4G check in #259 |
+| Zoom transfer, globe to deck | ≤ 12 MB; back to globe ≤ 0.5 MB | ≤ 5 MB; back ≤ 0.5 MB |
+| Near white pixels (≥ 245 of 255) | ≤ 2 % of the frame at every pose | same |
+
+MB are 10^6 bytes. The drawing buffer (screen size × DPR, 332 MB at 3840 × 2160 with MSAA) is
+not budgeted. The desktop is a fast GPU: 10 ms there leaves room for laptops several times slower
+before they fall under 30 fps and drop a tier.
 
 ## Baseline
 
-<!-- BASELINE -->
+Measured 2026-10-28 on `main` 31d5bf3 against production; raw results and screenshots in
+[`immersive/baseline/`](immersive/baseline/): `bench-desktop.json` and `bench-mobile.json` at
+30 minutes, `afterglow-0/` (default), `no-clouds/` (default, clouds off) and
+`afterglow-30-no-clouds/` (R1 and R4). Videos stay on the maintainer's Mac.
+
+| | Afterglow 0 (default) | Afterglow 30 min |
+|---|---|---|
+| Frame cost p95, desktop | 5.8 to 8.2 ms everywhere, tier `high` | 8 ms at `globe`; up to 46 ms at `regional`, 48 to 78 ms at `close` and `deck` (R1 to R3), tier dropped to `low` |
+| Frame cost p95, mobile emulation | not run | 5 to 10 ms, up to 22 ms (`close`) and 26 ms (`deck`) on R1 |
+| 3 s flight, desktop | p95 ≤ 9.3 ms, no interval over 50 ms | up to 108 ms p95, 37 intervals over 50 ms |
+| Active flashes (display window) | 7 to 361 | 172 to 9,846 |
+| Flashes uploaded to the GPU | 1,018 to 77,558 (whole replay) | same |
+| Near white pixels (1280 px screenshots) | 0 % | 19 to 58 % at `regional`, 58 to 94 % at `close` and `deck` |
+| GPU textures and buffers | 277 MB desktop (183 MB without clouds), 245 MB mobile | same |
+| Initial load | 6.4 to 9.2 MB (R1 to R3 over the mobile budget), of which clouds 5.0 to 7.1 MB, Earth 1.0 MB, flashes 0.01 to 0.78 MB, code 0.3 MB | same |
+| Globe ready, storm framed | 0.43 to 0.52 s, 3.8 to 4.2 s | 0.54 to 2.46 s, 4.8 to 7.2 s |
+| Zoom transfer | 0 (no level of detail yet) | 0 |
+
+Findings:
+
+1. **The 30 minute afterglow whites out every view below `globe`.** Thousands of glows at 4 times
+   the footprint add up: R1 is as white without clouds as with them, and even R4 (172 flashes) gets
+   a white disc at `deck`. The same overdraw drives the frame cost and the tier drops (#254, rules
+   1, 4, 5 and 6).
+2. **At the default afterglow, cost is flat and the night views are dark.** Close night views show
+   a few soft glows; at `deck`, one channel crosses half the view (R3), drawn over a large flat
+   glow.
+3. **Daytime close views are one blurred cloud.** 4k cloud texels are 67 px wide at `close` and
+   168 px at `deck`; R2, R4 and R5 show a uniform grey white surface with a hard horizon (#131).
+4. **City lights turn into blocks.** Black Marble texels are 11 to 67 px from `regional` to
+   `close` (R1, night) (#125).
+5. **Textures are uncompressed.** The globe loads the Earth as WebP into three 45 MB RGBA8
+   textures although KTX2 tiers exist, and each 4k cloud frame takes 45 MB for one channel of data.
+   Compressed Earth textures and one channel clouds would free about 150 MB for surface detail
+   (#252) and finer clouds (#131).
+6. **Clouds are 70 to 80 % of the first load.** Zoom loads nothing today.
+7. **The storm track draws over the sky at `deck`** (R3): its lines cross the horizon (#126).
+8. **The `deck` horizon is a hard edge** between the cloud shell and space; the atmosphere is not
+   drawn from inside (#126).
 
 ## Benchmark
 
@@ -128,8 +196,10 @@ node web/scripts/bench.mjs --refs docs/immersive/references.json --out bench/ \
 
 Per storm: cold load (bytes by kind, time to the storm framed), then for each pose the 3 s flight
 (frame intervals, bytes), 2 s paused and `--seconds` playing at 60× (frame intervals, then frame
-cost with the GPU synchronized each frame), active flashes, draw calls, the largest instance counts
-per draw, and the GPU memory the page allocated (textures, buffers, render buffers, drawing buffer).
+cost with the GPU synchronized each frame), the quality tier, active flashes, draw calls, the
+largest instance counts per draw, the GPU memory the page allocated (textures, buffers, render
+buffers, drawing buffer) and the screenshot brightness. `--afterglow <minutes>` overrides the
+reference afterglow and `--no-clouds` hides the clouds.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the

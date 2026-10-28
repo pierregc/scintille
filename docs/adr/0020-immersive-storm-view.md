@@ -19,8 +19,13 @@ The merged renderer sets the starting point (audited in [immersive view](../imme
 - Flashes are glows lifted to 12 km, scaled to 4 times the observed radius, with a 5 px floor.
   Channels are procedural: 2.2 flash radii long with a 6 px floor, 25 % drawn as cloud to ground
   with heights exaggerated 2.5 times, halos up to 512 channels.
-- GLM locates a flash within about 8 km, MTG LI within about 4.5 km. At 400 km range a GLM pixel
-  covers about 35 screen pixels; at the 20 km floor it covers almost the whole screen.
+- GLM locates a flash within about 8 km, MTG LI within about 4.5 km. At 250 km range a GLM pixel
+  covers about 55 screen pixels; at the 20 km floor it covers almost the whole screen.
+- The baseline on five storms (MacBook Pro M4 Max, production data) is flat at about 8 ms per
+  frame with the default afterglow. With the 30 minute afterglow, every view below the globe turns
+  19 to 94 % white and costs up to 78 ms, and the quality tier falls to `low`. Daytime close views
+  are one blurred cloud; city lights become blocks; Earth and cloud textures take 277 MB
+  uncompressed; clouds are 70 to 80 % of a 6 to 9 MB first load.
 
 ## Options
 
@@ -52,19 +57,27 @@ Adopt the third option, specified in [immersive view](../immersive-view.md):
    physical length is readable; halos stay restrained; exposure changes smoothly with altitude and
    never from scene content; the camera keeps 25 km above the ground. Each rule has numeric bounds
    in the specification.
-5. **Budgets.** Desktop and mobile frame time, GPU memory, initial load and zoom transfer budgets in
-   the specification apply to every M5 PR touching the scene, measured with `web/scripts/bench.mjs`
-   on the declared devices against the baseline recorded with this ADR.
+5. **Budgets.** On the reference Mac, at both afterglows and every pose: frame cost p95 ≤ 10 ms
+   without a tier drop, no frame over 50 ms in a flight, no more than 2 % near white pixels.
+   GPU textures and buffers ≤ 384 MB desktop and 256 MB mobile; first load ≤ 10 MB desktop and
+   8 MB mobile; diving from globe to deck ≤ 12 MB desktop and 5 MB mobile. They apply to every M5
+   PR touching the scene, measured with `web/scripts/bench.mjs` against the recorded baseline.
 
 ## Consequences
 
-- #254 replaces the pixel floors with continuous functions of km per pixel and removes the 6 px
-  channel floor at globe scale; #126 moves the surface floor from 15 to 25 km.
+- #254 replaces the pixel floors with continuous functions of km per pixel, removes the 6 px
+  channel floor at globe scale and brings the 30 minute afterglow within budget; #126 moves the
+  surface floor from 15 to 25 km, keeps the storm track below the horizon and softens the deck
+  horizon.
+- Mobile today exceeds its first load budget (up to 9.2 MB): loading lighter clouds on phones, and
+  compressed Earth and one channel cloud textures (about 150 MB less GPU memory), are the cheapest
+  ways to make room for #252 and #131.
 - #125, #251 to #253 and #131 report the four poses and the benchmark before and after their change;
   a PR over budget either fixes it or asks for an amended budget.
 - The 30 day lifecycle on `archive/clouds/` removes the clouds of the reference storms after a
   month. Keeping them needs a longer lifecycle or a protected copy, decided with #41.
-- Desktop numbers come from one MacBook Pro; mobile numbers need a real phone. Emulation and
-  software rendering only check that the benchmark runs.
+- Desktop numbers come from one MacBook Pro. Phone emulation on that Mac only stands in for the
+  smaller drawing buffer; a real phone is measured in #259. Software rendering only checks that
+  the benchmark runs.
 - The procedural share of the image grows as the camera descends. The deck pose is a composition
   above the data, not a claim of finer observation.
