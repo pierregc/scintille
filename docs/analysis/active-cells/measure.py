@@ -6,7 +6,9 @@ Read-only. Run it where the lake and Dagster settings are, the Dagster container
 
 The JSON goes to stdout and, after each section, to MEASURE_OUT. MEASURE_HOURS (72) bounds the
 latency scan, MEASURE_SAMPLES (6) the hours replayed minute by minute, MEASURE_RUN_DAYS (7) the
-Dagster run history.
+Dagster run history. MEASURE_SECTIONS picks sections, MEASURE_STEPS the replay steps in minutes,
+MEASURE_BUDGET (seconds) stops the replay from starting another hour, and MEASURE_NOW replays an
+earlier day.
 """
 
 import gzip
@@ -32,7 +34,11 @@ SAMPLES = int(os.environ.get("MEASURE_SAMPLES", "6"))
 RUN_DAYS = int(os.environ.get("MEASURE_RUN_DAYS", "7"))
 OUT = os.environ.get("MEASURE_OUT")
 BACKFILL_LAG = 6 * 3600
-STEPS = (10, 20, 30, 40, 50, 60, 70, 80)
+STEPS = tuple(int(m) for m in os.environ.get("MEASURE_STEPS", "10,20,30,40,50,60,70,80").split(","))
+SECTIONS = os.environ.get(
+    "MEASURE_SECTIONS", "host,silver_commits,dagster,public,gold,silver,replay"
+)
+BUDGET = float(os.environ.get("MEASURE_BUDGET", "inf"))
 LATE = (0, 5, 10, 15, 20, 25, 30, 60)
 DEFAULT_READY = 30 * 60
 TIME = pl.Datetime("us", "UTC")
@@ -361,17 +367,27 @@ def silver_latency(flashes: Any, commits: pl.DataFrame) -> dict[str, Any]:
 def silver_commits(batches: dict[str, float]) -> dict[str, Any]:
     times = sorted(set(round(t) for t in batches.values()))
     recent = np.asarray([t for t in times if t >= (END - HOURS * HOUR).timestamp()])
+    gaps = pl.DataFrame({"t": times[1:], "gap": np.diff(times)}).with_columns(
+        day=pl.from_epoch("t", "s").dt.date()
+    )
+    per_day = gaps.group_by("day").agg(pl.col("gap").median().round(), pl.len()).sort("day")
     return {
         "batches": len(batches),
         "commits": len(times),
         "first": datetime.fromtimestamp(times[0], UTC).isoformat() if times else None,
         "interval_s": pct(np.diff(recent), (50, 90, 95, 99)) if len(recent) > 1 else None,
+        "interval_p50_per_day": {str(d): [g, n] for d, g, n in per_day.iter_rows()},
     }
 
 
 def gold_volume(cat: Any) -> dict[str, Any]:
     start = END - HOURS * HOUR
     window = between("window_start", start, END)
+    tracks_table = cat.load_table(("gold", "storm_tracks"))
+    last = scan(tracks_table, "true", ("window_start",))["window_start"].max()
+    assert isinstance(last, datetime)
+    tracked_end = min(END, last + HOUR)
+    tracked = between("window_start", tracked_end - HOURS * HOUR, tracked_end)
     cells = scan(
         cat.load_table(("gold", "storm_cells")),
         window,
@@ -381,8 +397,8 @@ def gold_volume(cat: Any) -> dict[str, Any]:
         hull_bytes=pl.col("hull").str.len_bytes(),
     )
     tracks = scan(
-        cat.load_table(("gold", "storm_tracks")),
-        window,
+        tracks_table,
+        tracked,
         (
             "storm_id",
             "window_start",
@@ -408,11 +424,12 @@ def gold_volume(cat: Any) -> dict[str, Any]:
     )
     storms = scan(
         cat.load_table(("gold", "storms")),
-        between("storm_start", start, END),
+        between("storm_start", tracked_end - HOURS * HOUR, tracked_end),
         ("storm_id", "steps", "flash_count", "closed"),
     ).join(levels, on="storm_id", how="left")
     closed = storms.filter(pl.col("closed"))
     return {
+        "tracked_until": tracked_end.isoformat(),
         "windows": per_window.height,
         "per_window": {c: pct(per_window[c].to_numpy(), (50, 95)) for c in per_window.columns[1:]},
         "cells_per_window": pct(cells.group_by("window_start").len()["len"].to_numpy(), (50, 95)),
@@ -556,7 +573,13 @@ def compare(
     }
 
 
-def replay(cat: Any, flashes: Any, commits: pl.DataFrame, ready: dict[str, float]) -> Any:
+def replay(
+    cat: Any,
+    flashes: Any,
+    commits: pl.DataFrame,
+    ready: dict[str, float],
+    flush: Callable[[dict[str, Any]], None],
+) -> Any:
     from scintille_pipelines.storm_cells import StormCellsConfig, scan_hotspots
     from scintille_pipelines.tracking import TRACK_SCHEMA
 
@@ -577,8 +600,13 @@ def replay(cat: Any, flashes: Any, commits: pl.DataFrame, ready: dict[str, float
 
     span = max(1, 24 // SAMPLES)
     hours = [END - HOUR - k * span * HOUR for k in range(SAMPLES)]
-    samples = []
+    samples: list[dict[str, Any]] = []
+    started = time.perf_counter()
     for hour in hours:
+        flush({"timings": timings, "samples": samples})
+        if time.perf_counter() - started > BUDGET:
+            samples.append({"hour": hour.isoformat(), "skipped": "budget"})
+            continue
         log(f"replay {hour:%m-%d %H}h")
         t0 = time.perf_counter()
         both = scan(
@@ -741,7 +769,15 @@ def host() -> dict[str, Any]:
     return out
 
 
+def dump(results: dict[str, Any]) -> None:
+    if OUT:
+        with open(OUT, "w") as f:
+            json.dump(results, f, default=str, indent=1)
+
+
 def section(results: dict[str, Any], name: str, fn: Callable[[], Any]) -> None:
+    if name not in SECTIONS.split(","):
+        return
     log(f"start {name}")
     t0 = time.perf_counter()
     try:
@@ -749,9 +785,7 @@ def section(results: dict[str, Any], name: str, fn: Callable[[], Any]) -> None:
     except Exception:
         results[name] = {"error": traceback.format_exc()}
     log(f"done {name} in {time.perf_counter() - t0:.0f} s")
-    if OUT:
-        with open(OUT, "w") as f:
-            json.dump(results, f, default=str, indent=1)
+    dump(results)
 
 
 def main() -> None:
@@ -772,14 +806,19 @@ def main() -> None:
         results["files"] = file_latency(table)
         commits = (
             table.filter(pl.col("committed").is_not_null())
-            .group_by("key")
+            .group_by(pl.col("key").str.split("/").list.last())
             .agg(pl.col("committed").min())
         )
     except Exception:
         results["files"] = {"error": traceback.format_exc()}
     section(results, "silver", lambda: silver_latency(flashes, commits))
     ready = results.get("dagster", {}).get("tracked_at", {})
-    section(results, "replay", lambda: replay(cat, flashes, commits, ready))
+
+    def partial(value: dict[str, Any]) -> None:
+        results["replay"] = value
+        dump(results)
+
+    section(results, "replay", lambda: replay(cat, flashes, commits, ready, partial))
     json.dump(results, sys.stdout, default=str, indent=1)
     print()
 
