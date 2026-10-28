@@ -208,7 +208,28 @@ def dagster_runs() -> dict[str, Any]:
                 "metadata": meta,
             }
         )
-    return {"jobs": jobs, "summary": summarize_runs(runs), "storm_runs": runs}
+    return {
+        "jobs": jobs,
+        "summary": summarize_runs(runs),
+        "tracked_at": tracked_at(runs),
+        "recent": [compact(r) for r in sorted(runs, key=lambda r: r["created"])[-36:]],
+    }
+
+
+def compact(run: dict[str, Any]) -> dict[str, Any]:
+    def span(step: dict[str, Any]) -> float | None:
+        ok = step["start"] and step["end"]
+        return round(step["end"] - step["start"], 1) if ok else None
+
+    return {
+        "kind": run["kind"],
+        "status": run["status"],
+        "partition": run["partition"] or run["range"],
+        "start": datetime.fromtimestamp(run["start"], UTC).isoformat() if run["start"] else None,
+        "duration_s": round(run["end"] - run["start"], 1) if run["start"] and run["end"] else None,
+        "steps_s": {k: span(v) for k, v in run["steps"].items()},
+        "metadata": run["metadata"],
+    }
 
 
 def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -246,10 +267,10 @@ def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def tracked_at(runs: dict[str, Any]) -> dict[str, float]:
+def tracked_at(runs: list[dict[str, Any]]) -> dict[str, float]:
     """End of the first successful run that tracked each hourly partition."""
     out: dict[str, float] = {}
-    for r in runs.get("storm_runs", []):
+    for r in runs:
         step = r["steps"].get("gold__storm_tracks")
         if r["partition"] and step and step["status"] == "SUCCESS" and step["end"]:
             out[r["partition"]] = min(out.get(r["partition"], step["end"]), step["end"])
@@ -747,7 +768,7 @@ def main() -> None:
     except Exception:
         results["files"] = {"error": traceback.format_exc()}
     section(results, "silver", lambda: silver_latency(flashes, commits))
-    ready = tracked_at(results.get("dagster", {}))
+    ready = results.get("dagster", {}).get("tracked_at", {})
     section(results, "replay", lambda: replay(cat, flashes, commits, ready))
     json.dump(results, sys.stdout, default=str, indent=1)
     print()
