@@ -71,8 +71,8 @@ Adopt the third option, specified in [immersive view](../immersive-view.md):
    stay restrained; near the floor the glow stays within twice the observed footprint; exposure
    changes smoothly with altitude only. Numeric bounds are in the specification.
 8. **Budgets.** On the reference Mac, at every pose with the storm view afterglow (0), and at
-   `globe` with the 30 minute afterglow: frame cost p95 ≤ 10 ms
-   without a tier drop, no frame over 50 ms in a flight, no more than 2 % near white pixels. GPU
+   `globe` with the 30 minute afterglow: frame cost p95 ≤ 10 ms without a tier drop, no frame
+   over 50 ms in a flight, no more than 2 % near white pixels. GPU
    textures and buffers ≤ 384 MB desktop and 256 MB mobile; first load ≤ 10 MB desktop and 8 MB
    mobile; diving from `globe` to `iss` ≤ 12 MB desktop and 5 MB mobile. Every M5 PR touching the
    scene measures them with `web/scripts/bench.mjs` against the recorded baseline.
@@ -91,7 +91,9 @@ Adopt the third option, specified in [immersive view](../immersive-view.md):
   with stroke like timing, and forces the afterglow to 0 while a storm is open (#258 keeps it
   while following). Today a flash flickers in scene time: at the default 60× replay its 60 to
   600 ms flicker lasts 1 to 10 ms on screen, under one frame.
-- The whiteout measured with the 30 minute afterglow no longer concerns storm views.
+- The baseline at 400 km shows blurred clouds and ground at about 8 ms per frame: the cost
+  leaves room for the new detail. The whiteout measured with the 30 minute afterglow (up to
+  96 % near white at `iss`) no longer concerns storm views.
 - Until #125 and #131 land, the views below a few thousand km keep showing pixels: the baseline
   records this as the starting point, not a target.
 - Compressed Earth textures and one channel cloud frames (about 150 MB less GPU memory) are the

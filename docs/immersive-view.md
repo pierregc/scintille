@@ -167,45 +167,45 @@ before they fall under 30 fps and drop a tier.
 
 ## Baseline
 
-Measured 2026-10-28 on `main` 31d5bf3 against production; raw results and screenshots in
-[`immersive/baseline/`](immersive/baseline/): `bench-desktop.json` and `bench-mobile.json` at
-30 minutes, `afterglow-0/` (default), `no-clouds/` (default, clouds off) and
-`afterglow-30-no-clouds/` (R1 and R4). Videos stay on the maintainer's Mac.
+Measured 2026-10-28 on `main` 31d5bf3 against production, at the four poses. Raw results and
+screenshots in [`immersive/baseline/`](immersive/baseline/): `bench-desktop.json`,
+`bench-mobile.json` and one 1920 px screenshot per storm and pose at afterglow 0, with a 100 %
+centre crop at `iss` and `window` (`R1-iss-crop.jpg`…); `afterglow-30/` holds the same runs with
+the 30 minute afterglow.
 
-| | Afterglow 0 (default) | Afterglow 30 min |
+| | Afterglow 0 (storm view) | Afterglow 30 min |
 |---|---|---|
-| Frame cost p95, desktop | 5.8 to 8.2 ms everywhere, tier `high` | 8 ms at `globe`; up to 46 ms at `regional`, 48 to 78 ms at `close` and `deck` (R1 to R3), tier dropped to `low` |
-| Frame cost p95, mobile emulation | not run | 5 to 10 ms, up to 22 ms (`close`) and 26 ms (`deck`) on R1 |
-| 3 s flight, desktop | p95 ≤ 9.3 ms, no interval over 50 ms | up to 108 ms p95, 37 intervals over 50 ms |
-| Active flashes (display window) | 7 to 361 | 172 to 9,846 |
-| Flashes uploaded to the GPU | 1,018 to 77,558 (whole replay) | same |
-| Near white pixels (1280 px screenshots) | 0 % | 19 to 58 % at `regional`, 58 to 94 % at `close` and `deck` |
-| GPU textures and buffers | 277 MB desktop (183 MB without clouds), 245 MB mobile | same |
-| Initial load | 6.4 to 9.2 MB (R1 to R3 over the mobile budget), of which clouds 5.0 to 7.1 MB, Earth 1.0 MB, flashes 0.01 to 0.78 MB, code 0.3 MB | same |
-| Globe ready, storm framed | 0.43 to 0.52 s, 3.8 to 4.2 s | 0.54 to 2.46 s, 4.8 to 7.2 s |
-| Zoom transfer | 0 (no level of detail yet) | 0 |
+| Frame cost p95, desktop | 7.3 to 8.3 ms at every pose, tier `high` | 7.4 to 8.4 ms at `globe`; up to 41 ms at `regional` and 61 ms at `iss` (R1), tier dropped to `medium` or `low` on R1 to R3 |
+| Frame cost p95, mobile emulation | 2.9 to 6.0 ms, tier `medium` | up to 35 ms at `iss` (R1) |
+| 3 s flight, desktop | p95 ≤ 9.2 ms, no interval over 50 ms | up to 108 ms p95, 19 intervals over 50 ms (R1 to `iss`) |
+| Active flashes (display window) | 7 to 359 | 172 to 9,845 |
+| Near white pixels | 0 % | 0 at `globe`; 19 to 60 % at `regional`, 38 to 77 % at `iss` (96 % on mobile, R2) |
+| GPU textures and buffers | 277 MB at `high` (268 + 8.5), 245 MB at `medium` | same |
+| Initial load | 5.5 to 9.2 MB, of which clouds 4.1 to 7.0 MB, Earth 1.0 MB, flashes up to 0.8 MB, code 0.3 MB | same |
+| Globe ready, storm framed | 0.34 to 0.56 s, 3.7 to 4.1 s | 0.35 to 0.85 s, 3.7 to 4.9 s |
+| Zoom transfer, `globe` to `iss` | about 1 kB (no level of detail yet) | same |
 
 Findings:
 
-1. **The 30 minute afterglow whites out every view below `globe`.** Thousands of glows at 4 times
-   the footprint add up: R1 is as white without clouds as with them, and even R4 (172 flashes) gets
-   a white disc at `deck`. The same overdraw drives the frame cost and the tier drops (#254, rules
-   1, 4, 5 and 6).
-2. **At the default afterglow, cost is flat and the night views are dark.** Close night views show
-   a few soft glows; at `deck`, one channel crosses half the view (R3), drawn over a large flat
-   glow.
-3. **Daytime close views are one blurred cloud.** 4k cloud texels are 67 px wide at `close` and
-   168 px at `deck`; R2, R4 and R5 show a uniform grey white surface with a hard horizon (#131).
-4. **City lights turn into blocks.** Black Marble texels are 11 to 67 px from `regional` to
-   `close` (R1, night) (#125).
-5. **Textures are uncompressed.** The globe loads the Earth as WebP into three 45 MB RGBA8
-   textures although KTX2 tiers exist, and each 4k cloud frame takes 45 MB for one channel of data.
-   Compressed Earth textures and one channel clouds would free about 150 MB for surface detail
-   (#252) and finer clouds (#131).
-6. **Clouds are 70 to 80 % of the first load.** Zoom loads nothing today.
-7. **The storm track draws over the sky at `deck`** (R3): its lines cross the horizon (#126).
-8. **The `deck` horizon is a hard edge** between the cloud shell and space; the atmosphere is not
-   drawn from inside (#126).
+1. **At the floor, everything is pixels or blur.** At `iss` the clouds are soft blobs 30 to 40 px
+   wide and the ground under them a smeared 4k texture (`R2-iss.jpg`, crops). At `window`, the
+   far half reads well (coasts, cloud fields, limb), the near half is blurred (`R5-window.jpg`).
+   This is the gap #125, #251 to #253 and #131 close; until then the floor views are not judged
+   on looks.
+2. **Default storm view cost is flat and low.** About 8 ms everywhere on desktop, 6 ms on mobile
+   emulation: room for finer ground and clouds.
+3. **Paused, the storm view shows almost no lightning.** With afterglow 0 a flash lives about a
+   second of scene time, so a paused frame catches few; playing at 60×, it lives 17 ms on screen
+   and its flicker under one frame. Real time flicker (rule 11) is what will make it visible.
+4. **The 30 minute afterglow whites out the storm views** (38 to 96 % near white at `iss`) and
+   drops the tier: storm views no longer use it (rule 10). At `globe` it costs nothing extra.
+5. **The M3 framing goes below the floor** for compact storms: 306 km for R4 and R5 on desktop.
+   Mobile frames up to 3 times higher (397 to 3,033 km).
+6. **Textures are uncompressed.** The Earth loads as WebP into three 45 MB RGBA8 textures though
+   KTX2 tiers exist, and each 4k cloud frame takes 45 MB for one channel of data: about 150 MB to
+   free for the new levels.
+7. **Clouds are 70 to 80 % of the first load,** which goes over the mobile budget (8 MB) for R1
+   to R3. Zoom loads nothing today.
 
 ## Benchmark
 
@@ -215,7 +215,7 @@ through the poses and writes `bench-<profile>.json` and one screenshot per pose.
 ```sh
 pnpm -C web exec playwright install chromium
 node web/scripts/bench.mjs --refs docs/immersive/references.json --out bench/ \
-  --url https://scintille.app --profile desktop --gl gpu --headed
+  --url https://scintille.app --profile desktop --gl gpu --headed --afterglow 0
 ```
 
 Per storm: cold load (bytes by kind, time to the storm framed), then for each pose the 3 s flight
