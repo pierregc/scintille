@@ -34,7 +34,7 @@ The lightning is fixed; everything else follows from it.
 |---|---|---|
 | Lightning | LI pixel 4.5 km, GLM pixel 8 km, location within about one pixel | Instruments, not improvable |
 | Zoom floor | camera 400 km above the ground (ISS altitude) | 0.23 km per screen pixel, view about 450 km wide: a storm fills the screen, an LI pixel is 19 px. Lower only magnifies the lightning data |
-| Ground | 500 m per texel (day, night lights, water mask) | At most 2 px per texel at the floor: no visible pixel |
+| Ground | 500 m per texel (day, night lights, water mask); night lights from 0.93 km texels, close to their 0.74 km sensor pixels ([ADR 0022](adr/0022-surface-imagery.md)) | At most 2 px per texel at the floor: no visible pixel |
 | Clouds | about 1 km (2 km accepted where only that exists) | At most 4 px per texel at the floor with bicubic filtering |
 | Immersive view | chosen on captures once ground and clouds are upgraded | #126, after #253 and #131 |
 
