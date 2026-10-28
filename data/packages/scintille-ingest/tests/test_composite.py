@@ -536,9 +536,9 @@ def test_collector_clears_work_left_by_a_restart(tmp_path: Path) -> None:
 def test_a_failed_chunk_is_downloaded_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import scintille_ingest.clouds.sources as sources_module
+    import time
 
-    monkeypatch.setattr(sources_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(time, "sleep", lambda _: None)
     src = sources(segments=9)
     assert src.mtg is not None
     fetch = src.mtg.fetch
@@ -550,6 +550,6 @@ def test_a_failed_chunk_is_downloaded_again(
             raise ConnectionError("reset")
         return fetch(product, entry)
 
-    src.mtg.fetch = flaky  # type: ignore[method-assign]
+    monkeypatch.setattr(src.mtg, "fetch", flaky)
     downloaded = src.download(src.find(SLOT), tmp_path)
     assert len(downloaded["mtg-i1/chunks"]) == 40 and failures["left"] == 0
