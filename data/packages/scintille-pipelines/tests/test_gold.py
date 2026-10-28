@@ -235,6 +235,7 @@ def test_gold_day_end_to_end(lake: LakeResource, r2: FeedResource) -> None:
     assert sla.keys() == {"glm-east", "glm-west", "mtg-li"}
     mtg = sla["mtg-li"]
     assert (mtg["files"], mtg["completeness"], mtg["latency_p50_s"]) == (0, 0.0, None)
+    assert mtg["expected_files"] == 144
     east = sla["glm-east"]
     assert (east["files"], east["failed_files"], east["expected_files"]) == (4, 1, 4320)
     assert east["completeness"] == pytest.approx(3 / 4320)

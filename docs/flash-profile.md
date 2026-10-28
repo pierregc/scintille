@@ -1,64 +1,145 @@
 # Flash profile
 
 How bright a flash is on screen over time. Implemented in `web/src/globe/lightning/profile.ts` (TypeScript
-reference, unit-tested) and its GLSL twin used by the lightning shader. Times are scene time, so replay
-speed compresses them.
+reference, unit-tested) and its GLSL twin used by the shaders. Sizes, channels and halos by zoom are in
+[immersive view](immersive-view.md#lightning-scale).
 
-## Flicker, then afterglow
+## Two clocks
 
-1. **Flicker phase.** Lasts the measured flash duration, clamped to 60–600 ms (and to 60 % of the display
-   time). It holds one pulse per 150 ms, from 1 to 4. Each pulse rises in 4 ms and decays with a time
-   constant between 25 and 64 ms, picked per flash; each later pulse is 0.7× the previous one. Pulses after the first are jittered per flash, so
-   neighbouring flashes do not blink in step.
-2. **Afterglow.** A dim glow rises over the flicker phase, then decays exponentially with a time constant
-   of a quarter of the display duration, shifted to reach exactly zero at its end. The eye reads brightness
-   on a log scale, so this looks like a steady fade. The display duration is chosen in the HUD
-   ("Afterglow": 0, 1 or 30 minutes, 0 by default, saved in `localStorage`). At 0 the flash leaves no
-   trace: its flicker, then a 1 s fade.
+A flash starts at its observed time, in scene time. Its flicker then plays in **wall clock time**, whatever
+the replay speed ([ADR 0020](adr/0020-immersive-storm-view.md)): replay speed compresses the gaps between
+flashes, never a flash. At 60×, a minute of storm plays in a second, and each of its flashes still lasts
+its observed duration on screen. At 1× and in live, both clocks are the same.
 
-   Its level is 12 % of the first pulse up to 5 minutes, then `0.12 × 5 / minutes`: a longer window keeps
-   more flashes on screen, so each one glows dimmer and the light on screen at 30 minutes stays that of
-   5 minutes. New flashes stay visible over the older ones.
+Wall clock age is scene age divided by the replay speed (`playback.ts`). When the speed changes during
+play, flashes already lit keep the pace they started with. Pausing freezes both clocks, so a paused
+frame shows the flashes of the last second of play at their current stage. Offline renders keep 1×.
 
-The result is the maximum of the two. A short flash is a single blink with a faint tail; a long one
-stutters three or four times before settling into the glow.
+## Flicker, then fade
+
+1. **Pulses.** The flicker lasts the observed flash duration, clamped to 60 ms to 1 s. It holds pulses
+   timed like return strokes: about 60 ms apart (log-triangular gaps from 10 to 200 ms, median 60 ms),
+   as many as fit in the duration, at most 12. The first pulse has the full level; each later one is
+   picked between 0.3 and 0.9 of it. Each pulse rises at once and decays with a time constant picked
+   between 15 and 60 ms. The pattern is procedural and seeded by the flash position: only the start,
+   duration, energy and footprint are observed.
+2. **Shutter.** Each frame shows a pulse averaged over the last 1/60 s, like a camera shutter, so a pulse
+   is never lost between two frames and its light reaches the screen whatever the frame rate.
+3. **Fade.** A dim glow (12 % of the first pulse) rises over the flicker, then decays exponentially to
+   exactly zero at the end of the flash life: 1 s, or the flicker plus 0.5 s for long flashes. At
+   afterglow 0, the flash then leaves no trace.
+
+The result is the brightest of the three. A short flash is one or two blinks; a long one crackles for its
+whole duration before fading.
+
+## Cloud-to-ground and in-cloud
+
+A seed picks about 25 % cloud-to-ground looks (see [Channel](#channel)); the rest are in-cloud. Satellites
+cannot tell them apart, so this split, like the patterns below, is procedural.
+
+- **Cloud-to-ground** flashes flash in distinct strokes and go dark in between, as return strokes do. In
+  40 % of them, the first or second subsequent stroke holds a continuing current: a steady 20 to 30 %
+  glow for up to 250 ms, within the observed duration.
+- **In-cloud** flashes glow between their pulses (15 to 25 % of the first pulse) while their leaders
+  spread, and fade 80 ms after the observed duration.
+
+Leaders light the channel as they go. In-cloud ones start from a fifth of the path and cover it by
+80 % of the flicker, slowing down (`1 - (1 - t)²`); their light drifts along the channel from 0.6 radius
+on one side of the observed position to 0.6 radius on the other, so it stays within the observed
+footprint and averages back to the observed position. Ground leaders reach the ground within 20 ms.
+
+## Afterglow
+
+The HUD offers an afterglow of 0, 1 or 30 minutes of **scene time** (0 by default, saved in
+`localStorage`). After the flash life, a glow stays and decays with a time constant of a quarter of the
+window, shifted to reach exactly zero at its end. Its level is 12 % of the first pulse up to 5 minutes,
+then `0.12 × 5 / minutes`, so the light on screen at 30 minutes stays that of 5 minutes.
+
+A storm view (a storm open in replay) forces the afterglow to 0 without changing the saved choice; the
+HUD shows 0 and greys the other choices. The 1 and 30 minute afterglows stay for the globe overview.
+
+## Overlaps in a storm view
+
+At 60×, a storm view shows about a minute of flashes at once. Glows there use screen blending
+(`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white, and a flash still
+shows over sunlit clouds without whitening them. The cloud light keeps the brightest flash at each point.
+On the globe overview, flashes keep adding up, so active regions glow brighter.
+
+A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
+time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
+shortens each flash to its first pulses, at 3600× to a frame or two: the cost stays bounded, but near
+the floor the image still whitens at those speeds.
 
 ## Channel
 
-While a flash flickers, a screen-space ribbon follows a 3D random walk. The
-vertex shader generates its main channel and three branches from a seed derived from the event
-time and location. Revisiting a flash or rebasing GPU times preserves its shape.
+While a flash flickers, its channel shows: a skeleton of segments built once per flash
+(`skeleton.ts`), drawn as screen-space ribbons. Its shape is procedural and drawn from a seed of the
+event time and position, so a flash keeps its shape when revisited. Satellites only see the light: none
+of this shape is observed.
 
-The channel is 2.2 flash radii long in either direction, at least 6 px, with a 1.6 px width.
-Horizontal size has a pixel floor; altitude stays in kilometres so distant channels do not float
-above the globe. Branches only light on the first pulse, later pulses follow the main channel.
-The channel fades over 150 ms after the flicker phase, leaving the round afterglow. The glow
-is held back to 40 % during the channel phase so the cloud does not wash it out.
+**Silhouette.** A seed picks about 25 % cloud-to-ground looks; the rest are in-cloud.
 
-A seed selects about 25 % cloud-to-ground looks: a downward channel from a nominal 7 km cloud
-base to the surface, with downward branches. Its height alone is exaggerated by 2.5× (17.5 km
-on screen), so it reads in a grazing view. The other 75 % spread horizontally at 8–11.5 km,
-just below the 12 km cloud tops; those heights are not exaggerated. Both use the same horizontal
-walk, width, energy and timing, preserving their footprint from above. Satellites cannot classify
-these two kinds: their allocation and exaggerated drops are rendering choices, not measurements.
+- *Ground*: a short leader in the cloud, at 8 to 11.5 km, feeds a channel that drops to the ground
+  2 to 9 km away horizontally, mostly vertical, heights not exaggerated. It is a lone filament (30 %),
+  branched (40 %), forked into two comparable channels (20 %), or strikes the ground at two points (10 %).
+  Its branches go down and out and end in the air.
+- *In-cloud*: one to three leaders spread both ways from where the flash starts, at 8 to 11.5 km, like
+  the roots of a tree, up to 2.2 flash radii away. It is a filament (20 %), branched (30 %) or a wide
+  network without a dominant trunk (50 %).
 
-Only flashes still in that phase enter the channel buffer, capped at 2,048 instances. If a burst
-exceeds this budget, the newest channels remain; all flashes retain their glow and cloud lighting.
-The light map continues to use the full flash buffer.
+**Path.** Each path has one or two broad bends (an elbow or an S), then its midpoints are displaced
+sideways at uneven places, by about the same share of their length at every scale, down to segments of
+a 48th of the flash extent. Segment lengths vary, turns are sharp or soft, and the path never zigzags
+regularly. Branches leave at uneven places, mostly at 20 to 70 degrees, a few almost square, most of
+them on one side; some are short splinters, some as long as the trunk, and they branch again down to
+three levels, coarser as they get finer.
+
+**Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
+the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
+(drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
+in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
+sometimes lavender-rose or warm.
+
+**Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
+reach the ground within 20 ms. Branches light once, when the leader reaches them, then fade (60 ms for
+ground flashes, 120 ms in-cloud); later pulses light the main channels again, as return strokes follow
+an established path. The channel fades over 150 ms after the flicker, leaving the round glow. A channel
+appears as it gets readable: its opacity rises while its half length grows from 6 to 18 CSS px.
+
+**In the cloud and in daylight.** Segments above the 7 km cloud base are seen through the cloud: they
+widen to at least 0.6 km and keep 45 % of their light, scaled down as they widen, with no halo. Over
+sunlit clouds, which outshine a thin channel seen from orbit, channels keep 30 % of their light.
+
+**One flash, two instruments.** Where GLM and MTG LI detections fall within 400 ms and 0.15 degree of
+each other, they are one flash: both keep their glow, only the newest gets a channel.
+
+**Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud; their segments
+overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
+round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
+scaled by the channel opacity. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
+channel carry the flash.
+
+**Budget.** Channels are built only when the camera is close enough for one to be readable (under about
+9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
+256 segments. All flashes keep their glow and cloud light.
 
 ## Channel halo
 
-A second, soft ribbon follows the main channel only, sampling every other core vertex (8 segments
-instead of 16). Branches retain their thin core. The halo is eight times wider and at 30 % of the
-core level. It shares the same profile and fade. Nearby, the round glow falls to 10 % during flicker;
-the round afterglow is unchanged. The halo fades with camera distance from 1,500 to 6,000 km,
-returning the flicker glow to 40 % at globe scale.
+A second, soft ribbon follows the main channel of ground flashes in clear air: eight times wider, at
+30 % of the core level, sharing its opacity, profile, growth and fade, keeping the brightest light where
+it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
+250 ms, which bounds its cost during bursts.
 
-The halo pass is omitted above 512 active channels; the round glow then returns to its previous
-level. This bounds its instance and fill cost during bursts. The benchmark must still establish
-the 500-channel GPU delta at 1080p before this change is ready for review.
+## Cloud light
+
+Flashes also light the clouds from inside, through a light map: a 1024 × 512 equirectangular window
+around the point the camera looks at, 3 times the camera height in half height, up to the whole globe
+from about 3,300 km. Near the floor its texels are 4.7 km and each flash lights about 2 radii around it;
+from afar, 150 km at least, as on the globe; near the floor it is drawn at 45 %, so channels read over
+it. In-cloud flashes light it where their light has drifted.
+The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
 
 ## Reduced motion
 
-With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms (at most 4 %
-of the display duration), falling with a 250 ms time constant, then following the same afterglow.
+With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms, falling with
+a 250 ms time constant, then following the same glow. Light does not drift and channels show whole.

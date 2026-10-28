@@ -1,15 +1,13 @@
 import type { PreferenceStorage } from '../clouds/preference';
 
-/** Choices for how long a flash stays on screen, in minutes of scene time; 0 shows the flash alone. */
+/** Afterglow choices, in minutes of scene time; 0 shows each flash alone, for its wall clock life. */
 export const DISPLAY_MINUTES = [0, 1, 30] as const;
 export const DEFAULT_DISPLAY_MINUTES = 0;
 export const DISPLAY_KEY = 'scintille.display.minutes';
 
 const MINUTE_MS = 60_000;
-/** How long a flash lasts without afterglow: its flicker, then a short fade. */
-export const FLASH_ONLY_MS = 1_000;
 
-export const displayMs = (minutes: number): number => (minutes === 0 ? FLASH_ONLY_MS : minutes * MINUTE_MS);
+export const displayMs = (minutes: number): number => minutes * MINUTE_MS;
 
 function isChoice(minutes: number): boolean {
 	return (DISPLAY_MINUTES as readonly number[]).includes(minutes);

@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import signal
+import socket
 import statistics
 import sys
 from collections.abc import Callable, Sequence
@@ -55,6 +56,8 @@ from scintille_ingest.runtime.state import PostgresState
 log = logging.getLogger("scintille_ingest")
 
 SUMMARY_COLUMNS = ("event_time", "lat", "lon", "energy_raw", "area_km2", "duration_ms", "quality")
+# eumdac sets no timeout: a stalled EUMETSAT read would otherwise block MTG LI forever.
+SOCKET_TIMEOUT = 60.0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -151,6 +154,7 @@ async def run_live(spool_dir: Path, port: int) -> int:
     """Until SIGTERM or SIGINT; file states in Postgres (`SCINTILLE_POSTGRES_DSN`), original files
     in R2 (`SCINTILLE_R2_*`)."""
     configure_json_logs()
+    socket.setdefaulttimeout(SOCKET_TIMEOUT)
     dsn = os.environ.get("SCINTILLE_POSTGRES_DSN")
     if not dsn:
         log.error("SCINTILLE_POSTGRES_DSN is not set")

@@ -1,4 +1,4 @@
-import { Texture } from 'three';
+import { Texture, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { atmosphereParameters } from '../atmosphere';
 import { CLOUD_TOP_KM } from '../lightning';
@@ -72,8 +72,10 @@ describe('createClouds', () => {
 		const { uniforms } = clouds.mesh.material as unknown as { uniforms: Record<string, { value: unknown }> };
 		expect(uniforms.flashGain.value).toBe(0);
 		const map = new Texture();
-		clouds.setFlashLight(map);
+		const window = new Vector4(1, 0.5, 0.4, 0.2);
+		clouds.setFlashLight({ map, window });
 		expect(uniforms.flashLight.value).toBe(map);
+		expect(uniforms.flashWindow.value).toBe(window);
 		expect(uniforms.flashGain.value).toBeGreaterThan(0);
 		clouds.setFlashLight(null);
 		expect(uniforms.flashGain.value).toBe(0);

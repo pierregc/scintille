@@ -17,6 +17,7 @@ from scintille_ingest.runtime.lake_commit import (
     LakeCommit,
     bronze_scope,
     committed_batches,
+    quarantine_scope,
     silver_scope,
 )
 from scintille_ingest.runtime.lake_writer import LakeWriter
@@ -288,3 +289,20 @@ def test_revisions_only_read_the_partitions_of_their_products(
         rows = table.scan(row_filter=scope).to_arrow()
         assert len(list(table.scan(row_filter=scope).plan_files())) == 1
         assert pc.min(rows[column]).as_py() >= later[0].start
+
+
+def commit_one_rejected_flash(spool: Spool, catalog: Catalog, received: datetime) -> None:
+    source = Source(received)
+    source.bad_first_flash.add(source.products[0].key)
+    asyncio.run(IngestLive([source], MemoryState(), spool, clock=lambda: received).poll(source))
+    LakeCommit(lambda: catalog)(spool, spool.pending())
+
+
+def test_quarantine_revisions_only_read_recent_files(tmp_path: Path, catalog: Catalog) -> None:
+    spool = Spool(tmp_path / "spool")
+    commit_one_rejected_flash(spool, catalog, HOUR)
+    commit_one_rejected_flash(spool, catalog, HOUR + timedelta(days=1))
+    table = catalog.load_table(FLASHES_QUARANTINE.identifier)
+    assert len(list(table.scan().plan_files())) == 2
+    scope = quarantine_scope(pl.DataFrame({"received_at": [HOUR + timedelta(days=1)]}))
+    assert len(list(table.scan(row_filter=scope).plan_files())) == 1

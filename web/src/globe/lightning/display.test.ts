@@ -5,7 +5,6 @@ import {
 	DEFAULT_DISPLAY_MINUTES,
 	DISPLAY_KEY,
 	DISPLAY_MINUTES,
-	FLASH_ONLY_MS,
 	displayMs,
 	readDisplayMinutes,
 	writeDisplayMinutes,
@@ -64,6 +63,6 @@ describe('display duration preference', () => {
 		expect(() => assertDisplayMinutes(0)).not.toThrow();
 		expect(() => assertDisplayMinutes(15)).toThrow(RangeError);
 		expect(displayMs(5)).toBe(300_000);
-		expect(displayMs(0)).toBe(FLASH_ONLY_MS);
+		expect(displayMs(0)).toBe(0);
 	});
 });

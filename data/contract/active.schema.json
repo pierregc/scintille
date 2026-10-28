@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scintille:contract:active",
+  "title": "ActiveStorms",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "published_at",
+    "authoritative_until",
+    "update_seconds",
+    "min_level",
+    "sources",
+    "cells",
+    "ended"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/SchemaVersion"
+    },
+    "published_at": {
+      "description": "When this snapshot was written.",
+      "$ref": "common.schema.json#/$defs/UtcTimestamp"
+    },
+    "authoritative_until": {
+      "description": "End of the last hour tracked by the storm catalog. A storm that started before it has its final id; null before the first tracked hour.",
+      "anyOf": [
+        {
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "update_seconds": {
+      "description": "Typical time between snapshots. Clients judge staleness from published_at, never by assuming this cadence.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "min_level": {
+      "description": "Storms below this intensity level (ADR 0009) are left out of cells and ended.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "sources": {
+      "description": "Data frontier of each source in this snapshot.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceFrontier"
+      }
+    },
+    "cells": {
+      "description": "Active storms, one current cell each, strongest first.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ActiveCell"
+      }
+    },
+    "ended": {
+      "description": "Storms that left cells during the last two hours, newest first.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/EndedStorm"
+      }
+    }
+  },
+  "description": "storms/active.json: storms active now and their current cells, rewritten after each update (ADR 0021).",
+  "$defs": {
+    "SourceFrontier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "observed_until"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "common.schema.json#/$defs/Source"
+        },
+        "observed_until": {
+          "description": "End of the newest product file of this source included; null when none is. Its flashes after this time are not in the snapshot yet.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "How far a source's data reaches."
+    },
+    "PathPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "lat",
+        "lon",
+        "flash_count"
+      ],
+      "properties": {
+        "time": {
+          "description": "Mean event time of the slice's flashes, never later than the data.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "flash_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "description": "Centroid of a storm's flashes over one 10 minute slice."
+    },
+    "ActiveCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "provisional",
+        "previous_ids",
+        "slug",
+        "name",
+        "level",
+        "flashes",
+        "t_start",
+        "t_end",
+        "lat",
+        "lon",
+        "bounds",
+        "area_km2",
+        "hull",
+        "sources",
+        "split_from",
+        "merged",
+        "path"
+      ],
+      "properties": {
+        "id": {
+          "description": "Storm id: the catalog storm_id once provisional is false.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "provisional": {
+          "description": "True while the storm started in an hour the catalog has not tracked yet; its id may then be replaced.",
+          "type": "boolean"
+        },
+        "previous_ids": {
+          "description": "Ids this storm had in earlier snapshots, newest first.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "slug": {
+          "description": "Catalog slug once the storm is published (storms/<slug>.json), else null.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Short place name once the catalog has named the storm, else null.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level": {
+          "description": "ADR 0009 level on the data so far; it only rises and is never below the catalog's.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "flashes": {
+          "description": "Flashes of the storm so far on the source its level is computed from.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "t_start": {
+          "description": "First flash of the storm.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "t_end": {
+          "description": "Last flash of the storm so far.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "lat": {
+          "description": "Centroid of the current cell.",
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "bounds": {
+          "$ref": "storm.schema.json#/$defs/StormBounds"
+        },
+        "area_km2": {
+          "description": "Area of the current cell's convex hull.",
+          "type": "number",
+          "minimum": 0
+        },
+        "hull": {
+          "description": "Closed [lon, lat] ring of the current cell's convex hull, at most 33 points. Longitudes stay continuous around the centroid, so they may leave -180..180 near the antimeridian.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 33,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Source"
+          }
+        },
+        "split_from": {
+          "description": "Storm this one split off, when it started that way.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "merged": {
+          "description": "Storms that merged into this one in the open hour.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "path": {
+          "description": "Observed centroids, oldest first, over at most the last two hours. Older positions are in the catalog track.",
+          "type": "array",
+          "maxItems": 13,
+          "items": {
+            "$ref": "#/$defs/PathPoint"
+          }
+        }
+      },
+      "description": "One active storm and its current cell."
+    },
+    "EndReason": {
+      "description": "Why a storm left the feed: expired 30 minutes after its last flash (measured on its sources' data), merged into another storm, replaced by another id while provisional, or no data from its sources for an hour. Only a storm ended by source-gap may come back under the same id.",
+      "type": "string",
+      "enum": [
+        "expired",
+        "merged",
+        "replaced",
+        "source-gap"
+      ]
+    },
+    "EndedStorm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "reason",
+        "into",
+        "t_end",
+        "ended_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reason": {
+          "$ref": "#/$defs/EndReason"
+        },
+        "into": {
+          "description": "Storm that continues it, for merged and replaced; else null.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "t_end": {
+          "description": "Last flash seen for it.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        },
+        "ended_at": {
+          "description": "published_at of the first snapshot without it.",
+          "$ref": "common.schema.json#/$defs/UtcTimestamp"
+        }
+      },
+      "description": "A storm that left the feed, and where to follow it."
+    }
+  }
+}

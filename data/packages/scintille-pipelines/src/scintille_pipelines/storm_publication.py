@@ -15,13 +15,22 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetSelection,
+    Backoff,
+    DagsterRunStatus,
     DefaultScheduleStatus,
     MaterializeResult,
+    RetryPolicy,
     RunRequest,
+    RunsFilter,
     ScheduleEvaluationContext,
+    SkipReason,
     asset,
     define_asset_job,
     schedule,
+)
+from dagster._core.storage.tags import (
+    ASSET_PARTITION_RANGE_END_TAG,
+    ASSET_PARTITION_RANGE_START_TAG,
 )
 from scintille_contract.models import (
     SCHEMA_VERSION,
@@ -41,11 +50,12 @@ from .storm_catalog import (
     replay_chunks,
     selected_flashes,
 )
-from .storm_cells import hourly
+from .storm_cells import BACKFILL, RUN_HOURS, hourly
 from .storm_highlights import haversine_km, highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
 from .storms import STORM_TRACKS, STORMS, _between, _scan
+from .tracking import HOUR
 
 BOOTSTRAP_STORMS = 100
 # Strong and above (ADR 0009): about a quarter of storms, nine tenths of the flashes.
@@ -133,6 +143,7 @@ def summaries(
     key=["feeds", "storm_catalog"],
     partitions_def=hourly,
     deps=[AssetKey(["gold", key]) for key in ("storms", "storm_names", "storm_levels")],
+    backfill_policy=BACKFILL,
     group_name="feeds",
     pool="storm-tracks",
     description="Storm metadata, replay, index, highlights and sitemaps, published in order.",
@@ -251,7 +262,30 @@ def storm_catalog(
 hourly_storm_catalog = define_asset_job(
     "hourly_storm_catalog",
     selection=AssetSelection.assets(storm_catalog).upstream(),
+    # A transient R2 read error must not leave an hour out of the tracking chain.
+    op_retry_policy=RetryPolicy(max_retries=3, delay=30, backoff=Backoff.EXPONENTIAL),
+    # Run monitoring fails a run orphaned by a daemon restart, which frees its pool.
+    run_tags={"dagster/max_runtime": "3600"},
 )
+
+ACTIVE = [
+    DagsterRunStatus.QUEUED,
+    DagsterRunStatus.STARTING,
+    DagsterRunStatus.STARTED,
+    DagsterRunStatus.CANCELING,
+]
+
+
+def hour_of(key: str) -> datetime:
+    return datetime.strptime(key, "%Y-%m-%d-%H:%M").replace(tzinfo=UTC)
+
+
+def next_hours(last: datetime | None, target: datetime) -> tuple[datetime, datetime] | None:
+    """The hours after the last published one, up to `target`, at most one run's worth."""
+    if last is None or last >= target:
+        return None
+    start = last + HOUR
+    return start, min(target, start + (RUN_HOURS - 1) * HOUR)
 
 
 @schedule(
@@ -260,7 +294,19 @@ hourly_storm_catalog = define_asset_job(
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.STOPPED,
 )
-def storm_catalog_schedule(context: ScheduleEvaluationContext) -> RunRequest:
+def storm_catalog_schedule(context: ScheduleEvaluationContext) -> RunRequest | SkipReason:
+    """Publishes up to the previous hour, starting from the first hour not published yet."""
     now = context.scheduled_execution_time or datetime.now(UTC)
-    key = hourly.get_partition_key_for_timestamp((now - timedelta(hours=1)).timestamp())
-    return RunRequest(run_key=key, partition_key=key)
+    instance = context.instance
+    if instance.get_runs(RunsFilter(job_name=hourly_storm_catalog.name, statuses=ACTIVE), limit=1):
+        return SkipReason("A catalog run is still queued or running")
+    target = hour_of(hourly.get_partition_key_for_timestamp((now - HOUR).timestamp()))
+    published = instance.get_materialized_partitions(storm_catalog.key)
+    last = hour_of(max(published)) if published else None
+    hours = next_hours(last, target)
+    if hours is None:
+        return SkipReason("Up to date" if last else "Nothing published yet: start a chain first")
+    start, end = (hourly.get_partition_key_for_timestamp(t.timestamp()) for t in hours)
+    return RunRequest(
+        tags={ASSET_PARTITION_RANGE_START_TAG: start, ASSET_PARTITION_RANGE_END_TAG: end}
+    )

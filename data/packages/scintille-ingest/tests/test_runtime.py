@@ -399,3 +399,82 @@ def test_a_failing_heartbeat_does_not_disturb_ingestion(tmp_path: Path) -> None:
     assert len(pinger.pings) >= 2
     assert len(Spool(tmp_path).pending()) == 3
     assert not any(t.exception() for t in live._tasks if not t.cancelled())
+
+
+class HangingSource(FakeSource):
+    """The first download never returns, like a stalled EUMETSAT read."""
+
+    async def fetch(self, product: Product) -> bytes:
+        if self.fetches == 0:
+            self.fetches += 1
+            await asyncio.Event().wait()
+        return await super().fetch(product)
+
+
+def test_a_hung_download_is_abandoned_and_retried(tmp_path: Path) -> None:
+    spool = Spool(tmp_path)
+    live = IngestLive(
+        [HangingSource("mtg-li")],
+        MemoryState(),
+        spool,
+        clock=lambda: NOW,
+        settings=Settings(fetch_timeout=0.05, initial_backoff=0.01, max_backoff=0.02),
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(live.run(grace=1))
+        for _ in range(500):
+            await asyncio.sleep(0.01)
+            if len(spool.pending()) == 3:
+                break
+        live.stop()
+        await task
+
+    asyncio.run(scenario())
+    assert len(spool.pending()) == 3
+    assert live.metrics.counters[("ingest_errors_total", (("source", "mtg-li"),))] == 1
+
+
+def test_the_disk_loop_survives_a_failed_check(tmp_path: Path) -> None:
+    calls = {"n": 0}
+
+    def usage(path: Path) -> DiskUsage:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise FileNotFoundError("batch deleted while listed")
+        return DiskUsage(100, 40, 60)
+
+    live = IngestLive([], MemoryState(), Spool(tmp_path), disk_usage=usage)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(live.disk_loop(every=0.01))
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            if calls["n"] >= 3:
+                break
+        live.stop()
+        await task
+
+    asyncio.run(scenario())
+    assert live.metrics.counters[("disk_check_errors_total", ())] == 1
+    assert live.metrics.gauges[("spool_disk_used_ratio", ())] == 0.4
+
+
+def test_spool_listing_skips_batches_deleted_meanwhile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spool = Spool(tmp_path)
+    log = pl.DataFrame({"key": ["k"]})
+    for batch in ("a", "b"):
+        spool.write(batch, pl.DataFrame({"x": [1]}), log)
+    stat = Path.stat
+
+    def racing_stat(path: Path, **kwargs: object) -> object:
+        if path.name.startswith("a."):
+            raise FileNotFoundError(path)
+        return stat(path, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "stat", racing_stat)
+    assert spool.pending() == ["b"]
+    assert spool.size_bytes() == stat(spool.path("b")).st_size + stat(spool.log_path("b")).st_size
+    assert spool.oldest_pending_time() is not None
