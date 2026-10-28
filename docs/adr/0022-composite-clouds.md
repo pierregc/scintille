@@ -75,13 +75,13 @@ NOAA open data; Himawari is credited to JMA; GMGSI keeps its credit.
 
 ## Measurements
 
-2026-10-18 at 12, 14, 19 and 23 UTC, rendered on the reference Mac (10 worker processes):
+2026-10-18 at 12, 14, 19 and 23 UTC, rendered on the reference Mac:
 
 | | Per hourly frame |
 |---|---|
 | Download | 1.9 to 2.3 GB (FCI 1.0 to 1.1 GB, GOES band 2 0.3 to 0.4 GB each, Himawari band 3 0.1 to 0.3 GB), 104 to 138 s over a home line |
 | Decode | 30 s, peak resident memory 2.2 GB of which about 1.4 GB are the memory-mapped disks |
-| Render | 80 to 122 s, 330 to 630 s of CPU |
+| Render | 123 s with 2 worker processes, 240 s of CPU (14 UTC) |
 | Tiles | 1,286 to 1,810, 30 to 34 MB; `2k` 0.31 MB and `4k` 0.94 to 1.0 MB, as GMGSI |
 | Ready | about 15 min after the hour, published 20 to 30 min after it (GMGSI: about 45 min) |
 
