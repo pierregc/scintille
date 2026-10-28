@@ -32,6 +32,7 @@ async function source(file, sha256) {
 	}
 	return JSON.parse(data.toString('utf8'));
 }
+
 /** Cities kept: Natural Earth scale rank at most this (lower is more important). */
 const CITY_RANK = 3;
 
