@@ -1,7 +1,7 @@
 import type { Clouds } from './index';
 import { CLOUD_MAX_GAP_MS } from './index';
 import { type CloudFrame, loadCloudFrame } from './frame';
-import { type CloudManifest, type CloudTier, frameSources, parseCloudManifest } from './manifest';
+import { type CloudFrameSource, type CloudManifest, type CloudTier, frameSources, parseCloudManifest } from './manifest';
 import { boundedBody } from './response';
 import { CLOUD_ARCHIVE_RULES as RULES } from '../../contract/cloud-archive';
 
@@ -9,6 +9,7 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const REFRESH_MS = 60_000;
 const TEXTURE_PATH = new RegExp(RULES.texture_path_pattern);
+const DETAIL_PATH = new RegExp(RULES.detail_path_pattern);
 
 interface ArchiveManifest extends Omit<CloudManifest, 'window_seconds'> {
 	schema_version: number;
@@ -25,6 +26,7 @@ export function parseArchive(json: unknown, day: string): ArchiveManifest {
 	for (const frame of manifest.frames) {
 		if (new Date(frame.time).toISOString().slice(0, 10) !== day ||
 			!Number.isFinite(Date.parse(frame.expires_at))) throw new Error('invalid archive cloud frame');
+		if (frame.detail && !DETAIL_PATH.test(frame.detail.path)) frame.detail = null;
 		for (const [tier, texture] of Object.entries(frame.textures)) {
 			if (!texture || !RULES.tiers.includes(tier) ||
 				!TEXTURE_PATH.test(texture.path) ||
@@ -68,7 +70,7 @@ export class ArchiveCloudFeed {
 	readonly #failed = new Map<string, number>();
 	#time: number | undefined;
 	#days: string[] = [];
-	#sources: { time: number; url: string }[] = [];
+	#sources: CloudFrameSource[] = [];
 	#discovery: Work | undefined;
 	#loading: Work | undefined;
 	#attribution: string | null = null;
@@ -179,7 +181,7 @@ export class ArchiveCloudFeed {
 					frame.texture.dispose(); return;
 				}
 				this.#loaded.set(source.url, source.time);
-				this.#options.clouds.setFrame(frame);
+				this.#options.clouds.setFrame({ ...frame, detail: source.detail });
 			} catch {
 				if (!request.signal.aborted) this.#failed.set(source.url, this.#now() + REFRESH_MS);
 			}

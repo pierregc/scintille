@@ -2,6 +2,7 @@ import { Color, FrontSide, Mesh, ShaderMaterial, SphereGeometry, type Texture, V
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
+import type { CloudDetail, DetailSource } from './detail';
 import type { CloudFrame } from './frame';
 import { browserStorage, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 import { blendPair, easePosition, framePosition, MAX_CLOUD_FRAMES } from './timeline';
@@ -38,6 +39,8 @@ export interface CloudsOptions {
 	storage?: PreferenceStorage | null;
 	/** Frames kept on the GPU. */
 	maxFrames?: number;
+	/** Finer tiles near the camera, when the frames have them. */
+	detail?: CloudDetail;
 }
 
 export interface Clouds {
@@ -58,6 +61,8 @@ export interface Clouds {
 	setTime(utcMs: number): void;
 	/** Flash glow map in Earth UV space that lights the clouds from inside; null turns it off. */
 	setFlashLight(map: Texture | null): void;
+	/** Detail tiles of the two frames being blended, while the layer shows. */
+	detailFrames(): readonly [DetailSource | null, DetailSource | null];
 	dispose(): void;
 }
 
@@ -77,6 +82,7 @@ export function createClouds(
 		bicubic = true,
 		storage = browserStorage(),
 		maxFrames = MAX_CLOUD_FRAMES,
+		detail,
 	}: CloudsOptions = {},
 ): Clouds {
 	const geometry = new SphereGeometry(cloudShellRadius(radius, altitudeKm), widthSegments, heightSegments);
@@ -105,8 +111,9 @@ export function createClouds(
 			flashLight: { value: null },
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
+			...detail?.uniforms,
 		},
-		defines: bicubic ? { BICUBIC: '' } : {},
+		defines: { ...(bicubic ? { BICUBIC: '' } : {}), ...(detail ? { DETAIL: '' } : {}) },
 		side: FrontSide,
 		transparent: true,
 		depthWrite: false,
@@ -200,6 +207,11 @@ export function createClouds(
 				? easePosition(position, target(), Math.abs(utcMs - previous) / 1000)
 				: target();
 			show();
+		},
+		detailFrames() {
+			if (!mesh.visible || frames.length === 0) return [null, null];
+			const { a, b } = blendPair(position, frames.length);
+			return [frames[a].detail ?? null, frames[b].detail ?? null];
 		},
 		setFlashLight(map) {
 			material.uniforms.flashLight.value = map;

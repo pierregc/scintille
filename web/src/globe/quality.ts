@@ -14,15 +14,17 @@ export interface QualityPreset {
 	clouds: '2k' | '4k';
 	/** Bicubic cloud filtering. */
 	cloudBicubic: boolean;
+	/** Finer cloud tiles near the camera. */
+	cloudDetail: boolean;
 	/** Bloom and grading (#58). */
 	postProcessing: boolean;
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, postProcessing: false },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: false },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: true },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, cloudDetail: false, postProcessing: false },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: false },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: true },
 };
 
 export interface DeviceHints {

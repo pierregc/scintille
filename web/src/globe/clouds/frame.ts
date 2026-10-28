@@ -1,4 +1,5 @@
-import { NoColorSpace, RepeatWrapping, type Texture, TextureLoader } from 'three';
+import { NoColorSpace, RedFormat, RepeatWrapping, type Texture, TextureLoader } from 'three';
+import type { DetailSource } from './detail';
 import { boundedBody } from './response';
 import { CLOUD_ARCHIVE_RULES } from '../../contract/cloud-archive';
 
@@ -7,6 +8,8 @@ export interface CloudFrame {
 	texture: Texture;
 	/** Observation time in UTC milliseconds, for the HUD. */
 	time: number;
+	/** Finer tiles of the same observation, if published. */
+	detail?: DetailSource | null;
 }
 
 export async function loadCloudFrame(url: string, time: number, loader = new TextureLoader(), signal?: AbortSignal): Promise<CloudFrame> {
@@ -20,6 +23,8 @@ export async function loadCloudFrame(url: string, time: number, loader = new Tex
 	finally { URL.revokeObjectURL(objectUrl); }
 	if (signal?.aborted) { texture.dispose(); signal.throwIfAborted(); }
 	texture.colorSpace = NoColorSpace;
+	// One channel on the GPU: a quarter of the memory of the decoded RGBA image.
+	texture.format = RedFormat;
 	texture.wrapS = RepeatWrapping;
 	return { texture, time };
 }

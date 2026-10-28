@@ -148,7 +148,7 @@ export class CloudFeed {
 					return;
 				}
 				this.#loaded.add(source.url);
-				this.#onFrame(frame);
+				this.#onFrame({ ...frame, detail: source.detail });
 			}
 			if (frameError !== undefined) throw frameError;
 			this.#failures = 0;

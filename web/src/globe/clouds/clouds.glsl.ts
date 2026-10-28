@@ -53,10 +53,8 @@ float twilight(float sinElevation) {
 }
 
 // Cubic B-spline from four bilinear taps: rounds texel blocks off when zoomed in.
-float sampleOpacity(sampler2D map, vec2 uv) {
+float sampleOpacity(sampler2D map, vec2 uv, vec2 gx, vec2 gy) {
 #ifdef BICUBIC
-	vec2 gx = dFdx(uv);
-	vec2 gy = dFdy(uv);
 	vec2 st = uv * cloudMapSize - 0.5;
 	vec2 i = floor(st);
 	vec2 f = st - i;
@@ -80,6 +78,53 @@ float sampleOpacity(sampler2D map, vec2 uv) {
 #endif
 }
 
+#ifdef DETAIL
+uniform sampler2DArray detailTiles;
+uniform sampler2D detailPagesA;
+uniform sampler2D detailPagesB;
+uniform vec2 detailGrid;
+uniform vec2 detailCells;
+uniform float detailOn;
+
+// Same B-spline inside one tile of the array; the tile's border holds its neighbours' texels.
+float tileOpacity(vec2 geo, float z, float slot) {
+	vec2 count = vec2(exp2(z + 1.0), exp2(z));
+	float size = detailGrid.x + 2.0 * detailGrid.y;
+	vec2 st = fract(geo * count) * detailGrid.x + detailGrid.y - 0.5;
+	vec2 i = floor(st);
+	vec2 f = st - i;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 g0 = w0 + w1;
+	vec2 g1 = w2 + w3;
+	vec2 h0 = (i - 0.5 + w1 / g0) / size;
+	vec2 h1 = (i + 1.5 + w3 / g1) / size;
+	float a = texture(detailTiles, vec3(h0.x, h0.y, slot)).r;
+	float b = texture(detailTiles, vec3(h1.x, h0.y, slot)).r;
+	float c = texture(detailTiles, vec3(h0.x, h1.y, slot)).r;
+	float d = texture(detailTiles, vec3(h1.x, h1.y, slot)).r;
+	return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * c + g1.x * d);
+}
+
+// The finest loaded tile over this cell, faded in over the one below it, else the global frame.
+float frameOpacity(sampler2D pages, sampler2D map, vec2 geo, vec2 gx, vec2 gy) {
+	ivec2 cell = ivec2(min(floor(geo * detailCells), detailCells - 1.0));
+	vec4 top = texelFetch(pages, ivec2(cell.x * 2, cell.y), 0) * 255.0;
+	if (top.g < 0.5) return sampleOpacity(map, vUv, gx, gy);
+	float value = tileOpacity(geo, top.g, top.r);
+	if (top.b < 254.5) {
+		vec4 under = texelFetch(pages, ivec2(cell.x * 2 + 1, cell.y), 0) * 255.0;
+		float base = under.g < 0.5 ? sampleOpacity(map, vUv, gx, gy) : tileOpacity(geo, under.g, under.r);
+		value = mix(base, value, top.b / 255.0);
+	}
+	return value;
+}
+#endif
+
 void main() {
 	vec3 n = normalize(vNormal);
 	vec3 sun = normalize(vSun);
@@ -97,7 +142,22 @@ void main() {
 	// Flashes light the cloud from inside; clear sky has no alpha, so it never glows.
 	color += flashColor * (1.0 - exp(-flashGain * texture2D(flashLight, vUv).r));
 
-	float opacity = mix(sampleOpacity(cloudMap, vUv), sampleOpacity(cloudMapNext, vUv), cloudMix) * maxOpacity;
+	// Derivatives taken here, in uniform control flow, serve every tap below.
+	vec2 gx = dFdx(vUv);
+	vec2 gy = dFdy(vUv);
+	float opacity;
+#ifdef DETAIL
+	if (detailOn > 0.5) {
+		// Geographic position from the normal: exact on the faceted shell, unlike the vertex UVs.
+		vec3 ln = normalize(vLocalNormal);
+		vec2 geo = vec2(atan(-ln.z, ln.x) / 6.283185307 + 0.5, 0.5 - asin(clamp(ln.y, -1.0, 1.0)) / 3.141592654);
+		float a = frameOpacity(detailPagesA, cloudMap, geo, gx, gy);
+		float b = cloudMix > 0.0 ? frameOpacity(detailPagesB, cloudMapNext, geo, gx, gy) : a;
+		opacity = mix(a, b, cloudMix);
+	} else
+#endif
+	opacity = mix(sampleOpacity(cloudMap, vUv, gx, gy), sampleOpacity(cloudMapNext, vUv, gx, gy), cloudMix);
+	opacity *= maxOpacity;
 	float mu = max(dot(n, view), 0.05);
 	float alpha = 1.0 - pow(1.0 - opacity, 1.0 / mix(1.0, mu, limbThickening));
 	alpha *= 1.0 - smoothstep(fadeLatitudes.x, fadeLatitudes.y, abs(normalize(vLocalNormal).y));

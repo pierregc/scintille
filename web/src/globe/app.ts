@@ -1,10 +1,11 @@
-import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { Matrix4, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
 import { ArchiveCloudFeed } from './clouds/archive';
+import { createCloudDetail } from './clouds/detail';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { CloudPlayback } from './clouds/playback';
@@ -73,6 +74,7 @@ export interface GlobeApp {
 }
 
 const RADIUS = 1;
+const EARTH_RADIUS_KM = 6371;
 const FOV = 35;
 const SHELLS = [
 	cloudShellRadius(RADIUS),
@@ -108,11 +110,14 @@ export function createGlobeApp(
 	scene.add(earth.mesh);
 	const atmosphere = createAtmosphere(RADIUS);
 	earth.mesh.add(atmosphere.mesh);
+	const cloudDetail = preset.cloudDetail && !renderParams ? createCloudDetail(renderer) : undefined;
 	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), {
 		radius: RADIUS,
 		bicubic: preset.cloudBicubic,
 		maxFrames: LIVE_CLOUD_FRAMES,
+		detail: cloudDetail,
 	});
+	const cloudInverse = new Matrix4();
 	earth.mesh.add(clouds.mesh);
 	const cloudFeed = new CloudFeed({
 		baseUrl: liveBaseUrl(),
@@ -231,6 +236,18 @@ export function createGlobeApp(
 		atmosphere.setTime(now);
 		if (!renderParams) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
+		if (cloudDetail) {
+			camera.updateMatrixWorld();
+			cloudDetail.update({
+				camera,
+				inverseWorld: cloudInverse.copy(clouds.mesh.matrixWorld).invert(),
+				shellRadius: cloudShellRadius(RADIUS),
+				kmPerUnit: EARTH_RADIUS_KM / RADIUS,
+				heightPx: canvas.clientHeight || window.innerHeight,
+				frames: clouds.detailFrames(),
+				now: performance.now(),
+			});
+		}
 		stars.setTime(now);
 		data.update(now);
 		const delays = playbackDelays();
@@ -315,6 +332,7 @@ export function createGlobeApp(
 			atmosphere.dispose();
 			detachDevClouds?.();
 			clouds.dispose();
+			cloudDetail?.dispose();
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
