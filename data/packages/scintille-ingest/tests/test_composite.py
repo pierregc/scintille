@@ -402,6 +402,27 @@ def test_detail_tiles_are_written_once_and_both_manifests_point_to_them() -> Non
     assert resolved == packs[0]
 
 
+def test_detail_packs_leave_the_archive_after_a_day() -> None:
+    import obstore
+
+    pub, store = publisher()
+    textures = {"2k": b"x", "4k": b"y"}
+    detail = {tiles.Key(3, 2, 8): b"a"}
+    asyncio.run(pub.publish(SLOT, "first", "gfs", textures, SLOT, detail))
+    later = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(later, "second", "gfs", textures, later, detail))
+    packs = sorted(
+        m["path"] for batch in obstore.list(store, prefix="archive/clouds/detail/") for m in batch
+    )
+    assert len(packs) == 1 and packs[0].startswith(
+        f"archive/clouds/detail/2026/10/19/{later:%Y%m%dT%H%M%SZ}-"
+    )
+    day = ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
+    )
+    assert day.frames[0].detail is None and day.frames[0].textures
+
+
 def test_pack_index_covers_every_level() -> None:
     assert tiles.INDEX_SLOTS == 128 + 512 + 2048
     assert tiles.index_slot(tiles.Key(3, 0, 0)) == 0

@@ -87,15 +87,18 @@ NOAA open data; Himawari is credited to JMA; GMGSI keeps its credit.
 | Tiles | 1,286 to 1,810, 30 to 34 MB; `2k` 0.31 MB and `4k` 0.94 to 1.0 MB, as GMGSI |
 | Ready | about 15 min after the hour, published 20 to 30 min after it (GMGSI: about 45 min) |
 
-| | Per day | 30 day archive |
+| | Per day | Kept |
 |---|---|---|
 | Ingress | 45 to 55 GB | |
-| R2 storage | about 0.8 GB | about 25 GB, about 0.4 USD a month |
+| R2 storage, detail | about 0.8 GB | one day: about 0.8 GB |
+| R2 storage, `2k` and `4k` | about 31 MB | 30 days: about 0.9 GB |
 | R2 writes (class A) | about 200 | about 6,000 a month |
 
-The account was already past the R2 free tier before this change (October 2026: 44 GB stored,
-25 million reads, almost all by the lake). One object per frame keeps the composite's writes
-negligible; written tile by tile, they would have added about 1.2 million a month (5.4 USD).
+The goal is to stay within the R2 free tier (10 GB stored, 1 million writes and 10 million reads a
+month); the account was already past it before this change because of the lake (October 2026:
+44 GB stored, 25 million reads). One object per frame keeps the composite's writes negligible
+(tile by tile: about 1.2 million a month), and keeping the detail one day keeps its storage under
+1 GB (30 days: about 25 GB).
 
 Client, five reference storms at the hour, four poses ([immersive view](../immersive-view.md)),
 `bench.mjs` at afterglow 0, against the baseline:
@@ -130,7 +133,8 @@ Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive
   about 4 GB of disk while a frame is built.
 - Each close view reads the frame's index (21 kB) and its tiles by range; Cloudflare caches the
   object at the edge after the first read.
-- The 30 day lifecycle on `archive/clouds/` also bounds the detail of replays.
+- Detail lives one day: replays of older storms show the `4k` frame, about 10 km. A longer
+  retention costs about 0.8 GB of R2 storage a day kept.
 - Offline rendering (`/render`) keeps the global frames; it does not load detail yet.
 - The texture array with page tables is generic: the ground detail of
   [ADR 0022](0022-surface-imagery.md) (#252, #253) can reuse it to draw in one pass.

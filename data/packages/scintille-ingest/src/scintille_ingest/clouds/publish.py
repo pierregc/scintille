@@ -28,6 +28,8 @@ log = logging.getLogger("scintille_ingest.clouds")
 ATTRIBUTION = "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)"
 WINDOW = timedelta(hours=6)
 ARCHIVE_RETENTION = timedelta(days=30)
+DETAIL_RETENTION = timedelta(days=1)
+"""Detail packs are the bulk of the archive; older replays keep the global textures."""
 TEXTURE_HEADERS = {
     "Content-Type": "image/webp",
     "Cache-Control": "public, max-age=31536000, immutable",
@@ -206,6 +208,7 @@ class CloudPublisher:
             await self._delete(path)
         self.expired = {t.path for f in before for t in f.textures.values()} - kept
         await self._archive(frame, textures, now, detail_ref)
+        await self._expire_details(now)
         return frame
 
     async def _detail(
@@ -286,6 +289,30 @@ class CloudPublisher:
             await self.archive.put(key, manifest.model_dump_json().encode(), MANIFEST_HEADERS)
         except Exception:
             log.exception("cloud archive publication failed")
+
+    async def _expire_details(self, now: datetime) -> None:
+        """Deletes the detail packs published before the retention and unlists them."""
+        cutoff = now - DETAIL_RETENTION
+        for day in sorted({(cutoff - timedelta(days=1)).date(), cutoff.date()}):
+            key = f"manifests/{day}.json"
+            try:
+                data = await self.archive.get(key)
+                if not data:
+                    continue
+                manifest = ArchiveCloudManifest.model_validate_json(data)
+                frames = []
+                for frame in manifest.frames:
+                    if frame.detail and frame.published_at < cutoff:
+                        await self.archive.delete(frame.detail.path.removeprefix("../"))
+                        frame = frame.model_copy(update={"detail": None})
+                    frames.append(frame)
+                if frames != manifest.frames:
+                    updated = manifest.model_copy(update={"frames": frames, "generated_at": now})
+                    await self.archive.put(
+                        key, updated.model_dump_json().encode(), MANIFEST_HEADERS
+                    )
+            except Exception:
+                log.exception("cloud detail expiry failed", extra={"fields": {"day": str(day)}})
 
     async def _delete(self, path: str) -> None:
         try:

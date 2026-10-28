@@ -203,9 +203,11 @@ that ignore it keep the global textures:
   little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
   order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
   index, then each tile, with HTTP range requests.
-- The object is written once, before the manifests, under `archive/clouds/detail/` (30 day
-  lifecycle); the live manifest and the daily archive index both point there, each with a path
-  relative to itself (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
+- The object is written once, before the manifests, under `archive/clouds/detail/`; the live
+  manifest and the daily archive index both point there, each with a path relative to itself
+  (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
+- Detail is kept one day: the publisher then deletes the object and removes the `detail` block
+  from its archive index, so older replays keep the `2k` and `4k` textures only.
 
 ## Historical cloud discovery
 
