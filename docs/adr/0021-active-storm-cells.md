@@ -1,6 +1,6 @@
 # 0021 · Active storm cells: update cadence and feed contract
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 
 ## Context
