@@ -286,3 +286,28 @@ Region availability uses HEAD requests, and mixed storm/region sitemaps are name
 The remaining deployment prerequisites, schedule decision and dated evidence for #74 are tracked
 in [storm publication acceptance](qa/storm-publication-acceptance.md). Source defaults and unit
 tests do not establish production schedule state or measured publication freshness.
+
+## Active storms
+
+`active-storms` (`scintille-active-storms`, outside Dagster) rewrites `storms/active.json` every
+5 minutes ([ADR 0021](adr/0021-active-storm-cells.md), [contract](data-contract.md#active-storms-on-r2)).
+Each update clusters the open hour, and the previous one until 15 minutes past its end, with
+`labelled_hour` (the catalog's `hour_cells`), links them with the catalog's `link` from its last
+tracked hour, and levels them with ADR 0009 on top of the catalog's counts. An hour the catalog has
+not tracked is kept as computed and relinked whenever the catalog moves, so ids converge on the
+catalog's. A storm that takes over a merged or replaced one takes its level too, so it stays listed.
+
+- **Reads.** Only the silver and bronze files added since the previous update, from the new
+  snapshots' manifests; files are listed afresh at start and once a day. Silver commits about
+  every 6.5 minutes, GLM flashes reach it after 7 minutes at p95 (2026-10-28), so the service also
+  reads lake-writer's spool read-only, as the ADR's temporary input, until silver meets 2 minutes.
+- **Hot spots.** The same files feed flash counts per 0.05° cell and hour, so the catalog's rule
+  runs every hour without reading three days of silver again; a day's centre is its mean position
+  rather than its median.
+- **Bounds.** One update at a time, 1 CPU and 1 GiB. A failed update or a snapshot failing
+  `scintille_contract.active` leaves the previous object in place. After a restart the service reads
+  its last snapshot back; a vanished provisional storm is `replaced` by the storm holding most of
+  its flashes, or whose hull overlaps it most.
+
+`uv run scintille-active-storms --once --dry-run` runs one update against the lake in the
+environment and prints its timings without writing.

@@ -65,19 +65,72 @@ def pixel_days(flashes: pl.DataFrame, end: datetime, rule: HotspotRule) -> pl.Da
             .fill_null(0.0)
             .alias("spread_km"),
         )
-        .with_columns(
-            pixel=(pl.col("flashes") >= rule.pixel_min_flashes)
-            & (pl.col("hours") >= rule.pixel_min_hours),
-            last=pl.col("day") == 0,
+        .pipe(_flag, rule)
+    )
+
+
+def _flag(days: pl.DataFrame, rule: HotspotRule) -> pl.DataFrame:
+    return days.with_columns(
+        pixel=(pl.col("flashes") >= rule.pixel_min_flashes)
+        & (pl.col("hours") >= rule.pixel_min_hours),
+        last=pl.col("day") == 0,
+    ).with_columns(
+        busy=pl.col("last")
+        & (pl.col("flashes") >= rule.min_flashes)
+        & (pl.col("hours") >= rule.min_hours),
+        stuck=pl.col("pixel") & (pl.col("spread_km") < rule.pixel_spread_km),
+        tight=pl.col("pixel") & pl.col("last") & (pl.col("spread_km") < rule.pixel_tight_km),
+    )
+
+
+def pixel_hours(flashes: pl.DataFrame, rule: HotspotRule) -> pl.DataFrame:
+    """Flashes per grid cell and hour with their position sums, so days add up later."""
+    return (
+        flashes.with_columns(
+            pl.col("source").cast(pl.Categorical),
+            gi=(pl.col("lat") / rule.grid_deg).floor().cast(pl.Int32),
+            gj=(pl.col("lon") / rule.grid_deg).floor().cast(pl.Int32),
+            hour=pl.col("event_time").dt.truncate("1h"),
         )
-        .with_columns(
-            busy=pl.col("last")
-            & (pl.col("flashes") >= rule.min_flashes)
-            & (pl.col("hours") >= rule.min_hours),
-            stuck=pl.col("pixel") & (pl.col("spread_km") < rule.pixel_spread_km),
-            tight=pl.col("pixel") & pl.col("last") & (pl.col("spread_km") < rule.pixel_tight_km),
+        .group_by(*CELL, "hour")
+        .agg(
+            pl.len().cast(pl.Int64).alias("flashes"),
+            pl.col("lat").sum().alias("lat_sum"),
+            pl.col("lon").sum().alias("lon_sum"),
+            (pl.col("lat") ** 2).sum().alias("lat_sq"),
+            (pl.col("lon") ** 2).sum().alias("lon_sq"),
         )
     )
+
+
+def hotspots_from_hours(hours: pl.DataFrame, end: datetime, rule: HotspotRule) -> pl.DataFrame:
+    """`fixed_hotspots` from `pixel_hours`; a day's position is its mean, not its median."""
+    n = pl.col("flashes")
+
+    def std(total: str, squares: str) -> pl.Expr:
+        variance = (pl.col(squares) - pl.col(total) ** 2 / n) / (n - 1)
+        return pl.when(n > 1).then(variance.clip(0).sqrt())
+
+    days = (
+        hours.filter(pl.col("hour").is_between(end - rule.lookback, end, closed="left"))
+        .with_columns(
+            day=((pl.lit(end) - pl.col("hour")).dt.total_microseconds() - 1) // 86_400_000_000
+        )
+        .group_by(*CELL, "day")
+        .agg(
+            pl.col("flashes", "lat_sum", "lon_sum", "lat_sq", "lon_sq").sum(),
+            pl.col("hour").n_unique().alias("hours"),
+        )
+        .with_columns(lat=pl.col("lat_sum") / n, lon=pl.col("lon_sum") / n)
+        .with_columns(
+            (std("lat_sum", "lat_sq") * std("lon_sum", "lon_sq") * pl.col("lat").radians().cos())
+            .sqrt()
+            .mul(KM_PER_DEGREE)
+            .fill_null(0.0)
+            .alias("spread_km")
+        )
+    )
+    return hotspots_from_days(_flag(days, rule), rule)
 
 
 def hotspots_from_days(days: pl.DataFrame, rule: HotspotRule) -> pl.DataFrame:

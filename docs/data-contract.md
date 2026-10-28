@@ -908,9 +908,10 @@ has not tracked yet, recomputed from silver with the catalog's own clustering an
 - `ended` keeps every storm that left `cells` in the last two hours, with the reason (`expired`,
   `merged`, `replaced`, `source-gap`) and, for merges and replacements, the storm to follow.
   A split starts a new storm with `split_from`; the main branch keeps the id.
-- `level` follows ADR 0009 on the data so far and only rises. Storms under `min_level` are left
-  out. `path` holds the centroid of each 10 minute slice of observed flashes, at the slice's mean
-  event time, over at most the last two hours; earlier positions are in the catalog track.
+- `level` follows ADR 0009 on the data so far and only rises. A storm that a merged or replaced
+  storm continues into takes at least its level. Storms under `min_level` are left out. `path`
+  holds the centroid of each 10 minute slice of observed flashes, at the slice's mean event time,
+  over at most the last two hours; earlier positions are in the catalog track.
 
 Clients poll at their own pace and judge staleness from `published_at`. A storm is shown at the
 earlier of the scene time and its sources' `observed_until`, never extrapolated beyond its last
