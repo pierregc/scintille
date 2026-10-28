@@ -92,11 +92,18 @@ NOAA open data; Himawari is credited to JMA; GMGSI keeps its credit.
 | R2 writes (class A) | about 40,000 | about 1.2 million a month, about 5.4 USD before the free tier |
 
 Client, five reference storms at the hour, four poses ([immersive view](../immersive-view.md)),
-desktop profile: GPU textures 210 to 221 MB (baseline 268 MB); first load 4.4 to 8.4 MB (baseline
-6.6 to 8.1 MB); dive from `globe` to `iss` 0 to 2.1 MB. Alternating the detail path on and off on
-the same page at `iss` and `window` (3840 × 2160) changes the frame interval by 0.3 to 0.7 ms.
-Absolute frame costs measured that day were inflated by other GPU work on the machine and are not
-comparable with the baseline.
+`bench.mjs` at afterglow 0, against the baseline:
+
+| | Desktop | Mobile emulation (R2, R5) | Baseline desktop |
+|---|---|---|---|
+| Frame cost p95 | 5.4 to 10.0 ms, tier kept at `high` | 2.3 to 5.4 ms, `medium` | 7.3 to 8.3 ms |
+| 3 s flights | p95 at most 10.2 ms, no interval over 50 ms | | p95 at most 9.2 ms |
+| GPU textures | 210 to 221 MB | 178 MB | 268 MB |
+| First load | 5.0 to 8.7 MB | 3.9 to 4.7 MB | 6.6 to 8.1 MB |
+| `globe` to `iss` | 0 to 1.1 MB | 0 to 0.3 MB | about 1 kB |
+
+Alternating the detail path on and off on the same page at `iss` and `window` (3840 × 2160)
+changes the frame interval by 0.3 to 0.7 ms.
 
 Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive/composite/).
 
