@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--headed] [--video]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -19,6 +19,7 @@ const { values } = parseArgs({
 		gl: { type: 'string', default: 'gpu' },
 		seconds: { type: 'string', default: '8' },
 		storm: { type: 'string' },
+		afterglow: { type: 'string' },
 		headed: { type: 'boolean', default: false },
 		video: { type: 'boolean', default: false },
 	},
@@ -326,7 +327,7 @@ async function benchStorm(browser, storm, outDir) {
 	await context.addInitScript(instrument);
 	await context.addInitScript((minutes) => {
 		try { localStorage.setItem('scintille.display.minutes', String(minutes)); } catch { /* private mode */ }
-	}, storm.afterglow ?? 0);
+	}, values.afterglow !== undefined ? Number(values.afterglow) : storm.afterglow ?? 0);
 	const page = await context.newPage();
 	page.setDefaultTimeout(120_000);
 	page.on('console', (message) => { if (message.type() === 'error') process.stderr.write(`page: ${message.text()}\n`); });
@@ -389,6 +390,7 @@ async function benchStorm(browser, storm, outDir) {
 			playing,
 			playingCost,
 			flashes,
+			quality: await page.evaluate(() => document.querySelector('canvas')?.dataset.quality ?? null),
 			memory: await page.evaluate(() => globalThis.scintilleBench.memory()),
 			screenshot: shot,
 		};
