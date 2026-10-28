@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--no-clouds] [--surface base|tiles|vectors|both] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--headed] [--video]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -20,6 +20,7 @@ const { values } = parseArgs({
 		profile: { type: 'string', default: 'desktop' },
 		gl: { type: 'string', default: 'gpu' },
 		seconds: { type: 'string', default: '8' },
+		speed: { type: 'string' },
 		storm: { type: 'string' },
 		afterglow: { type: 'string' },
 		surface: { type: 'string' },
@@ -291,22 +292,24 @@ async function record(page, ms, sync = false) {
 	return page.evaluate(() => { const b = globalThis.scintilleBench; b.recording = false; return b.frames; });
 }
 
-/** Flashes inside the display window at the current scene time, from the app's ring. */
+/** Flashes on screen at the current scene time, from the app's ring: a wall clock second of flashes, or the afterglow window. */
 function activeFlashes() {
 	const app = globalThis.scintilleBench.app;
 	const { ring, delays } = app.debug;
 	const now = app.clock.time();
 	const d = delays();
-	const span = Math.max(1, app.lightning.displayMinutes) * 60_000;
+	const minutes = app.lightning.stormView ? 0 : app.lightning.displayMinutes;
+	const speed = app.clock.mode === 'replay' ? app.clock.speed : 1;
+	const span = Math.max(minutes * 60_000, 1000 * speed);
 	let active = 0;
 	let flicker = 0;
 	for (let i = 0; i < ring.size; i++) {
 		const s = ring.slot(i);
 		const age = now - (ring.time[s] + d.ms[ring.source[s]]);
 		if (age >= 0 && age < span) active++;
-		if (age >= 0 && age < 750) flicker++;
+		if (age >= 0 && age < 750 * speed) flicker++;
 	}
-	return { held: ring.size, active, flicker, displayMinutes: app.lightning.displayMinutes, sceneTime: new Date(now).toISOString() };
+	return { held: ring.size, active, flicker, displayMinutes: minutes, speed, sceneTime: new Date(now).toISOString() };
 }
 
 /** Pose templates from the reference file, centred on the storm. */
@@ -393,7 +396,11 @@ async function benchStorm(browser, storm, outDir) {
 		const exposure = brightness(await page.screenshot({ path: shot }));
 		const view = new URL(await page.evaluate(() => globalThis.scintilleBench.app.shareUrl())).searchParams.get('view');
 		const paused = frameStats(await record(page, 2000, true));
-		await page.evaluate(() => globalThis.scintilleBench.app.clock.play());
+		await page.evaluate((speed) => {
+			const { clock } = globalThis.scintilleBench.app;
+			if (speed) clock.setSpeed(speed);
+			clock.play();
+		}, values.speed === undefined ? null : Number(values.speed));
 		const playing = frameStats(await record(page, seconds * 500));
 		const playingCost = frameStats(await record(page, seconds * 500, true));
 		const flashes = await page.evaluate(activeFlashes);
@@ -442,6 +449,7 @@ const report = {
 	profile: values.profile,
 	afterglow: values.afterglow ?? 'per storm',
 	surface: values.surface ?? null,
+	speed: values.speed ?? 'opened at 60',
 	clouds: values.clouds,
 	gl: values.gl,
 	headed: values.headed,

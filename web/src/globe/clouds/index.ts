@@ -56,8 +56,8 @@ export interface Clouds {
 	setVisible(visible: boolean): void;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
-	/** Flash glow map in Earth UV space that lights the clouds from inside; null turns it off. */
-	setFlashLight(map: Texture | null): void;
+	/** Flash glow map over a window of the globe that lights the clouds from inside; null turns it off. */
+	setFlashLight(light: { map: Texture; window: Vector4 } | null): void;
 	dispose(): void;
 }
 
@@ -103,6 +103,7 @@ export function createClouds(
 			limbThickening: { value: 0.6 },
 			fadeLatitudes: { value: new Vector2(...CLOUD_FADE_LATITUDES.map((lat) => Math.sin(lat * DEG))) },
 			flashLight: { value: null },
+			flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
 		},
@@ -201,9 +202,10 @@ export function createClouds(
 				: target();
 			show();
 		},
-		setFlashLight(map) {
-			material.uniforms.flashLight.value = map;
-			material.uniforms.flashGain.value = map ? FLASH_GAIN : 0;
+		setFlashLight(light) {
+			material.uniforms.flashLight.value = light?.map ?? null;
+			if (light) material.uniforms.flashWindow.value = light.window;
+			material.uniforms.flashGain.value = light ? FLASH_GAIN : 0;
 		},
 		dispose() {
 			disposed = true;

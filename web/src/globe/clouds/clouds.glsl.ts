@@ -1,3 +1,5 @@
+import { flashLightGlsl } from '../lightning/light-map.glsl';
+
 export const cloudsVertexShader = /* glsl */ `
 uniform vec3 sunDirection;
 
@@ -36,7 +38,7 @@ uniform float terminatorTint;
 uniform float maxOpacity;
 uniform float limbThickening;
 uniform vec2 fadeLatitudes;
-uniform sampler2D flashLight;
+${flashLightGlsl}
 uniform vec3 flashColor;
 uniform float flashGain;
 
@@ -94,8 +96,8 @@ void main() {
 	float edge = exp(-(s - 0.03) * (s - 0.03) / 0.004);
 	color *= mix(vec3(1.0), warmTint, terminatorTint * edge);
 	color += nightColor * (1.0 - level);
-	// Flashes light the cloud from inside; clear sky has no alpha, so it never glows.
-	color += flashColor * (1.0 - exp(-flashGain * texture2D(flashLight, vUv).r));
+	// Flashes light the cloud from inside, barely visible on sunlit tops; clear sky has no alpha, so it never glows.
+	color += flashColor * (1.0 - exp(-flashGain * flashLightAt(vUv))) * max(1.0 - color, 0.0);
 
 	float opacity = mix(sampleOpacity(cloudMap, vUv), sampleOpacity(cloudMapNext, vUv), cloudMix) * maxOpacity;
 	float mu = max(dot(n, view), 0.05);

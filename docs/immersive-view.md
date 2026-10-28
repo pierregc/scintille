@@ -62,7 +62,7 @@ because the orbit camera stops at 1,274 km; the surface camera takes over with a
 at a distance `d` one CSS pixel of a 1080 px tall view covers `d × 0.000584` km across the line of
 sight. At `window`, the nearest visible ground is 510 km away and the centre 740 km.
 
-| Pose | km per CSS px | GLM pixel | LI pixel | Earth 4k texel (9.8 km) | GMGSI cloud (8 km) | Ground target (0.5 km) | Cloud target (1 km) | Glow radius, r = 8 km |
+| Pose | km per CSS px | GLM pixel | LI pixel | Earth 4k texel (9.8 km) | GMGSI cloud (8 km) | Ground target (0.5 km) | Cloud target (1 km) | Glow radius before #254, r = 8 km |
 |---|---|---|---|---|---|---|---|---|
 | `globe` | 11.7 | 0.7 px | 0.4 px | 0.8 px | 0.7 px | | | 2.7 px |
 | `regional`, R1 (873 km) | 0.51 | 16 px | 9 px | 19 px | 16 px | 1.0 px | 2.0 px | 63 px |
@@ -70,9 +70,9 @@ sight. At `window`, the nearest visible ground is 510 km away and the centre 740
 | `iss` | 0.23 | 34 px | 19 px | 42 px | 34 px | 2.1 px | 4.3 px | 137 px |
 | `window`, nearest ground | 0.30 | 27 px | 15 px | 33 px | 27 px | 1.7 px | 3.4 px | 107 px |
 
-Glow radius is 4 times the observed radius `r = √(area / π)` at mid intensity (0.6 to 1.4 times
-with intensity), at least 5 physical px. Channel half length is 2.2 `r`, at least 6 physical px.
-At DPR 2, a physical px is half a CSS px.
+Before #254, the glow radius was 4 times the observed radius `r = √(area / π)` at mid intensity
+(0.6 to 1.4 times with intensity), at least 5 CSS px, and the channel half length 2.2 `r`, at least
+6 CSS px, at every zoom. [Lightning scale](#lightning-scale) gives the sizes since.
 
 What the table says:
 
@@ -82,6 +82,73 @@ What the table says:
 - The M3 framing of small storms (R4, R5) goes below the floor (306 km); it moves to 400 km.
 - Near the floor the 4 times glow (137 px radius at `iss`) hides the cells it should reveal.
 
+## Lightning scale
+
+Since #254, every lightning size is a continuous function of `k`, the km per CSS px at the flash
+([`zoom.ts`](../web/src/globe/lightning/zoom.ts), mirrored in the shaders). With `r` the observed
+radius and `i` the intensity:
+
+- **Farness** `f = smoothstep(0, 1, ln(k / 0.3) / ln 10)`: 0 up to 0.3 km per px (the floor poses),
+  1 from 3 km per px.
+- **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
+  1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
+  point of 3 to 7 CSS px when that is larger.
+- **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
+- **Halo**: 8 core widths at 30 % of the core, with the channel opacity, fading from 1,500 to
+  6,000 km away.
+- **Bloom** strength `0.9 × (0.15 + 0.85 f)`, with `k` taken from the camera height only.
+- **Cloud light**: a window 3 times the camera height in half height around the point looked at
+  (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
+  at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
+
+1 world unit is 6,371 km: a world length is `km / 6371`, a CSS px is `k` km. Representative values
+at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 5, 10.5 and 18.6 km):
+
+| Pose | km per CSS px | `f` | Glow, r = 5 km | Glow, r = 10.5 km | Glow, r = 18.6 km | Glow, r = 10.5 km, world units | Channel half length, r = 10.5 km, opacity | Channel opacity, r = 5 km | Bloom |
+|---|---|---|---|---|---|---|---|---|---|
+| `globe` | 11.7 | 1 | 58 km, 5 px | 58 km, 5 px | 74 km, 6 px | 0.0092 | 2 px, 0 | 0 | 0.90 |
+| mid zoom (camera 2,000 km) | 1.17 | 0.63 | 15 km, 13 px | 32 km, 28 px | 57 km, 49 px | 0.0051 | 20 px, 1 | 0.20 | 0.62 |
+| `regional`, R1 (873 km) | 0.51 | 0.13 | 9 km, 18 px | 19 km, 38 px | 34 km, 67 px | 0.0030 | 45 px, 1 | 1 | 0.24 |
+| `regional`, R4 and R5 (306 km) | 0.18 | 0 | 8 km, 42 px | 16 km, 88 px | 28 km, 156 px | 0.0025 | 129 px, 1 | 1 | 0.14 |
+| `iss` | 0.23 | 0 | 8 km, 32 px | 16 km, 67 px | 28 km, 119 px | 0.0025 | 99 px, 1 | 1 | 0.14 |
+| `window`, nearest ground | 0.30 | 0 | 8 km, 25 px | 16 km, 53 px | 28 km, 94 px | 0.0025 | 78 px, 1 | 1 | 0.14 |
+| `window`, target | 0.43 | 0.07 | 8 km, 19 px | 18 km, 41 px | 31 km, 72 px | 0.0028 | 53 px, 1 | 1 | 0.14 |
+
+The glow profile has a hot core: its light falls to half at about 0.3 of the glow radius and to a
+tenth at half of it, so near the floor a glow of 1 to 2 `r` reads as a disc of 0.5 to 1 `r`, and
+the cloud light around it spreads over about 2 `r`.
+
+Physical scale and compensation:
+
+- Positions, footprints, energies and durations keep their measured values at every pose; channel
+  lengths are physical; channel heights follow [Observed, procedural, assumed](#observed-procedural-assumed).
+- Compensation only applies where the footprint is a few pixels: the 4 times glow and the point
+  size from afar, the pixel width of channels and halos, and the bloom. Near the floor the glow is
+  1 to 2 footprints and the bloom 15 % of the globe's.
+- Each flash flickers for its observed duration in wall clock time, so at 60× a storm view shows
+  about a minute of flashes at once ([flash profile](flash-profile.md)). Glows there use screen
+  blending, the cloud light keeps the brightest flash, and bloom and cloud light scale with how
+  dark the scene is, so overlaps and sunlit clouds never turn white.
+
+Measured on 2026-10-28 with a local production build of #254 against production data, on the same
+Mac as the baseline; captures at the four poses in [`immersive/lightning-scale/`](immersive/lightning-scale/).
+The Mac also ran other GPU jobs that evening, so frame costs swung by up to 3 times between runs of the
+same build; the figures below compare builds run back to back.
+
+| | #254 | `main` |
+|---|---|---|
+| Frame cost, desktop, 60×, quiet repetitions of interleaved runs (R1, R2, R5; `regional`, `iss`, `window`) | 7.3 to 9.1 ms | 6.8 to 7.8 ms |
+| Frame cost p95, mobile emulation, 60×, all storms and poses | 2.8 to 6.4 ms, tier `medium` | 2.2 to 5.5 ms |
+| 3 s flights | no interval over 50 ms | same |
+| Near white pixels, bench screenshot (paused at 60×) | at most 0.9 % (R1 `iss`), desktop | 0 % |
+| Flashes on screen at once, 60× | up to about 360 (R1) | under a second of scene time |
+| GPU textures and buffers | 283 MB desktop, 243 MB mobile | 285 MB, 245 MB |
+| First load, zoom transfer | unchanged | |
+
+At 600× and 3600×, the 500 flash budget keeps the frame cost at 10 to 15 ms and the tier at `high` on
+R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but near white pixels reach
+12 % (600×) and 22 % (3600×) at `iss`: those speeds show ten minutes or an hour per second.
+
 ## Observed, procedural, assumed
 
 | Element | Status | Source in the renderer |
@@ -90,7 +157,8 @@ What the table says:
 | Flash position | Observed, within about 8 km (GLM) or 4.5 km (LI) | `FlashInstances` |
 | Flash footprint area | Observed (illuminated cloud top area) | `flashShape.y`, radius `√(area / π)`, at least 3 km |
 | Flash brightness | Observed energy, normalized | `intensityBrightness` |
-| Flicker pulses within the duration | Procedural, seeded | `flashProfile` |
+| Flicker pulses within the duration | Procedural, seeded, timed like return strokes, played in wall clock time | `flashProfile` |
+| Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches | Procedural, seeded | `ribbon.glsl.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
 | Channel heights (8 to 11.5 km, ground strokes from 7 km base) | Assumed, ground strokes exaggerated 2.5× | `CHANNEL` |
@@ -171,7 +239,9 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
 
 Measured with `bench.mjs` on the five storms, four poses, clouds on, at afterglow 0 (the storm
 view setting). The 30 minute afterglow is measured at `globe` only, where it stays offered. Every
-M5 PR touching the scene runs it before and after.
+M5 PR touching the scene runs it before and after. Since #254 an open storm forces afterglow 0, so
+the benchmark, which opens the storms, measures every pose at 0; the 30 minute afterglow concerns
+the globe overview without a storm.
 
 | Metric | Desktop | Mobile |
 |---|---|---|
@@ -246,7 +316,9 @@ Per storm: cold load (bytes by kind, time to the storm framed), then for each po
 cost with the GPU synchronized each frame), the quality tier, active flashes, draw calls, the
 largest instance counts per draw, the GPU memory the page allocated (textures, buffers, render
 buffers, drawing buffer) and the screenshot brightness. `--afterglow <minutes>` overrides the
-reference afterglow and `--no-clouds` hides the clouds.
+reference afterglow, `--speed` plays at another replay speed than 60× and `--no-clouds` hides the
+clouds. Active flashes count those started within a second of wall clock time, or within the
+afterglow window.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the

@@ -67,7 +67,8 @@ The globe turns `intensity` into two visual cues, in
 | Cue | Mapping | Range |
 |---|---|---|
 | Brightness (linear light) | `0.08 + 0.92 × intensity^2.2` | 0.08 to 1 |
-| Glow radius multiplier | `0.6 + 0.8 × intensity` | 0.6 to 1.4 |
+| Glow radius multiplier, from afar | `0.6 + 0.8 × intensity` | 0.6 to 1.4 |
+| Glow radius over the footprint radius, near the floor | `1 + intensity` | 1 to 2 |
 
 **Brightness.** The renderer works in linear light and encodes its output to sRGB, which is close to
 a 1/2.2 power. Raising `intensity` to the power 2.2 undoes that encoding, so the value that reaches
@@ -76,13 +77,18 @@ look like roughly equal steps of brightness. A flash twice as far up the intensi
 looks about twice as far up the brightness scale. The floor of 0.08 keeps the weakest flashes
 visible: an empty spot must mean "no detection", never "too faint to draw".
 
-**Size.** The glow radius (already set by the measured flash area, with a minimum on-screen size)
-is multiplied by a factor that grows linearly with `intensity`. The area of the glow, which is what
-the eye compares, then grows faster than linearly, which helps strong flashes stand out without
-making weak ones vanish.
+**Size.** The glow radius starts from the measured flash area and grows with `intensity`. Near the
+storm view floor it stays close to the footprint, 1 to 2 times its radius from the weakest to the
+strongest flash. From afar, where a footprint covers a pixel or less, it is compensated: 4 times the
+radius times `0.6 + 0.8 × intensity`, with a minimum on-screen size, so distant flashes stay visible
+points. The transition is continuous with zoom ([lightning scale](immersive-view.md#lightning-scale)).
+The area of the glow, which is what the eye compares, grows faster than linearly with `intensity`,
+which helps strong flashes stand out without making weak ones vanish.
 
 Both cues multiply the time profile of the flash ([flash-profile.md](flash-profile.md)). The same
 brightness mapping also drives the glow that flashes cast inside the clouds.
 
 **Limits.** Brightness on screen is relative: it depends on the device, the bloom pass and how many
-flashes overlap. It shows which flashes are stronger, not absolute energy values.
+flashes overlap. It shows which flashes are stronger, not absolute energy values. In a storm view,
+overlapping glows use screen blending and fade on sunlit clouds, so a flash over a bright cloud
+looks fainter than the same flash at night.

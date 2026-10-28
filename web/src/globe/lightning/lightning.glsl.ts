@@ -1,36 +1,40 @@
-import { CHANNEL } from './channel';
+import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
+import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { zoomGlsl } from './zoom';
 
 export const lightningVertexShader = /* glsl */ `
 attribute vec4 flash;
-attribute vec3 flashShape;
+attribute vec4 flashShape;
 
 uniform float time;
 uniform float duration;
 uniform float radius;
 uniform float lift;
 uniform float kmToWorld;
-uniform float glowScale;
-uniform float minPixels;
 uniform float viewportHeight;
 uniform float flicker;
 uniform float haloStrength;
 
 varying vec2 vCorner;
 varying float vBrightness;
-varying float vFade;
-varying float vHalo;
+varying float vDip;
 
+${playbackGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
+${zoomGlsl}
+${channelGlsl}
+${cloudDriftGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
-	float seed = fract(sin(dot(flash.xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-	float age = time - flash.w;
-	float brightness = flashProfile(age, duration, flashShape.z, seed, flicker) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing);
+	float seed = flashShape.w;
+	bool ground = isGround(seed);
+	float age = wallAge(time, flash.w);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -39,19 +43,19 @@ void main() {
 	vec3 east = abs(normal.y) > 0.999 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), normal));
 	vec3 north = cross(normal, east);
 	float distance = length(cameraPosition - center);
-	float pixel = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight);
-	float size = max(flashShape.y * kmToWorld * glowScale, minPixels * pixel) * intensityScale(flashShape.x);
+	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
+	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx) * kmToWorld;
 
-	float flickerEnd = clamp(flashShape.z / 1000.0, ${f(CHANNEL.fade)}, ${f(PROFILE.maxFlicker)}) + ${f(CHANNEL.fade)};
-	vHalo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
-	vFade = 1.0 - smoothstep(0.0, flickerEnd, age);
-	float channelEnd = min(clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), duration * 0.6);
-	vFade = mix(vFade, 1.0 - smoothstep(channelEnd, channelEnd + ${f(CHANNEL.fade)}, age), vHalo);
-	vec3 world = center + (east * position.x + north * position.y) * size;
+	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
+	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
+	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
+	float channel = channelReveal(flashShape.y, kmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
+	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
+	vec2 drift = cloudDrift(age, end, flashShape.y, seed, ground) * kmToWorld * flicker;
+	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;
 	vBrightness = brightness;
-
 }
 `;
 
@@ -61,14 +65,13 @@ uniform float exposure;
 
 varying vec2 vCorner;
 varying float vBrightness;
-varying float vFade;
-varying float vHalo;
+varying float vDip;
 
 void main() {
 	vec2 g = vCorner;
 	float r2 = dot(g, g);
 	float glow = r2 < 1.0 ? (exp(-r2 * 12.0) + 0.25 * exp(-r2 * 3.0)) * (1.0 - r2) : 0.0;
-	float light = vBrightness * glow * (1.0 - mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, vHalo) * vFade);
+	float light = vBrightness * glow * (1.0 - vDip);
 	if (light <= 0.0) discard;
 	gl_FragColor = vec4(color * exposure * light, 1.0);
 	#include <tonemapping_fragment>

@@ -49,20 +49,20 @@ function makeFlashes(active: number, glowing: number, time: number, display: num
 	const r = rand(7);
 	const count = active + glowing;
 	const flash = new Float32Array(count * 4);
-	const shape = new Float32Array(count * 3);
+	const shape = new Float32Array(count * 4);
 	for (let i = 0; i < count; i++) {
 		const lat = CENTER.lat + (r() - 0.5) * spreadDeg;
 		const lon = CENTER.lon + (r() - 0.5) * spreadDeg;
 		const v = latLonToVector(lat, lon);
 		flash.set([v[0], v[1], v[2], i < active ? time - r() * 0.12 : time - 1 - r() * (display - 2)], i * 4);
-		shape.set([r(), 3 + r() * r() * 15, 150 + r() * 400], i * 3);
+		shape.set([r(), 3 + r() * r() * 15, 150 + r() * 400, (i * 0.61803398875) % 1], i * 4);
 	}
 	return { flash, shape, count };
 }
 
 function flashGeometry(base: InstancedBufferGeometry, fl: Flashes): InstancedBufferGeometry {
 	base.setAttribute('flash', new InstancedBufferAttribute(fl.flash, 4));
-	base.setAttribute('flashShape', new InstancedBufferAttribute(fl.shape, 3));
+	base.setAttribute('flashShape', new InstancedBufferAttribute(fl.shape, 4));
 	base.setAttribute('channelSeed', new InstancedBufferAttribute(Float32Array.from({ length: fl.count }, (_, i) => (i * 0.61803398875) % 1), 1));
 	base.instanceCount = fl.count;
 	return base;
@@ -122,6 +122,11 @@ function build(c: Case) {
 	const fl = makeFlashes(c.active, c.glowing, TIME, DISPLAY, c.altitudeKm > 5000 ? 30 : 6);
 	const common = {
 		time: { value: TIME },
+		speed: { value: 1 },
+		pivot: { value: -1e9 },
+		pivotSpeed: { value: 1 },
+		budgetFrom: { value: -1e6 },
+		budgetFade: { value: 1 },
 		duration: { value: DISPLAY },
 		flicker: { value: 1 },
 		haloStrength: { value: c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? 1 : 0 },
@@ -158,7 +163,7 @@ function build(c: Case) {
 	if (c.mode === 'ribbon' || c.mode === 'halo' || c.mode === 'ribbon232') {
 		const segments = c.segments ?? 16;
 		// Only flashes in their flicker phase need a channel: draw the first `active` instances.
-		const active: Flashes = { flash: fl.flash.slice(0, c.active * 4), shape: fl.shape.slice(0, c.active * 3), count: c.active };
+		const active: Flashes = { flash: fl.flash.slice(0, c.active * 4), shape: fl.shape.slice(0, c.active * 4), count: c.active };
 		const passes = c.mode === 'halo' && c.active <= CHANNEL.haloCapacity ? [1, 0] : [0];
 		for (const halo of passes) {
 			const passSegments = halo ? 8 : segments;

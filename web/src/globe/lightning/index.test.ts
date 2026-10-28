@@ -1,9 +1,9 @@
-import { InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
+import { AdditiveBlending, CustomBlending, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
-import { createLightning } from './index';
+import { budgetStart, createLightning, lightWindow } from './index';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -60,5 +60,64 @@ describe('3D channel integration', () => {
 		expect(child.material.uniforms.flicker.value).toBe(1);
 		lightning.dispose();
 		expect(preference.removeEventListener).toHaveBeenCalledWith('change', applyMotion);
+	});
+
+	it('keeps channels for their flicker in wall clock time while replaying fast', () => {
+		const ring = new FlashRing(8);
+		ring.push(decodeChunk(encodeChunk(100, [{ offsetMs: 0, lat: 0, lon: 0 }]).buffer));
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		const channel = lightning.mesh.children[0];
+		if (!(channel instanceof Mesh)) throw new Error('missing channel mesh');
+		lightning.setTime(100_000, undefined, 60);
+		lightning.setTime(106_000, undefined, 60);
+		expect(channel.geometry.instanceCount).toBe(1);
+		lightning.setTime(130_000, undefined, 60);
+		expect(channel.geometry.instanceCount).toBe(0);
+		lightning.dispose();
+	});
+});
+
+describe('storm view', () => {
+	it('shows each flash alone without forgetting the afterglow chosen for the globe', () => {
+		const lightning = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		lightning.setDisplayMinutes(30);
+		expect(material.uniforms.duration.value).toBe(1800);
+		lightning.stormView = true;
+		expect(lightning.displayMinutes).toBe(30);
+		expect(material.uniforms.duration.value).toBe(0);
+		expect(material.blending).toBe(CustomBlending);
+		lightning.stormView = false;
+		expect(material.uniforms.duration.value).toBe(1800);
+		expect(material.blending).toBe(AdditiveBlending);
+		lightning.dispose();
+	});
+});
+
+describe('storm view budget', () => {
+	it('finds where the newest flashes played by now begin', () => {
+		const ring = new FlashRing(16);
+		ring.push(decodeChunk(encodeChunk(100, [0, 100, 200, 300, 400].map((offsetMs) => ({ offsetMs, lat: 0, lon: 0 }))).buffer));
+		expect(budgetStart(ring, 100_350, 2)).toBe(100_200);
+		expect(budgetStart(ring, 100_350, 4)).toBe(Number.NEGATIVE_INFINITY);
+		expect(budgetStart(ring, 100_400, 4)).toBe(100_100);
+	});
+});
+
+describe('light map window', () => {
+	it('frames the view finely near the floor and the whole globe from afar', () => {
+		const near = lightWindow({ lat: 0.3, lon: -0.8 }, 400);
+		expect(near.x).toBe(-0.8);
+		expect(near.y).toBe(0.3);
+		expect(near.w).toBeCloseTo(1200 / 6371, 6);
+		expect(near.z).toBeCloseTo((2 * near.w) / Math.cos(0.3 + near.w), 6);
+		const far = lightWindow({ lat: 0.3, lon: -0.8 }, 20_000);
+		expect([far.y, far.z, far.w]).toEqual([0, Math.PI, Math.PI / 2]);
+	});
+
+	it('stays within the poles as it grows', () => {
+		const window = lightWindow({ lat: 1.4, lon: 0 }, 1000);
+		expect(window.y + window.w).toBeCloseTo(Math.PI / 2, 6);
+		expect(window.z).toBe(Math.PI);
 	});
 });
