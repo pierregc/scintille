@@ -4,7 +4,7 @@ import { atmosphereParameters } from '../atmosphere';
 import { CLOUD_TOP_KM } from '../lightning';
 import { zoomLimits } from '../orbit';
 import { isCloudToggleKey } from './dev';
-import { CLOUD_MAX_GAP_MS, type Clouds, CLOUDS_RENDER_ORDER, cloudShellRadius, createClouds } from './index';
+import { CLOUD_MAX_GAP_MS, type Clouds, CLOUDS_RENDER_ORDER, cloudOpacityGlsl, cloudShellRadius, createClouds } from './index';
 import { MAX_CLOUD_FRAMES } from './timeline';
 import { CLOUDS_VISIBLE_KEY, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 
@@ -77,6 +77,21 @@ describe('createClouds', () => {
 		expect(uniforms.flashGain.value).toBeGreaterThan(0);
 		clouds.setFlashLight(null);
 		expect(uniforms.flashGain.value).toBe(0);
+	});
+
+	it('shares its opacity inputs with other materials', () => {
+		const clouds = createClouds(16, { storage: null });
+		const { uniforms: shared, defines } = clouds.opacity;
+		expect(shared.cloudMap).toBe(uniforms(clouds).cloudMap);
+		expect(shared.cloudShown.value).toBe(0);
+		const f = frame();
+		clouds.setFrame(f.frame);
+		expect(shared.cloudMap.value).toBe(f.frame.texture);
+		expect(shared.cloudShown.value).toBe(1);
+		clouds.setVisible(false);
+		expect(shared.cloudShown.value).toBe(0);
+		expect(defines).toHaveProperty('BICUBIC');
+		expect(cloudOpacityGlsl).toContain('float cloudOpacityAt(vec3 direction)');
 	});
 
 	it('toggles and remembers the choice', () => {
