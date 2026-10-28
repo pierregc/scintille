@@ -1,6 +1,6 @@
 # 0020 · Immersive storm view: lightning sets the zoom, the zoom sets the detail
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-28
 
 ## Context
