@@ -1,0 +1,90 @@
+{
+  "storm": {
+    "sources": ["glm-east", "mtg-li"],
+    "t_start": "2026-10-18T18:05:00Z",
+    "t_end": "2026-10-18T23:40:00Z",
+    "track": ["2026-10-18T18:30:00Z", "2026-10-18T19:30:00Z", "2026-10-18T20:30:00Z", "2026-10-18T23:20:00Z"]
+  },
+  "clouds": ["2026-10-18T18:00:00Z", "2026-10-18T19:00:00Z", "2026-10-18T20:00:00Z", "2026-10-18T23:00:00Z"],
+  "cases": [
+    {
+      "name": "replay, clouds and position close to the scene",
+      "mode": "replay",
+      "clock": "2026-10-18T19:10:00Z",
+      "observed": "2026-10-18T19:10:00Z",
+      "position": "Position observed 18:30 · 40 min earlier",
+      "clouds": "Observed 19:00"
+    },
+    {
+      "name": "replay, next cloud frame already shown",
+      "mode": "replay",
+      "clock": "2026-10-18T19:45:00Z",
+      "observed": "2026-10-18T19:45:00Z",
+      "position": "Position observed 19:30 · 15 min earlier",
+      "clouds": "Observed 20:00 · 15 min later"
+    },
+    {
+      "name": "replay, missing cloud frames keep the nearest one",
+      "mode": "replay",
+      "clock": "2026-10-18T21:20:00Z",
+      "observed": "2026-10-18T21:20:00Z",
+      "position": "Position observed 20:30 · 50 min earlier",
+      "clouds": "Observed 20:00 · 1 h earlier"
+    },
+    {
+      "name": "replay, absent position updates",
+      "mode": "replay",
+      "clock": "2026-10-18T22:10:00Z",
+      "observed": "2026-10-18T22:10:00Z",
+      "position": "No position since 20:30",
+      "clouds": "Observed 23:00 · 50 min later"
+    },
+    {
+      "name": "replay, end of the storm",
+      "mode": "replay",
+      "clock": "2026-10-18T23:40:00Z",
+      "observed": "2026-10-18T23:40:00Z",
+      "position": "Position observed 23:20 · 20 min earlier",
+      "clouds": "Observed 23:00 · 40 min earlier"
+    },
+    {
+      "name": "replay, before the first position",
+      "mode": "replay",
+      "clock": "2026-10-18T18:05:00Z",
+      "observed": "2026-10-18T18:05:00Z",
+      "position": "",
+      "clouds": "Observed 18:00"
+    },
+    {
+      "name": "live, the storm waits for its slowest source",
+      "mode": "live",
+      "clock": "2026-10-18T23:30:00Z",
+      "observed": "2026-10-18T23:18:00Z",
+      "clouds": "Observed 23:00 · 18 min earlier"
+    },
+    {
+      "name": "live, globe without a storm uses the fastest source",
+      "mode": "live",
+      "storm": false,
+      "clock": "2026-10-18T23:30:00Z",
+      "observed": "2026-10-18T23:28:00Z",
+      "clouds": "Observed 23:00 · 28 min earlier"
+    },
+    {
+      "name": "live, old clouds",
+      "mode": "live",
+      "storm": false,
+      "clock": "2026-10-19T01:45:00Z",
+      "observed": "2026-10-19T01:43:00Z",
+      "clouds": "Observed 23:00 · 3 h earlier"
+    },
+    {
+      "name": "live, clouds too old to show",
+      "mode": "live",
+      "storm": false,
+      "clock": "2026-10-19T02:30:00Z",
+      "observed": "2026-10-19T02:28:00Z",
+      "clouds": "No cloud data"
+    }
+  ]
+}

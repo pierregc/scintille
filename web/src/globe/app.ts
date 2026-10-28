@@ -24,6 +24,7 @@ import { createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
+import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
@@ -58,6 +59,8 @@ export interface GlobeApp {
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
+	/** Time of the newest flashes drawn, for the selected storm's sources if any: ages are measured from it. */
+	observedTime(): number;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
@@ -284,6 +287,7 @@ export function createGlobeApp(
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
+		observedTime: () => observedTime(clock.time(), playbackDelays(), replay.state.selected?.storm.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
 		debug: {
