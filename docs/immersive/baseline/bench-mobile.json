@@ -120,7 +120,7 @@
 							988
 						]
 					},
-					"screenshot": "R1-globe.jpg"
+					"screenshot": null
 				},
 				"regional": {
 					"view": "-14.55705,-44.53189,2511.387,20.000",
@@ -231,7 +231,7 @@
 							988
 						]
 					},
-					"screenshot": "R1-regional.jpg"
+					"screenshot": null
 				},
 				"close": {
 					"view": "-14.56000,-44.26000,250.000,55.000",
@@ -342,7 +342,7 @@
 							988
 						]
 					},
-					"screenshot": "R1-close.jpg"
+					"screenshot": null
 				},
 				"deck": {
 					"view": "-14.56000,-44.26000,100.000,72.000",
@@ -453,7 +453,7 @@
 							988
 						]
 					},
-					"screenshot": "R1-deck.jpg"
+					"screenshot": null
 				}
 			},
 			"load": {
@@ -583,7 +583,7 @@
 							988
 						]
 					},
-					"screenshot": "R2-globe.jpg"
+					"screenshot": null
 				},
 				"regional": {
 					"view": "-7.29681,-57.68428,3033.270,20.000",
@@ -690,7 +690,7 @@
 							988
 						]
 					},
-					"screenshot": "R2-regional.jpg"
+					"screenshot": null
 				},
 				"close": {
 					"view": "-6.77000,-59.48000,250.000,55.000",
@@ -797,7 +797,7 @@
 							988
 						]
 					},
-					"screenshot": "R2-close.jpg"
+					"screenshot": null
 				},
 				"deck": {
 					"view": "-6.77000,-59.48000,100.000,72.000",
@@ -904,7 +904,7 @@
 							988
 						]
 					},
-					"screenshot": "R2-deck.jpg"
+					"screenshot": null
 				}
 			},
 			"load": {
@@ -1038,7 +1038,7 @@
 							988
 						]
 					},
-					"screenshot": "R3-globe.jpg"
+					"screenshot": null
 				},
 				"regional": {
 					"view": "26.97637,-44.20043,1343.849,20.000",
@@ -1149,7 +1149,7 @@
 							988
 						]
 					},
-					"screenshot": "R3-regional.jpg"
+					"screenshot": null
 				},
 				"close": {
 					"view": "26.74000,-44.40000,250.000,55.000",
@@ -1260,7 +1260,7 @@
 							988
 						]
 					},
-					"screenshot": "R3-close.jpg"
+					"screenshot": null
 				},
 				"deck": {
 					"view": "26.74000,-44.40000,100.000,72.000",
@@ -1371,7 +1371,7 @@
 							988
 						]
 					},
-					"screenshot": "R3-deck.jpg"
+					"screenshot": null
 				}
 			},
 			"load": {
@@ -1501,7 +1501,7 @@
 							988
 						]
 					},
-					"screenshot": "R4-globe.jpg"
+					"screenshot": null
 				},
 				"regional": {
 					"view": "6.93630,13.82670,397.443,20.000",
@@ -1608,7 +1608,7 @@
 							988
 						]
 					},
-					"screenshot": "R4-regional.jpg"
+					"screenshot": null
 				},
 				"close": {
 					"view": "7.06000,13.70000,250.000,55.000",
@@ -1715,7 +1715,7 @@
 							988
 						]
 					},
-					"screenshot": "R4-close.jpg"
+					"screenshot": null
 				},
 				"deck": {
 					"view": "7.06000,13.70000,100.000,72.000",
@@ -1822,7 +1822,7 @@
 							988
 						]
 					},
-					"screenshot": "R4-deck.jpg"
+					"screenshot": null
 				}
 			},
 			"load": {
@@ -1952,7 +1952,7 @@
 							988
 						]
 					},
-					"screenshot": "R5-globe.jpg"
+					"screenshot": null
 				},
 				"regional": {
 					"view": "38.68965,2.07360,721.289,20.000",
@@ -2059,7 +2059,7 @@
 							988
 						]
 					},
-					"screenshot": "R5-regional.jpg"
+					"screenshot": null
 				},
 				"close": {
 					"view": "38.57000,2.62000,250.000,55.000",
@@ -2166,7 +2166,7 @@
 							988
 						]
 					},
-					"screenshot": "R5-close.jpg"
+					"screenshot": null
 				},
 				"deck": {
 					"view": "38.57000,2.62000,100.000,72.000",
@@ -2273,7 +2273,7 @@
 							988
 						]
 					},
-					"screenshot": "R5-deck.jpg"
+					"screenshot": null
 				}
 			},
 			"load": {

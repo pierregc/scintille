@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--no-clouds] [--headed] [--video]
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -11,6 +11,7 @@ import { parseArgs } from 'node:util';
 import { chromium, devices } from 'playwright';
 
 const { values } = parseArgs({
+	allowNegative: true,
 	options: {
 		refs: { type: 'string' },
 		out: { type: 'string' },
@@ -20,6 +21,7 @@ const { values } = parseArgs({
 		seconds: { type: 'string', default: '8' },
 		storm: { type: 'string' },
 		afterglow: { type: 'string' },
+		clouds: { type: 'boolean', default: true },
 		headed: { type: 'boolean', default: false },
 		video: { type: 'boolean', default: false },
 	},
@@ -325,9 +327,12 @@ async function benchStorm(browser, storm, outDir) {
 		...(values.video ? { recordVideo: { dir: outDir, size: { width: 1280, height: 720 } } } : {}),
 	});
 	await context.addInitScript(instrument);
-	await context.addInitScript((minutes) => {
-		try { localStorage.setItem('scintille.display.minutes', String(minutes)); } catch { /* private mode */ }
-	}, values.afterglow !== undefined ? Number(values.afterglow) : storm.afterglow ?? 0);
+	await context.addInitScript(({ minutes, clouds }) => {
+		try {
+			localStorage.setItem('scintille.display.minutes', String(minutes));
+			localStorage.setItem('scintille.clouds.visible', clouds ? '1' : '0');
+		} catch { /* private mode */ }
+	}, { minutes: values.afterglow !== undefined ? Number(values.afterglow) : storm.afterglow ?? 0, clouds: values.clouds });
 	const page = await context.newPage();
 	page.setDefaultTimeout(120_000);
 	page.on('console', (message) => { if (message.type() === 'error') process.stderr.write(`page: ${message.text()}\n`); });
@@ -417,6 +422,8 @@ const report = {
 	measuredAt: new Date().toISOString(),
 	url: base,
 	profile: values.profile,
+	afterglow: values.afterglow ?? 'per storm',
+	clouds: values.clouds,
 	gl: values.gl,
 	headed: values.headed,
 	platform: `${process.platform} ${process.arch}`,
