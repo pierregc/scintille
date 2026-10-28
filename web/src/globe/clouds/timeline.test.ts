@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blendPair, easePosition, framePosition } from './timeline';
+import { blendPair, CLOUD_BLEND_MAX_GAP_MS, easePosition, framePosition } from './timeline';
 
 describe('cloud timeline', () => {
 	const times = [0, 100, 300];
@@ -38,5 +38,14 @@ describe('cloud timeline', () => {
 	it('snaps on seeks and on the first frame', () => {
 		expect(easePosition(0, 4, 1 / 60)).toBe(4);
 		expect(easePosition(Number.NaN, 1, 1 / 60)).toBe(1);
+	});
+
+	it('shows the nearest frame across a missing frame instead of mixing distant pictures', () => {
+		const hour = 3_600_000;
+		const gap = [0, hour, 4 * hour];
+		expect(framePosition(gap, 0.5 * hour)).toBe(0.5);
+		expect(framePosition(gap, 2 * hour)).toBe(1);
+		expect(framePosition(gap, 2.6 * hour)).toBe(2);
+		expect(framePosition([0, CLOUD_BLEND_MAX_GAP_MS], CLOUD_BLEND_MAX_GAP_MS / 4)).toBe(0.25);
 	});
 });

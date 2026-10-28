@@ -9,7 +9,6 @@ from dagster import (
     AssetCheckSpec,
     AssetExecutionContext,
     AssetKey,
-    BackfillPolicy,
     Config,
     MaterializeResult,
     asset,
@@ -30,7 +29,7 @@ from scintille_lake.tables import gold_table
 
 from .levels import LevelRule, classify, keep_live_maximum
 from .resources import LakeResource
-from .storm_cells import STORM_CELLS, hourly
+from .storm_cells import BACKFILL, STORM_CELLS, hourly
 from .storms import STORM_TRACKS, STORMS, STORMS_CHECK, _between, _scan, _write
 from .tracking import HOUR
 
@@ -113,7 +112,7 @@ def check_levels(levels: pl.DataFrame, rule: LevelRule) -> AssetCheckResult:
     key=LEVELS_CHECK.asset_key,
     partitions_def=hourly,
     deps=[STORMS_CHECK.asset_key],
-    backfill_policy=BackfillPolicy.single_run(),
+    backfill_policy=BACKFILL,
     pool="storm-tracks",
     group_name="gold",
     check_specs=[LEVELS_CHECK],

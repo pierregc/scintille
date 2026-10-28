@@ -1,5 +1,5 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -8,6 +8,19 @@ from xml.etree import ElementTree as ET
 import numpy as np
 import polars as pl
 import pytest
+from dagster import (
+    AssetMaterialization,
+    DagsterInstance,
+    DagsterRunStatus,
+    RunRequest,
+    SkipReason,
+    build_schedule_context,
+)
+from dagster._core.storage.tags import (
+    ASSET_PARTITION_RANGE_END_TAG,
+    ASSET_PARTITION_RANGE_START_TAG,
+)
+from dagster._core.test_utils import create_run_for_test, instance_for_test
 from scintille_contract.chunk import decode
 from scintille_contract.models import (
     SCHEMA_VERSION,
@@ -16,6 +29,7 @@ from scintille_contract.models import (
     StormHighlights,
     StormSummary,
 )
+from scintille_pipelines.definitions import defs
 from scintille_pipelines.storm_catalog import (
     DETAIL_MAX_BYTES,
     HIGHLIGHTS_PATH,
@@ -29,6 +43,7 @@ from scintille_pipelines.storm_catalog import (
     selected_flashes,
     sitemaps,
 )
+from scintille_pipelines.storm_cells import BACKFILL
 from scintille_pipelines.storm_publication import (
     BOOTSTRAP_STORMS,
     FLASH_WINDOW,
@@ -36,11 +51,13 @@ from scintille_pipelines.storm_publication import (
     export_candidates,
     flash_windows,
     publishable,
+    storm_catalog,
     storm_catalog_schedule,
 )
 
 ROOT = Path(__file__).parents[4]
 NOW = datetime(2026, 7, 15, 20, tzinfo=UTC)
+CATALOG = storm_catalog.key
 
 
 def detail() -> StormDetail:
@@ -353,9 +370,54 @@ def test_chunks_preserve_event_time_and_partition_hours() -> None:
     assert replay.selection == "track-bounds"
 
 
-def test_schedule_targets_latest_closed_hour() -> None:
-    from dagster import RunRequest, build_schedule_context
+def tick(instance: DagsterInstance, published: Sequence[str] = ()) -> RunRequest | SkipReason:
+    for key in published:
+        instance.report_runless_asset_event(AssetMaterialization(CATALOG, partition=key))
+    context = build_schedule_context(instance=instance, scheduled_execution_time=NOW)
+    result = storm_catalog_schedule(context)
+    assert isinstance(result, RunRequest | SkipReason)
+    return result
 
-    request = storm_catalog_schedule(build_schedule_context(scheduled_execution_time=NOW))
-    assert isinstance(request, RunRequest)
-    assert request.partition_key == "2026-07-15-19:00"
+
+def requested_range(result: RunRequest | SkipReason) -> tuple[str, str]:
+    assert isinstance(result, RunRequest)
+    return result.tags[ASSET_PARTITION_RANGE_START_TAG], result.tags[ASSET_PARTITION_RANGE_END_TAG]
+
+
+@pytest.fixture
+def instance() -> Iterator[DagsterInstance]:
+    with instance_for_test() as persistent:
+        yield persistent
+
+
+def test_schedule_targets_latest_closed_hour(instance: DagsterInstance) -> None:
+    result = tick(instance, ["2026-07-15-17:00", "2026-07-15-18:00"])
+    assert requested_range(result) == ("2026-07-15-19:00", "2026-07-15-19:00")
+
+
+def test_schedule_catches_up_missed_hours_six_at_a_time(instance: DagsterInstance) -> None:
+    result = tick(instance, ["2026-07-15-09:00", "2026-07-15-10:00"])
+    assert requested_range(result) == ("2026-07-15-11:00", "2026-07-15-16:00")
+
+
+def test_schedule_skips_when_never_started(instance: DagsterInstance) -> None:
+    assert isinstance(tick(instance), SkipReason)
+
+
+def test_schedule_skips_when_up_to_date(instance: DagsterInstance) -> None:
+    assert isinstance(tick(instance, ["2026-07-15-19:00"]), SkipReason)
+
+
+def test_schedule_waits_for_a_catalog_run_in_progress(instance: DagsterInstance) -> None:
+    create_run_for_test(instance, job_name="daily_gold", status=DagsterRunStatus.STARTED)
+    assert isinstance(tick(instance, ["2026-07-15-10:00"]), RunRequest)
+    create_run_for_test(instance, job_name="hourly_storm_catalog", status=DagsterRunStatus.STARTED)
+    assert isinstance(tick(instance), SkipReason)
+
+
+def test_catalog_job_retries_and_has_a_runtime_limit() -> None:
+    job = defs.get_job_def("hourly_storm_catalog")
+    assert job.run_tags["dagster/max_runtime"] == "3600"
+    assert job.op_retry_policy is not None and job.op_retry_policy.max_retries == 3
+    keys = job.asset_layer.executable_asset_keys
+    assert {job.asset_layer.get(key).assets_def.backfill_policy for key in keys} == {BACKFILL}

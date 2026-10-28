@@ -1,0 +1,72 @@
+{
+	"version": 1,
+	"catalog": "https://data.scintille.app/storms/, published 2026-10-19T19:28:00Z",
+	"poses": {
+		"globe": { "altitude": 20000, "tilt": 0 },
+		"regional": "framed",
+		"iss": { "altitude": 400, "tilt": 1 },
+		"window": { "altitude": 740, "tilt": 60 }
+	},
+	"storms": [
+		{
+			"id": "R1",
+			"slug": "2026-10-18-minas-gerais-7",
+			"why": "large, land, night, tropics, GLM and LI",
+			"time": "2026-10-18T23:15:00Z",
+			"center": { "lat": -14.56, "lon": -44.26 },
+			"afterglow": 0,
+			"sources": ["glm-east", "mtg-li"],
+			"sunElevationDeg": -33.3,
+			"boundsKm": [568, 303],
+			"flashes": 38579
+		},
+		{
+			"id": "R2",
+			"slug": "2026-10-18-mato-grosso-22",
+			"why": "largest extent, land, day, near the equator, GLM and LI",
+			"time": "2026-10-18T19:15:00Z",
+			"center": { "lat": -6.77, "lon": -59.48 },
+			"afterglow": 0,
+			"sources": ["glm-east", "mtg-li"],
+			"sunElevationDeg": 37.5,
+			"boundsKm": [680, 550],
+			"flashes": 36849
+		},
+		{
+			"id": "R3",
+			"slug": "2026-10-18-north-atlantic-ocean-464",
+			"why": "ocean, night, subtropics, GLM only",
+			"time": "2026-10-18T23:15:00Z",
+			"center": { "lat": 26.74, "lon": -44.4 },
+			"afterglow": 0,
+			"sources": ["glm-east"],
+			"sunElevationDeg": -38.2,
+			"boundsKm": [295, 256],
+			"flashes": 28916
+		},
+		{
+			"id": "R4",
+			"slug": "2026-10-18-ngaoundere",
+			"why": "compact, land, high sun, Africa, LI only",
+			"time": "2026-10-18T12:15:00Z",
+			"center": { "lat": 7.06, "lon": 13.7 },
+			"afterglow": 0,
+			"sources": ["mtg-li"],
+			"sunElevationDeg": 63.2,
+			"boundsKm": [88, 66],
+			"flashes": 1009
+		},
+		{
+			"id": "R5",
+			"slug": "2026-10-18-ibiza",
+			"why": "mid latitude, island and sea, low sun, Europe, LI only",
+			"time": "2026-10-18T14:15:00Z",
+			"center": { "lat": 38.57, "lon": 2.62 },
+			"afterglow": 0,
+			"sources": ["mtg-li"],
+			"sunElevationDeg": 29.2,
+			"boundsKm": [160, 105],
+			"flashes": 11366
+		}
+	]
+}

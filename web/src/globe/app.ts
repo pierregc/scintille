@@ -14,7 +14,7 @@ import { attachCoverageLabel } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
-import { createEarth } from './earth';
+import { createEarth, texturesRoot } from './earth';
 import { kmToWorld } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
@@ -24,7 +24,9 @@ import { createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
+import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
+import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
 import { ReplayNavigation } from './replay/navigation';
@@ -58,6 +60,8 @@ export interface GlobeApp {
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
+	/** Time of the newest flashes drawn, for the selected storm's sources if any: ages are measured from it. */
+	observedTime(): number;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
@@ -66,6 +70,8 @@ export interface GlobeApp {
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
+	/** Surface detail prototypes (#125), in development and PR previews only. */
+	readonly surface?: SurfaceDetail;
 	dispose(): void;
 }
 
@@ -103,6 +109,27 @@ export function createGlobeApp(
 	if (import.meta.env.DEV) applyDevReplay(clock, location.search);
 	const earth = createEarth(renderer, RADIUS, preset.textures);
 	scene.add(earth.mesh);
+	const surface = import.meta.env.DEV || BUILD.pr !== null
+		? new SurfaceDetail({
+				earth: earth.material,
+				root: texturesRoot(),
+				radius: RADIUS,
+				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
+				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+				pixelRatio: () => renderer.getPixelRatio(),
+				...surfaceFromSearch(location.search),
+			})
+		: undefined;
+	if (surface) {
+		earth.mesh.add(surface.tiles.group);
+		earth.mesh.add(surface.vectors.group);
+	}
+	const cycleSurface = (event: KeyboardEvent) => {
+		if (!surface || event.key !== 'S' || !event.shiftKey) return;
+		surface.mode = SURFACE_MODES[(SURFACE_MODES.indexOf(surface.mode) + 1) % SURFACE_MODES.length];
+		console.info('surface:', surface.mode);
+	};
+	window.addEventListener('keydown', cycleSurface);
 	const atmosphere = createAtmosphere(RADIUS);
 	earth.mesh.add(atmosphere.mesh);
 	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), {
@@ -225,6 +252,8 @@ export function createGlobeApp(
 		track.setStorm(clock.mode === 'replay' ? replay.state.selected : null);
 		track.setTime(now);
 		earth.setTime(now);
+		camera.updateMatrixWorld();
+		surface?.update(camera, renderParams?.height ?? window.innerHeight);
 		atmosphere.setTime(now);
 		if (!renderParams) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
@@ -284,6 +313,7 @@ export function createGlobeApp(
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
+		observedTime: () => observedTime(clock.time(), playbackDelays(), replay.state.selected?.storm.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
 		debug: {
@@ -293,7 +323,10 @@ export function createGlobeApp(
 			quality: () => tier,
 		},
 		render,
+		surface,
 		dispose() {
+			window.removeEventListener('keydown', cycleSurface);
+			surface?.dispose();
 			renderer.setAnimationLoop(null);
 			window.removeEventListener('pagehide', rememberFrame, { capture: true });
 			controls.dispose();

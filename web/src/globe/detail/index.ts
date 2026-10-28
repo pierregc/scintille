@@ -1,0 +1,78 @@
+import type { PerspectiveCamera, ShaderMaterial, Vector3 } from 'three';
+import { SurfaceTiles, type SurfaceTilesStats } from './tiles';
+import { SurfaceVectors } from './vectors';
+
+/** Surface detail prototypes compared in #125: base textures only, raster tiles, vector overlays, or both. */
+export type SurfaceMode = 'base' | 'tiles' | 'vectors' | 'both';
+export const SURFACE_MODES: readonly SurfaceMode[] = ['base', 'tiles', 'vectors', 'both'];
+
+/** `?surface=base|tiles|vectors|both`, `?texel=<css px>` for the refinement threshold, `?nightlevel=` for the finest night level. */
+export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number; nightMaxLevel: number } {
+	const params = new URLSearchParams(search);
+	const mode = params.get('surface') as SurfaceMode;
+	const texel = Number(params.get('texel'));
+	const night = Number(params.get('nightlevel'));
+	return { mode: SURFACE_MODES.includes(mode) ? mode : 'base', texelPixels: texel > 0 ? texel : 2, nightMaxLevel: night >= 2 && night <= 5 ? night : 4 };
+}
+
+export interface SurfaceDetailOptions {
+	earth: ShaderMaterial;
+	root: string;
+	radius: number;
+	baseTexelKm: number;
+	anisotropy: number;
+	pixelRatio: () => number;
+	mode: SurfaceMode;
+	texelPixels: number;
+	nightMaxLevel: number;
+}
+
+export class SurfaceDetail {
+	readonly tiles: SurfaceTiles;
+	readonly vectors: SurfaceVectors;
+	#mode: SurfaceMode;
+
+	constructor(private readonly options: SurfaceDetailOptions) {
+		this.#mode = options.mode;
+		this.tiles = new SurfaceTiles(options.earth, {
+			root: `${options.root}/tiles`,
+			radius: options.radius,
+			baseTexelKm: options.baseTexelKm,
+			texelPixels: options.texelPixels,
+			anisotropy: options.anisotropy,
+			dwellMs: 300,
+			nightMaxLevel: options.nightMaxLevel,
+			maxTextures: 96,
+			concurrency: 6,
+		});
+		this.vectors = new SurfaceVectors(`${options.root}/vectors/lines.bin`, options.radius, options.earth.uniforms.sunDirection.value as Vector3, options.pixelRatio);
+	}
+
+	get mode(): SurfaceMode {
+		return this.#mode;
+	}
+
+	set mode(mode: SurfaceMode) {
+		this.#mode = mode;
+		if (mode === 'base' || mode === 'vectors') this.tiles.clear();
+	}
+
+	update(camera: PerspectiveCamera, viewHeight: number): void {
+		const tiles = this.#mode === 'tiles' || this.#mode === 'both';
+		const vectors = this.#mode === 'vectors' || this.#mode === 'both';
+		this.tiles.group.visible = tiles;
+		if (tiles) this.tiles.update(camera, viewHeight, this.options.earth.uniforms.sunDirection.value as Vector3);
+		const heightKm = (camera.position.length() / this.options.radius - 1) * 6371;
+		if (vectors) this.vectors.update(heightKm);
+		else this.vectors.group.visible = false;
+	}
+
+	stats(): { mode: SurfaceMode; tiles: SurfaceTilesStats; vectors: boolean } {
+		return { mode: this.#mode, tiles: this.tiles.stats, vectors: this.vectors.loaded };
+	}
+
+	dispose(): void {
+		this.tiles.dispose();
+		this.vectors.dispose();
+	}
+}

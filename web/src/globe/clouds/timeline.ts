@@ -1,15 +1,23 @@
 /** Frames kept on the GPU; older ones are disposed. */
 export const MAX_CLOUD_FRAMES = 6;
 
-/** Fractional index of `time` among ascending frame `times`: i + f between frames i and i + 1, clamped to the ends. */
-export function framePosition(times: readonly number[], time: number): number {
+/** Frames further apart than this are a gap: it shows the nearest frame, never a mix of both. */
+export const CLOUD_BLEND_MAX_GAP_MS = 90 * 60_000;
+
+/**
+ * Fractional index of `time` among ascending frame `times`: i + f between frames i and i + 1, clamped
+ * to the ends. Across a gap wider than `maxGap`, f is 0 or 1.
+ */
+export function framePosition(times: readonly number[], time: number, maxGap = CLOUD_BLEND_MAX_GAP_MS): number {
 	const n = times.length;
 	if (n === 0) return Number.NaN;
 	if (!(time > times[0])) return 0;
 	if (time >= times[n - 1]) return n - 1;
 	let i = 0;
 	while (times[i + 1] <= time) i++;
-	return i + (time - times[i]) / (times[i + 1] - times[i]);
+	const gap = times[i + 1] - times[i];
+	const f = (time - times[i]) / gap;
+	return i + (gap > maxGap ? Math.round(f) : f);
 }
 
 /**

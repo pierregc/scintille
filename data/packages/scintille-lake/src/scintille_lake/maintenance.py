@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
+from pyiceberg.manifest import ManifestFile
 from pyiceberg.table import Table
 
 # R2 Data Catalog accepts compaction targets from 64 to 512 MB.
@@ -67,13 +68,16 @@ def referenced_keys(table: Table) -> set[str]:
     uris = {table.metadata_location, *(entry.metadata_file for entry in metadata.metadata_log)}
     uris |= {s.statistics_path for s in metadata.statistics}
     uris |= {s.statistics_path for s in metadata.partition_statistics}
+    # Snapshots share most of their manifests: read each one once, not once per snapshot.
+    manifests: dict[str, ManifestFile] = {}
     for snapshot in metadata.snapshots:
         uris.add(snapshot.manifest_list)
-        for manifest in snapshot.manifests(io):
-            uris.add(manifest.manifest_path)
-            # Deleted entries too: a file is only safe once no manifest mentions it.
-            for entry in manifest.fetch_manifest_entry(io, discard_deleted=False):
-                uris.add(entry.data_file.file_path)
+        manifests.update((m.manifest_path, m) for m in snapshot.manifests(io))
+    for path, manifest in manifests.items():
+        uris.add(path)
+        # Deleted entries too: a file is only safe once no manifest mentions it.
+        for entry in manifest.fetch_manifest_entry(io, discard_deleted=False):
+            uris.add(entry.data_file.file_path)
     return {object_key(u) for u in uris}
 
 
