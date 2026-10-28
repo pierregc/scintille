@@ -39,6 +39,9 @@ from .hotspots import HotspotRule, drop_hotspots, fixed_hotspots, hotspots_from_
 from .resources import LakeResource
 
 hourly = HourlyPartitionsDefinition(start_date="2026-07-01-00:00", timezone="UTC")
+# Six hours per run keep the catalog export within memory when catching up.
+RUN_HOURS = 6
+BACKFILL = BackfillPolicy.multi_run(RUN_HOURS)
 CHUNK = timedelta(days=1)
 
 STORM_CELLS = gold_table(
@@ -255,7 +258,7 @@ def check_cells(cells: pl.DataFrame, min_pts: int) -> AssetCheckResult:
 @asset(
     key=CHECK.asset_key,
     partitions_def=hourly,
-    backfill_policy=BackfillPolicy.single_run(),
+    backfill_policy=BACKFILL,
     pool="storm-cells",
     group_name="gold",
     check_specs=[CHECK],
