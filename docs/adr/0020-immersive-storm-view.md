@@ -1,4 +1,4 @@
-# 0020 · Immersive storm view: scale ladder, visual rules and budgets
+# 0020 · Immersive storm view: lightning sets the zoom, the zoom sets the detail
 
 - Status: proposed
 - Date: 2026-10-28
@@ -6,78 +6,97 @@
 ## Context
 
 M5 dives from the globe into a storm and follows it (#125, #126, #131, #251 to #259). Each ticket
-needs the same targets: which views count, how kilometres become pixels, what may be exaggerated,
-and how much frame time, memory and transfer the scene may cost. Without them, every PR invents its
-own scale and nobody can tell a regression from a choice.
+needs the same targets: how close the camera goes, how fine the ground and clouds must be there,
+what may be exaggerated, and how much frame time, memory and transfer the scene may cost.
 
-The merged renderer sets the starting point (audited in [immersive view](../immersive-view.md#current-renderer)):
+Lightning is the one input we cannot improve. GLM pixels are about 8 km, MTG LI pixels about
+4.5 km, and a flash is located within about one pixel. Ground imagery and the cloud source can be
+replaced; the lightning cannot. A storm is 50 to 700 km across, its cells 10 to 50 km.
 
-- 1 world unit is the Earth radius (6,371 km); field of view 35°; the surface camera stops 15 km
-  above the ground at a 20 km range.
-- Earth textures are 2k/4k/8k global images (9.8 km per texel at 4k); clouds are 2k/4k GMGSI
-  frames at about 8 km native resolution, on a smooth shell at 10 km.
-- Flashes are glows lifted to 12 km, scaled to 4 times the observed radius, with a 5 px floor.
-  Channels are procedural: 2.2 flash radii long with a 6 px floor, 25 % drawn as cloud to ground
-  with heights exaggerated 2.5 times, halos up to 512 channels.
-- GLM locates a flash within about 8 km, MTG LI within about 4.5 km. At 250 km range a GLM pixel
-  covers about 55 screen pixels; at the 20 km floor it covers almost the whole screen.
-- The baseline on five storms (MacBook Pro M4 Max, production data) is flat at about 8 ms per
-  frame with the default afterglow. With the 30 minute afterglow, every view below the globe turns
-  19 to 94 % white and costs up to 78 ms, and the quality tier falls to `low`. Daytime close views
-  are one blurred cloud; city lights become blocks; Earth and cloud textures take 277 MB
-  uncompressed; clouds are 70 to 80 % of a 6 to 9 MB first load.
+The merged renderer lets the camera down to 15 km above the ground, while its Earth texture has
+9.8 km texels (4k) and its clouds 8 km pixels (GMGSI). A first baseline at 100 and 250 km showed
+nothing readable: one texel covered 40 to 170 screen pixels, so the ground and clouds were blocks
+or blur, and the 4 times glow covered the view. Detail is missing well before the camera gets
+that low: at 2 screen pixels per texel, the 4k Earth already shows its pixels below about
+8,000 km, GMGSI clouds below about 3,500 km.
+
+Audit of the renderer and the measured baseline: [immersive view](../immersive-view.md).
 
 ## Options
 
-- **Free zoom, tuned by eye per ticket.** No upfront work, but scale and cost drift between PRs
-  and the five-storm validation (#259) has nothing to compare against.
-- **Physically exact everything.** Honest, but distant flashes vanish (a 30 km glow is under 3 px
-  from orbit) and close views expose 8 km data as large soft blocks.
-- **A fixed scale ladder with declared compensations and measured budgets.** Four reference poses
-  on five reference storms, physical scale by default, every visibility compensation named and
-  bounded, and a repeatable benchmark that later tickets must pass.
+- **Free zoom with today's textures.** No work, but every view below a few thousand km shows
+  pixels and the deepest views show only blur.
+- **Zoom limited by today's textures.** Honest, but the floor would sit around 8,000 km, where a
+  storm is a small cluster of points: no immersion.
+- **Lightning sets the zoom floor, textures are raised to match it.** The camera stops where
+  going lower would only magnify the lightning data; ground and clouds get fine enough that no
+  texel is visible at that floor.
 
 ## Decision
 
 Adopt the third option, specified in [immersive view](../immersive-view.md):
 
-1. **Reference set.** Five published storms (compact and large, day and night, land and ocean,
-   tropics and mid latitudes, GLM and MTG LI) reopened by share URL, each at four poses: `globe`
-   (20,000 km, nadir), `regional` (the M3 storm framing), `close` (250 km range, 55° tilt) and
-   `deck` (100 km range, 72° tilt, the lowest pose).
-2. **Scale.** Positions, footprints and heights are in kilometres through `kmToWorld`. Screen size
-   is derived, never stored. Detail may be added only where a source provides it: surface imagery
-   down to 500 m per texel (#125), clouds at their native resolution (#131), no synthetic terrain
-   or cloud relief.
-3. **Observed, procedural, assumed.** Time, position, footprint area, energy and duration are
+1. **Zoom floor: 400 km above the ground, the ISS altitude.** There, one screen pixel (1080 px
+   tall view) covers 0.23 km and the view is about 450 km wide: a whole storm or its core fills
+   the screen, an LI pixel is 19 px and a GLM pixel 34 px. Lower, the view only magnifies the
+   flash locations and the image becomes procedural. The floor applies to the camera height in
+   every mode: manual zoom, tilt, flights and storm framing.
+2. **No visible pixels at the floor.** At the nearest visible point, a ground texel covers at
+   most 2 screen pixels, a cloud texel at most 4 with smooth (bicubic) filtering. This gives:
+   - ground (day, night lights, water mask): **500 m per texel**, the finest release of Blue
+     Marble and Black Marble (today's assets use their 1.9 km and 3 km releases), loaded by
+     visible level of detail; #125 verifies the sources before building (#251 to #253);
+   - clouds: **about 1 km** (FCI infrared at 1 km where its feed allows, visible channels at 0.5
+     to 1 km by day). Where only 2 km infrared exists (night outside FCI coverage), clouds are the
+     softest layer at the floor: smoothed, never sharpened (#131).
+   No source is resampled beyond its native resolution and no synthetic relief or noise is added.
+3. **A storm view shows each flash only while it lives.** Opening or following a storm sets the
+   afterglow to 0 whatever the globe setting: a flash appears at its observed time, flickers and
+   fades within about a second, as an observer would see it. The 1 and 30 minute afterglows stay
+   for the globe overview.
+4. **Each flash plays in real time.** Its flicker lasts its observed duration in wall clock time,
+   whatever the replay speed, with pulses timed like real strokes (tens of milliseconds apart, a
+   few per flash, sharp rise, fast decay). Replay speed compresses the time between flashes, never
+   a flash itself. The pulse pattern stays procedural: only the duration, energy and footprint are
+   observed.
+5. **The final immersive view comes after the detail.** The `iss` (looking down) and `window`
+   (looking toward the horizon from 400 km) poses are measurement points. Tilt, framing and the
+   grazing composition (#126) are chosen by the maintainer on captures made once #253 and #131
+   deliver the new ground and clouds.
+6. **Observed, procedural, assumed.** Time, position, footprint area, energy and duration are
    observed and keep their meaning at every pose. Channel paths, branches, the cloud to ground
    share and channel heights are procedural. Cloud top (12 km) and cloud shell (10 km) are
    assumptions. Methodology and debug tooling keep this split visible.
-4. **Visual rules.** Distant flashes are luminous points; channels appear progressively once their
-   physical length is readable; halos stay restrained; exposure changes smoothly with altitude and
-   never from scene content; the camera keeps 25 km above the ground. Each rule has numeric bounds
-   in the specification.
-5. **Budgets.** On the reference Mac, at both afterglows and every pose: frame cost p95 ≤ 10 ms
-   without a tier drop, no frame over 50 ms in a flight, no more than 2 % near white pixels.
-   GPU textures and buffers ≤ 384 MB desktop and 256 MB mobile; first load ≤ 10 MB desktop and
-   8 MB mobile; diving from globe to deck ≤ 12 MB desktop and 5 MB mobile. They apply to every M5
-   PR touching the scene, measured with `web/scripts/bench.mjs` against the recorded baseline.
+7. **Visual rules.** Distant flashes are luminous points; channels appear progressively; halos
+   stay restrained; near the floor the glow stays within twice the observed footprint; exposure
+   changes smoothly with altitude only. Numeric bounds are in the specification.
+8. **Budgets.** On the reference Mac, at every pose with the storm view afterglow (0), and at
+   `globe` with the 30 minute afterglow: frame cost p95 ≤ 10 ms
+   without a tier drop, no frame over 50 ms in a flight, no more than 2 % near white pixels. GPU
+   textures and buffers ≤ 384 MB desktop and 256 MB mobile; first load ≤ 10 MB desktop and 8 MB
+   mobile; diving from `globe` to `iss` ≤ 12 MB desktop and 5 MB mobile. Every M5 PR touching the
+   scene measures them with `web/scripts/bench.mjs` against the recorded baseline.
 
 ## Consequences
 
-- #254 replaces the pixel floors with continuous functions of km per pixel, removes the 6 px
-  channel floor at globe scale and brings the 30 minute afterglow within budget; #126 moves the
-  surface floor from 15 to 25 km, keeps the storm track below the horizon and softens the deck
-  horizon.
-- Mobile today exceeds its first load budget (up to 9.2 MB): loading lighter clouds on phones, and
-  compressed Earth and one channel cloud textures (about 150 MB less GPU memory), are the cheapest
-  ways to make room for #252 and #131.
-- #125, #251 to #253 and #131 report the four poses and the benchmark before and after their change;
-  a PR over budget either fixes it or asks for an amended budget.
-- The 30 day lifecycle on `archive/clouds/` removes the clouds of the reference storms after a
-  month. Keeping them needs a longer lifecycle or a protected copy, decided with #41.
-- Desktop numbers come from one MacBook Pro. Phone emulation on that Mac only stands in for the
-  smaller drawing buffer; a real phone is measured in #259. Software rendering only checks that
-  the benchmark runs.
-- The procedural share of the image grows as the camera descends. The deck pose is a composition
-  above the data, not a claim of finer observation.
+- #126 replaces the 15 km surface floor by a 400 km camera height, and the M3 storm framing
+  minimum (300 km) by the same floor. Its grazing view becomes a look toward the horizon from that
+  height, not a pass just above the cloud tops.
+- #125 confirms the 500 m target and judges each option at the `iss` and `window` poses; #251 to
+  #253 build and load levels down to 500 m, only where the view needs them.
+- #131 targets 1 km clouds and compares them with GMGSI at `iss`. If 1 km is out of reach (feed
+  or licence), 2 km is the accepted fallback and the floor views stay visibly softer at night.
+- #254 sizes glows and channels for a floor at 400 km (points from orbit, channels readable at
+  `regional`, glow within twice the footprint at `iss`), moves the flicker to wall clock time
+  with stroke like timing, and forces the afterglow to 0 while a storm is open (#258 keeps it
+  while following). Today a flash flickers in scene time: at the default 60× replay its 60 to
+  600 ms flicker lasts 1 to 10 ms on screen, under one frame.
+- The whiteout measured with the 30 minute afterglow no longer concerns storm views.
+- Until #125 and #131 land, the views below a few thousand km keep showing pixels: the baseline
+  records this as the starting point, not a target.
+- Compressed Earth textures and one channel cloud frames (about 150 MB less GPU memory) are the
+  cheapest way to make room for the new levels; mobile today exceeds its first load budget.
+- The 30 day lifecycle on `archive/clouds/` removes the reference storms' clouds around
+  2026-11-17. Keeping them needs a longer lifecycle or a protected copy, decided with #41.
+- Desktop numbers come from one MacBook Pro; phone emulation only stands in for the smaller
+  drawing buffer. A real phone is measured in #259.

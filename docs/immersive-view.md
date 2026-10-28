@@ -1,7 +1,8 @@
 # Immersive storm view
 
 Targets for the M5 dive from the globe into a storm ([ADR 0020](adr/0020-immersive-storm-view.md)):
-reference storms and poses, scale, visual rules and budgets. M5 PRs that touch the scene compare
+reference storms, the resolution chain from lightning to ground and clouds, poses, scale, visual
+rules and budgets. M5 PRs that touch the scene compare
 against this page and the baseline below.
 
 ## Reference storms
@@ -25,32 +26,49 @@ these storms lose their clouds around 2026-11-17 and later runs compare lightnin
 Each storm opens on its share URL, paused at the reference time. The machine readable list, with
 poses, is [`immersive/references.json`](immersive/references.json).
 
+## Resolution chain
+
+The lightning is fixed; everything else follows from it.
+
+| Step | Value | Why |
+|---|---|---|
+| Lightning | LI pixel 4.5 km, GLM pixel 8 km, location within about one pixel | Instruments, not improvable |
+| Zoom floor | camera 400 km above the ground (ISS altitude) | 0.23 km per screen pixel, view about 450 km wide: a storm fills the screen, an LI pixel is 19 px. Lower only magnifies the lightning data |
+| Ground | 500 m per texel (day, night lights, water mask) | At most 2 px per texel at the floor: no visible pixel |
+| Clouds | about 1 km (2 km accepted where only that exists) | At most 4 px per texel at the floor with bicubic filtering |
+| Immersive view | chosen on captures once ground and clouds are upgraded | #126, after #253 and #131 |
+
+With today's assets, texels become visible (more than 2 px for the ground, 4 px for clouds) below
+about 8,400 km for the 4k Earth, 4,200 km for the 8k Earth and 3,400 km for GMGSI clouds.
+
 ## Poses
 
 `view` in a share URL is `lat,lon,altitude,tilt`: with tilt 0 the altitude is the camera height above
 the ground; with a tilt it is the range from the target point to the camera.
 
-| Pose | View | Camera height | Ground width at target (16:9) | Purpose |
+| Pose | View | Camera height | View width at target (16:9) | Purpose |
 |---|---|---|---|---|
 | `globe` | storm centre, 20,000 km, tilt 0 | 20,000 km | whole disc | Activity across the planet |
 | `regional` | M3 storm framing (`frameStorm`, tilt 20°, at least 300 km) | 300 to 6,000 km | the storm bounds | Choose and read one storm |
-| `close` | storm centre, range 250 km, tilt 55° | 147 km | 280 km | A few cells, oblique like the ISS |
-| `deck` | storm centre, range 100 km, tilt 72° | 32 km | 112 km | Lowest view, just above the cloud deck |
+| `iss` | storm centre, range 400 km, tilt 1° | 400 km | 450 km | The floor, looking down |
+| `window` | storm centre, range 740 km, tilt 60° | 400 km | 830 km, horizon in view | The floor, looking toward the horizon |
 
-Heading is north. The storm centre is the track point of the reference hour.
+Heading is north. The storm centre is the track point of the reference hour. `iss` uses a 1° tilt
+because the orbit camera stops at 1,274 km; the surface camera takes over with any tilt.
 
 ## Scale
 
 1 world unit is the Earth radius, 6,371 km (`kmToWorld`). The vertical field of view is 35°, so
-at a range `d` one CSS pixel of a 1080 px tall view covers `d × 0.000584` km at the centre; with a
-tilt, that is across the view, and `1 / cos(tilt)` times more along it.
+at a distance `d` one CSS pixel of a 1080 px tall view covers `d × 0.000584` km across the line of
+sight. At `window`, the nearest visible ground is 510 km away and the centre 740 km.
 
-| Pose | km per CSS px | GLM pixel (8 km) | LI pixel (4.5 km) | Earth 4k texel (9.8 km) | Cloud texel, 2k / 4k | Glow, r = 8 km | Channel half length |
-|---|---|---|---|---|---|---|---|
-| `globe` (20,000 km) | 11.7 | 0.7 px | 0.4 px | 0.8 px | 1.7 / 0.8 px | 2.7 px | 1.5 px, floor 3 px |
-| `regional` (1,500 km) | 0.88 | 9 px | 5 px | 11 px | 22 / 11 px | 36 px | 20 px |
-| `close` (250 km) | 0.15 | 55 px | 31 px | 67 px | 134 / 67 px | 219 px | 120 px |
-| `deck` (100 km) | 0.058 | 137 px | 77 px | 168 px | 336 / 168 px | 548 px | 301 px |
+| Pose | km per CSS px | GLM pixel | LI pixel | Earth 4k texel (9.8 km) | GMGSI cloud (8 km) | Ground target (0.5 km) | Cloud target (1 km) | Glow radius, r = 8 km |
+|---|---|---|---|---|---|---|---|---|
+| `globe` | 11.7 | 0.7 px | 0.4 px | 0.8 px | 0.7 px | | | 2.7 px |
+| `regional`, R1 (873 km) | 0.51 | 16 px | 9 px | 19 px | 16 px | 1.0 px | 2.0 px | 63 px |
+| `regional`, R4 and R5 (306 km) | 0.18 | 45 px | 25 px | 55 px | 45 px | 2.8 px | 5.6 px | 179 px |
+| `iss` | 0.23 | 34 px | 19 px | 42 px | 34 px | 2.1 px | 4.3 px | 137 px |
+| `window`, nearest ground | 0.30 | 27 px | 15 px | 33 px | 27 px | 1.7 px | 3.4 px | 107 px |
 
 Glow radius is 4 times the observed radius `r = √(area / π)` at mid intensity (0.6 to 1.4 times
 with intensity), at least 5 physical px. Channel half length is 2.2 `r`, at least 6 physical px.
@@ -59,12 +77,10 @@ At DPR 2, a physical px is half a CSS px.
 What the table says:
 
 - At `globe`, every source is at or below one pixel: flashes are points, compensation is required.
-- From `regional` down, every source is magnified. At `close`, one GLM pixel is about 55 px and
-  one Earth texel about 67 px: the Earth and clouds are soft blocks, and the glow (4 times
-  the footprint) covers a large part of the view.
-- At `deck`, the scene is mostly procedural: channels, cloud texture filtering and atmosphere.
-  Detail must come from #125 (surface down to 500 m per texel, 2 px per texel at `close`) and
-  #131 (clouds at about 2 km), never from synthetic noise.
+- At the floor, today's Earth and cloud texels are 27 to 42 px wide: that is the pixelation seen in
+  the baseline. The targets bring them to 2 and 4 px.
+- The M3 framing of small storms (R4, R5) goes below the floor (306 km); it moves to 400 km.
+- Near the floor the 4 times glow (137 px radius at `iss`) hides the cells it should reveal.
 
 ## Observed, procedural, assumed
 
@@ -109,22 +125,30 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
    apart from its own flicker.
 4. **Restrained halos.** A halo exists only with a visible channel, at most 8 core widths wide and
    30 % of the core level. At `regional`, halos never merge into a glow covering the storm.
-5. **Footprint at close range.** At `close` and `deck`, the round glow is between 1 and 2 times the
+5. **Footprint near the floor.** At `iss` and `window`, the round glow is between 1 and 2 times the
    observed radius; the 4 times compensation is for distant views only.
 6. **Smooth exposure.** Exposure depends on camera height only, never on scene content, changes by
-   at most one stop (2×) from `globe` to `deck`, and keeps brighter flashes brighter at every pose.
+   at most one stop (2×) from `globe` to `iss`, and keeps brighter flashes brighter at every pose.
 7. **Heights.** Cloud channels stay between 8 and 11.5 km. Any height exaggeration is at most 2.5×,
-   named in the methodology, and must not lift geometry above the camera floor.
-8. **Above-cloud camera clearance.** The camera stays at least 25 km above the ground, flights
-   included: above tropical cloud tops (up to about 18 km) and the tallest drawn geometry (17.5 km),
-   never inside the cloud shell or a channel.
-9. **No false precision.** Flash positions are not interpolated or snapped. Surface and clouds
+   named in the methodology.
+8. **Camera floor.** The camera stays at least 400 km above the ground in every mode: zoom, tilt,
+   flights and storm framing.
+9. **No visible pixels at the floor.** At the nearest visible point, a ground texel covers at most
+   2 CSS px and a cloud texel at most 4 CSS px, with bicubic filtering for clouds.
+10. **Storm views without afterglow.** While a storm is open or followed, the afterglow is 0: each
+   flash shows its flicker and a fade of about a second, then leaves no trace.
+11. **Real time flicker.** A flash flickers for its observed duration in wall clock time at any
+   replay speed: pulses about 60 ms apart (10 to 200 ms, as between real strokes), a rise within
+   one frame, a decay of tens of milliseconds. Replay speed only compresses the gaps between
+   flashes.
+12. **No false precision.** Flash positions are not interpolated or snapped. Surface and clouds
    show source detail only; magnification uses smooth filtering, never sharpening or added noise.
 
 ## Budgets
 
-Measured with `bench.mjs` on the five storms, four poses, clouds on, at afterglow 0 (the default)
-and 30 minutes (the heaviest choice). Every M5 PR touching the scene runs it before and after.
+Measured with `bench.mjs` on the five storms, four poses, clouds on, at afterglow 0 (the storm
+view setting). The 30 minute afterglow is measured at `globe` only, where it stays offered. Every
+M5 PR touching the scene runs it before and after.
 
 | Metric | Desktop | Mobile |
 |---|---|---|
@@ -134,7 +158,7 @@ and 30 minutes (the heaviest choice). Every M5 PR touching the scene runs it bef
 | GPU textures and buffers | ≤ 384 MB | ≤ 256 MB |
 | Initial load transfer | ≤ 10 MB | ≤ 8 MB |
 | Time to globe, to storm framed | ≤ 1 s, ≤ 5 s (broadband) | same, plus a 4G check in #259 |
-| Zoom transfer, globe to deck | ≤ 12 MB; back to globe ≤ 0.5 MB | ≤ 5 MB; back ≤ 0.5 MB |
+| Zoom transfer, `globe` to `iss` | ≤ 12 MB; back to globe ≤ 0.5 MB | ≤ 5 MB; back ≤ 0.5 MB |
 | Near white pixels (≥ 245 of 255) | ≤ 2 % of the frame at every pose | same |
 
 MB are 10^6 bytes. The drawing buffer (screen size × DPR, 332 MB at 3840 × 2160 with MSAA) is
