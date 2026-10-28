@@ -30,7 +30,8 @@ like any other, so the failure shows in `bronze.ingest_log`.
 
 States live in Postgres (`ingest_files`) and only move forward, so a step replayed after a crash
 changes nothing. It never calls the catalog. A failing source backs off exponentially (5 s to 5 min)
-without delaying the others. SIGTERM lets files in progress finish (30 s).
+without delaying the others; a listing or download that hangs is abandoned after 5 minutes, and a
+silent socket times out after 60 s. SIGTERM lets files in progress finish (30 s).
 
 - `GET :8080/healthz`: 200 while every loop runs (container healthcheck).
 - Heartbeat: a Healthchecks.io ping every minute when `SCINTILLE_HEALTHCHECK_URL` is set
