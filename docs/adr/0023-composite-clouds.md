@@ -85,7 +85,11 @@ NOAA open data; Himawari is credited to JMA; GMGSI keeps its credit.
 | Decode | 30 s, peak resident memory 2.2 GB of which about 1.4 GB are the memory-mapped disks |
 | Render | 123 s with 2 worker processes, 240 s of CPU (14 UTC) |
 | Tiles | 1,286 to 1,810, 30 to 34 MB; `2k` 0.31 MB and `4k` 0.94 to 1.0 MB, as GMGSI |
-| Ready | about 15 min after the hour, published 20 to 30 min after it (GMGSI: about 45 min) |
+| Ready | about 15 min after the hour, when the last disk (FCI) is listed |
+
+On the production VPS (4 vCores shared with Dagster), 2026-10-29 05 UTC, 2 worker processes:
+download 324 s, decode and render 824 s, peak resident memory 2.3 GB, 1,546 tiles (32 MB). A frame
+is published about 35 minutes after its hour, close to GMGSI (about 40 minutes).
 
 | | Per day | Kept |
 |---|---|---|
@@ -118,8 +122,8 @@ Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive
 
 ## Consequences
 
-- Clouds stay hourly but arrive about 20 minutes earlier; the lag to the lightning shrinks to
-  20 to 80 minutes.
+- Clouds stay hourly and arrive about when GMGSI did (35 minutes after the hour, mostly render
+  time on the VPS): faster rendering would bring them to about 20 minutes.
 - At the floor a cloud texel is 0.98 km by day everywhere and by night over Europe and Africa:
   about 4.3 CSS px at `iss`, 3.4 at `window`. At night elsewhere level 4 (2 km) is the finest:
   smooth, about twice softer.
