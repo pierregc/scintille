@@ -34,7 +34,7 @@ The lightning is fixed; everything else follows from it.
 |---|---|---|
 | Lightning | LI pixel 4.5 km, GLM pixel 8 km, location within about one pixel | Instruments, not improvable |
 | Zoom floor | camera 400 km above the ground (ISS altitude) | 0.23 km per screen pixel, view about 450 km wide: a storm fills the screen, an LI pixel is 19 px. Lower only magnifies the lightning data |
-| Ground | 500 m per texel (day, night lights, water mask) | At most 2 px per texel at the floor: no visible pixel |
+| Ground | 500 m per texel (day, night lights, water mask); night lights from 0.93 km texels, close to their 0.74 km sensor pixels ([ADR 0022](adr/0022-surface-imagery.md)) | At most 2 px per texel at the floor: no visible pixel |
 | Clouds | about 1 km (2 km accepted where only that exists) | At most 4 px per texel at the floor with bicubic filtering |
 | Immersive view | chosen on captures once ground and clouds are upgraded | #126, after #253 and #131 |
 
@@ -165,6 +165,29 @@ R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but n
 | Cloud top 12 km, cloud shell 10 km | Assumed | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), about 8 km, hourly | GMGSI frames |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
+
+## Scene time
+
+One clock drives the scene (`SceneClock`). Each layer shows observations, never a picture made up
+between them, and says how far they are from the scene when it matters
+([`scene-time.ts`](../web/src/globe/scene-time.ts), #255).
+
+- **Observed time.** The time of the newest flashes drawn: the clock in replay; in live, the clock
+  minus the slowest delay among the open storm's sources (`LIVE_DELAY_MS`, GLM 2 min, LI 12 min),
+  or the fastest one on the globe. Ages are measured from it.
+- **Storm position.** The latest track sample at or before the observed time, never interpolated.
+  Samples come once per hourly window: up to 90 min old the position is shown with its age, then
+  as "No position since". Nothing is shown before the first sample.
+- **Clouds.** Frames within 90 min of each other crossfade; across a wider gap (missing frames) the
+  nearest frame is shown alone. Its age appears from 15 min, earlier or later than the scene; beyond
+  3 h the layer hides ("No cloud data").
+- **Live and replay.** Leaving a storm returns to the wall clock at 1×, the live clouds and no
+  selection; browser history reopens the storm at its time, speed and pause state. Layer switches
+  are kept.
+
+Fixtures: [`scene-time-cases.json`](../web/src/globe/scene-time-cases.json) (delayed sources, old
+clouds, missing frames, absent positions, scrubbing) and the round trip test in
+[`round-trip.test.ts`](../web/src/globe/replay/round-trip.test.ts).
 
 ## Current renderer
 

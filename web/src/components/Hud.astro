@@ -90,7 +90,7 @@ import Version from './Version.astro';
 	<div class="layers" data-layers hidden>
 		<div class="group" role="group" aria-label="Layers">
 			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
-			<p class="frame" data-cloud-time hidden></p>
+			<p class="cloud-time" data-cloud-time hidden></p>
 			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
 		</div>
 		<div class="afterglow" data-afterglow>
@@ -110,6 +110,7 @@ import Version from './Version.astro';
 		max-width: min(24rem, calc(100vw - 2 * var(--gut)));
 		color: var(--soft);
 		font: 300 12px/1.6 var(--sans);
+		white-space: pre-line;
 	}
 	.share { position: fixed; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
 	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
@@ -357,7 +358,7 @@ import Version from './Version.astro';
 	.sw:hover {
 		color: var(--soft);
 	}
-	.frame {
+	.cloud-time {
 		margin: -8px 0 0;
 		color: var(--dim);
 		font: 300 9.5px/1 var(--mono);
@@ -616,7 +617,8 @@ import Version from './Version.astro';
 	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
-	import { cloudCaption, formatDate, formatTime, zoneLabel } from './hud/format';
+	import { trackObservation } from '../globe/scene-time';
+	import { cloudCaption, formatDate, formatTime, positionCaption, zoneLabel } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -641,6 +643,7 @@ import Version from './Version.astro';
 		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
 		let shareStorm: string | undefined;
+		let trackTimes: { detail: unknown; times: number[] } = { detail: null, times: [] };
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
 			const status = live && app ? app.feedStatus() : undefined;
@@ -674,8 +677,16 @@ import Version from './Version.astro';
 			if (shareTools) shareTools.hidden = !replay?.selected || Boolean(replay.loading);
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
 			if (replayStatus) {
-				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? (replay?.selected
-					? `${replay.selected.storm.label} · ${trackCaption(replay.selected)}` : '');
+				const selected = replay?.selected;
+				if (selected && trackTimes.detail !== selected) {
+					trackTimes = { detail: selected, times: selected.track.map((p) => Date.parse(p.time)).sort((a, b) => a - b) };
+				}
+				const observed = app?.observedTime() ?? 0;
+				const position = selected && !replay.loading
+					? positionCaption(trackObservation(trackTimes.times, observed), observed)
+					: '';
+				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? (selected
+					? [`${selected.storm.label} · ${trackCaption(selected)}`, position].filter(Boolean).join('\n') : '');
 				replayStatus.hidden = !caption;
 				if (replayStatus.textContent !== caption) replayStatus.textContent = caption;
 			}
@@ -695,7 +706,7 @@ import Version from './Version.astro';
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 			if (cloudTime) {
 				const caption = app
-					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudStatus().settled)
+					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudStatus().settled, app.observedTime())
 					: '';
 				cloudTime.hidden = !caption;
 				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
