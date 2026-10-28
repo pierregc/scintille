@@ -26,11 +26,12 @@ export interface CloudDetailRef {
 	levels: number[];
 	max_latitude: number;
 	fine: string;
+	index_bytes: number;
 }
 
 export interface DetailSource {
-	/** Absolute URL with `{z}`, `{y}` and `{x}`. */
-	template: string;
+	/** Absolute URL of the frame's tile pack: an index of (offset, length) pairs, then the tiles. */
+	url: string;
 	tileSize: number;
 	border: number;
 	levels: readonly number[];
@@ -50,19 +51,25 @@ export function detailSource(ref: unknown, manifestUrl: string): DetailSource | 
 	if (typeof ref !== 'object' || ref === null) return null;
 	const r = ref as Partial<CloudDetailRef>;
 	const levels = RULES.detail_levels;
-	if (typeof r.path !== 'string' || !['{z}', '{y}', '{x}'].every((part) => r.path?.includes(part)) ||
+	if (typeof r.path !== 'string' || !r.path.endsWith('.tiles') ||
 		r.tile_size !== RULES.detail_tile_size || r.border !== RULES.detail_border ||
 		!Array.isArray(r.levels) || r.levels.join() !== levels.join() ||
-		typeof r.max_latitude !== 'number' || typeof r.fine !== 'string') return null;
+		typeof r.max_latitude !== 'number' || typeof r.fine !== 'string' ||
+		r.index_bytes !== indexSlots(levels) * 8) return null;
 	let fine: Uint8Array;
 	try { fine = Uint8Array.from(atob(r.fine), (c) => c.charCodeAt(0)); }
 	catch { return null; }
 	const finest = levels[levels.length - 1];
 	if (fine.length !== Math.ceil((columns(finest) * rows(finest)) / 8)) return null;
-	const template = new URL(r.path.replace('{z}', 'Z').replace('{y}', 'Y').replace('{x}', 'X'), manifestUrl).href
-		.replace(/Z\/Y\/X\.webp$/, '{z}/{y}/{x}.webp');
-	if (!template.includes('{z}')) return null;
-	return { template, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine };
+	const url = new URL(r.path, manifestUrl).href;
+	return { url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine };
+}
+
+const indexSlots = (levels: readonly number[]) => levels.reduce((n, z) => n + rows(z) * columns(z), 0);
+
+/** Position of a tile in a pack's index: levels in order, then rows, then columns. */
+export function indexSlot(levels: readonly number[], { z, x, y }: TileKey): number {
+	return indexSlots(levels.filter((level) => level < z)) + y * columns(z) + x;
 }
 
 export const columns = (z: number) => 2 ** (z + 1);
@@ -84,9 +91,6 @@ export function hasTile(source: DetailSource, { z, x, y }: TileKey): boolean {
 	return south < source.maxLatitude && north > -source.maxLatitude;
 }
 
-export function tileUrl(source: DetailSource, { z, x, y }: TileKey): string {
-	return source.template.replace('{z}', String(z)).replace('{y}', String(y)).replace('{x}', String(x));
-}
 
 /** Texel size (km, north-south) of the global frame texture. */
 export const GLOBAL_TEXEL_KM = (360 / 4096) * DEG * EARTH_RADIUS_KM;
@@ -300,7 +304,31 @@ export function createCloudDetail(
 		detailOn: { value: 0 },
 	};
 
-	const tileId = (source: DetailSource, key: TileKey) => `${source.template}|${keyId(key)}`;
+	const tileId = (source: DetailSource, key: TileKey) => `${source.url}|${keyId(key)}`;
+	const indexes = new Map<string, Promise<Uint32Array>>();
+
+	/** Byte range of one request; a server that ignores ranges would send the whole pack. */
+	const readRange = async (url: string, start: number, length: number, signal: AbortSignal) => {
+		const response = await fetchTile(url, { signal, headers: { Range: `bytes=${start}-${start + length - 1}` } });
+		if (response.status !== 206) {
+			await response.body?.cancel();
+			throw new Error(`cloud tiles ${response.status}`);
+		}
+		return boundedBody(response, Math.min(length, RULES.max_frame_bytes));
+	};
+
+	const indexOf = (source: DetailSource): Promise<Uint32Array> => {
+		let index = indexes.get(source.url);
+		if (!index) {
+			const bytes = indexSlots(levels) * 8;
+			index = readRange(source.url, 0, bytes, new AbortController().signal)
+				.then((data) => new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4));
+			index.catch(() => indexes.delete(source.url));
+			indexes.set(source.url, index);
+			if (indexes.size > 4) indexes.delete(indexes.keys().next().value as string);
+		}
+		return index;
+	};
 
 	const freeSlot = (keep: Set<string>): number => {
 		let best = -1;
@@ -324,18 +352,20 @@ export function createCloudDetail(
 		loading.set(id, request);
 		const work = (async () => {
 			try {
-				const response = await fetchTile(tileUrl(source, key), { signal: request.signal });
-				if (!response.ok) throw new Error(`cloud tile ${response.status}`);
-				const bytes = await boundedBody(response, RULES.max_frame_bytes);
+				const index = await indexOf(source);
+				const slot = indexSlot(levels, key);
+				const [offset, length] = [index[2 * slot], index[2 * slot + 1]];
+				if (!length) throw new Error('cloud tile missing from its pack');
+				const bytes = await readRange(source.url, offset, length, request.signal);
 				const texels = await decode(new Blob([bytes], { type: 'image/webp' }), size);
 				if (request.signal.aborted || disposed || texels.length !== size * size) return;
-				const index = freeSlot(keep);
-				if (index < 0) return;
+				const free = freeSlot(keep);
+				if (free < 0) return;
 				const layer = new DataTexture(texels, size, size, RedFormat, UnsignedByteType);
 				layer.unpackAlignment = 1;
-				renderer.copyTextureToTexture(layer, tiles, null, new Vector3(0, 0, index));
-				slots[index] = { id, key, readyAt: performance.now(), usedAt: now };
-				bySlot.set(id, index);
+				renderer.copyTextureToTexture(layer, tiles, null, new Vector3(0, 0, free));
+				slots[free] = { id, key, readyAt: performance.now(), usedAt: now };
+				bySlot.set(id, free);
 				// The slot may have held a tile the pages still point to.
 				refreshPages();
 			} catch {
@@ -425,7 +455,7 @@ export function createCloudDetail(
 				if (loading.size >= maxLoads) break;
 				load(source, key, keep, now);
 			}
-			const ids: [string, string] = [view.frames[0]?.template ?? '', view.frames[1]?.template ?? ''];
+			const ids: [string, string] = [view.frames[0]?.url ?? '', view.frames[1]?.url ?? ''];
 			for (const frame of [0, 1] as const) {
 				if (!fading[frame] && ids[frame] === shown[frame]) continue;
 				fading[frame] = writePages(frame, view.frames[frame], performance.now());

@@ -181,13 +181,14 @@ that ignore it keep the global textures:
 
 ```json
 "detail": {
-  "path": "../../archive/clouds/detail/2026/10/18/20261018T140000Z-f41ef6e0/{z}/{y}/{x}.webp",
+  "path": "../../archive/clouds/detail/2026/10/18/20261018T140000Z-f41ef6e0.tiles",
   "tile_size": 640,
   "border": 2,
   "levels": [3, 4, 5],
   "max_latitude": 72.7,
   "fine": "AAAA…",
-  "size_bytes": 31591162
+  "size_bytes": 31612666,
+  "index_bytes": 21504
 }
 ```
 
@@ -198,15 +199,13 @@ that ignore it keep the global textures:
 - Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
   1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
   significant bit first.
-- Tiles are written once, before the manifests, under `archive/clouds/detail/` (30 day lifecycle);
-  the live manifest and the daily archive index both point there, each with a path relative to
-  itself (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
-
-The globe polls the manifest every minute, loads the newest 3 frames of its quality tier (`2k` on
-the low preset, `4k` above) and cross-fades them on the scene clock. It hides the layer when the
-scene time is more than 3 hours from every loaded frame (stale manifest, or none), and never falls
-back to a sample image. The HUD shows the observation time of the frame on screen; the about sheet
-carries the attribution.
+- All tiles of a frame are one object (`.tiles`, immutable): an index of `index_bytes`, one pair of
+  little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
+  order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
+  index, then each tile, with HTTP range requests.
+- The object is written once, before the manifests, under `archive/clouds/detail/` (30 day
+  lifecycle); the live manifest and the daily archive index both point there, each with a path
+  relative to itself (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
 
 ## Historical cloud discovery
 

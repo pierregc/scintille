@@ -1,7 +1,6 @@
 """Cloud frames on R2: immutable textures per tier under `live/clouds/`, a short-lived manifest,
 and the same textures under `archive/clouds/` for replay."""
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -27,7 +26,6 @@ from .texture import TIERS
 log = logging.getLogger("scintille_ingest.clouds")
 
 ATTRIBUTION = "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Himawari data)"
-UPLOADS = 16
 WINDOW = timedelta(hours=6)
 ARCHIVE_RETENTION = timedelta(days=30)
 TEXTURE_HEADERS = {
@@ -35,6 +33,10 @@ TEXTURE_HEADERS = {
     "Cache-Control": "public, max-age=31536000, immutable",
 }
 MANIFEST_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public, max-age=60"}
+PACK_HEADERS = {
+    "Content-Type": "application/octet-stream",
+    "Cache-Control": "public, max-age=31536000, immutable",
+}
 
 
 class CloudTexture(BaseModel):
@@ -49,7 +51,7 @@ class CloudDetail(BaseModel):
     """Finer tiles of the same frame, for close views (ADR 0023)."""
 
     path: str
-    """Relative to the manifest, with `{z}`, `{y}` and `{x}` to fill in."""
+    """Relative to the manifest: one object with an index, then the tiles (`tiles.pack`)."""
     tile_size: int
     border: int
     """Texels each tile repeats from its neighbours on every side."""
@@ -59,6 +61,8 @@ class CloudDetail(BaseModel):
     fine: str
     """Finest level tiles present: base64 bitmap, row-major from the north-west, low bit first."""
     size_bytes: int = Field(strict=True, ge=0)
+    index_bytes: int = Field(strict=True, ge=0)
+    """Length of the index at the start of the object."""
 
 
 class CloudFrameRef(BaseModel):
@@ -128,9 +132,9 @@ def archive_path(tier: str, time: datetime, name: str) -> str:
     return f"{tier}/{time:%Y/%m/%d}/{name}"
 
 
-def detail_root(time: datetime, name: str) -> str:
+def detail_path(time: datetime, name: str) -> str:
     """Tiles of a frame, under the archive root: written once, read by both manifests."""
-    return f"detail/{time:%Y/%m/%d}/{name.removesuffix('.webp')}"
+    return f"detail/{time:%Y/%m/%d}/{name.removesuffix('.webp')}.tiles"
 
 
 class CloudPublisher:
@@ -207,23 +211,19 @@ class CloudPublisher:
     async def _detail(
         self, time: datetime, name: str, detail: Mapping[tiles.Key, bytes]
     ) -> CloudDetail:
-        """Uploads every tile; the returned path is relative to the archive root."""
-        root = detail_root(time, name)
-        limit = asyncio.Semaphore(UPLOADS)
-
-        async def put(key: tiles.Key, data: bytes) -> None:
-            async with limit:
-                await self.archive.put(f"{root}/{key.path}", data, TEXTURE_HEADERS)
-
-        await asyncio.gather(*(put(k, d) for k, d in detail.items()))
+        """Uploads the tiles as one object; the returned path is relative to the archive root."""
+        path = detail_path(time, name)
+        data = tiles.pack(detail)
+        await self.archive.put(path, data, PACK_HEADERS)
         return CloudDetail(
-            path=root + "/{z}/{y}/{x}.webp",
+            path=path,
             tile_size=tiles.TILE,
             border=tiles.BORDER,
             levels=list(tiles.LEVELS),
             max_latitude=tiles.MAX_LATITUDE,
             fine=tiles.bitmap(detail, tiles.FINE_LEVEL),
-            size_bytes=sum(len(d) for d in detail.values()),
+            size_bytes=len(data),
+            index_bytes=tiles.INDEX_SLOTS * 8,
         )
 
     def manifest(self, now: datetime) -> CloudManifest:

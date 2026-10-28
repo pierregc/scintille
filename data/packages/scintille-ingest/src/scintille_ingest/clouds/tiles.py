@@ -2,7 +2,7 @@
 
 import base64
 import io
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -86,3 +86,30 @@ def bitmap(keys: Iterable[Key], z: int) -> str:
 def from_bitmap(encoded: str, z: int) -> set[Key]:
     bits = np.unpackbits(np.frombuffer(base64.b64decode(encoded), np.uint8), bitorder="little")
     return {Key(z, int(i) // columns(z), int(i) % columns(z)) for i in np.flatnonzero(bits)}
+
+
+def index_slot(key: Key) -> int:
+    """Position of a tile in the pack index: levels in order, then rows, then columns."""
+    before = sum(rows(z) * columns(z) for z in LEVELS if z < key.z)
+    return before + key.y * columns(key.z) + key.x
+
+
+INDEX_SLOTS = sum(rows(z) * columns(z) for z in LEVELS)
+
+
+def pack(tiles: Mapping[Key, bytes]) -> bytes:
+    """One object per frame: an index of (offset, length) little-endian uint32 pairs, one per
+    possible tile (length 0 where absent), then the WebP tiles back to back."""
+    index = np.zeros((INDEX_SLOTS, 2), "<u4")
+    body = io.BytesIO()
+    start = INDEX_SLOTS * 8
+    for key in sorted(tiles):
+        data = tiles[key]
+        index[index_slot(key)] = (start + body.tell(), len(data))
+        body.write(data)
+    return index.tobytes() + body.getvalue()
+
+
+def unpack(data: bytes, key: Key) -> bytes | None:
+    offset, length = np.frombuffer(data, "<u4", 2, index_slot(key) * 8)
+    return data[int(offset) : int(offset) + int(length)] if length else None

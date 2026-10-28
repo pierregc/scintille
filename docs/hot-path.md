@@ -121,8 +121,8 @@ With `--source composite` (or `SCINTILLE_CLOUD_SOURCE=composite`), it builds the
 3. **render** tiles of levels 3 to 5 in `SCINTILLE_CLOUD_WORKERS` processes: parallax-corrected,
    view-angle weighted blend, opacity against the GFS skin temperature, visible detail by day,
    GMGSI where no disk sees well;
-4. **publish** the tiles under `archive/clouds/detail/`, then the `2k` and `4k` textures and the
-   manifests as above. The work directory is emptied after each frame.
+4. **publish** the tiles as one object under `archive/clouds/detail/`, then the `2k` and `4k`
+   textures and the manifests as above. The work directory is emptied after each frame.
 
 `cloud_render_seconds` reports the decode and render time of the last frame.
 

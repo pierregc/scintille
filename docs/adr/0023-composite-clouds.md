@@ -56,9 +56,11 @@ multiplies it. The polar fade (68° to 72.7°) is unchanged.
 **Tiles**: 640 texels plus a border of 2 repeated from the neighbours, levels 3, 4 and 5 (3.9,
 2.0 and 0.98 km), grayscale WebP. Levels 3 and 4 cover ±72.7°; level 5 exists only where a source
 of about 1 km does (the day side, and FCI by night). The `2k` and `4k` textures of the existing
-contract are cut from level 3, so the switch from GMGSI needs no client change. Tiles are written
-once under `archive/clouds/detail/` and both manifests point to them
-([data contract](../data-contract.md#cloud-detail-tiles)).
+contract are cut from level 3, so the switch from GMGSI needs no client change. All tiles of a
+frame form one object, an index followed by the tiles, written once under
+`archive/clouds/detail/` and read by range; both manifests point to it
+([data contract](../data-contract.md#cloud-detail-tiles)). One object per hour keeps R2 writes
+to a few per frame instead of one per tile.
 
 **Client**: tiles go into a texture array of 48 layers (R8, 20 MB), with one page table per blended
 frame. The level is the coarsest whose texel covers at most 2 CSS px where the view meets the
@@ -89,7 +91,11 @@ NOAA open data; Himawari is credited to JMA; GMGSI keeps its credit.
 |---|---|---|
 | Ingress | 45 to 55 GB | |
 | R2 storage | about 0.8 GB | about 25 GB, about 0.4 USD a month |
-| R2 writes (class A) | about 40,000 | about 1.2 million a month, about 5.4 USD before the free tier |
+| R2 writes (class A) | about 200 | about 6,000 a month |
+
+The account was already past the R2 free tier before this change (October 2026: 44 GB stored,
+25 million reads, almost all by the lake). One object per frame keeps the composite's writes
+negligible; written tile by tile, they would have added about 1.2 million a month (5.4 USD).
 
 Client, five reference storms at the hour, four poses ([immersive view](../immersive-view.md)),
 `bench.mjs` at afterglow 0, against the baseline:
@@ -122,8 +128,8 @@ Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive
   over the Indian Ocean would close it.
 - The VPS downloads about 2 GB and spends a few CPU minutes per hour; the work directory needs
   about 4 GB of disk while a frame is built.
-- R2 class A operations grow by about 1.2 million a month. Packing a frame's tiles into one object
-  read by range would cut them to a few thousand if the bill matters.
+- Each close view reads the frame's index (21 kB) and its tiles by range; Cloudflare caches the
+  object at the edge after the first read.
 - The 30 day lifecycle on `archive/clouds/` also bounds the detail of replays.
 - Offline rendering (`/render`) keeps the global frames; it does not load detail yet.
 - The texture array with page tables is generic: the ground detail of

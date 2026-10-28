@@ -371,34 +371,45 @@ def publisher() -> tuple[CloudPublisher, MemoryStore]:
 
 
 def test_detail_tiles_are_written_once_and_both_manifests_point_to_them() -> None:
+    import posixpath
+    import re
+
+    import obstore
+
     pub, store = publisher()
     detail = {tiles.Key(3, 2, 8): b"a", tiles.Key(5, 9, 32): b"bb"}
     asyncio.run(pub.publish(SLOT, "composite-v1", "gfs", {"2k": b"x", "4k": b"y"}, SLOT, detail))
-    import obstore
-
     keys = {m["path"] for batch in obstore.list(store) for m in batch}
-    tile_keys = [k for k in keys if "/detail/" in k]
-    assert len(tile_keys) == 2 and all(
-        k.startswith("archive/clouds/detail/2026/10/18/") for k in tile_keys
-    )
+    packs = [k for k in keys if "/detail/" in k]
+    assert len(packs) == 1 and packs[0].startswith("archive/clouds/detail/2026/10/18/")
+    data = obstore.get(store, packs[0]).bytes().to_bytes()
+    assert tiles.unpack(data, tiles.Key(5, 9, 32)) == b"bb"
+    assert tiles.unpack(data, tiles.Key(4, 1, 1)) is None
     live = CloudManifest.model_validate_json(
         obstore.get(store, "live/clouds/manifest.json").bytes().to_bytes()
     )
     ref = live.frames[0].detail
-    assert ref is not None and ref.path.startswith("../../archive/clouds/detail/2026/10/18/")
-    assert tiles.from_bitmap(ref.fine, 5) == {tiles.Key(5, 9, 32)} and ref.size_bytes == 3
+    assert ref is not None and ref.size_bytes == len(data) and ref.index_bytes == 2688 * 8
+    assert posixpath.normpath(posixpath.join("live/clouds", ref.path)) == packs[0]
+    assert tiles.from_bitmap(ref.fine, 5) == {tiles.Key(5, 9, 32)}
     assert live.attribution == "test"
     archived = ArchiveCloudManifest.model_validate_json(
         obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
     )
-    path = archived.frames[0].detail.path if archived.frames[0].detail else ""
-    import re
+    archived_ref = archived.frames[0].detail
+    assert archived_ref is not None and re.fullmatch(ARCHIVE_DETAIL_PATTERN, archived_ref.path)
+    resolved = posixpath.normpath(posixpath.join("archive/clouds/manifests", archived_ref.path))
+    assert resolved == packs[0]
 
-    assert re.fullmatch(ARCHIVE_DETAIL_PATTERN, path)
-    resolved = "archive/clouds/manifests/" + path.replace("{z}/{y}/{x}", "5/9/32")
-    assert str(Path(resolved).resolve(strict=False)).endswith(
-        str(Path(tile_keys[0]).parent.parent.parent / "5/9/32.webp")
-    ) or any(k.endswith("5/9/32.webp") for k in tile_keys)
+
+def test_pack_index_covers_every_level() -> None:
+    assert tiles.INDEX_SLOTS == 128 + 512 + 2048
+    assert tiles.index_slot(tiles.Key(3, 0, 0)) == 0
+    assert tiles.index_slot(tiles.Key(4, 0, 0)) == 128
+    assert tiles.index_slot(tiles.Key(5, 31, 63)) == tiles.INDEX_SLOTS - 1
+    data = tiles.pack({tiles.Key(4, 3, 5): b"xyz"})
+    offset, length = np.frombuffer(data, "<u4", 2, tiles.index_slot(tiles.Key(4, 3, 5)) * 8)
+    assert data[offset : offset + length] == b"xyz" and length == 3
 
 
 class FakeFci:

@@ -6,6 +6,7 @@ import {
 	type DetailSource,
 	detailSource,
 	hasTile,
+	indexSlot,
 	levelFor,
 	tileAt,
 	viewPoints,
@@ -14,6 +15,33 @@ import {
 
 const MANIFEST = 'https://data.example/live/clouds/manifest.json';
 const FINE_BYTES = (64 * 32) / 8;
+const SLOTS = 128 + 512 + 2048;
+
+/** A pack holding three bytes for every listed tile. */
+function pack(keys: { z: number; x: number; y: number }[]): Uint8Array<ArrayBuffer> {
+	const index = new Uint32Array(SLOTS * 2);
+	const body: number[] = [];
+	for (const key of keys) {
+		const slot = indexSlot([3, 4, 5], key);
+		index[2 * slot] = SLOTS * 8 + body.length;
+		index[2 * slot + 1] = 3;
+		body.push(key.z, key.y, key.x);
+	}
+	const out = new Uint8Array(SLOTS * 8 + body.length);
+	out.set(new Uint8Array(index.buffer));
+	out.set(body, SLOTS * 8);
+	return out;
+}
+
+/** Serves byte ranges of `data`, as the data domain does. */
+function rangeFetch(data: Uint8Array<ArrayBuffer>) {
+	return vi.fn<typeof fetch>(async (_url, init) => {
+		const range = new Headers(init?.headers).get('Range') ?? '';
+		const [, start, end] = /bytes=(\d+)-(\d+)/.exec(range) ?? [];
+		if (start === undefined) return new Response(data);
+		return new Response(data.slice(Number(start), Number(end) + 1), { status: 206 });
+	});
+}
 
 function bitmap(tiles: [number, number][] = []): string {
 	const bits = new Uint8Array(FINE_BYTES);
@@ -26,13 +54,14 @@ function bitmap(tiles: [number, number][] = []): string {
 
 function ref(overrides: Record<string, unknown> = {}) {
 	return {
-		path: '../../archive/clouds/detail/2026/10/18/f/{z}/{y}/{x}.webp',
+		path: '../../archive/clouds/detail/2026/10/18/f.tiles',
 		tile_size: 640,
 		border: 2,
 		levels: [3, 4, 5],
 		max_latitude: 72.7,
 		fine: bitmap([[32, 9]]),
 		size_bytes: 1,
+		index_bytes: SLOTS * 8,
 		...overrides,
 	};
 }
@@ -44,8 +73,8 @@ function source(fine: [number, number][] = [[32, 9]]): DetailSource {
 }
 
 describe('detailSource', () => {
-	it('resolves the tile template against the manifest', () => {
-		expect(source().template).toBe('https://data.example/archive/clouds/detail/2026/10/18/f/{z}/{y}/{x}.webp');
+	it('resolves the tile pack against the manifest', () => {
+		expect(source().url).toBe('https://data.example/archive/clouds/detail/2026/10/18/f.tiles');
 	});
 
 	it('ignores detail the client cannot use', () => {
@@ -53,6 +82,7 @@ describe('detailSource', () => {
 		expect(detailSource(ref({ tile_size: 512 }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ levels: [4, 5] }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ path: 'detail/tile.webp' }), MANIFEST)).toBeNull();
+		expect(detailSource(ref({ index_bytes: 8 }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ fine: btoa('short') }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ fine: '%%%' }), MANIFEST)).toBeNull();
 	});
@@ -130,9 +160,16 @@ describe('createCloudDetail', () => {
 	camera.lookAt(new Vector3(0, 0, 0));
 	camera.updateMatrixWorld();
 
-	function setup(slots = 24) {
+	const tilesUnderView = [5, 4, 3].flatMap((z) => [
+		{ z, x: 32 >> (5 - z), y: 16 >> (5 - z) },
+		{ z, x: 31 >> (5 - z), y: 16 >> (5 - z) },
+		{ z, x: 32 >> (5 - z), y: 15 >> (5 - z) },
+		{ z, x: 31 >> (5 - z), y: 15 >> (5 - z) },
+	]);
+
+	function setup(slots = 24, served = pack(tilesUnderView)) {
 		const renderer = { copyTextureToTexture: vi.fn(), initTexture: vi.fn() };
-		const fetchTile = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 2, 3])));
+		const fetchTile = rangeFetch(served);
 		const decode = vi.fn(async (_: Blob, size: number) => new Uint8Array(size * size));
 		const detail = createCloudDetail(renderer, { slots, fetch: fetchTile, decode, fadeMs: 0 });
 		return { renderer, fetchTile, detail };
@@ -156,9 +193,10 @@ describe('createCloudDetail', () => {
 			await detail.idle();
 		}
 		detail.update(view([s, s]));
-		expect(fetchTile.mock.calls.map(([url]) => String(url))).toContain(
-			'https://data.example/archive/clouds/detail/2026/10/18/f/5/16/32.webp',
-		);
+		const ranges = fetchTile.mock.calls.map(([, init]) => new Headers(init?.headers).get('Range'));
+		expect(ranges[0]).toBe(`bytes=0-${SLOTS * 8 - 1}`);
+		expect(ranges.filter((r) => r === `bytes=0-${SLOTS * 8 - 1}`)).toHaveLength(1);
+		expect(ranges.length).toBeGreaterThan(8);
 		expect(renderer.copyTextureToTexture).toHaveBeenCalled();
 		const pages = (detail.uniforms.detailPagesA.value as DataTexture).image.data as Uint8Array;
 		const cell = (16 * 64 + 32) * 2 * 4;
@@ -166,6 +204,18 @@ describe('createCloudDetail', () => {
 		expect(pages[cell + 2]).toBe(255);
 		expect(pages[cell + 5]).toBe(4);
 		expect(detail.uniforms.detailOn.value).toBe(1);
+		detail.dispose();
+	});
+
+	it('refuses a server that ignores byte ranges', async () => {
+		const { renderer, detail } = setup();
+		const s = source([[32, 16]]);
+		const whole = vi.fn<typeof fetch>(async () => new Response(new Uint8Array(10)));
+		const other = createCloudDetail(renderer, { fetch: whole, decode: async (_: Blob, n: number) => new Uint8Array(n * n) });
+		other.update(view([s, s]));
+		await other.idle();
+		expect(renderer.copyTextureToTexture).not.toHaveBeenCalled();
+		other.dispose();
 		detail.dispose();
 	});
 
@@ -182,7 +232,7 @@ describe('createCloudDetail', () => {
 		const a = source([[32, 16]]);
 		detail.update(view([a, a]));
 		await detail.idle();
-		const b = detailSource({ ...ref({ fine: bitmap([[32, 16]]) }), path: 'other/{z}/{y}/{x}.webp' }, MANIFEST);
+		const b = detailSource({ ...ref({ fine: bitmap([[32, 16]]) }), path: 'other.tiles' }, MANIFEST);
 		detail.update(view([b, b]));
 		await detail.idle();
 		const layers = renderer.copyTextureToTexture.mock.calls.map(([, , , position]) => (position as Vector3).z);
