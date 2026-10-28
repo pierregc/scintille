@@ -159,9 +159,9 @@ R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but n
 | Flash brightness | Observed energy, normalized | `intensityBrightness` |
 | Flicker pulses within the duration | Procedural, seeded, timed like return strokes, played in wall clock time | `flashProfile` |
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
-| Channel path, branches | Procedural, seeded | `ribbon.glsl.ts` |
+| Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Channel heights (8 to 11.5 km, ground strokes from 7 km base) | Assumed, ground strokes exaggerated 2.5× | `CHANNEL` |
+| Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated | `SKELETON` |
 | Cloud top 12 km, cloud shell 10 km | Assumed | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), about 8 km, hourly | GMGSI frames |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |

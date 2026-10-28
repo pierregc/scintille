@@ -18,9 +18,9 @@ import {
 } from 'three';
 import { lookRotation, northTangent } from '../src/globe/flight';
 import { CHANNEL } from '../src/globe/lightning/channel';
-import { ribbonGeometry } from '../src/globe/lightning/ribbon';
+import { ribbonGeometry } from './ribbon-geometry';
 import { ribbonVertex as ribbon232Vertex } from './ribbon-232.glsl';
-import { ribbonVertex, ribbonFragment } from '../src/globe/lightning/ribbon.glsl';
+import { ribbonVertex, ribbonFragment } from './ribbon-254.glsl';
 import { lightningFragmentShader, lightningVertexShader } from '../src/globe/lightning/lightning.glsl';
 import { lightningFragmentShader as flatFragment, lightningVertexShader as flatVertex } from './baseline';
 import { latLonToVector } from '../src/globe/sun';

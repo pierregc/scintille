@@ -27,11 +27,12 @@ import {
 	type WebGLRenderer,
 } from 'three';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
+import { sunDirection } from '../sun';
 import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { CHANNEL } from './channel';
-import { CHANNEL_CAPACITY, CHANNEL_STRIDE, ChannelInstances } from './channel-instances';
-import { ribbonGeometry } from './ribbon';
+import { ChannelPool, POOL_FLASHES, SEGMENT_STRIDE } from './channel-pool';
+import { segmentGeometry } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
@@ -74,6 +75,8 @@ export interface Lightning {
 	setDisplayMinutes(minutes: number): void;
 	/** A storm view shows each flash alone, whatever the afterglow chosen. */
 	stormView: boolean;
+	/** Km per CSS px at the camera height; channels are only built when they can be seen. */
+	viewKmPerPx: number;
 	/** Null when disabled. */
 	light: FlashLight | null;
 	/** Redraws the light map around what `camera` looks at; call once per frame before the main render. */
@@ -88,6 +91,9 @@ class NumberUniform {
 
 /** Seconds for the channel halo to fade in or out when the channel count crosses its budget. */
 const HALO_FADE = 0.25;
+
+/** Beyond this zoom, km per CSS px, even the largest flash has no readable channel. */
+const CHANNEL_VIEW_KM_PER_PX = (CHANNEL.lengthScale * 25) / 6;
 
 /** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
 export const STORM_VIEW_FLASHES = 500;
@@ -158,6 +164,7 @@ export function createLightning(
 			viewportHeight: { value: 1 },
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
+			sunDirection: { value: new Vector3(1, 0, 0) },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
 		},
@@ -166,52 +173,45 @@ export function createLightning(
 		depthWrite: false,
 	});
 
-	const channels = new ChannelInstances(ring, Math.min(capacity, CHANNEL_CAPACITY));
-	const channelGeometry = ribbonGeometry(3, 16);
-	const channelBuffer = new InstancedInterleavedBuffer(channels.data, CHANNEL_STRIDE).setUsage(DynamicDrawUsage);
-	channelGeometry.setAttribute('flash', new InterleavedBufferAttribute(channelBuffer, 4, 0));
-	channelGeometry.setAttribute('flashShape', new InterleavedBufferAttribute(channelBuffer, 4, 4));
-	channelGeometry.instanceCount = 0;
-	const channelMaterial = new ShaderMaterial({
-		vertexShader: ribbonVertex(16),
-		fragmentShader: ribbonFragment,
-		uniforms: {
-			...material.uniforms,
-			viewport: { value: new Vector2(1, 1) },
-			widthPx: { value: 1.6 },
-			halo: { value: 0 },
-		},
-		transparent: true,
-		depthWrite: false,
-		blending: CustomBlending,
-		blendEquation: MaxEquation,
-		blendSrc: OneFactor,
-		blendDst: OneFactor,
+	const channels = new ChannelPool(ring, POOL_FLASHES, (start, count) => {
+		channelBuffer.addUpdateRange(start * SEGMENT_STRIDE, count * SEGMENT_STRIDE);
+		channelBuffer.needsUpdate = true;
 	});
+	const channelBuffer = new InstancedInterleavedBuffer(channels.data, SEGMENT_STRIDE).setUsage(DynamicDrawUsage);
+	const channelGeometry = segmentGeometry();
+	for (const [name, offset] of [['segA', 0], ['segB', 4], ['segC', 8], ['flash', 12], ['flashShape', 16]] as const) {
+		channelGeometry.setAttribute(name, new InterleavedBufferAttribute(channelBuffer, 4, offset));
+	}
+	channelGeometry.instanceCount = 0;
+	const poolShift = new NumberUniform();
+	// Channel cores add to what is behind them, so they stay visible over a lit cloud; halos keep the brightest.
+	const ribbon = (halo: number) =>
+		new ShaderMaterial({
+			vertexShader: ribbonVertex,
+			fragmentShader: ribbonFragment,
+			uniforms: {
+				...material.uniforms,
+				poolShift,
+				viewport: { value: viewport },
+				halo: { value: halo },
+				color: { value: new Color(halo ? '#c4cdff' : '#eef2ff') },
+			},
+			transparent: true,
+			depthWrite: false,
+			blending: halo ? CustomBlending : AdditiveBlending,
+			blendEquation: MaxEquation,
+			blendSrc: OneFactor,
+			blendDst: OneFactor,
+		});
+	const viewport = new Vector2(1, 1);
+	const channelMaterial = ribbon(0);
+	const haloMaterial = ribbon(1);
 	const channelMesh = new Mesh(channelGeometry, channelMaterial);
 	channelMesh.frustumCulled = false;
-	channelMesh.renderOrder = 2;
 	channelMesh.onBeforeRender = (renderer) => {
-		renderer.getSize(channelMaterial.uniforms.viewport.value).multiplyScalar(0.5);
+		renderer.getSize(viewport).multiplyScalar(0.5);
 	};
-
-	const haloGeometry = ribbonGeometry(0, 8);
-	for (const name of ['flash', 'flashShape']) {
-		haloGeometry.setAttribute(name, channelGeometry.getAttribute(name));
-	}
-	haloGeometry.instanceCount = 0;
-	const haloMaterial = new ShaderMaterial({
-		vertexShader: ribbonVertex(8),
-		fragmentShader: ribbonFragment,
-		uniforms: { ...channelMaterial.uniforms, halo: { value: 1 } },
-		transparent: true,
-		depthWrite: false,
-		blending: CustomBlending,
-		blendEquation: MaxEquation,
-		blendSrc: OneFactor,
-		blendDst: OneFactor,
-	});
-	const haloMesh = new Mesh(haloGeometry, haloMaterial);
+	const haloMesh = new Mesh(channelGeometry, haloMaterial);
 	haloMesh.frustumCulled = false;
 	haloMesh.renderOrder = 2;
 	channelMesh.renderOrder = 3;
@@ -243,11 +243,13 @@ export function createLightning(
 		material.uniforms.duration.value = ms / 1000;
 	};
 	let lastWall = Number.NaN;
+	let viewKmPerPx = 0;
 
 	return {
 		mesh,
 		setTime(utcMs, delays, replaySpeed = 1) {
 			playback.update(utcMs, replaySpeed);
+			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
 			instances.lookbackMs = Math.max(displayMs(shownMinutes()), playback.span(MAX_LIFE, utcMs));
 			instances.sync(utcMs, delays);
 			geometry.instanceCount = instances.count;
@@ -259,21 +261,23 @@ export function createLightning(
 			const from = stormView ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
 			budgetFrom.value = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;
-			channels.sync(utcMs, instances.origin, playback, delays);
+			channels.sync(utcMs, playback, delays, viewKmPerPx < CHANNEL_VIEW_KM_PER_PX);
 			channelGeometry.instanceCount = channels.count;
+			poolShift.value = Number.isFinite(channels.origin) ? (channels.origin - instances.origin) / 1000 : 0;
 			const now = performance.now();
 			const step = Number.isFinite(lastWall) ? Math.min((now - lastWall) / 1000, HALO_FADE) : HALO_FADE;
 			lastWall = now;
-			const haloTarget = channels.count <= CHANNEL.haloCapacity ? 1 : 0;
+			const haloTarget = channels.flashes <= CHANNEL.haloCapacity ? 1 : 0;
 			const halo = material.uniforms.haloStrength;
 			if (haloTarget > halo.value) halo.value = Math.min(1, halo.value + step / HALO_FADE);
 			else if (haloTarget < halo.value) halo.value = Math.max(0, halo.value - step / HALO_FADE);
-			haloGeometry.instanceCount = halo.value > 0 ? channels.count : 0;
-			if (channels.count > 0) {
-				channelBuffer.clearUpdateRanges();
-				channelBuffer.addUpdateRange(0, channels.count * CHANNEL_STRIDE);
-				channelBuffer.needsUpdate = true;
-			}
+			haloMesh.visible = halo.value > 0;
+		},
+		get viewKmPerPx() {
+			return viewKmPerPx;
+		},
+		set viewKmPerPx(kmPerPx) {
+			viewKmPerPx = kmPerPx;
 		},
 		get displayMinutes() {
 			return displayMinutes;
@@ -301,7 +305,6 @@ export function createLightning(
 		dispose() {
 			lightMap?.dispose();
 			reducedMotion?.removeEventListener('change', applyMotion);
-			haloGeometry.dispose();
 			haloMaterial.dispose();
 			channelGeometry.dispose();
 			channelMaterial.dispose();
@@ -318,6 +321,8 @@ export const LIGHT_WINDOW = {
 	nearSplat: 2,
 	farSplat: 3,
 	farSpreadKm: 150,
+	/** Cloud light level near the floor, so channels still read over the lit cloud. */
+	nearLevel: 0.45,
 } as const;
 
 /** Scene time (UTC ms) of the `count`-th newest flash played by `now`, or -Infinity when fewer have played. */
@@ -352,6 +357,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	const { time, duration, flicker, speed, pivot, pivotSpeed, budgetFrom, budgetFade } = flashes.uniforms;
 	const bounds = new Vector4(0, 0, Math.PI, Math.PI / 2);
 	const splat = { value: LIGHT_WINDOW.farSplat as number };
+	const level = { value: 1 };
 	const spread = { value: LIGHT_WINDOW.farSpreadKm as number };
 	const minSplat = { value: 0 };
 	const scene = new Scene();
@@ -372,6 +378,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 					budgetFade,
 					window: { value: bounds },
 					splat,
+					level,
 					spreadKm: spread,
 					minSplatKm: minSplat,
 					wrap: { value: wrap },
@@ -412,6 +419,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, bounds);
 			const whole = bounds.w / (Math.PI / 2);
 			splat.value = LIGHT_WINDOW.nearSplat + (LIGHT_WINDOW.farSplat - LIGHT_WINDOW.nearSplat) * whole;
+			level.value = LIGHT_WINDOW.nearLevel + (1 - LIGHT_WINDOW.nearLevel) * whole;
 			spread.value = LIGHT_WINDOW.farSpreadKm * whole * whole;
 			minSplat.value = (4 * bounds.w * EARTH_RADIUS_KM) / (width / 2);
 			const previous = renderer.getRenderTarget();

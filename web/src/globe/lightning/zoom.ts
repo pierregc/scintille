@@ -17,6 +17,8 @@ export const ZOOM = {
 	revealPx: [6, 18],
 	/** Share of the bloom kept near the floor, where glows are resolved and need no halo to be seen. */
 	nearBloom: 0.15,
+	/** Glow level near the floor, where the lit cloud and the channels carry the flash. */
+	nearGlowLevel: 0.4,
 } as const;
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
@@ -33,6 +35,11 @@ export function farness(kmPerPx: number): number {
 /** Bloom strength for a view of `kmPerPx` from the camera height, out of the full `strength`. */
 export function bloomStrength(kmPerPx: number, strength: number): number {
 	return strength * (ZOOM.nearBloom + (1 - ZOOM.nearBloom) * farness(kmPerPx));
+}
+
+/** Level of the round glow, out of its full brightness. */
+export function glowShare(kmPerPx: number): number {
+	return ZOOM.nearGlowLevel + (1 - ZOOM.nearGlowLevel) * farness(kmPerPx);
 }
 
 /** Glow radius in km of a flash of observed radius `radiusKm`. */
@@ -59,6 +66,9 @@ float glowRadiusKm(float radiusKm, float intensity, float kmPerPx) {
 	float near = mix(${f(ZOOM.nearGlow[0])}, ${f(ZOOM.nearGlow[1])}, i);
 	float far = ${f(ZOOM.farGlow)} * intensityScale(i);
 	return max(radiusKm * mix(near, far, farness(kmPerPx)), ${f(ZOOM.pointPx)} * kmPerPx * intensityScale(i));
+}
+float glowShare(float kmPerPx) {
+	return mix(${f(ZOOM.nearGlowLevel)}, 1.0, farness(kmPerPx));
 }
 float channelReveal(float radiusKm, float kmPerPx) {
 	return smoothstep(${f(ZOOM.revealPx[0])}, ${f(ZOOM.revealPx[1])}, radiusKm * ${f(CHANNEL.lengthScale)} / kmPerPx);

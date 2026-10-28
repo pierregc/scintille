@@ -72,49 +72,71 @@ the floor the image still whitens at those speeds.
 
 ## Channel
 
-While a flash flickers, a screen-space ribbon follows a 3D random walk. The vertex shader generates its
-main channel and three branches from a seed derived from the event time and location. Revisiting a flash
-or rebasing GPU times preserves its shape.
+While a flash flickers, its channel shows: a skeleton of segments built once per flash
+(`skeleton.ts`), drawn as screen-space ribbons. Its shape is procedural and drawn from a seed of the
+event time and position, so a flash keeps its shape when revisited. Satellites only see the light: none
+of this shape is observed.
 
-The channel half length is always physical, 2.2 flash radii, with a 1.6 CSS px width; it has no pixel
-floor. Its opacity rises from 0 to 1 while that half length grows from 6 to 18 CSS px, so distant flashes
-are points and channels appear as they get readable. Branches light once, when the leader reaches them,
-then fade (60 ms for ground flashes, 120 ms in-cloud); later pulses follow the main channel. The channel
-fades over 150 ms after the flicker, leaving the round glow.
+**Silhouette.** A seed picks about 25 % cloud-to-ground looks; the rest are in-cloud.
 
-In-cloud channels run inside the cloud, 0.5 to 4 km below its top, so they are seen through it: their
-core widens to at least 2 km and keeps 60 % of its light, scaled down as it widens, and they have no
-halo. Ground channels stay sharp.
+- *Ground*: a short leader in the cloud, at 8 to 11.5 km, feeds a channel that drops to the ground
+  2 to 9 km away horizontally, mostly vertical, heights not exaggerated. It is a lone filament (30 %),
+  branched (40 %), forked into two comparable channels (20 %), or strikes the ground at two points (10 %).
+  Its branches go down and out and end in the air.
+- *In-cloud*: one to three leaders spread both ways from where the flash starts, at 8 to 11.5 km, like
+  the roots of a tree, up to 2.2 flash radii away. It is a filament (20 %), branched (30 %) or a wide
+  network without a dominant trunk (50 %).
 
-While a channel shows, the round glow steps back so the lit cloud does not wash it out: to 40 % for a
-ground flash (10 % with its halo), to 40 % for an in-cloud one, scaled by the channel opacity.
+**Path.** Each path has one or two broad bends (an elbow or an S), then its midpoints are displaced
+sideways at uneven places, by about the same share of their length at every scale, down to segments of
+a 48th of the flash extent. Segment lengths vary, turns are sharp or soft, and the path never zigzags
+regularly. Branches leave at uneven places, mostly at 20 to 70 degrees, a few almost square, most of
+them on one side; some are short splinters, some as long as the trunk, and they branch again down to
+three levels, coarser as they get finer.
 
-A seed selects about 25 % cloud-to-ground looks: a downward channel from a nominal 7 km cloud base to the
-surface, with downward branches. Its height alone is exaggerated by 2.5× (17.5 km on screen), so it reads
-in a grazing view. The other 75 % spread horizontally at 8 to 11.5 km, just below the 12 km cloud tops;
-those heights are not exaggerated. Both use the same horizontal walk, width, energy and timing, preserving
-their footprint from above. Satellites cannot classify these two kinds: their allocation and exaggerated
-drops are rendering choices, not measurements.
+**Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
+the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
+(drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
+in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
+sometimes lavender-rose or warm.
 
-Only flashes still in that phase enter the channel buffer, capped at 2,048 instances. If a burst exceeds
-this budget, the newest channels remain; all flashes retain their glow and cloud lighting.
+**Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
+reach the ground within 20 ms. Branches light once, when the leader reaches them, then fade (60 ms for
+ground flashes, 120 ms in-cloud); later pulses light the main channels again, as return strokes follow
+an established path. The channel fades over 150 ms after the flicker, leaving the round glow. A channel
+appears as it gets readable: its opacity rises while its half length grows from 6 to 18 CSS px.
+
+**In the cloud and in daylight.** Segments above the 7 km cloud base are seen through the cloud: they
+widen to at least 0.6 km and keep 45 % of their light, scaled down as they widen, with no halo. Over
+sunlit clouds, which outshine a thin channel seen from orbit, channels keep 30 % of their light.
+
+**One flash, two instruments.** Where GLM and MTG LI detections fall within 400 ms and 0.15 degree of
+each other, they are one flash: both keep their glow, only the newest gets a channel.
+
+**Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud; their segments
+overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
+round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
+scaled by the channel opacity. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
+channel carry the flash.
+
+**Budget.** Channels are built only when the camera is close enough for one to be readable (under about
+9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
+256 segments. All flashes keep their glow and cloud light.
 
 ## Channel halo
 
-A second, soft ribbon follows the main channel of ground flashes only, sampling every other core vertex
-(8 segments instead of 16). Branches retain their thin core. The halo is eight times wider and at 30 % of
-the core level, and shares the channel opacity, profile, growth and fade. It fades with camera distance
-from 1,500 to 6,000 km.
-
-The halo pass is omitted above 512 active channels, fading out and back in over 250 ms, which bounds its
-instance and fill cost during bursts.
+A second, soft ribbon follows the main channel of ground flashes in clear air: eight times wider, at
+30 % of the core level, sharing its opacity, profile, growth and fade, keeping the brightest light where
+it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
+250 ms, which bounds its cost during bursts.
 
 ## Cloud light
 
 Flashes also light the clouds from inside, through a light map: a 1024 × 512 equirectangular window
 around the point the camera looks at, 3 times the camera height in half height, up to the whole globe
 from about 3,300 km. Near the floor its texels are 4.7 km and each flash lights about 2 radii around it;
-from afar, 150 km at least, as on the globe. In-cloud flashes light it where their light has drifted.
+from afar, 150 km at least, as on the globe; near the floor it is drawn at 45 %, so channels read over
+it. In-cloud flashes light it where their light has drifted.
 The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
 
 ## Reduced motion

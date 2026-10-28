@@ -45,6 +45,7 @@ void main() {
 	float distance = length(cameraPosition - center);
 	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx) * kmToWorld;
+	brightness *= glowShare(kmPerPx);
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));

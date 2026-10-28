@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { intensityScale } from './intensity';
-import { channelReveal, farness, glowRadiusKm, ZOOM } from './zoom';
+import { channelReveal, farness, glowRadiusKm, glowShare, ZOOM } from './zoom';
 
 const POSES = { globe: 11.7, mid: 1.2, regional: 0.51, window: 0.3, iss: 0.23 };
 
@@ -40,5 +40,10 @@ describe('flash size with zoom', () => {
 		const mid = channelReveal(8, POSES.mid);
 		expect(mid).toBeGreaterThan(0);
 		expect(mid).toBeLessThan(1);
+	});
+
+	it('lets the lit cloud and the channels carry the flash near the floor', () => {
+		expect(glowShare(POSES.iss)).toBe(ZOOM.nearGlowLevel);
+		expect(glowShare(POSES.globe)).toBe(1);
 	});
 });
