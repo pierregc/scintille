@@ -14,7 +14,9 @@ from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.runtime.live_feed import LiveFeed, parse_manifest
 from scintille_ingest.runtime.ops import (
     GOLD_STATUS,
+    LAKE_STATUS,
     QUALITY_STATUS,
+    STORMS_STATUS,
     FileStats,
     LiveStats,
     OpsPublisher,
@@ -157,6 +159,22 @@ def test_build_reports_freshness_per_layer() -> None:
     assert metrics.sources[0].completeness == pytest.approx(178 / 180, abs=1e-4)
     assert metrics.sources[1].last_file_time is None
     assert metrics.catalog.month == "2026-07" and metrics.catalog.free_tier == 1_000_000
+    assert metrics.lake.measured_at is None and metrics.lake.bytes is None
+    assert metrics.storms.measured_at is None and metrics.storms.published is None
+
+
+def test_lake_size_and_storm_counts_keep_their_measurement_time(tmp_path: Path) -> None:
+    store, clock, ops = MemoryStore(), Clock(), MemoryOps()
+    feed = LiveFeed(store, outbox=tmp_path / "outbox", clock=clock)
+    publisher = OpsPublisher(store, feed, Spool(tmp_path / "spool"), ops, clock=clock)
+    lake = {"tables": 11, "bytes": 2_874_316_800, "data_files": 1482, "records": 431_277_904}
+    ops.put_status(LAKE_STATUS, lake, T0 - timedelta(minutes=40))
+    ops.put_status(STORMS_STATUS, {"published": 1164, "highlighted": 9}, T0 - timedelta(hours=2))
+    metrics = publisher.snapshot()
+    assert metrics.lake.model_dump() == {"measured_at": T0 - timedelta(minutes=40), **lake}
+    assert metrics.storms.measured_at == T0 - timedelta(hours=2)
+    assert (metrics.storms.detected, metrics.storms.published) == (None, 1164)
+    assert metrics.storms.highlighted == 9
 
 
 def test_stopped_lake_writer_raises_silver_lag_but_not_live_feed_age(tmp_path: Path) -> None:

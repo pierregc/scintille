@@ -168,6 +168,22 @@ def test_highlights_follow_the_effective_snapshot_and_keep_the_previous_file() -
     assert store.get(HIGHLIGHTS_PATH) == written
 
 
+def test_search_indexes_the_published_storms_after_their_index_pages() -> None:
+    store, document = Store(), detail()
+    seen: list[tuple[list[str], bool]] = []
+
+    def index(storms: Sequence[StormSummary]) -> dict[str, int]:
+        detail_path = f"storms/{document.storm.slug}.json"
+        seen.append(([s.slug for s in storms], store.exists(detail_path)))
+        assert store.exists("storms/index/latest.json")
+        return {"search_upserted": len(storms)}
+
+    result = publish_catalog(
+        store, [document], chunks(document), [document.storm], NOW, lambda _: True, search=index
+    )
+    assert seen == [([document.storm.slug], True)] and result["search_upserted"] == 1
+
+
 def test_details_published_by_an_earlier_minor_version_are_still_read() -> None:
     store, document = Store(), detail()
     path = f"storms/{document.storm.slug}.json"
@@ -379,6 +395,7 @@ def test_track_bounds_cross_antimeridian_without_double_counting() -> None:
     step = dict(
         window_start=NOW,
         window_end=NOW + timedelta(hours=1),
+        t_start=NOW,
         west=178.0,
         east=-178.0,
         south=-1.0,
@@ -386,6 +403,28 @@ def test_track_bounds_cross_antimeridian_without_double_counting() -> None:
     )
     selected = selected_flashes(flashes, pl.DataFrame([step, step]))
     assert set(selected["flash_id"]) == {"a", "b"}
+
+
+def test_track_bounds_start_at_the_first_flash_of_the_overlap() -> None:
+    minutes = [-40, -20, 10]
+    flashes = pl.DataFrame(
+        {
+            "flash_id": ["a", "b", "c"],
+            "event_time": [NOW + timedelta(minutes=m) for m in minutes],
+            "lat": [0.0] * 3,
+            "lon": [0.0] * 3,
+        }
+    )
+    step = dict(
+        window_start=NOW,
+        window_end=NOW + timedelta(hours=1),
+        t_start=NOW - timedelta(minutes=30),
+        west=-1.0,
+        east=1.0,
+        south=-1.0,
+        north=1.0,
+    )
+    assert selected_flashes(flashes, pl.DataFrame([step]))["flash_id"].to_list() == ["b", "c"]
 
 
 def test_chunks_preserve_event_time_and_partition_hours() -> None:

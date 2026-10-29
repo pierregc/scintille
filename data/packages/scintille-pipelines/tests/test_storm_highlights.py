@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
 import polars as pl
-from scintille_contract.models import StormSummary
-from scintille_pipelines.storm_highlights import highlights, storm_metrics
+from scintille_contract.models import StormHighlight, StormSummary
+from scintille_pipelines.storm_highlights import countries_crossed, highlights, storm_metrics
 from scintille_pipelines.storm_publication import distances
 
 T0 = datetime(2026, 7, 15, tzinfo=UTC)
@@ -21,6 +21,8 @@ def storm(
     area: float = 100.0,
     score: float = 10.0,
     offshore: bool = False,
+    distance: float | None = 100.0,
+    countries: int = 1,
 ) -> tuple[StormSummary, dict[str, object]]:
     summary = StormSummary(
         storm_id=f"id-{slug}",
@@ -33,6 +35,7 @@ def storm(
         closed=True,
         flashes=flashes,
         peak_rate=peak,
+        distance_km=distance,
         level=3,
         level_name="Strong",
         level_rule="test",
@@ -46,8 +49,13 @@ def storm(
         "drift_km": drift,
         "score": score,
         "offshore": offshore,
+        "countries": countries,
     }
     return summary, row
+
+
+def chosen(*storms: tuple[StormSummary, dict[str, object]]) -> list[StormHighlight]:
+    return highlights([s for s, _ in storms], pl.DataFrame([r for _, r in storms]), T0).highlights
 
 
 def pick(*storms: tuple[StormSummary, dict[str, object]]) -> list[tuple[str, str | None, str]]:
@@ -128,8 +136,54 @@ def test_metrics_join_gold_tables() -> None:
     levels = pl.DataFrame({"storm_id": ["a"], "score": [4.0]})
     names = pl.DataFrame({"storm_id": ["a"], "offshore": [True]})
     row = storm_metrics(storms, levels, names).row(0)
-    assert row[:4] == ("a", 1.0, 2.0, 3.0) and row[5:] == (4.0, True)
+    assert row[:4] == ("a", 1.0, 2.0, 3.0) and row[5:] == (4.0, True, 0)
     assert abs(row[4] - 111.2) < 0.1
+
+
+def test_countries_come_from_track_centroids_on_land() -> None:
+    track = [
+        {"lat": 48.9, "lon": 2.3},
+        {"lat": 50.8, "lon": 4.4},
+        {"lat": 50.9, "lon": 6.9},
+        {"lat": 51.0, "lon": 7.0},
+        {"lat": 45.0, "lon": -30.0},
+    ]
+    storms = pl.DataFrame({"storm_id": ["a", "b"], "track": [track, track[-1:]]})
+    assert dict(countries_crossed(storms).iter_rows()) == {"a": 3}
+
+
+def test_records_show_their_own_figure() -> None:
+    picks = chosen(
+        storm("best", 10, 2, score=50),
+        storm("long", -50, 9, score=1, peak=5),
+        storm("intense", -40, 1, score=1, peak=900),
+        storm("wide", -30, 1, score=1, area=50_000),
+    )
+    figures = {h.kind: (h.metric.name, h.metric.value, h.metric.rank) for h in picks if h.metric}
+    assert figures["longest"] == ("hours", 9.0, 1)
+    assert figures["intense"] == ("peak_rate", 900, 1)
+    assert figures["largest"] == ("area_km2", 50_000, 1)
+
+
+def test_winners_show_their_best_ranked_figure() -> None:
+    def best(*storms: tuple[StormSummary, dict[str, object]]) -> tuple[str, float, int]:
+        metric = chosen(*storms)[0].metric
+        assert metric is not None
+        return metric.name, metric.value, metric.rank
+
+    many = storm("many", 10, 2, score=50, flashes=9000)
+    assert best(many, storm("other", 12, 2, score=10)) == ("flashes", 9000, 1)
+    far = storm("far", 10, 2, score=50, distance=900.0, countries=4)
+    rival = storm("rival", 12, 2, score=10, flashes=20_000)
+    assert best(far, rival) == ("countries", 4, 1)
+    few = storm("few", 10, 2, score=50, distance=900.0, countries=2)
+    assert best(few, rival) == ("distance_km", 900.0, 1)
+    plain = storm("plain", 10, 2, score=50, distance=None)
+    assert best(plain, storm("rival", 12, 2, score=10, flashes=20_000, distance=None)) == (
+        "hours",
+        2.0,
+        1,
+    )
 
 
 def test_distance_sums_track_steps_in_time_order() -> None:

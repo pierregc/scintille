@@ -4,11 +4,14 @@ import { formatAge, SOURCE_LABELS, STALE_AFTER_MS } from '../globe/live/freshnes
 
 /** Targets from docs/slo.md. */
 export const SLO = {
-	latencyP95Seconds: 120,
+	latencyP95Seconds: { 'glm-east': 45, 'glm-west': 45, 'mtg-li': 660 } satisfies Record<Source, number>,
 	completeness: 0.99,
 	liveFeedAgeSeconds: 120,
 	silverLagSeconds: 15 * 60,
 	goldAgeSeconds: 26 * 3600,
+	/** Both are measured hourly; one missed run is tolerated. */
+	lakeAgeSeconds: 2 * 3600,
+	stormsAgeSeconds: 2 * 3600,
 } as const;
 
 export class MetricsFormatError extends Error {}
@@ -69,6 +72,8 @@ export interface StatusView {
 	sources: SourceView[];
 	quality: { status: CheckStatus; text: string; failed: string[]; checkedAt: string };
 	catalog: { text: string; share: string } | null;
+	lake: { size: string; tables: string; files: string; rows: string; measured: Measure } | null;
+	storms: { detected: string; published: string; highlighted: string; measured: Measure } | null;
 }
 
 const dash = '—';
@@ -81,8 +86,31 @@ export function formatPercent(share: number | null, digits = 1): string {
 	return share === null ? dash : `${(share * 100).toFixed(digits)} %`;
 }
 
-export function formatCount(n: number): string {
-	return n.toLocaleString('en-US');
+export function formatCount(n: number | null): string {
+	return n === null ? dash : n.toLocaleString('en-US');
+}
+
+/** Decimal units, as storage is billed. */
+export function formatBytes(n: number | null): string {
+	if (n === null) return dash;
+	const units = ['B', 'kB', 'MB', 'GB', 'TB'];
+	let i = 0;
+	let v = n;
+	while (v >= 1000 && i < units.length - 1) {
+		v /= 1000;
+		i += 1;
+	}
+	return `${i === 0 ? v : v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
+}
+
+/** Age of a measurement made `at`, against a freshness target. */
+function measured(at: string | null | undefined, now: number, target: number, targetText: string, current: boolean): Measure {
+	const age = at ? Math.max(now - Date.parse(at), 0) / 1000 : null;
+	return {
+		text: age === null ? 'never' : `${formatAge(age * 1000)} ago`,
+		verdict: verdict(age, (v) => v < target, current),
+		target: targetText,
+	};
 }
 
 function since(iso: string | null, now: number): string {
@@ -116,6 +144,8 @@ export function statusView(
 			sources: [],
 			quality: { status: 'unknown', text: dash, failed: [], checkedAt: dash },
 			catalog: null,
+			lake: null,
+			storms: null,
 		};
 	}
 	const generated = Date.parse(metrics.generated_at);
@@ -124,6 +154,8 @@ export function statusView(
 	const current = ageMs <= STALE_AFTER_MS;
 	const advance = (s: number | null) => (s === null ? null : s + elapsed);
 	const f = metrics.freshness;
+	const lake = metrics.lake as OpsMetrics['lake'] | undefined;
+	const storms = metrics.storms as OpsMetrics['storms'] | undefined;
 	const layer = (label: string, value: number | null, target: number, targetText: string) => ({
 		label,
 		measure: {
@@ -152,8 +184,8 @@ export function statusView(
 			latencyP50: s.latency_p50_seconds === null ? dash : `${Math.round(s.latency_p50_seconds)} s`,
 			latencyP95: {
 				text: s.latency_p95_seconds === null ? dash : `${Math.round(s.latency_p95_seconds)} s`,
-				verdict: verdict(s.latency_p95_seconds, (v) => v <= SLO.latencyP95Seconds, current),
-				target: '≤ 120 s',
+				verdict: verdict(s.latency_p95_seconds, (v) => v <= SLO.latencyP95Seconds[s.source], current),
+				target: `≤ ${formatAge(SLO.latencyP95Seconds[s.source] * 1000)}`,
 			},
 			completeness: {
 				text: formatPercent(s.completeness),
@@ -172,6 +204,20 @@ export function statusView(
 		catalog: {
 			text: `${formatCount(metrics.catalog.operations)} / ${formatCount(metrics.catalog.free_tier)}`,
 			share: metrics.catalog.free_tier > 0 ? formatPercent(metrics.catalog.operations / metrics.catalog.free_tier) : dash,
+		},
+		// Absent before contract 2.7: shown as never measured.
+		lake: {
+			size: formatBytes(lake?.bytes ?? null),
+			tables: formatCount(lake?.tables ?? null),
+			files: formatCount(lake?.data_files ?? null),
+			rows: formatCount(lake?.records ?? null),
+			measured: measured(lake?.measured_at, now, SLO.lakeAgeSeconds, '< 2 h', current),
+		},
+		storms: {
+			detected: formatCount(storms?.detected ?? null),
+			published: formatCount(storms?.published ?? null),
+			highlighted: formatCount(storms?.highlighted ?? null),
+			measured: measured(storms?.measured_at, now, SLO.stormsAgeSeconds, '< 2 h', current),
 		},
 	};
 }

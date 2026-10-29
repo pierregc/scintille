@@ -98,6 +98,20 @@ describe('hasTile', () => {
 		expect(hasTile(s, { z: 5, x: 33, y: 9 })).toBe(false);
 		expect(hasTile(s, { z: 3, x: 16, y: 0 })).toBe(false);
 	});
+
+	it('lists only the coarse tiles a partial pack keeps', () => {
+		const bits = new Uint8Array((128 + 512) / 8);
+		const slot = 128 + 7 * columns(4) + 17;
+		bits[slot >> 3] |= 1 << (slot & 7);
+		const s = detailSource(ref({ coarse: btoa(String.fromCharCode(...bits)) }), MANIFEST);
+		if (!s) throw new Error('invalid test detail');
+		expect(hasTile(s, { z: 4, x: 17, y: 7 })).toBe(true);
+		expect(hasTile(s, { z: 4, x: 18, y: 7 })).toBe(false);
+		expect(hasTile(s, { z: 3, x: 8, y: 3 })).toBe(false);
+		expect(hasTile(s, { z: 5, x: 32, y: 9 })).toBe(true);
+		expect(detailSource(ref({ coarse: btoa('short') }), MANIFEST)).toBeNull();
+		expect(source().coarse).toBeNull();
+	});
 });
 
 describe('levelFor', () => {

@@ -87,7 +87,7 @@ def published_slugs(store: CatalogStore) -> set[str]:
 
 
 def selected_flashes(flashes: pl.DataFrame, tracks: pl.DataFrame) -> pl.DataFrame:
-    """Track-window bounds selection, explicitly broader than exact cell membership."""
+    """Track-window bounds from each cell's first flash, broader than exact cell membership."""
     selected = []
     for step in tracks.iter_rows(named=True):
         lon = pl.col("lon")
@@ -99,7 +99,7 @@ def selected_flashes(flashes: pl.DataFrame, tracks: pl.DataFrame) -> pl.DataFram
         selected.append(
             flashes.filter(
                 pl.col("event_time").is_between(
-                    step["window_start"], step["window_end"], closed="left"
+                    min(step["window_start"], step["t_start"]), step["window_end"], closed="left"
                 )
                 & pl.col("lat").is_between(step["south"], step["north"])
                 & longitude
@@ -219,6 +219,7 @@ def publish_catalog(
     purge: Callable[[list[str]], bool],
     region_codes: Sequence[str] = (),
     highlights: Callable[[Sequence[StormSummary]], StormHighlights | None] | None = None,
+    search: Callable[[Sequence[StormSummary]], dict[str, int]] | None = None,
 ) -> dict[str, int]:
     with ThreadPoolExecutor(IO_THREADS) as pool:
         paths = [f"storms/{detail.storm.slug}.json" for detail in details]
@@ -326,7 +327,9 @@ def publish_catalog(
         except OSError:
             log.exception("Cache purge transport failed; pending tags retry on the next run")
     store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
-    return {
+    # Last: search only names storms whose detail and index entry are published.
+    searched = search(all_storms) if search is not None else {}
+    return searched | {
         "changed": len(changed),
         "index_pages_written": len(rewritten),
         "storms": len(all_storms),

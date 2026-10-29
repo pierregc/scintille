@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { intensityScale } from './intensity';
-import { channelReveal, farness, glowRadiusKm, glowShare, ZOOM } from './zoom';
+import { channelReveal, farness, glowRadiusKm, glowShare, PHONE, viewScale, ZOOM } from './zoom';
 
 const POSES = { globe: 11.7, mid: 1.2, regional: 0.51, window: 0.3, iss: 0.23 };
 
@@ -45,5 +45,18 @@ describe('flash size with zoom', () => {
 	it('lets the lit cloud and the channels carry the flash near the floor', () => {
 		expect(glowShare(POSES.iss)).toBe(ZOOM.nearGlowLevel);
 		expect(glowShare(POSES.globe)).toBe(1);
+	});
+
+	it('draws a phone as a shrunk 1080 px tall view, with the point floor kept in CSS px', () => {
+		expect(viewScale(1080, false)).toBe(1);
+		expect(viewScale(659, false)).toBe(1);
+		expect(viewScale(1440, true)).toBe(1);
+		const scale = viewScale(659, true);
+		expect(scale).toBeCloseTo(659 / PHONE.viewHeight, 6);
+		const phoneKmPerPx = POSES.window / scale;
+		expect(glowRadiusKm(8, 0.5, phoneKmPerPx, scale)).toBeCloseTo(glowRadiusKm(8, 0.5, POSES.window), 6);
+		expect(glowRadiusKm(8, 0.5, POSES.globe, scale)).toBeCloseTo(glowRadiusKm(8, 0.5, POSES.globe), 6);
+		expect(glowShare(POSES.iss, ZOOM.nearGlowLevel * PHONE.nearLevel)).toBeLessThan(glowShare(POSES.iss));
+		expect(glowShare(POSES.globe, ZOOM.nearGlowLevel * PHONE.nearLevel)).toBe(1);
 	});
 });

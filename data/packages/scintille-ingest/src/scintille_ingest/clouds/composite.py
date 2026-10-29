@@ -9,11 +9,11 @@ from numpy.typing import NDArray
 
 from . import geos
 from .disk import Disk, bilinear, block_mean
+from .profile import lapse_heights
 from .texture import OPACITY_KELVIN, smoothstep
 
 Array = NDArray[np.float32]
 
-LAPSE_KELVIN_PER_KM = 6.5
 MAX_HEIGHT_KM = 15.0
 HEIGHT_CELL_KM = 16.0
 """Cloud-top heights for parallax are smoothed to about this size."""
@@ -39,11 +39,17 @@ class Satellite:
 
 
 SkinAt = Callable[[NDArray[np.float64], NDArray[np.float64]], Array]
+TopAt = Callable[[Array, NDArray[np.float64], NDArray[np.float64]], Array]
+"""Cloud-top height (km) for brightness temperatures at latitudes and longitudes."""
 
 
-def heights(infrared: Disk, skin_at: SkinAt) -> Disk:
-    """Cloud-top height (km) from the cooling below the surface temperature, on a coarse grid,
-    smoothed so parallax shifts vary slowly."""
+def lapse(skin_at: SkinAt) -> TopAt:
+    """Tops from the cooling below the surface, when no temperature profile is available."""
+    return lambda bt, lat, lon: lapse_heights(bt, skin_at(lat, lon))
+
+
+def heights(infrared: Disk, top_at: TopAt) -> Disk:
+    """Cloud-top height (km) on a coarse grid, smoothed so parallax shifts vary slowly."""
     factor = max(1, round(HEIGHT_CELL_KM / infrared.resolution_km))
     grid = infrared.grid.coarsened(factor)
     bt = np.empty((grid.rows, grid.cols), np.float32)
@@ -57,12 +63,11 @@ def heights(infrared: Disk, skin_at: SkinAt) -> Disk:
     lat, lon = geos.ground(
         *grid.angles(rows.astype(np.float64), cols.astype(np.float64)), infrared.view
     )
-    seen = np.isfinite(lat)
-    skin = np.full(lat.shape, np.nan, np.float32)
-    skin[seen] = skin_at(lat[seen], lon[seen])
-    with np.errstate(invalid="ignore"):
-        cooling = np.clip((skin - bt) / LAPSE_KELVIN_PER_KM, 0, MAX_HEIGHT_KM)
-    h = np.asarray(np.nan_to_num(cooling, nan=0.0, posinf=0.0, neginf=0.0), np.float32)
+    seen = np.isfinite(lat) & np.isfinite(bt)
+    h = np.zeros(lat.shape, np.float32)
+    h[seen] = np.clip(
+        np.nan_to_num(top_at(bt[seen], lat[seen], lon[seen]), nan=0.0), 0, MAX_HEIGHT_KM
+    )
     return Disk(infrared.satellite, "bt", infrared.view, grid, _box3(h), HEIGHT_CELL_KM)
 
 
@@ -189,3 +194,42 @@ def sample_grid(values: Array, lat: NDArray[np.float64], lon: NDArray[np.float64
     cols = ((lon + 180) / 360 * n_cols - 0.5) % n_cols
     padded = np.concatenate([values, values[:, :1]], axis=1)
     return bilinear(padded, np.clip(rows, 0, n_rows - 1), cols)
+
+
+FILL_SIGMA = 6.0
+"""Texels: clear sky takes the tops of the clouds within a few times this distance."""
+DEFAULT_TOP_KM = 2.0
+
+
+def fill_tops(height: Array, opacity: Array, threshold: float = 0.05) -> Array:
+    """Heights where there is cloud, and the nearby tops elsewhere, so filtering never ramps a
+    top down to the ground; `DEFAULT_TOP_KM` far from any cloud."""
+    known = (opacity > threshold) & np.isfinite(height)
+    weight = known.astype(np.float32)
+    values = np.where(known, height, 0).astype(np.float32)
+    spread_weight = _gaussian(weight, FILL_SIGMA)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        spread = _gaussian(values, FILL_SIGMA) / spread_weight
+    filled = np.where(spread_weight > 1e-3, spread, DEFAULT_TOP_KM)
+    return np.where(known, height, filled).astype(np.float32)
+
+
+def _gaussian(values: Array, sigma: float) -> Array:
+    """Three box blurs along each axis, edges repeated."""
+    radius = max(1, round(sigma * 0.86))
+    out = values.astype(np.float32)
+    for axis in (0, 1):
+        for _ in range(3):
+            out = _box(out, radius, axis)
+    return out
+
+
+def _box(values: Array, radius: int, axis: int) -> Array:
+    pad = [(0, 0), (0, 0)]
+    pad[axis] = (radius + 1, radius)
+    padded = np.pad(values, pad, mode="edge")
+    total = np.cumsum(padded, axis=axis, dtype=np.float64)
+    size = 2 * radius + 1
+    upper = np.take(total, np.arange(size, total.shape[axis]), axis=axis)
+    lower = np.take(total, np.arange(0, total.shape[axis] - size), axis=axis)
+    return ((upper - lower) / size).astype(np.float32)

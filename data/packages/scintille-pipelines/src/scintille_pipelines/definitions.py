@@ -12,6 +12,12 @@ from .alerts import alert_on_failure
 from .automation import daily_gold, daily_gold_schedule, silver_changed
 from .backfill import silver_flashes_backfill
 from .checks import DAILY, HOURLY, SILVER
+from .flash_archive import (
+    flash_archive,
+    flash_archive_repair_schedule,
+    flash_archive_schedule,
+    hourly_flash_archive,
+)
 from .gold.assets import GOLD, daily_stats_feed
 from .lineage import BRONZE, COUNTRIES, RAW
 from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
@@ -45,6 +51,7 @@ defs = Definitions(
         storm_levels,
         storm_names,
         storm_catalog,
+        flash_archive,
         SILVER,
         silver_flashes_backfill,
         *GOLD,
@@ -57,11 +64,14 @@ defs = Definitions(
         daily_checks,
         weekly_maintenance,
         hourly_storm_catalog,
+        hourly_flash_archive,
         silver_retention,
     ],
     schedules=[
         daily_gold_schedule,
         storm_catalog_schedule,
+        flash_archive_schedule,
+        flash_archive_repair_schedule,
         silver_retention_schedule,
         ScheduleDefinition(
             job=hourly_checks,

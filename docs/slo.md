@@ -6,14 +6,16 @@ minute in `live/metrics.json` ([contract](data-contract.md#opsmetrics)), which f
 
 | SLO | Target | Window | Measured from |
 |---|---|---|---|
-| Live latency | p95 ≤ 120 s per source, from `event_time` to the chunk listed in the manifest | rolling 60 min | `ingest-live`, in memory |
-| Completeness | ≥ 99 % of expected product files spooled (GLM 180/h, MTG LI 120/h) | 30 days, with an error budget | Postgres `ingest_files` |
+| Live latency | p95 ≤ 45 s for GLM, ≤ 11 min for MTG LI, from `event_time` to the chunk listed in the manifest | rolling 60 min | `ingest-live`, in memory |
+| Completeness | ≥ 99 % of expected product files spooled (GLM 180/h, MTG LI 6/h) | 30 days, with an error budget | Postgres `ingest_files` |
 | Live feed freshness | manifest age < 2 min | instant | `ingest-live` |
 | Silver lag | < 15 min (lake-writer drains every 5 min) | instant | oldest batch in the spool |
 | Gold age | < 26 h (daily build at 01:30 UTC) | instant | latest `gold/*` materialization in Dagster |
 
-Latency budget: about 30 s from satellite to product file (#30), up to 30 s of chunk window, then
-upload; 120 s leaves room for a slow listing or a retry.
+Latency budget ([ADR 0026](adr/0026-live-latency.md)): GLM files are listable about 21 s after the
+flash (p95 35 s), then up to 2 s of listing and 10 s of wait for the other satellite. MTG LI
+delivers one file per 10 minute cycle, about a minute after it ends. The browser plays GLM 70 s and
+MTG LI 720 s behind the clock.
 
 ## Freshness per layer
 
@@ -40,6 +42,13 @@ history is not stored (only the current hour).
 - `catalog`: catalog operations counted by `lake-writer` this month (3 table loads and one commit
   per table per drain, about 50,000 a month) against the R2 Data Catalog free tier of 1 million.
   Dagster checks and backfills are not counted.
+- `lake`: size of the lakehouse, summed from the summary of each table's current snapshot (bytes,
+  data files, rows), read hourly by the `ops_status` sensor; `measured_at` says when. Files kept
+  only for older snapshots and other objects in the bucket are not counted, so it is below the R2
+  storage bill. `/status` flags a measurement older than 2 h.
+- `storms`: storms `detected` (tracked and classified, every level), `published` (level 3 and above,
+  with a public page) and `highlighted`, from the metadata of the latest `feeds/storm_catalog`
+  materialization; `measured_at` is that publication. `/status` flags one older than 2 h.
 - `flashes_per_minute`: flashes per minute of `ingest_time`, so a spot check against silver is
   `count(*) GROUP BY date_trunc('minute', ingest_time), source`. The series restarts with
   `ingest-live` (`series_start`).

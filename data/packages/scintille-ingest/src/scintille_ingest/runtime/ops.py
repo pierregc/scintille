@@ -18,10 +18,12 @@ from scintille_contract.models import (
     SOURCE_VALUES,
     CatalogUsage,
     CheckStatus,
+    LakeSize,
     LayerFreshness,
     OpsMetrics,
     QualityStatus,
     SourceMetrics,
+    StormCounts,
 )
 
 from .metrics import Metrics
@@ -38,6 +40,8 @@ EXPECTED_FILES_PER_HOUR = {"glm-east": 180, "glm-west": 180, "mtg-li": 6}
 CATALOG_FREE_TIER = 1_000_000
 QUALITY_STATUS = "quality"
 GOLD_STATUS = "gold"
+LAKE_STATUS = "lake"
+STORMS_STATUS = "storms"
 
 
 def minute(t: datetime) -> datetime:
@@ -219,6 +223,31 @@ def quality_status(status: tuple[datetime, dict[str, Any]] | None) -> QualitySta
     )
 
 
+def lake_size(status: tuple[datetime, dict[str, Any]] | None) -> LakeSize:
+    if status is None:
+        return LakeSize(measured_at=None, tables=None, bytes=None, data_files=None, records=None)
+    at, value = status
+    return LakeSize(
+        measured_at=at,
+        tables=value.get("tables"),
+        bytes=value.get("bytes"),
+        data_files=value.get("data_files"),
+        records=value.get("records"),
+    )
+
+
+def storm_counts(status: tuple[datetime, dict[str, Any]] | None) -> StormCounts:
+    if status is None:
+        return StormCounts(measured_at=None, detected=None, published=None, highlighted=None)
+    at, value = status
+    return StormCounts(
+        measured_at=at,
+        detected=value.get("detected"),
+        published=value.get("published"),
+        highlighted=value.get("highlighted"),
+    )
+
+
 def age(now: datetime, then: datetime | None) -> float | None:
     return None if then is None else round(max(0.0, (now - then).total_seconds()), 1)
 
@@ -233,6 +262,8 @@ def build(
     gold_built: datetime | None,
     quality: QualityStatus,
     catalog_operations: int,
+    lake: LakeSize | None = None,
+    storms: StormCounts | None = None,
 ) -> OpsMetrics:
     sources = []
     for source in SOURCE_VALUES:
@@ -264,6 +295,8 @@ def build(
         catalog=CatalogUsage(
             month=f"{now:%Y-%m}", operations=catalog_operations, free_tier=CATALOG_FREE_TIER
         ),
+        lake=lake or lake_size(None),
+        storms=storms or storm_counts(None),
     )
 
 
@@ -311,6 +344,8 @@ class OpsPublisher:
             gold_built=gold[0] if gold else None,
             quality=quality_status(self.ops.status(QUALITY_STATUS)),
             catalog_operations=self.ops.catalog_operations(f"{now:%Y-%m}"),
+            lake=lake_size(self.ops.status(LAKE_STATUS)),
+            storms=storm_counts(self.ops.status(STORMS_STATUS)),
         )
 
     async def publish(self) -> OpsMetrics:

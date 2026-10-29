@@ -16,6 +16,8 @@ uniform float radius;
 uniform float lift;
 uniform float kmToWorld;
 uniform float viewportHeight;
+uniform float viewScale;
+uniform float nearGlowLevel;
 uniform float flicker;
 uniform float haloStrength;
 
@@ -50,13 +52,14 @@ void main() {
 	vec3 north = cross(normal, east);
 	float distance = length(cameraPosition - center);
 	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
-	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx) * kmToWorld;
-	brightness *= glowShare(kmPerPx);
+	float viewKmPerPx = kmPerPx * viewScale;
+	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
+	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
-	float channel = channelReveal(flashShape.y, kmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
+	float channel = channelReveal(flashShape.y, viewKmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
 	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
 #ifdef CLOUDS
 	// Only as much as the cloud lets a ground channel show; in-cloud ones still carry their light, veiled.

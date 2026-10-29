@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { OpsMetrics } from '../contract/types';
-import { MetricsFormatError, parseMetrics, statusView } from './metrics';
+import { formatBytes, MetricsFormatError, parseMetrics, statusView } from './metrics';
 
 const fixture = (): OpsMetrics =>
 	JSON.parse(readFileSync(new URL('../../../fixtures/live/metrics.json', import.meta.url), 'utf8')) as OpsMetrics;
@@ -27,6 +27,20 @@ describe('parseMetrics', () => {
 	});
 });
 
+describe('formatBytes', () => {
+	it('uses decimal units', () => {
+		expect([0, 999, 1500, 42_500_000_000, 2_874_316_800, 1.2e13].map(formatBytes)).toEqual([
+			'0 B',
+			'999 B',
+			'1.50 kB',
+			'42.5 GB',
+			'2.87 GB',
+			'12.0 TB',
+		]);
+		expect(formatBytes(null)).toBe('—');
+	});
+});
+
 describe('statusView', () => {
 	it('shows the numbers of metrics.json', () => {
 		const m = fixture();
@@ -46,6 +60,37 @@ describe('statusView', () => {
 		expect(nth(view.sources, 0).latencyP95.verdict).toBe('met');
 		expect(view.quality).toMatchObject({ status: 'warn', failed: ['silver_volume'], checkedAt: '5 min ago' });
 		expect(view.catalog).toEqual({ text: '21,480 / 1,000,000', share: '2.1 %' });
+		expect(view.lake).toEqual({
+			size: '2.87 GB',
+			tables: '11',
+			files: '1,482',
+			rows: '431,277,904',
+			measured: { text: '29 min ago', verdict: 'met', target: '< 2 h' },
+		});
+		expect(view.storms).toEqual({
+			detected: '4,812',
+			published: '1,164',
+			highlighted: '9',
+			measured: { text: '35 min ago', verdict: 'met', target: '< 2 h' },
+		});
+	});
+
+	it('flags old or missing lake and storm measurements', () => {
+		const m = fixture();
+		m.lake = { measured_at: null, tables: null, bytes: null, data_files: null, records: null };
+		m.storms.measured_at = '2026-07-15T16:30:00Z';
+		const view = statusView(m, T, T);
+		expect(view.lake).toMatchObject({ size: '—', tables: '—', files: '—', rows: '—', measured: { text: 'never', verdict: 'unknown' } });
+		expect(view.storms?.measured).toMatchObject({ text: '3 h ago', verdict: 'missed' });
+	});
+
+	it('reads metrics written before the lake and storm fields', () => {
+		const older: Partial<OpsMetrics> = fixture();
+		delete older.lake;
+		delete older.storms;
+		const view = statusView(parseMetrics(older), T, T);
+		expect(view.lake?.measured.text).toBe('never');
+		expect(view.storms?.published).toBe('—');
 	});
 
 	it('checks each layer against its target and advances ages', () => {
@@ -67,8 +112,11 @@ describe('statusView', () => {
 
 	it('marks a missed latency target', () => {
 		const m = fixture();
-		nth(m.sources, 2).latency_p95_seconds = 121;
-		expect(nth(statusView(m, T, T).sources, 2).latencyP95.verdict).toBe('missed');
+		nth(m.sources, 0).latency_p95_seconds = 46;
+		nth(m.sources, 2).latency_p95_seconds = 661;
+		const sources = statusView(m, T, T).sources;
+		expect(sources.map((s) => s.latencyP95.verdict)).toEqual(['missed', 'met', 'missed']);
+		expect(sources.map((s) => s.latencyP95.target)).toEqual(['≤ 45 s', '≤ 45 s', '≤ 11 min']);
 	});
 
 	it('does not vouch for old metrics', () => {

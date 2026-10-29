@@ -29,7 +29,6 @@ export const cloudOpacityGlsl = /* glsl */ `
 uniform sampler2D cloudMap;
 uniform sampler2D cloudMapNext;
 uniform float cloudMix;
-uniform vec2 cloudMapSize;
 uniform float cloudMaxOpacity;
 uniform vec2 cloudFadeLatitudes;
 uniform float cloudShown;
@@ -37,7 +36,9 @@ uniform float cloudShown;
 // Cubic B-spline from four bilinear taps: rounds texel blocks off when zoomed in.
 float sampleOpacity(sampler2D map, vec2 uv, vec2 gx, vec2 gy) {
 #ifdef BICUBIC
-	vec2 st = uv * cloudMapSize - 0.5;
+	// Per map: a blended pair may mix a preview with a full frame.
+	vec2 size = vec2(textureSize(map, 0));
+	vec2 st = uv * size - 0.5;
 	vec2 i = floor(st);
 	vec2 f = st - i;
 	vec2 f2 = f * f;
@@ -48,8 +49,8 @@ float sampleOpacity(sampler2D map, vec2 uv, vec2 gx, vec2 gy) {
 	vec2 w3 = f3 / 6.0;
 	vec2 g0 = w0 + w1;
 	vec2 g1 = w2 + w3;
-	vec2 h0 = (i - 0.5 + w1 / g0) / cloudMapSize;
-	vec2 h1 = (i + 1.5 + w3 / g1) / cloudMapSize;
+	vec2 h0 = (i - 0.5 + w1 / g0) / size;
+	vec2 h1 = (i + 1.5 + w3 / g1) / size;
 	float a = textureGrad(map, vec2(h0.x, h0.y), gx, gy).r;
 	float b = textureGrad(map, vec2(h1.x, h0.y), gx, gy).r;
 	float c = textureGrad(map, vec2(h0.x, h1.y), gx, gy).r;

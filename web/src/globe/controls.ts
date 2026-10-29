@@ -42,6 +42,8 @@ export interface GlobeControls {
 	onSurface(): boolean;
 	/** Calls `listener` when the visitor starts moving the camera; returns the unsubscribe function. */
 	onInput(listener: () => void): () => void;
+	/** Keeps the idle auto-rotation off while `hold` is true; once released it waits a full idle delay. */
+	holdRotation(hold: boolean): void;
 	view(): CameraView;
 	dispose(): void;
 }
@@ -76,6 +78,7 @@ export function createGlobeControls(
 	let surface: SurfaceView | undefined;
 	let limits: ZoomLimits | undefined;
 	let previousTime: number | undefined;
+	let held = false;
 
 	const applyRoll = () => {
 		if (!roll) return;
@@ -299,6 +302,10 @@ export function createGlobeControls(
 			}
 		},
 		flying: () => flight !== undefined,
+		holdRotation(hold) {
+			if (held && !hold) idle.wait(now());
+			held = hold;
+		},
 		onSurface: () => surface !== undefined,
 		onInput(listener) {
 			inputListeners.add(listener);
@@ -334,7 +341,7 @@ export function createGlobeControls(
 			const delta = previousTime === undefined ? 0 : Math.min((time - previousTime) / 1000, 0.1);
 			previousTime = time;
 			if (surface) return;
-			controls.autoRotate = !reducedMotion.matches && idle.rotating(now());
+			controls.autoRotate = !held && !reducedMotion.matches && idle.rotating(now());
 			if (limits) controls.rotateSpeed = rotateSpeedFor(camera.position.length(), radius, limits.fit);
 			controls.update(delta);
 			applyRoll();

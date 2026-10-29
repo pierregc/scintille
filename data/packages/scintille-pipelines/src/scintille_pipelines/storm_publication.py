@@ -54,6 +54,7 @@ from .storm_cells import BACKFILL, RUN_HOURS, hourly
 from .storm_highlights import haversine_km, highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
+from .storm_search import D1Error, D1Rest, retained, sync_search
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 from .tracking import HOUR
 
@@ -190,11 +191,15 @@ def storm_catalog(
             reject(storm.slug)
             continue
         valid.append(storm.storm_id)
-    steps = all_tracks.filter(pl.col("storm_id").is_in(valid)).sort("window_start")
+    steps = (
+        all_tracks.filter(pl.col("storm_id").is_in(valid))
+        .with_columns(scan_start=pl.min_horizontal("window_start", "t_start"))
+        .sort("scan_start")
+    )
     selected: dict[str, list[pl.DataFrame]] = defaultdict(list)
     # Bounded silver scans shared by every storm, long ones read piece by piece.
     for (start_window, end_window), rows in flash_windows(
-        list(zip(steps["window_start"], steps["window_end"], strict=True))
+        list(zip(steps["scan_start"], steps["window_end"], strict=True))
     ):
         flashes = _scan(flash_table, _between("event_time", start_window, end_window))
         for (storm_id,), part in steps[rows].partition_by("storm_id", as_dict=True).items():
@@ -247,9 +252,27 @@ def storm_catalog(
             context.log.exception("Highlights failed; the previous file stays published")
             return None
 
+    def index(published: Sequence[StormSummary]) -> dict[str, int]:
+        try:
+            database = D1Rest.from_env()
+            if database is None:
+                return {"search_skipped": 1}
+            ids = [storm.storm_id for storm in published if retained(storm, now)]
+            tracks = {
+                str(storm_id): track
+                for storm_id, track in storms.filter(pl.col("storm_id").is_in(ids))
+                .select("storm_id", "track")
+                .iter_rows()
+            }
+            return sync_search(store, database, published, tracks, now)
+        except (D1Error, OSError, ValueError):
+            context.log.exception("Search sync failed; it resumes on the next run")
+            return {"search_failed": 1}
+
     metrics = publish_catalog(
-        store, details, objects, visible, now, purge_tags, regions, highlights=pick
+        store, details, objects, visible, now, purge_tags, regions, highlights=pick, search=index
     )
+    metrics["detected"] = len(classified)
     metrics["invalid_exports"] = len(rejected)
     metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(

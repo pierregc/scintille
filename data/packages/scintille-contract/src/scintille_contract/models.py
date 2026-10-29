@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.6.1"]
-SCHEMA_VERSION: Final = "2.6.1"
+SchemaVersion = Literal["2.9.0"]
+SCHEMA_VERSION: Final = "2.9.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -320,6 +320,62 @@ class CatalogUsage(BaseModel):
     )
 
 
+class LakeSize(BaseModel):
+    """Size of the Iceberg tables, from the summary of each table's current snapshot, measured
+    about every hour. Files kept only for older snapshots, metadata and other objects in the
+    bucket are not counted.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    measured_at: UtcTimestamp | None = Field(
+        description="When the snapshots were read; null before the first measurement."
+    )
+    tables: int | None = Field(
+        description=(
+            "Tables in the bronze, silver and gold namespaces; null before the first measurement."
+        )
+    )
+    bytes: int | None = Field(
+        description=(
+            "Data files of the current snapshots, bytes; null before the first measurement."
+        )
+    )
+    data_files: int | None = Field(
+        description="Data files of the current snapshots; null before the first measurement."
+    )
+    records: int | None = Field(
+        description="Rows of the current snapshots; null before the first measurement."
+    )
+
+
+class StormCounts(BaseModel):
+    """Storms in the catalog after its latest hourly publication."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    measured_at: UtcTimestamp | None = Field(
+        description=(
+            "When the storm catalog was last published; null before the first publication."
+        )
+    )
+    detected: int | None = Field(
+        description=(
+            "Storms tracked and classified in the lake, every intensity level; null "
+            "before the first publication."
+        )
+    )
+    published: int | None = Field(
+        description=(
+            "Storms with a public page: intensity level 3 and above; null before the "
+            "first publication."
+        )
+    )
+    highlighted: int | None = Field(
+        description="Storms featured in the highlights; null before the first publication."
+    )
+
+
 class OpsMetrics(BaseModel):
     """live/metrics.json: operational metrics and freshness per layer, written every minute."""
 
@@ -331,6 +387,8 @@ class OpsMetrics(BaseModel):
     sources: list[SourceMetrics] = Field(description="One entry per source, in Source order.")
     quality: QualityStatus
     catalog: CatalogUsage
+    lake: LakeSize
+    storms: StormCounts
 
 
 CoverageKind = Literal["footprint", "no-coverage"]
@@ -511,6 +569,23 @@ class StormIndexPage(BaseModel):
     storms: list[StormSummary]
 
 
+class StormMetric(BaseModel):
+    """The one figure that makes a highlighted storm notable."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: Literal["flashes", "countries", "distance_km", "hours", "peak_rate", "area_km2"] = Field(
+        description=(
+            "Total flashes, countries crossed by the centroid, distance travelled, "
+            "duration, peak flashes per minute, or largest cell area."
+        )
+    )
+    value: float = Field(ge=0)
+    rank: int = Field(
+        ge=1, description="Rank among the storms the highlight was chosen from, 1 for the most."
+    )
+
+
 class StormHighlight(BaseModel):
     """One highlighted storm and the reason it was chosen."""
 
@@ -527,6 +602,9 @@ class StormHighlight(BaseModel):
         description="Broad area from the storm centroid, set when kind is area."
     )
     storm: StormSummary
+    metric: StormMetric | None | None = Field(
+        default=None, description="Null in files older than 2.8.0."
+    )
 
 
 class StormHighlights(BaseModel):
@@ -707,3 +785,95 @@ class ActiveStorms(BaseModel):
     ended: list[EndedStorm] = Field(
         description="Storms that left cells during the last two hours, newest first."
     )
+
+
+class NearbyQuery(BaseModel):
+    """The query as answered: the point rounded to 0.1°, the window ending at the request time."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    hours: int = Field(ge=1, le=168)
+    km: int = Field(ge=10, le=3000)
+    limit: int = Field(ge=1, le=8)
+    window_start: UtcTimestamp
+    window_end: UtcTimestamp = Field(description="The request time.")
+
+
+class SearchCatalog(BaseModel):
+    """What the search index holds: published storms of min_level and above, kept retention_days."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min_level: int = Field(ge=1)
+    retention_days: int = Field(ge=1)
+    published_at: UtcTimestamp = Field(description="Last sync of the index.")
+    last_observation_time: UtcTimestamp | None
+    stale: bool = Field(description="The last observation is more than 3 hours old.")
+    complete: bool = Field(description="False while some published storms wait to be indexed.")
+
+
+class NearbyStorm(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    storm: StormSummary
+    distance_km: float = Field(ge=0)
+    score: float = Field(
+        ge=0, description="ADR 0009 score: square root of flashes times peak rate."
+    )
+
+
+class SearchError(BaseModel):
+    """Refused or failed search: invalid (400), too-broad (422, more candidates than one answer
+    reads), unavailable (503).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    status: Literal["invalid", "too-broad", "unavailable"]
+    errors: list[str]
+
+
+class VisitorLocation(BaseModel):
+    """GET /api/location: the city of the visitor's IP address according to Cloudflare, rounded to
+    0.1°. Never stored or cached; no time zone, postal code or address.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    status: Literal["approximate", "unavailable"] = Field(
+        description=(
+            "unavailable when the city or its coordinates are unknown; a country alone is"
+            " not a location."
+        )
+    )
+    source: Literal["ip"]
+    lat: float | None
+    lon: float | None
+    city: str | None
+    region: str | None
+    country_code: str | None
+
+
+class StormsNearby(BaseModel):
+    """GET /api/storms/nearby (ADR 0027): published storms whose observed interval meets the window
+    and whose path comes within the radius, best first. Depends on the URL only.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    query: NearbyQuery
+    catalog: SearchCatalog
+    distance: Literal["path-minus-radius"] = Field(
+        description=(
+            "Great-circle distance to the arcs joining the storm's hourly centroids, "
+            "minus the radius of a disc with its largest hourly area, at least 0, rounded"
+            " to 10 km."
+        )
+    )
+    total: int = Field(ge=0, description="Matching storms before the limit.")
+    storms: list[NearbyStorm]

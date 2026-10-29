@@ -4,7 +4,7 @@ import s1 from '../../../../fixtures/storms/active/1.json';
 import type { ActiveCell } from '../../contract/types';
 import type { LiveSelection } from '../../globe/focus';
 import { ACTIVE_STALE_MS } from '../../globe/focus/active';
-import { ageSuffix, cloudCaption, endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './format';
+import { ageSuffix, endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './format';
 
 const PARIS = 'Europe/Paris';
 const NEW_YORK = 'America/New_York';
@@ -32,22 +32,12 @@ describe('HUD formatting', () => {
 		expect(zoneLabel('UTC')).toMatch(/^UTC(\+0)?$/);
 	});
 
-	it('captions the cloud frame time, or its absence once the feed has answered', () => {
-		const t = Date.UTC(2026, 6, 15, 18);
-		expect(cloudCaption(true, t, true, null, PARIS)).toBe('Observed 20:00');
-		expect(cloudCaption(true, t, true, t + 10 * MIN, PARIS)).toBe('Observed 20:00');
-		expect(cloudCaption(true, null, false)).toBe('');
-		expect(cloudCaption(true, null, true)).toBe('No cloud data');
-		expect(cloudCaption(false, t, true)).toBe('');
-	});
-
 	it('gives an observation its age only when it is far from the scene', () => {
 		const t = Date.UTC(2026, 6, 15, 18);
 		expect(ageSuffix(t, t + 14 * MIN)).toBe('');
 		expect(ageSuffix(t, t + 40 * MIN)).toBe(' · 40 min earlier');
 		expect(ageSuffix(t, t - 20 * MIN)).toBe(' · 20 min later');
 		expect(ageSuffix(t, t + 130 * MIN)).toBe(' · 2 h earlier');
-		expect(cloudCaption(true, t, true, t + 70 * MIN, 'UTC')).toBe('Observed 18:00 · 1 h earlier');
 	});
 
 	it('captions the storm position, its age, or its absence', () => {

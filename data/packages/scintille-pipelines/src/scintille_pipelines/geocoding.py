@@ -115,6 +115,10 @@ class Geocoder:
         found[point] = country
         return found
 
+    def country_index(self, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+        """Index of the country under each point, -1 at sea."""
+        return self._country(np.asarray(shapely.points(lon, lat)))
+
     def _sea(self, points: np.ndarray) -> np.ndarray:
         found = np.full(len(points), -1)
         point, sea = self.seas.query(points, predicate="within")

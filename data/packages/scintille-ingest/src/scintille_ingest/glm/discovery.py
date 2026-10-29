@@ -16,10 +16,10 @@ def public_store(bucket: str) -> S3Store:
     return S3Store(bucket, region=NOAA_REGION, skip_signature=True)
 
 
-def list_products(store: ObjectStore, hour: datetime) -> list[ProductKey]:
-    """Product files of one hour, oldest first."""
+def list_products(store: ObjectStore, hour: datetime, after: str | None = None) -> list[ProductKey]:
+    """Product files of one hour, oldest first; only keys sorting after `after` when given."""
     keys: list[ProductKey] = []
-    for batch in obstore.list(store, prefix=hour_prefix(hour), chunk_size=1000):
+    for batch in obstore.list(store, prefix=hour_prefix(hour), offset=after, chunk_size=1000):
         keys.extend(
             replace(parse_key(meta["path"]), etag=meta["e_tag"])
             for meta in batch

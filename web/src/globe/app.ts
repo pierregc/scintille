@@ -1,6 +1,7 @@
 import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
+import { FlashDays } from './archive/days';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
@@ -21,7 +22,7 @@ import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomStrength } from './lightning/zoom';
-import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
+import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
 import { BLOOM, createPostProcessing, type PostProcessing } from './post';
@@ -73,8 +74,10 @@ export interface GlobeApp {
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
-	/** Internals shown by the debug panel. */
-	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
+	/** UTC midnight of the first day travel in time can show, once the archive index is known. */
+	archiveStart(): number | null;
+	/** Internals for tools and the HUD flash counter. */
+	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
 	/** Surface detail prototypes (#125), in development and PR previews only. */
@@ -187,12 +190,18 @@ export function createGlobeApp(
 		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
 		: undefined;
 
-	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: () => coverage.retry() });
-	const data = new SceneData(clock, live, (ring) => startLiveFeed({
-		ring,
+	const late = new LateFlashes(LIVE_DELAYS, clock.wallTime());
+	const feedOptions: Partial<LiveClientOptions> = {
 		now: () => clock.wallTime(),
 		onManifest: () => coverage.retry(),
-	}));
+		onChunk: (chunk, ref) => late.add(chunk, Date.parse(ref.start), clock.wallTime()),
+	};
+	const live = startLiveFeed(feedOptions);
+	const flashDays = new FlashDays({ baseUrl: liveBaseUrl(), now: () => clock.wallTime() });
+	const data = new SceneData(clock, live, (ring) => {
+		late.since = clock.wallTime();
+		return startLiveFeed({ ...feedOptions, ring });
+	}, renderParams ? undefined : flashDays);
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
@@ -219,6 +228,7 @@ export function createGlobeApp(
 		capacity: preset.maxFlashes ?? live.ring.capacity,
 		lightMapWidth: preset.cloudLight ? 1024 : 0,
 		clouds: clouds.opacity,
+		phone,
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
@@ -281,7 +291,12 @@ export function createGlobeApp(
 	};
 
 	const draw = (time: number) => {
-		if (!renderParams) controls.update(time);
+		if (!renderParams) replay.update();
+		const stormView = (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)) || focus.selected;
+		if (!renderParams) {
+			controls.holdRotation(stormView || Boolean(replay.state.loading));
+			controls.update(time);
+		}
 		renderer.getSize(focus.footprint.viewport);
 		focus.update(performance.now());
 		fitClipPlanes();
@@ -291,7 +306,8 @@ export function createGlobeApp(
 		camera.updateMatrixWorld();
 		surface?.update(camera, renderParams?.height ?? window.innerHeight);
 		atmosphere.setTime(now);
-		if (!renderParams) cloudPlayback.update(clock.mode, now);
+		// Live clouds would load only to be dropped while a storm opens.
+		if (!renderParams && !(clock.mode === 'live' && replay.state.loading)) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
 		if (cloudDetail) {
 			camera.updateMatrixWorld();
@@ -310,7 +326,7 @@ export function createGlobeApp(
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
 		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
-		lightning.stormView = (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)) || focus.selected;
+		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		sound.update(now, delays);
@@ -373,10 +389,12 @@ export function createGlobeApp(
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
+		archiveStart: () => flashDays.index()?.firstDay ?? null,
 		debug: {
 			ring: live.ring,
 			get client() { return data.liveClient; },
 			delays: playbackDelays,
+			late,
 			quality: () => tier,
 		},
 		render,

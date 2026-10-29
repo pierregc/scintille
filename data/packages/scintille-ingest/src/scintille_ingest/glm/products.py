@@ -72,5 +72,16 @@ def _goes_time(value: str) -> datetime:
     )
 
 
+def goes_stamp(at: datetime) -> str:
+    """Inverse of `_goes_time`, truncated to the tenth of a second."""
+    at = at.astimezone(UTC)
+    return f"{at:%Y%j%H%M%S}{at.microsecond // 100_000}"
+
+
 def hour_prefix(at: datetime) -> str:
     return f"{PRODUCT}/{at.astimezone(UTC):%Y/%j/%H}/"
+
+
+def start_offset(hour: datetime, platform: str, start: datetime) -> str:
+    """Sorts just before the keys of `hour` whose file starts at `start` or later."""
+    return f"{hour_prefix(hour)}OR_{PRODUCT}_{platform}_s{goes_stamp(start)}"

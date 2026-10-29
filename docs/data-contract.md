@@ -86,7 +86,7 @@ behind the Americas. Lower latency needs another channel, such as EUMETCast (#20
 ## Live feed on R2
 
 ```
-live/manifest.json                    Cache-Control: max-age=10
+live/manifest.json                    Cache-Control: max-age=2
 live/metrics.json                     Cache-Control: max-age=30
 live/coverage.geojson                 Cache-Control: max-age=3600
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
@@ -94,7 +94,8 @@ live/chunks/20260715T183030Z.bin.gz
 ...
 ```
 
-- A **chunk** holds the flashes **ingested** during a window `[start, end)`, 30 s today.
+- A **chunk** holds the flashes **ingested** during a window `[start, end)`, one per GLM slot
+  today, about 20 s ([ADR 0026](adr/0026-live-latency.md)).
   Chunks are keyed by ingest time, not event time, so a chunk is complete when its window ends and
   never changes afterwards: late data lands in a later chunk instead of rewriting an old one. Event
   times inside a chunk are therefore usually 20 to 60 s before its `start` (`event_offset_ms < 0`).
@@ -108,7 +109,8 @@ live/chunks/20260715T183030Z.bin.gz
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
 - A source's **state** comes from the time since its last product file: `live` up to
   `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
-  `offline`. Both delays are configurable ([hot path](hot-path.md#live-feed)).
+  `offline`. Both count from the next expected file, so MTG LI, which delivers every 10 minutes,
+  turns `delayed` after 12 minutes. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
@@ -195,7 +197,8 @@ that ignore it keep the global textures:
   cubic filter needs no other tile.
 - Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
   1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
-  significant bit first.
+  significant bit first. A pack that keeps only some tiles of levels 3 and 4 lists them in
+  `coarse`: base64 of one bit per tile of those levels, in index order, least significant bit first.
 - All tiles of a frame are one object (`.tiles`, immutable): an index of `index_bytes`, one pair of
   little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
   order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
@@ -203,8 +206,32 @@ that ignore it keep the global textures:
 - The object is written once, before the manifests, under `archive/clouds/detail/`; the live
   manifest and the daily archive index both point there, each with a path relative to itself
   (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
-- Detail is kept one day: the publisher then deletes the object and removes the `detail` block
-  from its archive index, so older replays keep the `2k` and `4k` textures only.
+- Detail is kept one day. The publisher then writes the level 4 and 5 tiles under the ten strongest
+  storms of each UTC day (flashes × peak rate, track positions within an hour of the frame) to a
+  `-storms.tiles` object with `coarse`, points the archive index to it, and deletes the full
+  object; frames without such a storm lose their `detail` block. Everything under
+  `archive/clouds/` goes after 30 days.
+- Cloud-top heights ([ADR 0028](adr/0028-cloud-relief.md)) travel in the same object, declared by
+  an optional `height` block inside `detail`; clients that ignore it read the opacity index as
+  before:
+
+  ```json
+  "height": {
+    "levels": [3, 4],
+    "max_km": 20,
+    "index_offset": 21504,
+    "index_bytes": 5120,
+    "reference": "gfs 2026101812 f003 0p50"
+  }
+  ```
+
+  A second index of the same form starts at `index_offset`, one pair per possible tile of
+  `levels`, and points to grayscale WebP tiles on the opacity grid (same size and border): 0 to
+  255 map onto 0 to `max_km` above sea level. Heights come from the infrared brightness
+  temperature matched to the GFS temperature profile named in `reference` (`lapse from …` when
+  the profile was missing). Clear texels carry the tops of the nearby clouds, so filtering never
+  slopes a top down to the ground. A `-storms.tiles` object keeps the level 4 heights under its
+  storms.
 
 ## Historical cloud discovery
 
@@ -242,7 +269,8 @@ The canonical limits, tiers and texture-path rule are packaged in
 vectors exercise their accepted and rejected payloads without adding a generic runtime validator.
 `expires_at` is archive publication plus 30 days. The existing archive lifecycle can still remove
 referenced objects; indices do not promise permanent availability or exact cloud measurements at
-every scene instant. No existing unindexed archive is backfilled by this change.
+every scene instant. `scintille-ingest clouds-reindex --first DAY --last DAY` indexes textures
+archived before the indexes existed, without uploading them again ([ADR 0025](adr/0025-past-days-archive.md)).
 
 Interactive replay fetches at most three daily indices and keeps at most three frame textures close
 to the playhead, bounded by the existing 3-hour gap rule. Selection follows sub-hourly scrubs as well.
@@ -259,6 +287,40 @@ under `/_replay-fixtures/archive/clouds/` only in Preview builds. Their far-futu
 dates are synthetic so the real July imagery remains available for repeatable visual checks.
 Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
 does not include these fixtures. Dev uses the existing fixture server at the configured data root.
+
+## Flash archive
+
+Travel in time reads flashes before the live window from `archive/flashes/`
+([ADR 0025](adr/0025-past-days-archive.md)). The Dagster job `hourly_flash_archive` writes it from
+silver at :02 and :32, reading the two newest archived hours again for late rows, and rereads the
+previous day at 02:45. Limits and the chunk path rule are in `scintille_contract/flash_archive_rules.json`.
+
+```
+archive/flashes/index.json                     Cache-Control: public, max-age=60
+archive/flashes/manifests/2026-10-15.json      Cache-Control: public, max-age=60
+archive/flashes/chunks/<sha256>.bin.gz         Cache-Control: public, max-age=31536000, immutable
+```
+
+```json
+{
+  "schema_version": 1,
+  "day": "2026-10-15",
+  "generated_at": "2026-10-15T19:02:41Z",
+  "hours": [{
+    "start": "2026-10-15T18:00:00Z",
+    "flash_count": 203114,
+    "chunks": [{"path": "../chunks/3f1c...e9.bin.gz", "flash_count": 65536, "size_bytes": 604211,
+                "event_min": "2026-10-15T18:00:00.012Z", "event_max": "2026-10-15T18:19:07.441Z"}]
+  }]
+}
+```
+
+- Chunks use the live encoding with the hour as origin, at most 65,536 flashes each, in event time
+  order. An hour whose flashes changed gets new chunks; the replaced ones are deleted after the
+  day index is written, so a reader holding an old index refetches it on a missing chunk.
+- An hour without flashes in silver is absent: the reader shows missing data, never an empty sky.
+- `index.json` gives `first_day`, `last_hour` and `retention_days` (silver's, 21). Days before
+  `first_day` are deleted by the job; an R2 lifecycle rule removes anything older than 22 days.
 
 ## Chunk encoding
 
@@ -344,7 +406,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.6.1**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.9.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -352,7 +414,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.6.1`.
+Value: `2.9.0`.
 
 ### UtcTimestamp
 
@@ -585,6 +647,33 @@ Iceberg catalog operations this month against the free tier.
 | `operations` | integer | yes | minimum `0` | Catalog operations made by lake-writer this month. |
 | `free_tier` | integer | yes | minimum `0` | Operations included each month by the catalog provider. |
 
+### LakeSize
+
+Defined in `data/contract/metrics.schema.json`.
+
+Size of the Iceberg tables, from the summary of each table's current snapshot, measured about every hour. Files kept only for older snapshots, metadata and other objects in the bucket are not counted.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the snapshots were read; null before the first measurement. |
+| `tables` | integer or null | yes |  | Tables in the bronze, silver and gold namespaces; null before the first measurement. |
+| `bytes` | integer or null | yes |  | Data files of the current snapshots, bytes; null before the first measurement. |
+| `data_files` | integer or null | yes |  | Data files of the current snapshots; null before the first measurement. |
+| `records` | integer or null | yes |  | Rows of the current snapshots; null before the first measurement. |
+
+### StormCounts
+
+Defined in `data/contract/metrics.schema.json`.
+
+Storms in the catalog after its latest hourly publication.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the storm catalog was last published; null before the first publication. |
+| `detected` | integer or null | yes |  | Storms tracked and classified in the lake, every intensity level; null before the first publication. |
+| `published` | integer or null | yes |  | Storms with a public page: intensity level 3 and above; null before the first publication. |
+| `highlighted` | integer or null | yes |  | Storms featured in the highlights; null before the first publication. |
+
 ### OpsMetrics
 
 Defined in `data/contract/metrics.schema.json`.
@@ -599,6 +688,8 @@ live/metrics.json: operational metrics and freshness per layer, written every mi
 | `sources` | array of [SourceMetrics](#sourcemetrics) | yes |  | One entry per source, in Source order. |
 | `quality` | [QualityStatus](#qualitystatus) | yes |  |  |
 | `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
+| `lake` | [LakeSize](#lakesize) | yes |  |  |
+| `storms` | [StormCounts](#stormcounts) | yes |  |  |
 
 ### CoverageKind
 
@@ -756,6 +847,18 @@ storms/index/<page>.json: zero-based pages counted from the oldest storm, each l
 | `total_pages` | integer | yes | minimum `1` |  |
 | `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
 
+### StormMetric
+
+Defined in `data/contract/storm.schema.json`.
+
+The one figure that makes a highlighted storm notable.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  | Total flashes, countries crossed by the centroid, distance travelled, duration, peak flashes per minute, or largest cell area. |
+| `value` | number | yes | minimum `0` |  |
+| `rank` | integer | yes | minimum `1` | Rank among the storms the highlight was chosen from, 1 for the most. |
+
 ### StormHighlight
 
 Defined in `data/contract/storm.schema.json`.
@@ -767,6 +870,7 @@ One highlighted storm and the reason it was chosen.
 | `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
 | `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
 | `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `metric` | [StormMetric](#stormmetric) or null | no |  | Null in files older than 2.8.0. |
 
 ### StormHighlights
 
@@ -892,6 +996,91 @@ storms/active.json: storms active now and their current cells, rewritten after e
 | `cells` | array of [ActiveCell](#activecell) | yes |  | Active storms, one current cell each, strongest first. |
 | `ended` | array of [EndedStorm](#endedstorm) | yes |  | Storms that left cells during the last two hours, newest first. |
 
+### NearbyQuery
+
+Defined in `data/contract/search.schema.json`.
+
+The query as answered: the point rounded to 0.1°, the window ending at the request time.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `hours` | integer | yes | minimum `1`, maximum `168` |  |
+| `km` | integer | yes | minimum `10`, maximum `3000` |  |
+| `limit` | integer | yes | minimum `1`, maximum `8` |  |
+| `window_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `window_end` | [UtcTimestamp](#utctimestamp) | yes |  | The request time. |
+
+### SearchCatalog
+
+Defined in `data/contract/search.schema.json`.
+
+What the search index holds: published storms of min_level and above, kept retention_days.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `min_level` | integer | yes | minimum `1` |  |
+| `retention_days` | integer | yes | minimum `1` |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  | Last sync of the index. |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `stale` | boolean | yes |  | The last observation is more than 3 hours old. |
+| `complete` | boolean | yes |  | False while some published storms wait to be indexed. |
+
+### NearbyStorm
+
+Defined in `data/contract/search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `distance_km` | number | yes | minimum `0` |  |
+| `score` | number | yes | minimum `0` | ADR 0009 score: square root of flashes times peak rate. |
+
+### SearchError
+
+Defined in `data/contract/search.schema.json`.
+
+Refused or failed search: invalid (400), too-broad (422, more candidates than one answer reads), unavailable (503).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  |  |
+| `errors` | array of string | yes |  |  |
+
+### VisitorLocation
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/location: the city of the visitor's IP address according to Cloudflare, rounded to 0.1°. Never stored or cached; no time zone, postal code or address.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  | unavailable when the city or its coordinates are unknown; a country alone is not a location. |
+| `source` | `"ip"` | yes |  |  |
+| `lat` | number or null | yes |  |  |
+| `lon` | number or null | yes |  |  |
+| `city` | string or null | yes |  |  |
+| `region` | string or null | yes |  |  |
+| `country_code` | string or null | yes |  |  |
+
+### StormsNearby
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/storms/nearby (ADR 0027): published storms whose observed interval meets the window and whose path comes within the radius, best first. Depends on the URL only.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `query` | [NearbyQuery](#nearbyquery) | yes |  |  |
+| `catalog` | [SearchCatalog](#searchcatalog) | yes |  |  |
+| `distance` | `"path-minus-radius"` | yes |  | Great-circle distance to the arcs joining the storm's hourly centroids, minus the radius of a disc with its largest hourly area, at least 0, rounded to 10 km. |
+| `total` | integer | yes | minimum `0` | Matching storms before the limit. |
+| `storms` | array of [NearbyStorm](#nearbystorm) | yes |  |  |
+
 <!-- END GENERATED REFERENCE -->
 
 ## Storm catalog on R2
@@ -982,6 +1171,6 @@ Open that URL, choose the 5 min afterglow, enable sound from the HUD, and observ
 fixture flashes. Click Live,
 check that the old flashes and pending crackles disappear, then click Time travel to reload the
 fixture in the same scene. Repeat these two controls without reloading the page.
-Use the debug panel to inspect ring counts and the browser's graphics/audio tools to check stable
+Use the browser's graphics/audio tools to check stable
 resources across repeated round trips. This fixture entry is for loader QA; it does not implement
 production storm links or scene restoration.

@@ -6,8 +6,9 @@ lakehouse can never slow down or stop the live feed.
 ## `ingest-live` (`scintille-ingest live`)
 
 One asyncio task per source (GLM East, GLM West; MTG LI with #32). Each lists its bucket on its own
-cadence and takes every file not spooled yet (a known key listed with a new ETag counts as not
-spooled) through:
+cadence (GLM every 2 s, only the files of the last 3 minutes, with the whole hour once a minute;
+MTG LI every 30 s) and takes every file not spooled yet (a known key listed with a new ETag counts
+as not spooled) through:
 
 1. **download**: file identity = object key + SHA-256 (a revised product is a new file); the
    original is not copied, NOAA and EUMETSAT keep it; state `downloaded`;
@@ -42,9 +43,12 @@ silent socket times out after 60 s. SIGTERM lets files in progress finish (30 s)
 ## Live feed
 
 When `SCINTILLE_LIVE_BUCKET` is set, `ingest-live` publishes the live feed of the
-[data contract](data-contract.md#live-feed-on-r2): every 30 s (on whole multiples of 30 s) the flashes
-received since the previous chunk become one gzip chunk under `live/chunks/`, then
-`live/manifest.json` is rewritten, then chunks older than 60 minutes are deleted. A chunk that fails
+[data contract](data-contract.md#live-feed-on-r2): the flashes received since the previous chunk
+become one gzip chunk under `live/chunks/`, then `live/manifest.json` is rewritten, then chunks
+older than 60 minutes are deleted. A chunk is due once every live GLM source has delivered a file
+since the previous one (one chunk per 20 s GLM slot), or 10 s after the first pending flashes,
+never sooner than 15 s after the previous chunk; without data, an empty chunk after 30 s
+([ADR 0026](adr/0026-live-latency.md), `FlushPolicy`). A chunk that fails
 to upload keeps its flashes for the next one, and the manifest only lists chunks already stored.
 Flashes are deduplicated by `flash_id` over the hour, so a file published again after a crash adds
 nothing. Source state: `live` if a file arrived in the last 2 minutes, `delayed` up to 10, then

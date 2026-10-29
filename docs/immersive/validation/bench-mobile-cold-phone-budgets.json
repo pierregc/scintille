@@ -1,0 +1,2781 @@
+{
+	"measuredAt": "2026-10-29T18:31:49.508Z",
+	"url": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/",
+	"profile": "mobile",
+	"afterglow": "per storm",
+	"surface": null,
+	"journey": false,
+	"warm": false,
+	"network": null,
+	"speed": "opened at 60",
+	"clouds": true,
+	"gl": "gpu",
+	"headed": false,
+	"platform": "darwin arm64",
+	"results": [
+		{
+			"id": "R1",
+			"slug": "2026-10-18-minas-gerais-7",
+			"time": "2026-10-18T23:15:00Z",
+			"poses": {
+				"globe": {
+					"view": "-14.56000,-44.26000,20000.000,0.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,20000.000,0.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3001,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.7,
+						"workMaxMs": 0.9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"transferBytes": {
+						"total": 527,
+						"other": 527
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.6,
+						"workMaxMs": 6.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.7,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 5.8,
+						"workMaxMs": 7.4,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"flashes": {
+						"held": 77558,
+						"active": 362,
+						"flicker": 266,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.680Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351536,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 8,
+							"bytes": 8714368,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 8,
+							"loaded": 8,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 8
+						},
+						"vectors": false
+					},
+					"screenshot": "R1-globe.png",
+					"exposure": {
+						"mean": 17,
+						"nearWhite": 0.001
+					}
+				},
+				"regional": {
+					"view": "-14.55705,-44.53189,2511.387,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.55705,-44.53189,2511.387,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3021,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.5,
+						"workP95Ms": 8.9,
+						"workMaxMs": 9.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"transferBytes": {
+						"total": 1070,
+						"other": 1070
+					},
+					"paused": {
+						"frames": 121,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 7.5,
+						"workP95Ms": 8.4,
+						"workMaxMs": 9.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 7.9,
+						"workP95Ms": 10,
+						"workMaxMs": 10.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"flashes": {
+						"held": 77558,
+						"active": 362,
+						"flicker": 268,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.440Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351536,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 6,
+							"textures": 8,
+							"bytes": 8714368,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 2,
+							"requested": 8,
+							"loaded": 8,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 8
+						},
+						"vectors": false
+					},
+					"screenshot": "R1-regional.png",
+					"exposure": {
+						"mean": 31,
+						"nearWhite": 0.009
+					}
+				},
+				"iss": {
+					"view": "-14.56000,-44.26000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3010,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 6.2,
+						"workP95Ms": 8.3,
+						"workMaxMs": 11,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"transferBytes": {
+						"total": 151712,
+						"other": 1058,
+						"earth": 150654
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.7,
+						"workP95Ms": 6.1,
+						"workMaxMs": 7.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 6.5,
+						"workP95Ms": 7.2,
+						"workMaxMs": 8.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"flashes": {
+						"held": 77558,
+						"active": 362,
+						"flicker": 266,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.620Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351536,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 4,
+							"drawn": 4,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 4,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R1-iss.png",
+					"exposure": {
+						"mean": 58,
+						"nearWhite": 0.016
+					}
+				},
+				"window": {
+					"view": "-14.56000,-44.26000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3018,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.8,
+						"workP95Ms": 7,
+						"workMaxMs": 10.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"transferBytes": {
+						"total": 124367,
+						"other": 1063,
+						"earth": 123304
+					},
+					"paused": {
+						"frames": 121,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.7,
+						"workP95Ms": 6.2,
+						"workMaxMs": 6.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 6.6,
+						"workP95Ms": 7.5,
+						"workMaxMs": 9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 77558,
+							"elements4:6": 77558
+						}
+					},
+					"flashes": {
+						"held": 77558,
+						"active": 362,
+						"flicker": 266,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.620Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351536,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 12,
+							"drawn": 12,
+							"textures": 24,
+							"bytes": 26143104,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 4,
+							"requested": 24,
+							"loaded": 24,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 2,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 22
+						},
+						"vectors": false
+					},
+					"screenshot": "R1-window.png",
+					"exposure": {
+						"mean": 27,
+						"nearWhite": 0.011
+					}
+				}
+			},
+			"load": {
+				"readyMs": 3576,
+				"settledMs": 8364,
+				"bytes": {
+					"total": 6004024,
+					"other": 5383,
+					"code": 319007,
+					"earth": 1163828,
+					"metadata": 208468,
+					"flashes": 780125,
+					"clouds": 3527213
+				},
+				"quality": "medium",
+				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+				"framed": "-14.55705,-44.53189,2511.387,20.000"
+			}
+		},
+		{
+			"id": "R2",
+			"slug": "2026-10-18-mato-grosso-22",
+			"time": "2026-10-18T19:15:00Z",
+			"poses": {
+				"globe": {
+					"view": "-6.77000,-59.48000,20000.000,0.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,20000.000,0.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3014,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.8,
+						"workMaxMs": 0.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"transferBytes": {
+						"total": 530,
+						"other": 530
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.3,
+						"workP95Ms": 6,
+						"workMaxMs": 6.9,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.8,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.5,
+						"workP95Ms": 6.1,
+						"workMaxMs": 6.7,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"flashes": {
+						"held": 60221,
+						"active": 201,
+						"flicker": 147,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T19:23:01.800Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351608,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 8,
+							"bytes": 8714368,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 8,
+							"loaded": 8,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 8
+						},
+						"vectors": false
+					},
+					"screenshot": "R2-globe.png",
+					"exposure": {
+						"mean": 73,
+						"nearWhite": 0.001
+					}
+				},
+				"regional": {
+					"view": "-7.29681,-57.68428,3033.270,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-7.29681,-57.68428,3033.270,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3014,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.5,
+						"workP95Ms": 7,
+						"workMaxMs": 8.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"transferBytes": {
+						"total": 1069,
+						"other": 1069
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.6,
+						"workMaxMs": 6.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 6,
+						"workP95Ms": 7.4,
+						"workMaxMs": 7.9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"flashes": {
+						"held": 60221,
+						"active": 201,
+						"flicker": 147,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T19:23:01.800Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351608,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 8,
+							"textures": 8,
+							"bytes": 8714368,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 2,
+							"requested": 8,
+							"loaded": 8,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 8
+						},
+						"vectors": false
+					},
+					"screenshot": "R2-regional.png",
+					"exposure": {
+						"mean": 148,
+						"nearWhite": 0.005
+					}
+				},
+				"iss": {
+					"view": "-6.77000,-59.48000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3014,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.5,
+						"workP95Ms": 7.1,
+						"workMaxMs": 9.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"transferBytes": {
+						"total": 201892,
+						"other": 1057,
+						"earth": 200835
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.2,
+						"workMaxMs": 6.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playing": {
+						"frames": 239,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 33.4,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 1,
+						"workP95Ms": 1.2,
+						"workMaxMs": 1.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.9,
+						"workP95Ms": 6.8,
+						"workMaxMs": 7.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"flashes": {
+						"held": 60221,
+						"active": 200,
+						"flicker": 147,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T19:23:01.440Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17353144,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 6,
+							"drawn": 6,
+							"textures": 22,
+							"bytes": 23964512,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 22,
+							"loaded": 22,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 22
+						},
+						"vectors": false
+					},
+					"screenshot": "R2-iss.png",
+					"exposure": {
+						"mean": 203,
+						"nearWhite": 0.005
+					}
+				},
+				"window": {
+					"view": "-6.77000,-59.48000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3019,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.5,
+						"workP95Ms": 6.6,
+						"workMaxMs": 8.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"transferBytes": {
+						"total": 97240,
+						"other": 1059,
+						"earth": 96181
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.6,
+						"workMaxMs": 5.9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.9,
+						"workP95Ms": 1.2,
+						"workMaxMs": 1.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.4,
+						"workMaxMs": 7.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 60221,
+							"elements4:6": 60221
+						}
+					},
+					"flashes": {
+						"held": 60221,
+						"active": 200,
+						"flicker": 147,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T19:23:01.500Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351608,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 12,
+							"drawn": 12,
+							"textures": 28,
+							"bytes": 30500288,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 28,
+							"loaded": 28,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 28
+						},
+						"vectors": false
+					},
+					"screenshot": "R2-window.png",
+					"exposure": {
+						"mean": 166,
+						"nearWhite": 0.006
+					}
+				}
+			},
+			"load": {
+				"readyMs": 8143,
+				"settledMs": 13295,
+				"bytes": {
+					"total": 6027390,
+					"other": 5374,
+					"code": 318783,
+					"metadata": 26831,
+					"earth": 1195309,
+					"flashes": 881042,
+					"clouds": 3600051
+				},
+				"quality": "medium",
+				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+				"framed": "-7.29681,-57.68428,3033.270,20.000"
+			}
+		},
+		{
+			"id": "R3",
+			"slug": "2026-10-18-north-atlantic-ocean-464",
+			"time": "2026-10-18T23:15:00Z",
+			"poses": {
+				"globe": {
+					"view": "26.74000,-44.40000,20000.000,0.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,20000.000,0.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3016,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.7,
+						"workMaxMs": 0.9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"transferBytes": {
+						"total": 527,
+						"other": 527
+					},
+					"paused": {
+						"frames": 121,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 5.8,
+						"workMaxMs": 6,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.7,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.9,
+						"workMaxMs": 6.2,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"flashes": {
+						"held": 30474,
+						"active": 87,
+						"flicker": 65,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.440Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351728,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 13,
+							"bytes": 14160848,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 13,
+							"loaded": 13,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 13
+						},
+						"vectors": false
+					},
+					"screenshot": "R3-globe.png",
+					"exposure": {
+						"mean": 15,
+						"nearWhite": 0
+					}
+				},
+				"regional": {
+					"view": "26.97637,-44.20043,1343.849,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.97637,-44.20043,1343.849,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3011,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.5,
+						"workMaxMs": 7.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"transferBytes": {
+						"total": 1059,
+						"other": 1059
+					},
+					"paused": {
+						"frames": 121,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.8,
+						"workP95Ms": 6.1,
+						"workMaxMs": 6.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.7,
+						"workP95Ms": 1,
+						"workMaxMs": 1.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.2,
+						"workMaxMs": 7.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"flashes": {
+						"held": 30474,
+						"active": 86,
+						"flicker": 64,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.680Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351728,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 6,
+							"drawn": 6,
+							"textures": 13,
+							"bytes": 14160848,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 3,
+							"requested": 13,
+							"loaded": 13,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 13
+						},
+						"vectors": false
+					},
+					"screenshot": "R3-regional.png",
+					"exposure": {
+						"mean": 18,
+						"nearWhite": 0.004
+					}
+				},
+				"iss": {
+					"view": "26.74000,-44.40000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3012,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.6,
+						"workP95Ms": 6,
+						"workMaxMs": 8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"transferBytes": {
+						"total": 1062,
+						"other": 1062
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.7,
+						"workP95Ms": 5.7,
+						"workMaxMs": 6.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.7,
+						"workP95Ms": 0.9,
+						"workMaxMs": 1.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playingCost": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.9,
+						"workP95Ms": 5.7,
+						"workMaxMs": 6.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"flashes": {
+						"held": 30474,
+						"active": 87,
+						"flicker": 64,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.620Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351728,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 2,
+							"drawn": 2,
+							"textures": 13,
+							"bytes": 14160848,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 3,
+							"requested": 13,
+							"loaded": 13,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 13
+						},
+						"vectors": false
+					},
+					"screenshot": "R3-iss.png",
+					"exposure": {
+						"mean": 51,
+						"nearWhite": 0.01
+					}
+				},
+				"window": {
+					"view": "26.74000,-44.40000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3017,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.7,
+						"workP95Ms": 6.1,
+						"workMaxMs": 8.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"transferBytes": {
+						"total": 22082,
+						"other": 1071,
+						"earth": 21011
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.7,
+						"workP95Ms": 5.5,
+						"workMaxMs": 6.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.7,
+						"workP95Ms": 0.9,
+						"workMaxMs": 1.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.8,
+						"workP95Ms": 5.8,
+						"workMaxMs": 7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 30474,
+							"elements4:6": 30474
+						}
+					},
+					"flashes": {
+						"held": 30474,
+						"active": 86,
+						"flicker": 64,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T23:23:01.740Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351728,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 7,
+							"drawn": 7,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 3,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R3-window.png",
+					"exposure": {
+						"mean": 16,
+						"nearWhite": 0.005
+					}
+				}
+			},
+			"load": {
+				"readyMs": 578,
+				"settledMs": 5444,
+				"bytes": {
+					"total": 5738273,
+					"other": 5378,
+					"code": 318942,
+					"metadata": 209219,
+					"earth": 1028666,
+					"flashes": 648814,
+					"clouds": 3527254
+				},
+				"quality": "medium",
+				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+				"framed": "26.97637,-44.20043,1343.849,20.000"
+			}
+		},
+		{
+			"id": "R4",
+			"slug": "2026-10-18-ngaoundere",
+			"time": "2026-10-18T12:15:00Z",
+			"poses": {
+				"globe": {
+					"view": "7.06000,13.70000,20000.000,0.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,20000.000,0.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3012,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"transferBytes": {
+						"total": 531,
+						"other": 531
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.4,
+						"workMaxMs": 4.6,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1018
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.9,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1018
+						}
+					},
+					"playingCost": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.5,
+						"workP95Ms": 6.6,
+						"workMaxMs": 8.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1018
+						}
+					},
+					"flashes": {
+						"held": 1018,
+						"active": 7,
+						"flicker": 6,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T12:23:02.280Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351164,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 10,
+							"bytes": 10892960,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 10,
+							"loaded": 10,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 10
+						},
+						"vectors": false
+					},
+					"screenshot": "R4-globe.png",
+					"exposure": {
+						"mean": 98,
+						"nearWhite": 0
+					}
+				},
+				"regional": {
+					"view": "6.93630,13.82670,432.499,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=6.93630,13.82670,432.499,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3007,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.2,
+						"workP95Ms": 7,
+						"workMaxMs": 13.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"transferBytes": {
+						"total": 56570,
+						"other": 1069,
+						"earth": 55501
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 6.7,
+						"workMaxMs": 7.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.9,
+						"workP95Ms": 2.2,
+						"workMaxMs": 2.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1792
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.9,
+						"workMaxMs": 8.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1280
+						}
+					},
+					"flashes": {
+						"held": 1018,
+						"active": 7,
+						"flicker": 5,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T12:23:02.880Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351164,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 4,
+							"drawn": 4,
+							"textures": 12,
+							"bytes": 13071552,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 12,
+							"loaded": 12,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 1,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 11
+						},
+						"vectors": false
+					},
+					"screenshot": "R4-regional.png",
+					"exposure": {
+						"mean": 200,
+						"nearWhite": 0.003
+					}
+				},
+				"iss": {
+					"view": "7.06000,13.70000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3004,
+						"frames": 180,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"transferBytes": {
+						"total": 1062,
+						"other": 1062
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.9,
+						"workP95Ms": 1.9,
+						"workMaxMs": 2.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1792
+						}
+					},
+					"playingCost": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 7.1,
+						"workMaxMs": 7.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1280
+						}
+					},
+					"flashes": {
+						"held": 1018,
+						"active": 7,
+						"flicker": 6,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T12:23:02.220Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351164,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 4,
+							"drawn": 4,
+							"textures": 12,
+							"bytes": 13071552,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 12,
+							"loaded": 12,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 1,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 11
+						},
+						"vectors": false
+					},
+					"screenshot": "R4-iss.png",
+					"exposure": {
+						"mean": 197,
+						"nearWhite": 0.003
+					}
+				},
+				"window": {
+					"view": "7.06000,13.70000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3015,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 5.1,
+						"workP95Ms": 7.4,
+						"workMaxMs": 9.7,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1280
+						}
+					},
+					"transferBytes": {
+						"total": 174728,
+						"other": 1066,
+						"earth": 173662
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.3,
+						"workP95Ms": 6.4,
+						"workMaxMs": 7.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1024
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.8,
+						"workP95Ms": 1.7,
+						"workMaxMs": 2.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1792
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 3.7,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 1018,
+							"elements4:6": 1280
+						}
+					},
+					"flashes": {
+						"held": 1018,
+						"active": 7,
+						"flicker": 6,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T12:23:01.620Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351164,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 12,
+							"drawn": 12,
+							"textures": 20,
+							"bytes": 21785920,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 20,
+							"loaded": 20,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 20
+						},
+						"vectors": false
+					},
+					"screenshot": "R4-window.png",
+					"exposure": {
+						"mean": 183,
+						"nearWhite": 0.001
+					}
+				}
+			},
+			"load": {
+				"readyMs": 6721,
+				"settledMs": 11834,
+				"bytes": {
+					"total": 5330061,
+					"other": 5376,
+					"code": 318905,
+					"metadata": 21916,
+					"earth": 1235762,
+					"flashes": 11766,
+					"clouds": 3736336
+				},
+				"quality": "medium",
+				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+				"framed": "6.93630,13.82670,432.499,20.000"
+			}
+		},
+		{
+			"id": "R5",
+			"slug": "2026-10-18-ibiza",
+			"time": "2026-10-18T14:15:00Z",
+			"poses": {
+				"globe": {
+					"view": "38.57000,2.62000,20000.000,0.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,20000.000,0.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3015,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 535,
+						"other": 535
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.4,
+						"workP95Ms": 4.9,
+						"workMaxMs": 5.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.6,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.7,
+						"workMaxMs": 5.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.680Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-globe.png",
+					"exposure": {
+						"mean": 66,
+						"nearWhite": 0
+					}
+				},
+				"regional": {
+					"view": "38.68965,2.07360,721.289,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.68965,2.07360,721.289,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3005,
+						"frames": 180,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.7,
+						"workMaxMs": 7.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 1062,
+						"other": 1062
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 3.7,
+						"workP95Ms": 4,
+						"workMaxMs": 4.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.7,
+						"workMaxMs": 1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.5,
+						"workMaxMs": 5.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.200Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 8,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 4,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-regional.png",
+					"exposure": {
+						"mean": 168,
+						"nearWhite": 0.002
+					}
+				},
+				"iss": {
+					"view": "38.57000,2.62000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3009,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.9,
+						"workMaxMs": 7.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 87973,
+						"other": 1062,
+						"earth": 86911
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.4,
+						"workMaxMs": 4.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.6,
+						"workP95Ms": 0.8,
+						"workMaxMs": 0.9,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.5,
+						"workMaxMs": 4.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.560Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 8,
+							"textures": 26,
+							"bytes": 28321696,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 26,
+							"loaded": 26,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 26
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-iss.png",
+					"exposure": {
+						"mean": 186,
+						"nearWhite": 0.004
+					}
+				},
+				"window": {
+					"view": "38.57000,2.62000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3010,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.5,
+						"workMaxMs": 7.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 141517,
+						"other": 1067,
+						"earth": 140450
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 3.9,
+						"workP95Ms": 4.3,
+						"workMaxMs": 4.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.6,
+						"workP95Ms": 0.8,
+						"workMaxMs": 1.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.6,
+						"workMaxMs": 5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.620Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 11,
+							"drawn": 11,
+							"textures": 29,
+							"bytes": 31589584,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 4,
+							"requested": 29,
+							"loaded": 29,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 29
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-window.png",
+					"exposure": {
+						"mean": 181,
+						"nearWhite": 0.002
+					}
+				}
+			},
+			"load": {
+				"readyMs": 584,
+				"settledMs": 5733,
+				"bytes": {
+					"total": 6190758,
+					"other": 5385,
+					"code": 318891,
+					"metadata": 218697,
+					"earth": 1577047,
+					"flashes": 384159,
+					"clouds": 3686579
+				},
+				"quality": "medium",
+				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+				"framed": "38.68965,2.07360,721.289,20.000"
+			}
+		}
+	]
+}
