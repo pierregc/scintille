@@ -112,8 +112,11 @@ describe('statusView', () => {
 
 	it('marks a missed latency target', () => {
 		const m = fixture();
-		nth(m.sources, 2).latency_p95_seconds = 121;
-		expect(nth(statusView(m, T, T).sources, 2).latencyP95.verdict).toBe('missed');
+		nth(m.sources, 0).latency_p95_seconds = 46;
+		nth(m.sources, 2).latency_p95_seconds = 661;
+		const sources = statusView(m, T, T).sources;
+		expect(sources.map((s) => s.latencyP95.verdict)).toEqual(['missed', 'met', 'missed']);
+		expect(sources.map((s) => s.latencyP95.target)).toEqual(['≤ 45 s', '≤ 45 s', '≤ 11 min']);
 	});
 
 	it('does not vouch for old metrics', () => {

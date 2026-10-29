@@ -13,13 +13,13 @@ Behind the globe runs a small but real lakehouse, fed around the clock by geosta
 ```mermaid
 flowchart LR
     sat["Satellites<br/>GOES GLM<br/>MTG LI"] --> ingest["ingest-live"]
-    ingest -->|30 s chunks| live[("Live feed<br/>custom binary format<br/>R2 + CDN")] --> globe["Three.js globe"]
+    ingest -->|20 s chunks| live[("Live feed<br/>custom binary format<br/>R2 + CDN")] --> globe["Three.js globe"]
     ingest --> spool[("Spool<br/>Parquet<br/>VPS disk")] --> writer["lake-writer"]
     writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver<br/>Parquet on R2")]
     lake --> dagster["Dagster"] --> gold[("Iceberg<br/>gold<br/>Parquet on R2")]
 ```
 
-- **Two paths.** `ingest-live` publishes the live feed in 30-second chunks and writes every batch to
+- **Two paths.** `ingest-live` publishes the live feed in 20-second chunks and writes every batch to
   a durable spool; `lake-writer` commits the spool to Iceberg every five minutes, so a catalog
   outage never slows the live globe.
 - **Apache Iceberg on Cloudflare R2**, through a REST catalog (R2 Data Catalog in production,

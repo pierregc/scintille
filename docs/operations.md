@@ -30,7 +30,7 @@ Without the variable, nothing is pinged.
 
 The `live-probe` service (`scintille-ingest live-probe`) reads the public manifest
 (https://data.scintille.app/live/manifest.json, through Cloudflare like a visitor) every 60 s and
-checks `generated_at` against the clock. The manifest is rewritten every 30 s, so older than 180 s
+checks `generated_at` against the clock. The manifest is rewritten at least every 30 s, so older than 180 s
 means the live feed is stuck even if the collector looks alive (R2 writes failing, a cache serving an
 old copy). It pings `SCINTILLE_HEALTHCHECK_LIVE_URL` when fresh and `<url>/fail` with the reason
 otherwise (`stale: generated 240 s ago`, `unreachable: HTTPError`, `invalid manifest`).

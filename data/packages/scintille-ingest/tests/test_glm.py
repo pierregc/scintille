@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -21,7 +22,14 @@ from scintille_ingest.glm.parse import (
     normalize_glm_flashes,
     read_glm_flashes,
 )
-from scintille_ingest.glm.products import hour_prefix, parse_key, satellites_from_env
+from scintille_ingest.glm.products import (
+    Satellite,
+    goes_stamp,
+    hour_prefix,
+    parse_key,
+    satellites_from_env,
+)
+from scintille_ingest.runtime.sources import GlmSource
 
 FIXTURE = (
     Path(__file__).parent
@@ -170,3 +178,32 @@ def test_latest_live_file_of_each_satellite_parses() -> None:
         assert product is not None
         result = ingest_glm_file(fetch(store, product.key), product.key, satellite.source, RECEIVED)
         assert result.log.status == "ok"
+
+
+def test_glm_source_lists_recent_files_then_the_whole_hours_every_minute() -> None:
+    store = MemoryStore()
+
+    def put(start: datetime) -> str:
+        stamp = goes_stamp(start)
+        end = goes_stamp(start + timedelta(seconds=20))
+        key = f"{hour_prefix(start)}OR_GLM-L2-LCFA_G19_s{stamp}_e{end}_c{end}.nc"
+        obstore.put(store, key, b"")
+        return key
+
+    t = datetime(2026, 10, 29, 18, 0, 40, tzinfo=UTC)
+    old, previous_hour, recent = (
+        put(t - timedelta(minutes=30)),
+        put(t - timedelta(minutes=2)),
+        put(t),
+    )
+    source = GlmSource(Satellite("glm-east", "noaa-goes19"), store)
+    assert {p.key for p in asyncio.run(source.list_recent(t))} == {old, previous_hour, recent}
+
+    late = put(t - timedelta(seconds=40))
+    obstore.put(store, old, b"revised")
+    listed = asyncio.run(source.list_recent(t + timedelta(seconds=2)))
+    assert {p.key for p in listed} == {previous_hour, late, recent}
+
+    full = asyncio.run(source.list_recent(t + timedelta(minutes=2.5)))
+    assert {p.key for p in full} == {old, previous_hour, late, recent}
+    assert {p.key for p in asyncio.run(source.list_recent(t + timedelta(minutes=3)))} == {recent}

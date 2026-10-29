@@ -35,7 +35,7 @@ describe('sourceStats', () => {
 		]);
 		const stats = sourceStats(r, delays, T0 + 70_000);
 		expect(stats.map((s) => s.label)).toEqual(['GLM E', 'GLM W', 'MTG LI', '#7']);
-		expect(stats[0]).toEqual({ label: 'GLM E', held: 2, lastMinute: 1, pending: 0 });
+		expect(stats[0]).toEqual({ label: 'GLM E', held: 2, lastMinute: 1, pending: 0, late: 0 });
 		expect(stats[1]).toMatchObject({ held: 0, lastMinute: 0, pending: 0 });
 		expect(stats[2]).toMatchObject({ held: 1, lastMinute: 0, pending: 1 });
 		expect(stats[3]).toMatchObject({ held: 1, pending: 1 });

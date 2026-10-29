@@ -115,9 +115,9 @@
 
 		const showRates = () => {
 			if (!app || !rates) return;
-			const { ring, delays } = app.debug;
-			rates.textContent = sourceStats(ring, delays(), app.clock.time())
-				.map((s) => `${s.label} ${s.lastMinute.toLocaleString('en')}/min`)
+			const { ring, delays, late } = app.debug;
+			rates.textContent = sourceStats(ring, delays(), app.clock.time(), late.counts)
+				.map((s) => `${s.label} ${s.lastMinute.toLocaleString('en')}/min${s.late ? `, ${s.late} late` : ''}`)
 				.join(' · ');
 		};
 

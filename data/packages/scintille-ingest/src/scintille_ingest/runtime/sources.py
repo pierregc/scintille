@@ -9,7 +9,7 @@ from obstore.store import ObjectStore
 
 from scintille_ingest.glm.discovery import fetch, list_products, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
-from scintille_ingest.glm.products import Satellite
+from scintille_ingest.glm.products import Satellite, start_offset
 from scintille_ingest.mtg.discovery import DataStore, chunks
 from scintille_ingest.mtg.ingest import ingest_li_file
 from scintille_ingest.mtg.products import parse_key
@@ -39,27 +39,54 @@ class Source(Protocol):
 
 
 class GlmSource:
-    """GOES-East or GOES-West, from the public NOAA bucket."""
+    """GOES-East or GOES-West, from the public NOAA bucket.
 
-    cadence = 10.0
+    Lists only the files of the last `lookback`, and the whole last two hours every `full_every`
+    to catch revisions."""
+
+    cadence = 2.0
+    lookback = timedelta(minutes=3)
+    full_every = timedelta(minutes=1)
 
     def __init__(self, satellite: Satellite, store: ObjectStore | None = None) -> None:
         self.name: str = satellite.source
         self._source = satellite.source
         self._store = store or public_store(satellite.bucket)
+        self._platform: str | None = None
+        self._full_at: datetime | None = None
 
     async def list_recent(self, now: datetime) -> list[Product]:
-        hours = (now - timedelta(hours=1), now)
+        full = self._full_at is None or now - self._full_at >= self.full_every
+        platform = None if full else self._platform
+        since = now - self.lookback
+        hours = [h for h in (now - timedelta(hours=1), now) if full or _hour_end(h) > since]
         listed = await asyncio.gather(
-            *(asyncio.to_thread(list_products, self._store, h) for h in hours)
+            *(
+                asyncio.to_thread(
+                    list_products,
+                    self._store,
+                    h,
+                    start_offset(h, platform, since) if platform else None,
+                )
+                for h in hours
+            )
         )
-        return [Product(p.key, p.start, p.etag) for batch in listed for p in batch]
+        if full:
+            self._full_at = now
+        products = [p for batch in listed for p in batch]
+        if products:
+            self._platform = products[-1].platform
+        return [Product(p.key, p.start, p.etag) for p in products]
 
     async def fetch(self, product: Product) -> bytes:
         return await asyncio.to_thread(fetch, self._store, product.key)
 
     def parse(self, product: Product, data: bytes, received_at: datetime) -> IngestedFile:
         return ingest_glm_file(data, product.key, self._source, received_at)
+
+
+def _hour_end(at: datetime) -> datetime:
+    return at.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
 
 
 class MtgSource:

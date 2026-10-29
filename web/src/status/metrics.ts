@@ -4,7 +4,7 @@ import { formatAge, SOURCE_LABELS, STALE_AFTER_MS } from '../globe/live/freshnes
 
 /** Targets from docs/slo.md. */
 export const SLO = {
-	latencyP95Seconds: 120,
+	latencyP95Seconds: { 'glm-east': 45, 'glm-west': 45, 'mtg-li': 660 } satisfies Record<Source, number>,
 	completeness: 0.99,
 	liveFeedAgeSeconds: 120,
 	silverLagSeconds: 15 * 60,
@@ -184,8 +184,8 @@ export function statusView(
 			latencyP50: s.latency_p50_seconds === null ? dash : `${Math.round(s.latency_p50_seconds)} s`,
 			latencyP95: {
 				text: s.latency_p95_seconds === null ? dash : `${Math.round(s.latency_p95_seconds)} s`,
-				verdict: verdict(s.latency_p95_seconds, (v) => v <= SLO.latencyP95Seconds, current),
-				target: '≤ 120 s',
+				verdict: verdict(s.latency_p95_seconds, (v) => v <= SLO.latencyP95Seconds[s.source], current),
+				target: `≤ ${formatAge(SLO.latencyP95Seconds[s.source] * 1000)}`,
 			},
 			completeness: {
 				text: formatPercent(s.completeness),

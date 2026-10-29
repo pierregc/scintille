@@ -1,12 +1,13 @@
 import { SOURCE_VALUES, type Source } from '../../contract/types';
+import type { DecodedChunk } from './decode';
 
 /**
- * How far each source plays behind the wall clock in live mode: above the p99 latency measured
- * in docs/data-contract.md, so flashes are loaded before they are due.
+ * How far each source plays behind the wall clock in live mode, so that almost every flash is
+ * loaded before it is due (ADR 0026).
  */
 export const LIVE_DELAY_MS: Record<Source, number> = {
-	'glm-east': 120_000,
-	'glm-west': 120_000,
+	'glm-east': 70_000,
+	'glm-west': 70_000,
 	'mtg-li': 720_000,
 };
 
@@ -30,3 +31,25 @@ export class SourceDelays {
 
 export const NO_DELAY = new SourceDelays();
 export const LIVE_DELAYS = new SourceDelays(LIVE_DELAY_MS);
+
+/** Flashes loaded after their live slot, per source index, from chunks ingested since `since`. */
+export class LateFlashes {
+	readonly counts = new Uint32Array(256);
+	since: number;
+
+	constructor(
+		readonly delays: SourceDelays,
+		since: number,
+	) {
+		this.since = since;
+	}
+
+	add(chunk: DecodedChunk, ingestStart: number, now: number): void {
+		if (!(ingestStart >= this.since)) return;
+		const { start, count, columns } = chunk;
+		for (let i = 0; i < count; i++) {
+			const source = columns.source[i];
+			if (start + columns.event_offset_ms[i] + this.delays.ms[source] < now) this.counts[source]++;
+		}
+	}
+}

@@ -21,7 +21,7 @@ import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomStrength } from './lightning/zoom';
-import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
+import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
 import { BLOOM, createPostProcessing, type PostProcessing } from './post';
@@ -74,7 +74,7 @@ export interface GlobeApp {
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
 	/** Internals shown by the debug panel. */
-	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
+	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
 	/** Surface detail prototypes (#125), in development and PR previews only. */
@@ -187,12 +187,17 @@ export function createGlobeApp(
 		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
 		: undefined;
 
-	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: () => coverage.retry() });
-	const data = new SceneData(clock, live, (ring) => startLiveFeed({
-		ring,
+	const late = new LateFlashes(LIVE_DELAYS, clock.wallTime());
+	const feedOptions: Partial<LiveClientOptions> = {
 		now: () => clock.wallTime(),
 		onManifest: () => coverage.retry(),
-	}));
+		onChunk: (chunk, ref) => late.add(chunk, Date.parse(ref.start), clock.wallTime()),
+	};
+	const live = startLiveFeed(feedOptions);
+	const data = new SceneData(clock, live, (ring) => {
+		late.since = clock.wallTime();
+		return startLiveFeed({ ...feedOptions, ring });
+	});
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
@@ -382,6 +387,7 @@ export function createGlobeApp(
 			ring: live.ring,
 			get client() { return data.liveClient; },
 			delays: playbackDelays,
+			late,
 			quality: () => tier,
 		},
 		render,

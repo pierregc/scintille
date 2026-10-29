@@ -23,10 +23,17 @@ export interface SourceStats {
 	lastMinute: number;
 	/** Flashes loaded but still waiting for their playback delay. */
 	pending: number;
+	/** Flashes loaded after their live slot (`LateFlashes`). */
+	late: number;
 }
 
 /** Per source counts over the whole ring at playback time `now`. */
-export function sourceStats(ring: FlashRing, delays: SourceDelays, now: number): SourceStats[] {
+export function sourceStats(
+	ring: FlashRing,
+	delays: SourceDelays,
+	now: number,
+	late: ArrayLike<number> = [],
+): SourceStats[] {
 	const held = new Map<number, number>();
 	const lastMinute = new Map<number, number>();
 	const pending = new Map<number, number>();
@@ -47,6 +54,7 @@ export function sourceStats(ring: FlashRing, delays: SourceDelays, now: number):
 			held: held.get(index) ?? 0,
 			lastMinute: lastMinute.get(index) ?? 0,
 			pending: pending.get(index) ?? 0,
+			late: late[index] ?? 0,
 		}));
 }
 
