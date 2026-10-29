@@ -1,7 +1,7 @@
 import { Texture } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { Source } from '../contract/types';
-import { cloudCaption, positionCaption } from '../components/hud/format';
+import { positionCaption } from '../components/hud/format';
 import { createClouds } from './clouds';
 import { LIVE_DELAYS, NO_DELAY, SourceDelays } from './live/delay';
 import fixture from './scene-time-cases.json';
@@ -24,7 +24,7 @@ function view(clouds: ReturnType<typeof cloudLayer>, c: (typeof fixture.cases)[n
 	return {
 		observed: new Date(observed).toISOString().replace('.000', ''),
 		position: positionCaption(trackObservation(track, observed), observed, 'UTC'),
-		clouds: cloudCaption(true, clouds.frameTime, true, observed, 'UTC'),
+		clouds: clouds.frameTime === null ? null : new Date(clouds.frameTime).toISOString().replace('.000', ''),
 	};
 }
 
