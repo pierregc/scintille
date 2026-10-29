@@ -3,12 +3,13 @@ import '@fontsource/ibm-plex-sans/latin-200.css';
 import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Version from '../components/Version.astro';
 import { breadcrumbs, website } from '../seo/jsonld';
 ---
 
 <BaseLayout
 	title="Methodology · Scintille"
-	description="What the dots on Scintille's globe are, where they come from, and what the globe cannot show."
+	description="How Scintille gets lightning from orbit to the globe: sources, live pipeline, Iceberg lakehouse, storm catalog, stack and limits."
 	jsonLd={[
 		website(),
 		breadcrumbs([
@@ -20,48 +21,111 @@ import { breadcrumbs, website } from '../seo/jsonld';
 	<main class="method">
 		<a class="name" href="/">Scintille</a>
 		<h1>Methodology</h1>
-		<p class="lead">Lightning as satellites measure it, with its gaps.</p>
+		<p class="lead">Lightning seen from orbit, on the globe minutes later.</p>
 
-		<h2>What you see</h2>
-		<p>
-			One dot is one flash, seen from orbit by its light: inside a cloud, between clouds or down to the ground.
-		</p>
+		<h2 id="pipeline">Pipeline</h2>
+		<div class="flow">
+			<section>
+				<h3>Live · seconds</h3>
+				<ol>
+					<li><b>Satellites</b>GLM file every 20 s, LI every 10 min</li>
+					<li><b>ingest-live</b>Polls, parses, dedupes</li>
+					<li><b>Live feed</b>30 s chunks on R2, last hour</li>
+					<li><b>Globe</b>Plays 2 min behind real time</li>
+				</ol>
+			</section>
+			<section>
+				<h3>Lake · minutes to hours</h3>
+				<ol>
+					<li><b>Spool</b>Each batch on disk first</li>
+					<li><b>lake-writer</b>Iceberg commit every 5 min</li>
+					<li><b>Dagster</b>Gold tables and storms, hourly</li>
+					<li><b>Replays</b>Storm catalog on R2</li>
+				</ol>
+			</section>
+		</div>
 
-		<h2>Sources</h2>
+		<h2 id="sources">Sources</h2>
 		<ul>
-			<li>NOAA GOES-East and GOES-West lightning mappers: the Americas and nearby oceans.</li>
-			<li>EUMETSAT MTG Lightning Imager: Europe, Africa and the Atlantic, being connected.</li>
+			<li>NOAA GOES-East and GOES-West lightning mappers (GLM): the Americas. Listed every 10 s on AWS open data.</li>
+			<li>EUMETSAT MTG Lightning Imager (LI): Europe, Africa, the Atlantic. Checked every 30 s on the EUMETSAT Data Store.</li>
+			<li>Clouds: hourly composite of GOES, Himawari and MTG full disks, gaps filled by NOAA GMGSI.</li>
 		</ul>
-		<p>Where two satellites overlap, each flash is drawn once.</p>
+		<p>Where two satellites overlap, the one with the better view draws the flash.</p>
 
-		<h2>Coverage</h2>
+		<h2 id="delay">Near real time</h2>
+		<ul>
+			<li>A GLM file lands about 30 s after the flash; the feed publishes every 30 s.</li>
+			<li>The globe plays 2 min behind, so every flash is loaded before it is due.</li>
+			<li>LI ships 10 minute files: Europe and Africa play 12 min behind.</li>
+		</ul>
+		<p>Live delay per satellite is on the <a href="/status/">status page</a>.</p>
+
+		<h2 id="lakehouse">Lakehouse</h2>
+		<ul>
+			<li>Apache Iceberg tables on Cloudflare R2, behind R2 Data Catalog.</li>
+			<li>Bronze: one row per satellite file. Silver: one row per flash, by day and source. Gold: hourly stats and storms.</li>
+			<li>The live feed never waits for the lake: a catalog outage only grows the spool.</li>
+			<li>Idempotent: flash ids hash their source file, so a replay writes nothing twice.</li>
+			<li>Backfills rebuild a whole day from the upstream archives.</li>
+			<li>Blocking quality checks on every gold table.</li>
+		</ul>
+
+		<h2 id="storms">Storm catalog</h2>
+		<ol class="steps">
+			<li>Flashes within 10 km and 10 min cluster into cells (ST-DBSCAN), stuck pixels removed.</li>
+			<li>Cells link hour to hour into storms, with splits and merges.</li>
+			<li>A level from flash count and peak rate, Light to Exceptional.</li>
+			<li>A place name, looked up offline: "Ajaccio, Corsica, France".</li>
+			<li>Strong storms and above are published with their replay.</li>
+		</ol>
+		<p>Runs every hour: a storm can be replayed within about 80 min. Storms active now refresh every 5 min.</p>
+
+		<h2 id="stack">Stack</h2>
+		<ul class="stack">
+			<li><b>Ingest</b>Python, asyncio</li>
+			<li><b>Lake</b>Iceberg, PyIceberg, DuckDB SQL</li>
+			<li><b>Orchestration</b>Dagster, Postgres</li>
+			<li><b>Runtime</b>Docker Compose on one VPS</li>
+			<li><b>Edge</b>Cloudflare R2 and Workers, Astro</li>
+			<li><b>Globe</b>Three.js, WebGL</li>
+			<li><b>Infra</b>Terraform, GitHub Actions</li>
+		</ul>
+
+		<h2 id="storage">Storage</h2>
+		<p>Sized for the R2 free tier: 10 GB and a million writes a month.</p>
+		<ul>
+			<li>Live feed: last hour.</li>
+			<li>Flashes: 21 days.</li>
+			<li>Storm replays: 60 days. Storm summaries and gold tables: kept.</li>
+			<li>Cloud frames: 30 days, their 1 km detail one day.</li>
+		</ul>
+
+		<h2 id="coverage">Coverage</h2>
 		<p>
-			Asia, Oceania and the poles are not covered, and detection weakens towards the edge of each view. An empty
-			region is not a region without lightning.
+			Asia, Oceania and the poles have no lightning feed yet and are shaded. Detection also weakens towards the edge
+			of each view. An empty region is not a region without lightning.
 		</p>
 
-		<h2>Brightness</h2>
-		<p>Follows the light energy measured for each flash, on a relative scale that is still provisional.</p>
-
-		<h2>Delay</h2>
-		<p>Flashes aim to appear within two minutes. The live delay is on the <a href="/status/">status page</a>.</p>
-
-		<h2>Limits</h2>
+		<h2 id="limits">Limits</h2>
 		<ul>
 			<li>Satellites miss some flashes.</li>
-			<li>A few faulty detector pixels can show a dot that keeps flashing in place.</li>
+			<li>Brightness ranks each flash within its satellite: GLM and LI measure light differently.</li>
+			<li>A faulty detector pixel can flash in place.</li>
 			<li>Clouds are hourly and lag the lightning.</li>
-			<li>The ground is a composite image: 2004 by day, about 500 m sharp; 2016 city lights by night, about 750 m sharp.</li>
+			<li>The ground is a composite: 2004 by day, 2016 city lights by night.</li>
 			<li>Thunder timing is stylized: it only says near or far.</li>
 		</ul>
 
-		<h2>Credits</h2>
+		<h2 id="credits">Credits</h2>
 		<p class="credits">
 			GLM data courtesy of NOAA.<br />
 			Contains modified EUMETSAT Meteosat data 2026.<br />
 			Clouds: NOAA GOES-East and GOES-West, JMA Himawari-9 via NOAA, contains modified EUMETSAT Meteosat data 2026; gaps from NOAA NESDIS GMGSI.<br />
-			Earth imagery: NASA Earth Observatory.
+			Earth imagery: NASA Earth Observatory.<br />
+			Storm names: GeoNames (CC BY 4.0), Natural Earth.
 		</p>
+		<Version />
 	</main>
 </BaseLayout>
 
@@ -73,7 +137,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 		--hair: rgb(238 242 247 / 0.14);
 		--mono: 'IBM Plex Mono', ui-monospace, monospace;
 		--sans: 'IBM Plex Sans', system-ui, sans-serif;
-		max-width: 32rem;
+		max-width: 34rem;
 		margin: 0 auto;
 		padding: clamp(24px, 6vw, 72px) 16px 96px;
 		color: var(--soft);
@@ -107,16 +171,74 @@ import { breadcrumbs, website } from '../seo/jsonld';
 		text-transform: uppercase;
 	}
 	p,
-	ul {
+	ul,
+	ol {
 		margin: 0 0 10px;
 	}
-	ul {
+	ul,
+	.steps {
 		padding-left: 14px;
+	}
+	.steps li::marker {
+		color: var(--dim);
+		font: 300 11px/1 var(--mono);
 	}
 	a {
 		color: var(--ink);
 		text-decoration-color: var(--hair);
 		text-underline-offset: 4px;
+	}
+	.flow {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 24px;
+	}
+	.flow h3 {
+		margin: 0 0 12px;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+	}
+	.flow ol {
+		padding: 0;
+		list-style: none;
+	}
+	.flow li {
+		position: relative;
+		padding: 0 0 18px 16px;
+		border-left: 1px solid var(--hair);
+		font-size: 13px;
+		line-height: 1.5;
+	}
+	.flow li:last-child {
+		padding-bottom: 0;
+		border-left-color: transparent;
+	}
+	.flow li::before {
+		position: absolute;
+		top: 6px;
+		left: -3px;
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		content: '';
+		background: var(--soft);
+	}
+	.flow b,
+	.stack b {
+		display: block;
+		color: var(--ink);
+		font: 300 11px/1.6 var(--mono);
+		letter-spacing: 0.06em;
+	}
+	.stack {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+		gap: 14px 24px;
+		padding: 0;
+		list-style: none;
+		font-size: 13px;
+		line-height: 1.5;
 	}
 	.credits {
 		color: var(--dim);
@@ -125,5 +247,10 @@ import { breadcrumbs, website } from '../seo/jsonld';
 	:focus-visible {
 		outline: 1px solid var(--soft);
 		outline-offset: 5px;
+	}
+	@media (max-width: 420px) {
+		.flow {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
