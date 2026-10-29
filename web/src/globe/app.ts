@@ -1,6 +1,7 @@
 import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
+import { FlashDays } from './archive/days';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
@@ -73,6 +74,8 @@ export interface GlobeApp {
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
+	/** UTC midnight of the first day travel in time can show, once the archive index is known. */
+	archiveStart(): number | null;
 	/** Internals shown by the debug panel. */
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
 	/** Set in render mode only. */
@@ -188,11 +191,12 @@ export function createGlobeApp(
 		: undefined;
 
 	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: () => coverage.retry() });
+	const flashDays = new FlashDays({ baseUrl: liveBaseUrl(), now: () => clock.wallTime() });
 	const data = new SceneData(clock, live, (ring) => startLiveFeed({
 		ring,
 		now: () => clock.wallTime(),
 		onManifest: () => coverage.retry(),
-	}));
+	}), renderParams ? undefined : flashDays);
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
@@ -380,6 +384,7 @@ export function createGlobeApp(
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
+		archiveStart: () => flashDays.index()?.firstDay ?? null,
 		debug: {
 			ring: live.ring,
 			get client() { return data.liveClient; },

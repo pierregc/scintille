@@ -203,6 +203,7 @@
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { formatTime, zoneLabel } from './hud/format';
 	import {
+		DAY_MS,
 		DEFAULT_SPEED,
 		dateInputValue,
 		dayStart,
@@ -284,6 +285,9 @@
 			if (day && document.activeElement !== day && day.value !== iso) day.value = iso;
 			const today = dateInputValue(wall());
 			if (day && day.max !== today) day.max = today;
+			const first = app?.archiveStart();
+			const oldest = first ? dateInputValue(first + DAY_MS / 2) : '';
+			if (day && day.min !== oldest) day.min = oldest;
 			if (play) {
 				play.toggleAttribute('data-paused', !clock.playing);
 				play.setAttribute('aria-label', clock.playing ? 'Pause' : 'Play');
@@ -325,7 +329,8 @@
 			const start = parseDateInput(day.value);
 			if (start === null) return;
 			const target = start + (now() - dayStart(now()));
-			seek(target < wall() ? target : wall() - REPLAY_LOOKBACK_MS);
+			const first = app?.archiveStart() ?? -Infinity;
+			seek(target >= wall() ? wall() - REPLAY_LOOKBACK_MS : Math.max(target, first));
 		});
 
 		const seekToPointer = (event: PointerEvent) => {
