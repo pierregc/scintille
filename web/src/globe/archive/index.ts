@@ -4,6 +4,12 @@ import type { SceneClock } from '../clock';
 import type { LiveFeed } from '../live';
 import { fetchChunk, type DecodedChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
+import { DayFeed, type FlashDays } from './days';
+
+/** Free replay reads the live feed this far back from the present, the archive before it. */
+const LIVE_REACH_MS = 55 * 60_000;
+/** Margin against switching back and forth at that boundary. */
+const LIVE_HYSTERESIS_MS = 60_000;
 
 export interface ArchiveSource {
 	/** Scene bounds in event time, UTC milliseconds; end is inclusive. */
@@ -47,6 +53,8 @@ export class SceneData {
 	readonly #offMode: () => void;
 	#live: LiveFeed;
 	#archive: { ring: FlashRing; start: number; end: number } | undefined;
+	readonly #days: FlashDays | undefined;
+	#travel: DayFeed | undefined;
 	#windowStart = -1;
 	#request: AbortController | undefined;
 	#revision = 0;
@@ -54,11 +62,12 @@ export class SceneData {
 	#suspended = false;
 	#returning: Promise<void> | undefined;
 
-	constructor(clock: SceneClock, live: LiveFeed, startLive: (ring: FlashRing) => LiveFeed) {
+	constructor(clock: SceneClock, live: LiveFeed, startLive: (ring: FlashRing) => LiveFeed, days?: FlashDays) {
 		this.#clock = clock;
 		this.#live = live;
 		this.ring = live.ring;
 		this.#startLive = startLive;
+		this.#days = days;
 		this.#offMode = clock.on('mode', (mode) => {
 			if (mode === 'live') void this.live();
 		});
@@ -69,9 +78,13 @@ export class SceneData {
 	}
 
 	covers(time: number): boolean {
-		return this.#archive
-			? time >= this.#archive.start && time <= this.#archive.end
-			: this.#live.client.covers(time);
+		if (this.#archive) return time >= this.#archive.start && time <= this.#archive.end;
+		return this.#travel ? this.#travel.covers(time) : this.#live.client.covers(time);
+	}
+
+	/** Whether free replay at `time` reads the flash archive rather than the live feed. */
+	get travelling(): boolean {
+		return this.#travel !== undefined;
 	}
 
 	coverageStart(): number | null {
@@ -113,6 +126,7 @@ export class SceneData {
 			for (const chunk of chunks) archive.push(chunk);
 			await this.#returning;
 			if (revision !== this.#revision) return false;
+			this.#stopTravel();
 			this.#suspended = true;
 			this.#live.stop();
 			await this.#live.client.idle();
@@ -130,10 +144,14 @@ export class SceneData {
 		}
 	}
 
-	/** Moves the bounded ring window on seeks and as playback crosses its middle. */
+	/** Moves the bounded ring window on seeks and as playback crosses its middle; in free replay,
+	 * reads the flash archive before the live window. */
 	update(time: number): void {
 		const archive = this.#archive?.ring;
-		if (!archive) return;
+		if (!archive) {
+			this.#freeReplay(time);
+			return;
+		}
 		let lo = 0;
 		let hi = archive.size;
 		while (lo < hi) {
@@ -153,11 +171,41 @@ export class SceneData {
 		this.#windowStart = from;
 	}
 
+	#freeReplay(time: number): void {
+		if (!this.#days || this.#disposed || this.#request || this.#returning || this.#clock.mode !== 'replay') return;
+		const reach = this.#clock.wallTime() - LIVE_REACH_MS;
+		if (this.#travel && time > reach + LIVE_HYSTERESIS_MS) {
+			this.#stopTravel();
+			this.ring.clear();
+			this.#live = this.#startLive(this.ring);
+			this.#suspended = false;
+			return;
+		}
+		if (!this.#travel && time < reach - LIVE_HYSTERESIS_MS) {
+			this.#suspended = true;
+			this.#live.stop();
+			this.ring.clear();
+			this.#travel = new DayFeed({
+				ring: this.ring,
+				days: this.#days,
+				now: () => this.#clock.wallTime(),
+				onError: (error) => console.warn('flash archive:', error),
+			});
+		}
+		this.#travel?.update(time);
+	}
+
+	#stopTravel(): void {
+		this.#travel?.stop();
+		this.#travel = undefined;
+	}
+
 	live(): Promise<void> {
 		if (this.#disposed) return Promise.resolve();
 		this.#revision++;
 		this.#request?.abort();
 		this.#request = undefined;
+		this.#stopTravel();
 		if (this.#returning) return this.#returning;
 		if (!this.#archive && !this.#suspended) {
 			if (this.#clock.mode !== 'live') this.#clock.live();
@@ -182,6 +230,7 @@ export class SceneData {
 		this.#request?.abort();
 		this.#request = undefined;
 		this.#archive = undefined;
+		this.#stopTravel();
 		this.#offMode();
 		this.#live.stop();
 		this.ring.clear();
