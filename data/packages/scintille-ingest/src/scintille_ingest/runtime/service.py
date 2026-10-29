@@ -33,17 +33,8 @@ class Publisher(Protocol):
     async def publish(self, source: str, flashes: pl.DataFrame) -> None: ...
 
 
-class RawCache(Protocol):
-    async def put(self, source: str, identity: FileIdentity, data: bytes) -> None: ...
-
-
 class NullPublisher:
     async def publish(self, source: str, flashes: pl.DataFrame) -> None:
-        pass
-
-
-class NullRawCache:
-    async def put(self, source: str, identity: FileIdentity, data: bytes) -> None:
         pass
 
 
@@ -60,7 +51,6 @@ class Settings:
     initial_backoff: float = 5.0
     max_backoff: float = 300.0
     disk_warn: tuple[float, ...] = (0.5, 0.8)
-    disk_pause_raw: float = 0.9
     owner_stale_after: float = 300.0
     """Seconds without a file before a source's zone takes the other sources' flashes live."""
     owner_stale_after_by_source: Mapping[str, float] = field(
@@ -84,7 +74,6 @@ class IngestLive:
         spool: Spool,
         *,
         publisher: Publisher | None = None,
-        raw_cache: RawCache | None = None,
         heartbeat: Pinger | None = None,
         metrics: Metrics | None = None,
         settings: Settings | None = None,
@@ -96,7 +85,6 @@ class IngestLive:
         self.state = state
         self.spool = spool
         self.publisher = publisher or NullPublisher()
-        self.raw_cache = raw_cache or NullRawCache()
         self.heartbeat = heartbeat
         self.metrics = metrics or Metrics()
         self.settings = settings or Settings()
@@ -105,7 +93,6 @@ class IngestLive:
         self._disk_usage = disk_usage
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
-        self.raw_cache_paused = False
         self._disk_level = 0.0
         self._last_file: dict[str, datetime] = {}
 
@@ -130,8 +117,6 @@ class IngestLive:
         if record and record.state == "spooled":
             self.state.advance(identity, source.name, "spooled", etag=product.etag)
             return
-        if not self.raw_cache_paused:
-            await self._cache_raw(source.name, identity, data)
         self.state.advance(identity, source.name, "downloaded", etag=product.etag)
         self._after_step("downloaded", identity)
 
@@ -202,14 +187,6 @@ class IngestLive:
         seconds = settings.owner_stale_after_by_source.get(source, settings.owner_stale_after)
         return timedelta(seconds=seconds)
 
-    async def _cache_raw(self, source: str, identity: FileIdentity, data: bytes) -> None:
-        """Best effort: an R2 outage must not stop the live feed."""
-        try:
-            await self.raw_cache.put(source, identity, data)
-        except Exception:
-            self.metrics.inc("ingest_raw_cache_errors_total", source=source)
-            log.exception("raw cache upload failed", extra={"fields": {"key": identity.key}})
-
     async def source_loop(self, source: Source) -> None:
         """Polls on the source's cadence; on errors backs off exponentially, alone."""
         failures = 0
@@ -240,25 +217,15 @@ class IngestLive:
             await self._sleep(delay)
 
     def check_disk(self) -> float:
-        """Spool disk usage; warns at each threshold and pauses the raw cache past the last one."""
+        """Spool disk usage; warns at each threshold."""
         usage = self._disk_usage(self.spool.directory)
         ratio = usage.used / usage.total
         self.metrics.set("spool_disk_used_ratio", ratio)
         self.metrics.set("spool_bytes", self.spool.size_bytes())
-        level = max(
-            [t for t in (*self.settings.disk_warn, self.settings.disk_pause_raw) if ratio >= t],
-            default=0.0,
-        )
+        level = max([t for t in self.settings.disk_warn if ratio >= t], default=0.0)
         if level > self._disk_level:
             log.warning("spool disk filling up", extra={"fields": {"used_ratio": round(ratio, 3)}})
         self._disk_level = level
-        paused = ratio >= self.settings.disk_pause_raw
-        if paused != self.raw_cache_paused:
-            log.warning(
-                "raw cache upload " + ("paused" if paused else "resumed"),
-                extra={"fields": {"used_ratio": round(ratio, 3)}},
-            )
-        self.raw_cache_paused = paused
         return ratio
 
     async def disk_loop(self, every: float = 60.0) -> None:

@@ -26,6 +26,7 @@ import {
 	WebGLRenderTarget,
 	type WebGLRenderer,
 } from 'three';
+import { type Clouds, cloudShellRadius } from '../clouds';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import { sunDirection } from '../sun';
 import type { FlashRing, SourceDelays } from '../live';
@@ -54,6 +55,8 @@ export interface LightningOptions {
 	storage?: PreferenceStorage | null;
 	/** Equirectangular flash light map width, for clouds lit from inside; 0 disables it. */
 	lightMapWidth?: number;
+	/** Opacity of the cloud layer (`Clouds.opacity`), which hides or veils channels; without it they are veiled as if in a cloud. */
+	clouds?: Clouds['opacity'];
 }
 
 /** Glow of recent flashes over an equirectangular window: centre longitude and latitude, half extents, radians. */
@@ -114,7 +117,7 @@ function blendFlashes(material: ShaderMaterial, mode: 'add' | 'max' | 'screen'):
 /** All flashes of the ring in one instanced draw call, aged on the GPU. */
 export function createLightning(
 	ring: FlashRing,
-	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024 }: LightningOptions = {},
+	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024, clouds }: LightningOptions = {},
 ): Lightning {
 	let displayMinutes = readDisplayMinutes(storage);
 	let stormView = false;
@@ -147,6 +150,7 @@ export function createLightning(
 	const pivotSpeed = new NumberUniform();
 	const budgetFrom = new NumberUniform();
 	const budgetFade = new NumberUniform();
+	const cloudDefines = clouds ? { ...clouds.defines, CLOUDS: '' } : {};
 	const material = new ShaderMaterial({
 		vertexShader: lightningVertexShader,
 		fragmentShader: lightningFragmentShader,
@@ -167,7 +171,10 @@ export function createLightning(
 			sunDirection: { value: new Vector3(1, 0, 0) },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
+			cloudShell: { value: cloudShellRadius(radius) },
+			...clouds?.uniforms,
 		},
+		defines: cloudDefines,
 		blending: AdditiveBlending,
 		transparent: true,
 		depthWrite: false,
@@ -196,6 +203,7 @@ export function createLightning(
 				halo: { value: halo },
 				color: { value: new Color(halo ? '#c4cdff' : '#eef2ff') },
 			},
+			defines: { ...cloudDefines },
 			transparent: true,
 			depthWrite: false,
 			blending: halo ? CustomBlending : AdditiveBlending,

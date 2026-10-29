@@ -213,6 +213,7 @@ JS heap flat (37.7 to 37.9 MB), with no page error.
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated | `SKELETON` |
 | Cloud top 12 km, cloud shell 10 km | Assumed | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), about 8 km, hourly | GMGSI frames |
+| Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight, assumed scattering | `veil.ts` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Scene time

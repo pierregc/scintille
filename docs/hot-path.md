@@ -9,9 +9,8 @@ One asyncio task per source (GLM East, GLM West; MTG LI with #32). Each lists it
 cadence and takes every file not spooled yet (a known key listed with a new ETag counts as not
 spooled) through:
 
-1. **download**: file identity = object key + SHA-256 (a revised product is a new file); original
-   uploaded to R2 under `raw/<source>/<key dir>/<checksum>_<name>` (`SCINTILLE_R2_*`, deleted after
-   30 days by the bucket rule; best effort, paused past 90 % spool disk); state `downloaded`;
+1. **download**: file identity = object key + SHA-256 (a revised product is a new file); the
+   original is not copied, NOAA and EUMETSAT keep it; state `downloaded`;
 2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`,
    except those flagged `outside-owner-zone`: another satellite has the better view of their point
    and publishes the same flash ([overlap](data-quality.md#overlap-between-satellites)); they are
@@ -38,7 +37,7 @@ silent socket times out after 60 s. SIGTERM lets files in progress finish (30 s)
   ([operations](operations.md)).
 - `GET :8080/metrics`: Prometheus text (files, flashes, errors, lag per source, spool size, disk use).
 - Logs: one JSON object per line.
-- Disk: warnings at 50 % and 80 %; past 90 %, raw cache uploads pause first.
+- Disk: warnings at 50 % and 80 %.
 
 ## Live feed
 

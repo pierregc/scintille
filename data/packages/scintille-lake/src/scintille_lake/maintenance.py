@@ -15,12 +15,11 @@ TARGET_RANGE_MB = (64, 512)
 
 @dataclass(frozen=True)
 class MaintenancePolicy:
-    """Retention and compaction settings; snapshot and raw values await decision #41."""
+    """Retention and compaction settings; snapshot values await decision #41."""
 
     compaction_target_mb: int = 128
     snapshot_retention_days: int = 3
     snapshots_retained_min: int = 5
-    raw_retention_days: int = 30
     orphan_min_age_days: int = 7
 
     def __post_init__(self) -> None:
@@ -29,8 +28,6 @@ class MaintenancePolicy:
             raise ValueError(f"compaction target must be within {low} to {high} MB")
         if self.snapshot_retention_days < 1 or self.snapshots_retained_min < 1:
             raise ValueError("snapshot retention must keep at least one day and one snapshot")
-        if self.raw_retention_days < 1:
-            raise ValueError("raw retention must be at least one day")
         # An orphan candidate must be older than any snapshot we keep.
         if self.orphan_min_age_days <= self.snapshot_retention_days:
             raise ValueError("orphan minimum age must exceed snapshot retention")
