@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.8.0"]
-SCHEMA_VERSION: Final = "2.8.0"
+SchemaVersion = Literal["2.9.0"]
+SCHEMA_VERSION: Final = "2.9.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -785,3 +785,95 @@ class ActiveStorms(BaseModel):
     ended: list[EndedStorm] = Field(
         description="Storms that left cells during the last two hours, newest first."
     )
+
+
+class NearbyQuery(BaseModel):
+    """The query as answered: the point rounded to 0.1°, the window ending at the request time."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    hours: int = Field(ge=1, le=168)
+    km: int = Field(ge=10, le=3000)
+    limit: int = Field(ge=1, le=8)
+    window_start: UtcTimestamp
+    window_end: UtcTimestamp = Field(description="The request time.")
+
+
+class SearchCatalog(BaseModel):
+    """What the search index holds: published storms of min_level and above, kept retention_days."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min_level: int = Field(ge=1)
+    retention_days: int = Field(ge=1)
+    published_at: UtcTimestamp = Field(description="Last sync of the index.")
+    last_observation_time: UtcTimestamp | None
+    stale: bool = Field(description="The last observation is more than 3 hours old.")
+    complete: bool = Field(description="False while some published storms wait to be indexed.")
+
+
+class NearbyStorm(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    storm: StormSummary
+    distance_km: float = Field(ge=0)
+    score: float = Field(
+        ge=0, description="ADR 0009 score: square root of flashes times peak rate."
+    )
+
+
+class SearchError(BaseModel):
+    """Refused or failed search: invalid (400), too-broad (422, more candidates than one answer
+    reads), unavailable (503).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    status: Literal["invalid", "too-broad", "unavailable"]
+    errors: list[str]
+
+
+class VisitorLocation(BaseModel):
+    """GET /api/location: the city of the visitor's IP address according to Cloudflare, rounded to
+    0.1°. Never stored or cached; no time zone, postal code or address.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    status: Literal["approximate", "unavailable"] = Field(
+        description=(
+            "unavailable when the city or its coordinates are unknown; a country alone is"
+            " not a location."
+        )
+    )
+    source: Literal["ip"]
+    lat: float | None
+    lon: float | None
+    city: str | None
+    region: str | None
+    country_code: str | None
+
+
+class StormsNearby(BaseModel):
+    """GET /api/storms/nearby (ADR 0027): published storms whose observed interval meets the window
+    and whose path comes within the radius, best first. Depends on the URL only.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    query: NearbyQuery
+    catalog: SearchCatalog
+    distance: Literal["path-minus-radius"] = Field(
+        description=(
+            "Great-circle distance to the arcs joining the storm's hourly centroids, "
+            "minus the radius of a disc with its largest hourly area, at least 0, rounded"
+            " to 10 km."
+        )
+    )
+    total: int = Field(ge=0, description="Matching storms before the limit.")
+    storms: list[NearbyStorm]

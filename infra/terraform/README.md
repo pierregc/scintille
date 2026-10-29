@@ -8,6 +8,7 @@ The VPS is not here: it is ordered by hand and configured by [`infra/vps/bootstr
 | `r2.tf` | Buckets `scintille-live`, `scintille-live-preview`, `scintille-lake` (ENAM, Standard, `prevent_destroy`); `r2.dev` URL off on all three; `data.scintille.app` custom domain on `scintille-live`; CORS on `scintille-live`; lifecycle on `scintille-lake` |
 | `zone.tf` | Proxied `www` record, `www` → apex 301 redirect rule, Always Use HTTPS, HSTS |
 | `edge.tf` | Cache rule on `data.scintille.app`, WAF rule blocking query strings and writes there, per-IP rate limit, Smart Tiered Cache |
+| `d1.tf` | D1 databases `scintille-search` and `scintille-search-preview` (Western Europe, no replicas, `prevent_destroy`) for storm search ([ADR 0027](../../docs/adr/0027-storm-search.md)) |
 
 Ownership:
 

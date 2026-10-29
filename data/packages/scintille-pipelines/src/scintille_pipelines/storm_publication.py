@@ -54,6 +54,7 @@ from .storm_cells import BACKFILL, RUN_HOURS, hourly
 from .storm_highlights import haversine_km, highlights, storm_metrics
 from .storm_levels import STORM_LEVELS
 from .storm_names import STORM_NAMES
+from .storm_search import D1Error, D1Rest, retained, sync_search
 from .storms import STORM_TRACKS, STORMS, _between, _scan
 from .tracking import HOUR
 
@@ -251,8 +252,25 @@ def storm_catalog(
             context.log.exception("Highlights failed; the previous file stays published")
             return None
 
+    def index(published: Sequence[StormSummary]) -> dict[str, int]:
+        try:
+            database = D1Rest.from_env()
+            if database is None:
+                return {"search_skipped": 1}
+            ids = [storm.storm_id for storm in published if retained(storm, now)]
+            tracks = {
+                str(storm_id): track
+                for storm_id, track in storms.filter(pl.col("storm_id").is_in(ids))
+                .select("storm_id", "track")
+                .iter_rows()
+            }
+            return sync_search(store, database, published, tracks, now)
+        except (D1Error, OSError, ValueError):
+            context.log.exception("Search sync failed; it resumes on the next run")
+            return {"search_failed": 1}
+
     metrics = publish_catalog(
-        store, details, objects, visible, now, purge_tags, regions, highlights=pick
+        store, details, objects, visible, now, purge_tags, regions, highlights=pick, search=index
     )
     metrics["detected"] = len(classified)
     metrics["invalid_exports"] = len(rejected)

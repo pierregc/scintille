@@ -168,6 +168,22 @@ def test_highlights_follow_the_effective_snapshot_and_keep_the_previous_file() -
     assert store.get(HIGHLIGHTS_PATH) == written
 
 
+def test_search_indexes_the_published_storms_after_their_index_pages() -> None:
+    store, document = Store(), detail()
+    seen: list[tuple[list[str], bool]] = []
+
+    def index(storms: Sequence[StormSummary]) -> dict[str, int]:
+        detail_path = f"storms/{document.storm.slug}.json"
+        seen.append(([s.slug for s in storms], store.exists(detail_path)))
+        assert store.exists("storms/index/latest.json")
+        return {"search_upserted": len(storms)}
+
+    result = publish_catalog(
+        store, [document], chunks(document), [document.storm], NOW, lambda _: True, search=index
+    )
+    assert seen == [([document.storm.slug], True)] and result["search_upserted"] == 1
+
+
 def test_details_published_by_an_earlier_minor_version_are_still_read() -> None:
     store, document = Store(), detail()
     path = f"storms/{document.storm.slug}.json"

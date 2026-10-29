@@ -1,0 +1,275 @@
+{
+ "measured_at": "2026-10-29T19:50:55.382810+00:00",
+ "queries": [
+  {
+   "place": "Lyon",
+   "hours": 72,
+   "km": 200,
+   "keys": 24,
+   "candidates": 0,
+   "rows_read": 24,
+   "candidate_bytes": 2,
+   "rest_ms": 194
+  },
+  {
+   "place": "Lyon",
+   "hours": 168,
+   "km": 500,
+   "keys": 384,
+   "candidates": 0,
+   "rows_read": 384,
+   "candidate_bytes": 2,
+   "rest_ms": 157
+  },
+  {
+   "place": "Lyon",
+   "hours": 168,
+   "km": 3000,
+   "keys": 1064,
+   "candidates": 200,
+   "rows_read": 3338,
+   "candidate_bytes": 27987,
+   "rest_ms": 274
+  },
+  {
+   "place": "Paris",
+   "hours": 72,
+   "km": 200,
+   "keys": 48,
+   "candidates": 0,
+   "rows_read": 48,
+   "candidate_bytes": 2,
+   "rest_ms": 152
+  },
+  {
+   "place": "Paris",
+   "hours": 168,
+   "km": 500,
+   "keys": 320,
+   "candidates": 0,
+   "rows_read": 320,
+   "candidate_bytes": 2,
+   "rest_ms": 138
+  },
+  {
+   "place": "Paris",
+   "hours": 168,
+   "km": 3000,
+   "keys": 1104,
+   "candidates": 135,
+   "rows_read": 2904,
+   "candidate_bytes": 19017,
+   "rest_ms": 243
+  },
+  {
+   "place": "Istanbul",
+   "hours": 72,
+   "km": 200,
+   "keys": 36,
+   "candidates": 1,
+   "rows_read": 47,
+   "candidate_bytes": 137,
+   "rest_ms": 151
+  },
+  {
+   "place": "Istanbul",
+   "hours": 168,
+   "km": 500,
+   "keys": 280,
+   "candidates": 22,
+   "rows_read": 624,
+   "candidate_bytes": 3011,
+   "rest_ms": 160
+  },
+  {
+   "place": "Istanbul",
+   "hours": 168,
+   "km": 3000,
+   "keys": 768,
+   "candidates": 451,
+   "rows_read": 2344,
+   "candidate_bytes": 62647,
+   "rest_ms": 266
+  },
+  {
+   "place": "Orlando",
+   "hours": 72,
+   "km": 200,
+   "keys": 36,
+   "candidates": 0,
+   "rows_read": 36,
+   "candidate_bytes": 2,
+   "rest_ms": 175
+  },
+  {
+   "place": "Orlando",
+   "hours": 168,
+   "km": 500,
+   "keys": 240,
+   "candidates": 2,
+   "rows_read": 264,
+   "candidate_bytes": 301,
+   "rest_ms": 188
+  },
+  {
+   "place": "Orlando",
+   "hours": 168,
+   "km": 3000,
+   "keys": 480,
+   "candidates": 694,
+   "rows_read": 3282,
+   "candidate_bytes": 98021,
+   "rest_ms": 236
+  },
+  {
+   "place": "Sao Paulo",
+   "hours": 72,
+   "km": 200,
+   "keys": 36,
+   "candidates": 0,
+   "rows_read": 58,
+   "candidate_bytes": 2,
+   "rest_ms": 128
+  },
+  {
+   "place": "Sao Paulo",
+   "hours": 168,
+   "km": 500,
+   "keys": 240,
+   "candidates": 6,
+   "rows_read": 352,
+   "candidate_bytes": 822,
+   "rest_ms": 178
+  },
+  {
+   "place": "Sao Paulo",
+   "hours": 168,
+   "km": 3000,
+   "keys": 504,
+   "candidates": 1146,
+   "rows_read": 7175,
+   "candidate_bytes": 158358,
+   "rest_ms": 207
+  },
+  {
+   "place": "Kinshasa",
+   "hours": 72,
+   "km": 200,
+   "keys": 36,
+   "candidates": 52,
+   "rows_read": 553,
+   "candidate_bytes": 7112,
+   "rest_ms": 158
+  },
+  {
+   "place": "Kinshasa",
+   "hours": 168,
+   "km": 500,
+   "keys": 240,
+   "candidates": 210,
+   "rows_read": 1729,
+   "candidate_bytes": 28705,
+   "rest_ms": 147
+  },
+  {
+   "place": "Kinshasa",
+   "hours": 168,
+   "km": 3000,
+   "keys": 392,
+   "candidates": 2135,
+   "rows_read": 6794,
+   "candidate_bytes": 291909,
+   "rest_ms": 238
+  },
+  {
+   "place": "Jakarta",
+   "hours": 72,
+   "km": 200,
+   "keys": 24,
+   "candidates": 0,
+   "rows_read": 24,
+   "candidate_bytes": 2,
+   "rest_ms": 152
+  },
+  {
+   "place": "Jakarta",
+   "hours": 168,
+   "km": 500,
+   "keys": 240,
+   "candidates": 0,
+   "rows_read": 240,
+   "candidate_bytes": 2,
+   "rest_ms": 136
+  },
+  {
+   "place": "Jakarta",
+   "hours": 168,
+   "km": 3000,
+   "keys": 392,
+   "candidates": 0,
+   "rows_read": 397,
+   "candidate_bytes": 2,
+   "rest_ms": 153
+  },
+  {
+   "place": "Suva",
+   "hours": 72,
+   "km": 200,
+   "keys": 24,
+   "candidates": 0,
+   "rows_read": 24,
+   "candidate_bytes": 2,
+   "rest_ms": 131
+  },
+  {
+   "place": "Suva",
+   "hours": 168,
+   "km": 500,
+   "keys": 288,
+   "candidates": 0,
+   "rows_read": 288,
+   "candidate_bytes": 2,
+   "rest_ms": 234
+  },
+  {
+   "place": "Suva",
+   "hours": 168,
+   "km": 3000,
+   "keys": 384,
+   "candidates": 144,
+   "rows_read": 761,
+   "candidate_bytes": 21269,
+   "rest_ms": 142
+  },
+  {
+   "place": "Tromso",
+   "hours": 72,
+   "km": 200,
+   "keys": 84,
+   "candidates": 0,
+   "rows_read": 84,
+   "candidate_bytes": 2,
+   "rest_ms": 164
+  },
+  {
+   "place": "Tromso",
+   "hours": 168,
+   "km": 500,
+   "keys": 816,
+   "candidates": 0,
+   "rows_read": 816,
+   "candidate_bytes": 2,
+   "rest_ms": 219
+  },
+  {
+   "place": "Tromso",
+   "hours": 168,
+   "km": 3000,
+   "keys": 1440,
+   "candidates": 0,
+   "rows_read": 1566,
+   "candidate_bytes": 2,
+   "rest_ms": 154
+  }
+ ]
+}

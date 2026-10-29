@@ -406,7 +406,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.8.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.9.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -414,7 +414,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.8.0`.
+Value: `2.9.0`.
 
 ### UtcTimestamp
 
@@ -995,6 +995,91 @@ storms/active.json: storms active now and their current cells, rewritten after e
 | `sources` | array of [SourceFrontier](#sourcefrontier) | yes |  | Data frontier of each source in this snapshot. |
 | `cells` | array of [ActiveCell](#activecell) | yes |  | Active storms, one current cell each, strongest first. |
 | `ended` | array of [EndedStorm](#endedstorm) | yes |  | Storms that left cells during the last two hours, newest first. |
+
+### NearbyQuery
+
+Defined in `data/contract/search.schema.json`.
+
+The query as answered: the point rounded to 0.1°, the window ending at the request time.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `hours` | integer | yes | minimum `1`, maximum `168` |  |
+| `km` | integer | yes | minimum `10`, maximum `3000` |  |
+| `limit` | integer | yes | minimum `1`, maximum `8` |  |
+| `window_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `window_end` | [UtcTimestamp](#utctimestamp) | yes |  | The request time. |
+
+### SearchCatalog
+
+Defined in `data/contract/search.schema.json`.
+
+What the search index holds: published storms of min_level and above, kept retention_days.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `min_level` | integer | yes | minimum `1` |  |
+| `retention_days` | integer | yes | minimum `1` |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  | Last sync of the index. |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `stale` | boolean | yes |  | The last observation is more than 3 hours old. |
+| `complete` | boolean | yes |  | False while some published storms wait to be indexed. |
+
+### NearbyStorm
+
+Defined in `data/contract/search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `distance_km` | number | yes | minimum `0` |  |
+| `score` | number | yes | minimum `0` | ADR 0009 score: square root of flashes times peak rate. |
+
+### SearchError
+
+Defined in `data/contract/search.schema.json`.
+
+Refused or failed search: invalid (400), too-broad (422, more candidates than one answer reads), unavailable (503).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  |  |
+| `errors` | array of string | yes |  |  |
+
+### VisitorLocation
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/location: the city of the visitor's IP address according to Cloudflare, rounded to 0.1°. Never stored or cached; no time zone, postal code or address.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  | unavailable when the city or its coordinates are unknown; a country alone is not a location. |
+| `source` | `"ip"` | yes |  |  |
+| `lat` | number or null | yes |  |  |
+| `lon` | number or null | yes |  |  |
+| `city` | string or null | yes |  |  |
+| `region` | string or null | yes |  |  |
+| `country_code` | string or null | yes |  |  |
+
+### StormsNearby
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/storms/nearby (ADR 0027): published storms whose observed interval meets the window and whose path comes within the radius, best first. Depends on the URL only.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `query` | [NearbyQuery](#nearbyquery) | yes |  |  |
+| `catalog` | [SearchCatalog](#searchcatalog) | yes |  |  |
+| `distance` | `"path-minus-radius"` | yes |  | Great-circle distance to the arcs joining the storm's hourly centroids, minus the radius of a disc with its largest hourly area, at least 0, rounded to 10 km. |
+| `total` | integer | yes | minimum `0` | Matching storms before the limit. |
+| `storms` | array of [NearbyStorm](#nearbystorm) | yes |  |  |
 
 <!-- END GENERATED REFERENCE -->
 

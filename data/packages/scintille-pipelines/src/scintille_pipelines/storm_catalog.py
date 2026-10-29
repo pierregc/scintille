@@ -219,6 +219,7 @@ def publish_catalog(
     purge: Callable[[list[str]], bool],
     region_codes: Sequence[str] = (),
     highlights: Callable[[Sequence[StormSummary]], StormHighlights | None] | None = None,
+    search: Callable[[Sequence[StormSummary]], dict[str, int]] | None = None,
 ) -> dict[str, int]:
     with ThreadPoolExecutor(IO_THREADS) as pool:
         paths = [f"storms/{detail.storm.slug}.json" for detail in details]
@@ -326,7 +327,9 @@ def publish_catalog(
         except OSError:
             log.exception("Cache purge transport failed; pending tags retry on the next run")
     store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
-    return {
+    # Last: search only names storms whose detail and index entry are published.
+    searched = search(all_storms) if search is not None else {}
+    return searched | {
         "changed": len(changed),
         "index_pages_written": len(rewritten),
         "storms": len(all_storms),
