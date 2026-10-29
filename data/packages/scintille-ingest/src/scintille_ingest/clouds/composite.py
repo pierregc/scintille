@@ -101,12 +101,13 @@ def blend(
     refl_sum = np.zeros(shape, np.float32)
     refl_weight = np.zeros(shape, np.float32)
     coverage = np.zeros(shape, np.float32)
+    points = geos.Points.of(lat, lon)
     for sat in satellites:
-        x0, y0, cos_vza = geos.scan_angles(lat, lon, 0.0, sat.infrared.view)
+        x0, y0, cos_vza = geos.scan_angles_at(points, 0.0, sat.infrared.view)
         if not np.any(cos_vza > VIEW_FADE[0]):
             continue
         # Scan angles move almost linearly with height over the first tens of kilometres.
-        x1, y1, _ = geos.scan_angles(lat, lon, PARALLAX_STEP_M, sat.infrared.view)
+        x1, y1, _ = geos.scan_angles_at(points, PARALLAX_STEP_M, sat.infrared.view)
         dx, dy = (x1 - x0) / PARALLAX_STEP_M, (y1 - y0) / PARALLAX_STEP_M
         x, y = x0, y0
         for _ in range(2):
