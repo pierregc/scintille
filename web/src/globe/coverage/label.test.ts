@@ -1,6 +1,6 @@
 import { PerspectiveCamera, Vector2 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { gapDetail, surfacePoint } from './label';
+import { surfacePoint } from './label';
 
 describe('surfacePoint', () => {
 	it('inverts latLonToVector at the center of the view', () => {
@@ -19,12 +19,5 @@ describe('surfacePoint', () => {
 		camera.lookAt(0, 0, 0);
 		camera.updateMatrixWorld();
 		expect(surfacePoint(new Vector2(0.99, 0.99), camera, 1)).toBeNull();
-	});
-});
-
-describe('gapDetail', () => {
-	it('names the down sources', () => {
-		expect(gapDetail({ kind: 'down', sources: ['glm-west'] })).toBe('GLM West is not delivering data');
-		expect(gapDetail({ kind: 'no-coverage' })).toMatch(/Outside the view/);
 	});
 });

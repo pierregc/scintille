@@ -3,7 +3,7 @@ import { SceneClock } from './clock';
 import { applyDevReplay } from './dev-replay';
 
 describe('applyDevReplay', () => {
-	const clock = () => new SceneClock(() => 0);
+	const clock = () => new SceneClock(() => Date.UTC(2027, 0, 1));
 
 	it('replays from the given instant and speed', () => {
 		const c = clock();

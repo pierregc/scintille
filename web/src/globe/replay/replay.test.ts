@@ -57,7 +57,7 @@ describe('production replay entry', () => {
 			client.start();
 			return { ring, client, stop: () => client.stop() };
 		};
-		const clock = new SceneClock(() => 200_000);
+		const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
 		const data = new SceneData(clock, startLive(new FlashRing(8)), startLive);
 		const chunk = new Uint8Array(await readFile(new URL(`../../../../fixtures/${fixture.replay.chunks[0].path}`, import.meta.url)));
 		const fetchFn: typeof fetch = async (input) => String(input).endsWith('.json') ? Response.json(fixture) : new Response(chunk);
@@ -82,7 +82,7 @@ describe('production replay entry', () => {
 	});
 
 	it('keeps the current selection on failure and ignores superseded results', async () => {
-		const clock = new SceneClock(() => 0);
+		const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
 		const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(Date.parse(detail.storm.t_start), 60); return detail; }), live: vi.fn().mockResolvedValue(undefined) };
 		const controls = { flyTo: vi.fn().mockResolvedValue(false), cancelFlight: vi.fn(), isAt: () => false };
 		const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
@@ -107,7 +107,7 @@ describe('production replay entry', () => {
 });
 
 it('flies to the horizon view of the open storm and back to its frame', async () => {
-	const clock = new SceneClock(() => 0);
+	const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
 	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(Date.parse(detail.storm.t_start), 60); return detail; }), live: vi.fn().mockResolvedValue(undefined) };
 	let at: unknown;
 	const controls = { cancelFlight: vi.fn(), isAt: (pose: unknown) => pose === at, flyTo: vi.fn().mockImplementation(async (pose) => { at = pose; return true; }) };
@@ -132,7 +132,7 @@ it('flies to the horizon view of the open storm and back to its frame', async ()
 });
 
 it('holds the start instant during the camera flight before autoplay so a short storm is not skipped', async () => {
-	let wall = 0;
+	let wall = Date.UTC(2027, 0, 1);
 	const clock = new SceneClock(() => wall);
 	const start = Date.parse(fixture.storm.t_start);
 	let finish!: (arrived: boolean) => void;

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { CoverageMap, Source } from '../../contract/types';
-import { downSources, drawGaps, gapAt, type MaskContext, parseCoverage } from './map';
+import type { CoverageMap } from '../../contract/types';
+import { drawGaps, gapAt, type MaskContext, parseCoverage } from './map';
 
 const FIXTURES = new URL('../../../../fixtures/live/', import.meta.url);
 let map: CoverageMap;
@@ -10,9 +10,6 @@ beforeAll(async () => {
 	map = parseCoverage(JSON.parse(await readFile(new URL('coverage.geojson', FIXTURES), 'utf8')));
 });
 
-const none = new Set<Source>();
-const westDown = new Set<Source>(['glm-west']);
-
 describe('parseCoverage', () => {
 	it('rejects another major version or a non collection', () => {
 		expect(() => parseCoverage({ ...map, schema_version: '9.0.0' })).toThrow(/major/);
@@ -20,49 +17,34 @@ describe('parseCoverage', () => {
 	});
 });
 
-describe('downSources', () => {
-	it('keeps the offline sources only', () => {
-		const sources = [
-			{ source: 'glm-east', state: 'live' },
-			{ source: 'glm-west', state: 'offline' },
-			{ source: 'mtg-li', state: 'delayed' },
-		] as const;
-		expect(downSources({ sources: sources.map((s) => ({ ...s, last_event_time: null, last_ingest_time: null })) })).toEqual(
-			westDown,
-		);
-		expect(downSources(null)).toEqual(none);
-	});
-});
-
 describe('gapAt', () => {
 	it('marks Asia, Oceania and the poles, not the Americas', () => {
-		expect(gapAt(map, none, 30, 100)).toEqual({ kind: 'no-coverage' });
-		expect(gapAt(map, none, -25, 135)).toEqual({ kind: 'no-coverage' });
-		expect(gapAt(map, none, 85, -100)).toEqual({ kind: 'no-coverage' });
-		expect(gapAt(map, none, -80, -70)).toEqual({ kind: 'no-coverage' });
-		expect(gapAt(map, none, 35, -95)).toBeNull();
-		expect(gapAt(map, none, 0, 170)).toBeNull();
+		expect(gapAt(map, 30, 100)).toBe(true);
+		expect(gapAt(map, -25, 135)).toBe(true);
+		expect(gapAt(map, 85, -100)).toBe(true);
+		expect(gapAt(map, -80, -70)).toBe(true);
+		expect(gapAt(map, 35, -95)).toBe(false);
+		expect(gapAt(map, 0, 170)).toBe(false);
 	});
 
 	it('follows the GeoJSON edge across the antimeridian', () => {
-		expect(gapAt(map, none, 0, 155.5)).toEqual({ kind: 'no-coverage' });
-		expect(gapAt(map, none, 0, 156.5)).toBeNull();
-		expect(gapAt(map, none, 0, -8.5)).toBeNull();
-		expect(gapAt(map, none, 0, -7.5)).toEqual({ kind: 'no-coverage' });
+		expect(gapAt(map, 0, 155.5)).toBe(true);
+		expect(gapAt(map, 0, 156.5)).toBe(false);
+		expect(gapAt(map, 0, -8.5)).toBe(false);
+		expect(gapAt(map, 0, -7.5)).toBe(true);
 	});
 
-	it('greys out a down source where no live source sees', () => {
-		expect(gapAt(map, westDown, 20, -160)).toEqual({ kind: 'down', sources: ['glm-west'] });
-		expect(gapAt(map, westDown, 0, 175)).toEqual({ kind: 'down', sources: ['glm-west'] });
-		expect(gapAt(map, westDown, 35, -105)).toBeNull();
-		expect(gapAt(map, westDown, 30, 100)).toEqual({ kind: 'no-coverage' });
+	it('leaves Europe and Africa clear once MTG LI is in the map', async () => {
+		const contract = parseCoverage(JSON.parse(await readFile(new URL('../../../../data/contract/coverage.geojson', import.meta.url), 'utf8')));
+		expect(gapAt(contract, 48.9, 2.3)).toBe(false);
+		expect(gapAt(contract, 6.5, 3.4)).toBe(false);
+		expect(gapAt(contract, 39.9, 116.4)).toBe(true);
 	});
 });
 
 class RecordingContext implements MaskContext {
 	fillStyle: MaskContext['fillStyle'] = '';
-	globalCompositeOperation: GlobalCompositeOperation = 'source-over';
-	readonly fills: { mode: GlobalCompositeOperation; points: number }[] = [];
+	readonly fills: number[] = [];
 	#points = 0;
 	beginPath(): void {
 		this.#points = 0;
@@ -79,7 +61,7 @@ class RecordingContext implements MaskContext {
 	}
 	closePath(): void {}
 	fill(): void {
-		this.fills.push({ mode: this.globalCompositeOperation, points: this.#points });
+		this.fills.push(this.#points);
 	}
 	clearRect(): void {
 		this.fills.length = 0;
@@ -87,16 +69,11 @@ class RecordingContext implements MaskContext {
 }
 
 describe('drawGaps', () => {
-	it('paints the no coverage area, then cuts out every live footprint', () => {
+	it('paints the no coverage area only', () => {
 		const ctx = new RecordingContext();
-		drawGaps(ctx, map, none, 2048, 1024);
-		expect(ctx.fills.map((f) => f.mode)).toEqual(['source-over', 'destination-out', 'destination-out', 'destination-out']);
-		expect(ctx.globalCompositeOperation).toBe('source-over');
-	});
-
-	it('paints a down footprint and cuts out only the live ones', () => {
-		const ctx = new RecordingContext();
-		drawGaps(ctx, map, westDown, 2048, 1024);
-		expect(ctx.fills.map((f) => f.mode)).toEqual(['source-over', 'source-over', 'source-over', 'destination-out']);
+		drawGaps(ctx, map, 2048, 1024);
+		const gaps = map.features.filter((f) => f.properties.kind === 'no-coverage').flatMap((f) => f.geometry.coordinates);
+		expect(ctx.fills).toHaveLength(gaps.length);
+		expect(ctx.fills.every((points) => points > 0)).toBe(true);
 	});
 });

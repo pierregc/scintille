@@ -1,11 +1,8 @@
-import type { CoverageFeature, CoverageMap, LiveManifest, Source } from '../../contract/types';
+import type { CoverageFeature, CoverageMap } from '../../contract/types';
 import { CONTRACT_MAJOR } from '../live/decode';
 
 type Ring = number[][];
 type Polygon = Ring[];
-
-/** Where flashes cannot show right now, and why. */
-export type Gap = { kind: 'no-coverage' } | { kind: 'down'; sources: Source[] };
 
 /** Checks the parts of `live/coverage.geojson` the overlay relies on. */
 export function parseCoverage(json: unknown): CoverageMap {
@@ -17,15 +14,8 @@ export function parseCoverage(json: unknown): CoverageMap {
 	return map;
 }
 
-/** Sources the manifest reports `offline`, i.e. down. */
-export function downSources(manifest: Pick<LiveManifest, 'sources'> | null): Set<Source> {
-	return new Set((manifest?.sources ?? []).filter((s) => s.state === 'offline').map((s) => s.source));
-}
-
-function footprints(map: CoverageMap, down: ReadonlySet<Source>, isDown: boolean): CoverageFeature[] {
-	return map.features.filter(
-		(f) => f.properties.kind === 'footprint' && f.properties.source !== null && down.has(f.properties.source) === isDown,
-	);
+function gaps(map: CoverageMap): CoverageFeature[] {
+	return map.features.filter((f) => f.properties.kind === 'no-coverage');
 }
 
 /** Even-odd test in the lon/lat plane, as the polygons are drawn. */
@@ -43,59 +33,31 @@ function insidePolygon(lon: number, lat: number, [outer, ...holes]: Polygon): bo
 	return insideRing(lon, lat, outer) && !holes.some((hole) => insideRing(lon, lat, hole));
 }
 
-function inside(lon: number, lat: number, feature: CoverageFeature): boolean {
-	return feature.geometry.coordinates.some((polygon) => insidePolygon(lon, lat, polygon));
-}
-
-/** The gap at a point, or null where a live source sees it. */
-export function gapAt(map: CoverageMap, down: ReadonlySet<Source>, lat: number, lon: number): Gap | null {
-	if (footprints(map, down, false).some((f) => inside(lon, lat, f))) return null;
-	const sources = footprints(map, down, true)
-		.filter((f) => inside(lon, lat, f))
-		.map((f) => f.properties.source as Source);
-	if (sources.length > 0) return { kind: 'down', sources };
-	return map.features.some((f) => f.properties.kind === 'no-coverage' && inside(lon, lat, f)) ? { kind: 'no-coverage' } : null;
+/** Whether no satellite sees the point. */
+export function gapAt(map: CoverageMap, lat: number, lon: number): boolean {
+	return gaps(map).some((f) => f.geometry.coordinates.some((polygon) => insidePolygon(lon, lat, polygon)));
 }
 
 /** The part of a 2D context the mask drawing uses. */
-export type MaskContext = Pick<
-	CanvasRenderingContext2D,
-	'beginPath' | 'moveTo' | 'lineTo' | 'closePath' | 'fill' | 'clearRect' | 'fillStyle' | 'globalCompositeOperation'
->;
+export type MaskContext = Pick<CanvasRenderingContext2D, 'beginPath' | 'moveTo' | 'lineTo' | 'closePath' | 'fill' | 'clearRect' | 'fillStyle'>;
 
-function tracePolygon(ctx: MaskContext, polygon: Polygon, width: number, height: number): void {
-	for (const ring of polygon) {
-		ring.forEach(([lon, lat], i) => {
-			const x = ((lon + 180) / 360) * width;
-			const y = ((90 - lat) / 180) * height;
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-		});
-		ctx.closePath();
-	}
-}
-
-function fillFeatures(ctx: MaskContext, features: CoverageFeature[], width: number, height: number): void {
-	for (const feature of features) {
+/** Paints the no coverage area white on an equirectangular canvas (west edge at 180° W, top row at 90° N). */
+export function drawGaps(ctx: MaskContext, map: CoverageMap, width: number, height: number): void {
+	ctx.clearRect(0, 0, width, height);
+	ctx.fillStyle = '#fff';
+	for (const feature of gaps(map)) {
 		for (const polygon of feature.geometry.coordinates) {
 			ctx.beginPath();
-			tracePolygon(ctx, polygon, width, height);
+			for (const ring of polygon) {
+				ring.forEach(([lon, lat], i) => {
+					const x = ((lon + 180) / 360) * width;
+					const y = ((90 - lat) / 180) * height;
+					if (i === 0) ctx.moveTo(x, y);
+					else ctx.lineTo(x, y);
+				});
+				ctx.closePath();
+			}
 			ctx.fill('evenodd');
 		}
 	}
-}
-
-/**
- * Paints the gaps white on an equirectangular canvas (west edge at 180° W, top row at 90° N): the no
- * coverage area and the footprints of down sources, minus what live footprints still see.
- */
-export function drawGaps(ctx: MaskContext, map: CoverageMap, down: ReadonlySet<Source>, width: number, height: number): void {
-	ctx.clearRect(0, 0, width, height);
-	ctx.fillStyle = '#fff';
-	ctx.globalCompositeOperation = 'source-over';
-	const gaps = map.features.filter((f) => f.properties.kind === 'no-coverage');
-	fillFeatures(ctx, [...gaps, ...footprints(map, down, true)], width, height);
-	ctx.globalCompositeOperation = 'destination-out';
-	fillFeatures(ctx, footprints(map, down, false), width, height);
-	ctx.globalCompositeOperation = 'source-over';
 }

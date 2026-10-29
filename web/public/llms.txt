@@ -16,7 +16,7 @@ Update cadence: the live globe is fed continuously from the satellite data strea
 ## Pages
 
 - [Home](https://scintille.app/): the live lightning globe.
-- [Methodology](https://scintille.app/methodology/): what the dots are, sources, coverage, brightness, delay, limits and credits.
+- [Methodology](https://scintille.app/methodology/): sources, live pipeline, lakehouse, storm catalog, stack, storage, coverage, limits and credits.
 - [Privacy](https://scintille.app/privacy/): what the site collects (no cookies, anonymous visit counts).
 
 ## Data sources

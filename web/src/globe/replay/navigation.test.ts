@@ -10,7 +10,7 @@ function setup(search: string, initialView?: NavigationHost['initialView']) {
 	let url = new URL(`https://scintille.app/${search}`);
 	let pop = () => {};
 	const writes: { url: URL; push: boolean }[] = [];
-	const clock = new SceneClock(() => 1000);
+	const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
 	const data = {
 		openStorm: vi.fn().mockImplementation(async (_base: string, slug: string, speed: number) => {
 			if (slug === 'unknown' || slug.includes('/')) throw new Error('missing');
