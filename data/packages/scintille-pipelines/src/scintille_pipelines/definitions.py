@@ -17,6 +17,7 @@ from .lineage import BRONZE, COUNTRIES, RAW
 from .maintenance import DAILY_MAINTENANCE, WEEKLY_MAINTENANCE
 from .ops_status import ops_status
 from .resources import resources
+from .silver_retention import silver_retention, silver_retention_schedule
 from .storm_cells import storm_cells
 from .storm_levels import storm_levels
 from .storm_names import storm_names
@@ -50,10 +51,18 @@ defs = Definitions(
         daily_stats_feed,
     ],
     asset_checks=[*HOURLY, *DAILY, *DAILY_MAINTENANCE, *WEEKLY_MAINTENANCE],
-    jobs=[daily_gold, hourly_checks, daily_checks, weekly_maintenance, hourly_storm_catalog],
+    jobs=[
+        daily_gold,
+        hourly_checks,
+        daily_checks,
+        weekly_maintenance,
+        hourly_storm_catalog,
+        silver_retention,
+    ],
     schedules=[
         daily_gold_schedule,
         storm_catalog_schedule,
+        silver_retention_schedule,
         ScheduleDefinition(
             job=hourly_checks,
             cron_schedule="10 * * * *",
