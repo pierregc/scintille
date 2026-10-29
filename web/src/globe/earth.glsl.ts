@@ -1,3 +1,4 @@
+import { volumeFieldGlsl } from './clouds/volume.glsl';
 export const earthVertexShader = /* glsl */ `
 uniform vec3 sunDirection;
 
@@ -32,6 +33,9 @@ uniform float glintCap;
 uniform float terminatorTint;
 uniform sampler2D coverageMap;
 uniform float coverageShade;
+#ifdef CLOUD_SHADOW
+${volumeFieldGlsl}
+#endif
 #ifdef SURFACE
 uniform highp sampler2DArray surfaceTiles;
 uniform sampler2D surfacePages;
@@ -154,6 +158,9 @@ void main() {
 	#endif
 
 	float direct = sqrt(max(s, 0.0)) * smoothstep(-0.02, 0.15, s);
+	#ifdef CLOUD_SHADOW
+	direct *= cloudShadowAt(geo);
+	#endif
 	vec3 color = day * mix(twilightFloor * level, 1.0, direct);
 
 	float edge = exp(-s * s / 0.006);

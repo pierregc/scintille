@@ -1,8 +1,10 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
+import { volumeFieldGlsl } from '../clouds/volume.glsl';
 import { CHANNEL, channelGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { SKELETON } from './skeleton';
 import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
 
@@ -38,6 +40,9 @@ ${channelGlsl}
 ${veilGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
+#endif
+#ifdef VOLUME
+${volumeFieldGlsl}
 #endif
 
 void cull() {
@@ -87,7 +92,13 @@ void main() {
 	vec3 north = cross(normal, east);
 	mat3 frame = mat3(east, north, normal) * kmToWorld;
 	float width = segA.w;
-	vec3 mid = 0.5 * (segA.xyz + segB.xyz);
+	// Channels stay under the observed top where the clouds are in relief (ADR 0028).
+	vec3 lift = vec3(1.0);
+#ifdef VOLUME
+	float top = cloudTopAt(flash.xyz);
+	if (top > 0.0) lift.z = clamp((top - 0.5) / ${f(SKELETON.cloudTopKm)}, 0.3, 1.0);
+#endif
+	vec3 mid = 0.5 * (segA.xyz + segB.xyz) * lift;
 	// The cloud where the line of sight leaves it veils a channel inside it and hides one below it.
 	float opacity = inCloud ? ${f(VEIL.fallback)} : 0.0;
 	float slant = 1.0;
@@ -114,8 +125,8 @@ void main() {
 		cull();
 		return;
 	}
-	vec3 a = segA.xyz;
-	vec3 b = mix(a, segB.xyz, grown);
+	vec3 a = segA.xyz * lift;
+	vec3 b = mix(a, segB.xyz * lift, grown);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);
 	vec4 cb = projectionMatrix * viewMatrix * vec4(base + frame * b, 1.0);
 	vec2 sa = ca.xy / ca.w * viewport;

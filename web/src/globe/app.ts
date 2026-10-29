@@ -6,6 +6,7 @@ import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
 import { ArchiveCloudFeed } from './clouds/archive';
 import { createCloudDetail } from './clouds/detail';
+import { createCloudVolume, type CloudVolume } from './clouds/volume';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { CloudPlayback } from './clouds/playback';
@@ -30,7 +31,7 @@ import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
-import { latLonToVector } from './sun';
+import { latLonToVector, sunDirection } from './sun';
 import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
@@ -40,6 +41,7 @@ import { frameStorm } from './replay/framing';
 import { createThunder, type Thunder } from './thunder';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
+import { CLOUD_ARCHIVE_RULES } from '../contract/cloud-archive';
 
 function deviceHints(context: WebGL2RenderingContext) {
 	const debug = context.getExtension('WEBGL_debug_renderer_info');
@@ -154,6 +156,31 @@ export function createGlobeApp(
 	});
 	const cloudInverse = new Matrix4();
 	earth.mesh.add(clouds.mesh);
+	// Clouds in relief near the ground (ADR 0028); phones keep the flat layer until a real phone is measured.
+	const compareClouds = import.meta.env.DEV || BUILD.pr !== null;
+	const cloudMode = compareClouds ? new URLSearchParams(location.search).get('clouds') : null;
+	const volumeScale = renderParams || phone || cloudMode === 'flat' ? 0 : preset.cloudVolume;
+	const heightDetail = volumeScale > 0 && cloudDetail
+		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 16 })
+		: undefined;
+	const volume: CloudVolume | undefined = heightDetail
+		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, detail: cloudMode !== 'columns' })
+		: undefined;
+	if (volume) {
+		scene.add(volume.mesh);
+		Object.assign(clouds.opacity.uniforms, volume.uniforms);
+		clouds.opacity.defines.VOLUME = '';
+		Object.assign(earth.material.uniforms, volume.uniforms);
+		earth.material.defines.CLOUD_SHADOW = '';
+		earth.material.needsUpdate = true;
+	}
+	const sunVector = new Vector3();
+	const cycleClouds = (event: KeyboardEvent) => {
+		if (!volume || !compareClouds || event.key !== 'C' || !event.shiftKey) return;
+		volume.detail = !volume.detail;
+		console.info('clouds:', volume.detail ? 'volume' : 'columns');
+	};
+	window.addEventListener('keydown', cycleClouds);
 	const cloudFeed = new CloudFeed({
 		baseUrl: liveBaseUrl(),
 		tier: preset.clouds,
@@ -311,6 +338,15 @@ export function createGlobeApp(
 				frames: clouds.detailFrames(),
 				now: performance.now(),
 			});
+			heightDetail?.update({
+				camera,
+				inverseWorld: cloudInverse,
+				shellRadius: cloudShellRadius(RADIUS),
+				kmPerUnit: EARTH_RADIUS_KM / RADIUS,
+				heightPx: canvas.clientHeight || window.innerHeight,
+				frames: clouds.heightFrames(),
+				now: performance.now(),
+			});
 		}
 		stars.setTime(now);
 		data.update(now);
@@ -323,6 +359,21 @@ export function createGlobeApp(
 		thunder.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
+		if (volume && PRESETS[tier].cloudVolume > 0) {
+			volume.render(renderer, {
+				camera,
+				earth: earth.mesh,
+				now,
+				sun: sunVector.set(...sunDirection(new Date(now))),
+				width: canvas.clientWidth || window.innerWidth,
+				height: canvas.clientHeight || window.innerHeight,
+				light: PRESETS[tier].cloudLight ? lightning.light : null,
+			});
+			clouds.setFlatShown(1 - volume.fade);
+		} else if (volume) {
+			volume.mesh.visible = false;
+			clouds.setFlatShown(1);
+		}
 		if (post) {
 			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength));
 			post.render();
@@ -390,6 +441,9 @@ export function createGlobeApp(
 		surface,
 		dispose() {
 			window.removeEventListener('keydown', cycleSurface);
+			window.removeEventListener('keydown', cycleClouds);
+			volume?.dispose();
+			heightDetail?.dispose();
 			surface?.dispose();
 			renderer.setAnimationLoop(null);
 			window.removeEventListener('pagehide', rememberFrame, { capture: true });

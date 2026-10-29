@@ -29,6 +29,16 @@ export interface CloudDetailRef {
 	/** Tiles of the other levels in index order, when the pack keeps only some of them. */
 	coarse?: string | null;
 	index_bytes: number;
+	/** Cloud-top height tiles in the same pack (ADR 0028). */
+	height?: CloudHeightRef | null;
+}
+
+export interface CloudHeightRef {
+	levels: number[];
+	max_km: number;
+	index_offset: number;
+	index_bytes: number;
+	reference?: string;
 }
 
 export interface DetailSource {
@@ -38,10 +48,15 @@ export interface DetailSource {
 	border: number;
 	levels: readonly number[];
 	maxLatitude: number;
-	/** Finest level tiles present, one bit each, row-major from the north-west. */
-	fine: Uint8Array;
+	/** Finest level tiles present, one bit each, row-major from the north-west; null when all within ±maxLatitude. */
+	fine: Uint8Array | null;
 	/** Other levels' tiles present, one bit each in index order; null when all within ±maxLatitude. */
 	coarse: Uint8Array | null;
+	/** Where the index of `levels` starts in the pack, and its length in bytes. */
+	indexOffset: number;
+	indexBytes: number;
+	/** Cloud-top heights in km above sea level, as tiles of the same pack (ADR 0028). */
+	heights?: DetailSource | null;
 }
 
 export interface TileKey {
@@ -65,7 +80,34 @@ export function detailSource(ref: unknown, manifestUrl: string): DetailSource | 
 	const coarse = r.coarse == null ? null : bits(r.coarse, indexSlots(levels.slice(0, -1)));
 	if (!fine || coarse === undefined) return null;
 	const url = new URL(r.path, manifestUrl).href;
-	return { url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine, coarse };
+	const indexBytes = indexSlots(levels) * 8;
+	const source: DetailSource = {
+		url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine, coarse, indexOffset: 0, indexBytes,
+	};
+	source.heights = heightSource(r.height, source);
+	return source;
+}
+
+/** The height tiles of a pack as their own source; null when the pack has none or they do not match the contract. */
+export function heightSource(ref: unknown, opacity: DetailSource): DetailSource | null {
+	if (typeof ref !== 'object' || ref === null) return null;
+	const h = ref as Partial<CloudHeightRef>;
+	const levels = RULES.detail_height_levels;
+	if (!Array.isArray(h.levels) || h.levels.join() !== levels.join() || h.max_km !== RULES.detail_height_max_km ||
+		h.index_offset !== opacity.indexOffset + opacity.indexBytes || h.index_bytes !== indexSlots(levels) * 8) return null;
+	const finest = levels[levels.length - 1];
+	let fine: Uint8Array | null = null;
+	let coarse: Uint8Array | null = null;
+	if (opacity.coarse) {
+		// A storm pack keeps heights under the same finest height level tiles as its opacity.
+		fine = new Uint8Array(Math.ceil((columns(finest) * rows(finest)) / 8));
+		const before = indexSlots(opacity.levels.filter((z) => z < finest));
+		for (let i = 0; i < columns(finest) * rows(finest); i++) {
+			if (bitSet(opacity.coarse, before + i)) fine[i >> 3] |= 1 << (i & 7);
+		}
+		coarse = new Uint8Array(Math.ceil(indexSlots(levels.slice(0, -1)) / 8));
+	}
+	return { ...opacity, levels, fine, coarse, indexOffset: h.index_offset, indexBytes: h.index_bytes, heights: null };
 }
 
 /** A base64 bitmap of `count` bits; undefined when malformed. */
@@ -95,9 +137,9 @@ export const texelDegrees = (z: number, tileSize: number) => 180 / (2 ** z * til
 export function hasTile(source: DetailSource, { z, x, y }: TileKey): boolean {
 	if (x < 0 || x >= columns(z) || y < 0 || y >= rows(z)) return false;
 	const finest = source.levels[source.levels.length - 1];
-	if (z === finest) return bitSet(source.fine, y * columns(z) + x);
 	if (!source.levels.includes(z)) return false;
-	if (source.coarse) return bitSet(source.coarse, indexSlot(source.levels, { z, x, y }));
+	if (z === finest && source.fine) return bitSet(source.fine, y * columns(z) + x);
+	if (z !== finest && source.coarse) return bitSet(source.coarse, indexSlot(source.levels, { z, x, y }));
 	const north = 90 - (y * 180) / 2 ** z;
 	const south = north - 180 / 2 ** z;
 	return south < source.maxLatitude && north > -source.maxLatitude;
@@ -225,6 +267,10 @@ export interface DetailView {
 }
 
 export interface CloudDetailOptions {
+	/** Levels of the tiles, as in the sources it is given. */
+	levels?: readonly number[];
+	/** Prefix of the uniform names, so several caches can share a material. */
+	prefix?: string;
 	slots?: number;
 	maxLoads?: number;
 	fadeMs?: number;
@@ -266,6 +312,8 @@ const PAGE_TEXELS = 2;
 export function createCloudDetail(
 	renderer: Pick<WebGLRenderer, 'copyTextureToTexture' | 'initTexture'>,
 	{
+		levels = RULES.detail_levels,
+		prefix = 'detail',
 		slots: slotCount = 48,
 		maxLoads = 6,
 		fadeMs = 400,
@@ -274,7 +322,6 @@ export function createCloudDetail(
 	}: CloudDetailOptions = {},
 ): CloudDetail {
 	const size = RULES.detail_tile_size + 2 * RULES.detail_border;
-	const levels = RULES.detail_levels;
 	const finest = levels[levels.length - 1];
 	const tiles = new DataArrayTexture(new Uint8Array(size * size * slotCount), size, size, slotCount);
 	tiles.format = RedFormat;
@@ -307,13 +354,14 @@ export function createCloudDetail(
 	let frames: readonly [DetailSource | null, DetailSource | null] = [null, null];
 	let disposed = false;
 
-	const uniforms = {
-		detailTiles: { value: tiles },
-		detailPagesA: { value: pages[0] },
-		detailPagesB: { value: pages[1] },
-		detailGrid: { value: new Vector2(RULES.detail_tile_size, RULES.detail_border) },
-		detailCells: { value: new Vector2(columns(finest), rows(finest)) },
-		detailOn: { value: 0 },
+	const on = { value: 0 };
+	const uniforms: Record<string, { value: unknown }> = {
+		[`${prefix}Tiles`]: { value: tiles },
+		[`${prefix}PagesA`]: { value: pages[0] },
+		[`${prefix}PagesB`]: { value: pages[1] },
+		[`${prefix}Grid`]: { value: new Vector2(RULES.detail_tile_size, RULES.detail_border) },
+		[`${prefix}Cells`]: { value: new Vector2(columns(finest), rows(finest)) },
+		[`${prefix}On`]: on,
 	};
 
 	const tileId = (source: DetailSource, key: TileKey) => `${source.url}|${keyId(key)}`;
@@ -332,8 +380,7 @@ export function createCloudDetail(
 	const indexOf = (source: DetailSource): Promise<Uint32Array> => {
 		let index = indexes.get(source.url);
 		if (!index) {
-			const bytes = indexSlots(levels) * 8;
-			index = readRange(source.url, 0, bytes, new AbortController().signal)
+			index = readRange(source.url, source.indexOffset, source.indexBytes, new AbortController().signal)
 				.then((data) => new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4));
 			index.catch(() => indexes.delete(source.url));
 			indexes.set(source.url, index);
@@ -474,7 +521,7 @@ export function createCloudDetail(
 				pages[frame].needsUpdate = true;
 			}
 			shown = ids;
-			uniforms.detailOn.value = bySlot.size > 0 && (view.frames[0] || view.frames[1]) ? 1 : 0;
+			on.value = bySlot.size > 0 && (view.frames[0] || view.frames[1]) ? 1 : 0;
 		},
 		async idle() {
 			while (pending.length > 0) await Promise.allSettled(pending);
