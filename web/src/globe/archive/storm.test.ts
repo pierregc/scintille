@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
-import { REPLAY_LIMITS, stormSource } from './storm';
+import { REPLAY_LIMITS, REPLAY_RETENTION_DAYS, ReplayExpiredError, stormSource } from './storm';
 
 async function fixtureFetch() {
 	const requests: string[] = [];
@@ -26,6 +26,21 @@ describe('published storm extracts', () => {
 		expect(source.start).toBe(Date.parse(fixture.storm.t_start));
 		expect(chunks[0].count).toBe(3);
 		expect(requests[1]).toBe(`https://feed.test/data/${fixture.replay.chunks[0].path}`);
+	});
+
+	it('reports an expired replay only when an old storm fails to load', async () => {
+		const missing: typeof fetch = async (input) => new URL(String(input)).pathname.endsWith('orlando.json')
+			? Response.json(fixture) : new Response('missing', { status: 404 });
+		const signal = new AbortController().signal;
+		const start = Date.parse(fixture.storm.t_start);
+		const day = 86_400_000;
+		const old = await stormSource('https://feed.test/', fixture.storm.slug, signal, missing, start + (REPLAY_RETENTION_DAYS + 1) * day);
+		await expect(old.source.load(signal)).rejects.toBeInstanceOf(ReplayExpiredError);
+		const recent = await stormSource('https://feed.test/', fixture.storm.slug, signal, missing, start + day);
+		await expect(recent.source.load(signal)).rejects.not.toBeInstanceOf(ReplayExpiredError);
+		const { fetchFn } = await fixtureFetch();
+		const kept = await stormSource('https://feed.test/data', fixture.storm.slug, signal, fetchFn, start + (REPLAY_RETENTION_DAYS + 1) * day);
+		expect((await kept.source.load(signal))[0].count).toBe(3);
 	});
 
 	it('rejects unsupported metadata, wrong slugs, invalid bounds and malformed references', async () => {

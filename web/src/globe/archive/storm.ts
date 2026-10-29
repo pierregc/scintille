@@ -5,6 +5,12 @@ import { boundedBody } from '../clouds/response';
 import { stormCap } from '../replay/framing';
 
 export const REPLAY_LIMITS = { metadataBytes: 256 * 1024, flashes: 1_000_000, storedBytes: 64 * 1024 * 1024 };
+/** The `storms/chunks/` lifecycle rule; chunks are written after the storm starts, so never deleted before this. */
+export const REPLAY_RETENTION_DAYS = 60;
+
+export class ReplayExpiredError extends Error {
+	constructor() { super('storm replay expired'); }
+}
 
 /** Fetches metadata once; its replay paths resolve against the public data root. */
 export async function stormSource(
@@ -12,6 +18,7 @@ export async function stormSource(
 	slug: string,
 	signal: AbortSignal,
 	fetchFn: typeof fetch = fetch,
+	now?: number,
 ): Promise<{ detail: StormDetail; source: ArchiveSource }> {
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('invalid storm slug');
 	const root = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
@@ -48,7 +55,13 @@ export async function stormSource(
 			start,
 			end,
 			async load(abort) {
-				const chunks = await loadArchiveChunks(root, detail.replay.chunks, abort, fetchFn);
+				let chunks;
+				try {
+					chunks = await loadArchiveChunks(root, detail.replay.chunks, abort, fetchFn);
+				} catch (error) {
+					if (!abort.aborted && now !== undefined && now - start > REPLAY_RETENTION_DAYS * 86_400_000) throw new ReplayExpiredError();
+					throw error;
+				}
 				if (chunks.reduce((count, chunk) => count + chunk.count, 0) !== detail.replay.flash_count) {
 					throw new Error('storm replay count mismatch');
 				}
