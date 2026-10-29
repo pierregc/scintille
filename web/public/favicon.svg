@@ -1,24 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="122 115 1010 1010">
   <title>Scintille</title>
-  <defs>
-    <radialGradient id="halo">
-      <stop stop-color="#E8F4FF" stop-opacity=".9"/>
-      <stop offset=".22" stop-color="#7B8CFF" stop-opacity=".65"/>
-      <stop offset=".55" stop-color="#536AFF" stop-opacity=".22"/>
-      <stop offset="1" stop-color="#536AFF" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="coreGlow">
-      <stop stop-color="#FFFFFF"/>
-      <stop offset=".3" stop-color="#E8F4FF" stop-opacity=".9"/>
-      <stop offset="1" stop-color="#8CB9FF" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <path fill="#0A0E1A" d="M0 0h512v512H0z"/>
-  <path fill="#111C30" d="M0 328Q256 220 512 328V512H0Z"/>
-  <path fill="none" stroke="#398CFF" stroke-width="7" d="M-4 330Q256 219 516 330"/>
-  <circle cx="256" cy="274" r="44" fill="url(#halo)"/>
-  <ellipse cx="256" cy="274" rx="6" ry="30" fill="url(#coreGlow)"/>
-  <ellipse cx="256" cy="274" rx="23" ry="6" fill="url(#coreGlow)"/>
-  <path fill="#E8F4FF" d="M256 264Q258 272 265 274Q258 276 256 284Q254 276 247 274Q254 272 256 264Z"/>
-  <circle cx="256" cy="274" r="12" fill="#FFFFFF"/>
+  <path d="M192 1062Q627 806 1062 1062" fill="none" stroke="#03070F" stroke-width="118" stroke-linecap="round"/>
+  <path d="M192 1062Q627 806 1062 1062" fill="none" stroke="#6099FC" stroke-width="70" stroke-linecap="round"/>
+  <path d="M683 190L878 146L665 466L872 466L400 885L570 590L400 590Z" fill="#FDFCFC" stroke="#03070F" stroke-width="48" stroke-linejoin="round"/>
 </svg>
