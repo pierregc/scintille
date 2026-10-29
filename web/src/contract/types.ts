@@ -187,6 +187,32 @@ export interface CatalogUsage {
   free_tier: number;
 }
 
+/** Size of the Iceberg tables, from the summary of each table's current snapshot, measured about every hour. Files kept only for older snapshots, metadata and other objects in the bucket are not counted. */
+export interface LakeSize {
+  /** When the snapshots were read; null before the first measurement. */
+  measured_at: UtcTimestamp | null;
+  /** Tables in the bronze, silver and gold namespaces; null before the first measurement. */
+  tables: number | null;
+  /** Data files of the current snapshots, bytes; null before the first measurement. */
+  bytes: number | null;
+  /** Data files of the current snapshots; null before the first measurement. */
+  data_files: number | null;
+  /** Rows of the current snapshots; null before the first measurement. */
+  records: number | null;
+}
+
+/** Storms in the catalog after its latest hourly publication. */
+export interface StormCounts {
+  /** When the storm catalog was last published; null before the first publication. */
+  measured_at: UtcTimestamp | null;
+  /** Storms tracked and classified in the lake, every intensity level; null before the first publication. */
+  detected: number | null;
+  /** Storms with a public page: intensity level 3 and above; null before the first publication. */
+  published: number | null;
+  /** Storms featured in the highlights; null before the first publication. */
+  highlighted: number | null;
+}
+
 /** live/metrics.json: operational metrics and freshness per layer, written every minute. */
 export interface OpsMetrics {
   schema_version: SchemaVersion;
@@ -197,6 +223,8 @@ export interface OpsMetrics {
   sources: SourceMetrics[];
   quality: QualityStatus;
   catalog: CatalogUsage;
+  lake: LakeSize;
+  storms: StormCounts;
 }
 
 export const COVERAGE_KIND_VALUES = ["footprint", "no-coverage"] as const;

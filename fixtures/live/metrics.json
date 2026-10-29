@@ -232,5 +232,18 @@
     "month": "2026-07",
     "operations": 21480,
     "free_tier": 1000000
+  },
+  "lake": {
+    "measured_at": "2026-07-15T18:31:12Z",
+    "tables": 11,
+    "bytes": 2874316800,
+    "data_files": 1482,
+    "records": 431277904
+  },
+  "storms": {
+    "measured_at": "2026-07-15T18:24:37Z",
+    "detected": 4812,
+    "published": 1164,
+    "highlighted": 9
   }
 }

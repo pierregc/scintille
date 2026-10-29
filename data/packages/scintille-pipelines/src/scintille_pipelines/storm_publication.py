@@ -254,6 +254,7 @@ def storm_catalog(
     metrics = publish_catalog(
         store, details, objects, visible, now, purge_tags, regions, highlights=pick
     )
+    metrics["detected"] = len(classified)
     metrics["invalid_exports"] = len(rejected)
     metrics["below_level"] = len(classified) - len(summary)
     metrics["bootstrap_remaining"] = sum(

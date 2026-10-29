@@ -585,6 +585,33 @@ Iceberg catalog operations this month against the free tier.
 | `operations` | integer | yes | minimum `0` | Catalog operations made by lake-writer this month. |
 | `free_tier` | integer | yes | minimum `0` | Operations included each month by the catalog provider. |
 
+### LakeSize
+
+Defined in `data/contract/metrics.schema.json`.
+
+Size of the Iceberg tables, from the summary of each table's current snapshot, measured about every hour. Files kept only for older snapshots, metadata and other objects in the bucket are not counted.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the snapshots were read; null before the first measurement. |
+| `tables` | integer or null | yes |  | Tables in the bronze, silver and gold namespaces; null before the first measurement. |
+| `bytes` | integer or null | yes |  | Data files of the current snapshots, bytes; null before the first measurement. |
+| `data_files` | integer or null | yes |  | Data files of the current snapshots; null before the first measurement. |
+| `records` | integer or null | yes |  | Rows of the current snapshots; null before the first measurement. |
+
+### StormCounts
+
+Defined in `data/contract/metrics.schema.json`.
+
+Storms in the catalog after its latest hourly publication.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the storm catalog was last published; null before the first publication. |
+| `detected` | integer or null | yes |  | Storms tracked and classified in the lake, every intensity level; null before the first publication. |
+| `published` | integer or null | yes |  | Storms with a public page: intensity level 3 and above; null before the first publication. |
+| `highlighted` | integer or null | yes |  | Storms featured in the highlights; null before the first publication. |
+
 ### OpsMetrics
 
 Defined in `data/contract/metrics.schema.json`.
@@ -599,6 +626,8 @@ live/metrics.json: operational metrics and freshness per layer, written every mi
 | `sources` | array of [SourceMetrics](#sourcemetrics) | yes |  | One entry per source, in Source order. |
 | `quality` | [QualityStatus](#qualitystatus) | yes |  |  |
 | `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
+| `lake` | [LakeSize](#lakesize) | yes |  |  |
+| `storms` | [StormCounts](#stormcounts) | yes |  |  |
 
 ### CoverageKind
 

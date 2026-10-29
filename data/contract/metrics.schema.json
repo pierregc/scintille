@@ -11,7 +11,9 @@
     "freshness",
     "sources",
     "quality",
-    "catalog"
+    "catalog",
+    "lake",
+    "storms"
   ],
   "properties": {
     "schema_version": {
@@ -36,6 +38,12 @@
     },
     "catalog": {
       "$ref": "#/$defs/CatalogUsage"
+    },
+    "lake": {
+      "$ref": "#/$defs/LakeSize"
+    },
+    "storms": {
+      "$ref": "#/$defs/StormCounts"
     }
   },
   "$defs": {
@@ -245,6 +253,139 @@
           "description": "Operations included each month by the catalog provider.",
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "LakeSize": {
+      "description": "Size of the Iceberg tables, from the summary of each table's current snapshot, measured about every hour. Files kept only for older snapshots, metadata and other objects in the bucket are not counted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measured_at",
+        "tables",
+        "bytes",
+        "data_files",
+        "records"
+      ],
+      "properties": {
+        "measured_at": {
+          "description": "When the snapshots were read; null before the first measurement.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tables": {
+          "description": "Tables in the bronze, silver and gold namespaces; null before the first measurement.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "description": "Data files of the current snapshots, bytes; null before the first measurement.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_files": {
+          "description": "Data files of the current snapshots; null before the first measurement.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "records": {
+          "description": "Rows of the current snapshots; null before the first measurement.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "StormCounts": {
+      "description": "Storms in the catalog after its latest hourly publication.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measured_at",
+        "detected",
+        "published",
+        "highlighted"
+      ],
+      "properties": {
+        "measured_at": {
+          "description": "When the storm catalog was last published; null before the first publication.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detected": {
+          "description": "Storms tracked and classified in the lake, every intensity level; null before the first publication.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "published": {
+          "description": "Storms with a public page: intensity level 3 and above; null before the first publication.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlighted": {
+          "description": "Storms featured in the highlights; null before the first publication.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     }
