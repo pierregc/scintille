@@ -167,36 +167,65 @@ At 600× and 3600×, the 500 flash budget keeps the frame cost at 10 to 15 ms an
 R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but near white pixels reach
 12 % (600×) and 22 % (3600×) at `iss`: those speeds show ten minutes or an hour per second.
 
-## Surface detail loading
+## Surface detail
 
-Since #252 the pyramid of [ADR 0022](adr/0022-surface-imagery.md) loads through
-[`web/src/globe/detail/`](../web/src/globe/detail/), in development and PR previews with
-`?surface=tiles`: tiles wanted per layer by the 2 px rule at their nearest visible point, requested
-after 300 ms and never while the camera climbs, most blurred area first, 6 at once and 8 per second
-after a burst of 40; a GPU byte budget (96 MB, 40 MB on phones, none at `low`) evicts the least
-recently drawn; 404 shows the parent, 429 and errors back off.
+The pyramid of [ADR 0022](adr/0022-surface-imagery.md) loads through
+[`web/src/globe/detail/`](../web/src/globe/detail/) (#252): tiles wanted per layer by the 2 px rule at
+their nearest visible point, requested after 300 ms and never while the camera climbs, most blurred
+area first, 6 at once and 8 per second after a burst of 40; a GPU byte budget (96 MB, 40 MB on
+phones, none at `low`) evicts the least recently drawn; 404 shows the parent, 429 and errors back off.
 
-Measured 2026-10-29 before the composite clouds (#131, about 47 MB less GPU memory), on a local
-build against production data, five storms, clouds on, afterglow 0, desktop, with
-`bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`):
+The Earth shader draws it in one pass (#253):
+
+- **Tile array.** Loaded tiles live in one sRGB texture array with mipmaps, as many layers as the
+  budget holds (88 on desktop, 36 on phones), allocated when the first tile is needed. Each tile goes
+  to the GPU through a scratch texture whose mipmaps the GPU builds, then every level is copied into
+  its layer.
+- **Page table.** One cell per level 5 tile (192 × 96), for day and night: the layer and level shown
+  there and the one it fades from; level 0 is the global texture. The fragment finds its cell from
+  its longitude and latitude and samples the tile with the derivatives of those coordinates: day
+  bilinear with the water mask in alpha, night with the cubic B-spline.
+- **Fades.** Every change of source in a cell, finer or coarser, fades over 400 ms, including back
+  to the global texture when the camera climbs.
+- **Brightness.** Tiles are scaled to the linear mean of the 4k textures over each level, measured on
+  every tile: 0.98 by day, and by night (red, green, blue) 0.98, 0.99, 1 at level 2, 0.95, 0.97, 1 at
+  level 3 and 0.91, 0.95, 0.99 at level 4. The pyramid was downsampled from 15″ in sRGB, so its finer
+  night levels held up to 9 % more red light than the globe.
+- **Seams.** Coordinates come from the point itself rather than the mesh UVs, which bend near the
+  poles, and the longitude derivative wraps at the antimeridian, so no line of coarse texels runs
+  along it. Blue Marble itself changes at 180° at high latitudes (also in the 4k texture).
+- **Fallback.** `low`, offline renders and `?surface=base` (development and PR previews) keep the
+  global textures only.
+
+Measured 2026-10-29 on a local build against production data, five storms, clouds on, afterglow 0,
+with `bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`), tiles and base run back to
+back per storm:
 
 | | Tiles | Base |
 |---|---|---|
-| First load, Earth | 1.26 to 2.27 MB | 1.02 MB |
-| Dive `globe` to `iss` | 0.04 to 0.27 MB | 0 |
-| Pan at `iss`, `iss` to `window` | 0 to 0.05 MB, 0.01 to 0.95 MB | 0 |
+| First load, Earth | 1.33 to 2.26 MB | 1.02 MB |
+| Framing and dive to `iss` | 0 to 0.24 MB | 0 |
+| Pan at `iss`, `iss` to `window` | 0 to 0.06 MB, 0.01 to 1.0 MB | 0 |
 | Back to `globe` | 0 | 0 |
-| GPU textures and buffers | up to 374 MB (87 tiles) | 282 MB |
-| Tiles loaded but never drawn | 0 or 1 per storm | |
-| Frame cost p95, back to back, not interleaved | 8.2 to 14.4 ms, median 11.7 | 5.3 to 12 ms, median 9.7 |
-| Selection and loading, CPU per frame | 0.2 to 0.3 ms | |
+| GPU textures and buffers | 332 MB desktop, 244 MB mobile, once a tile was needed | 235 MB, 203 MB |
+| Draw calls | 28 at every pose | 28 |
+| Tiles loaded but never drawn | 0 | |
+| Frame cost p95, desktop, same page, modes alternated 6 times | +0.1 to +0.4 ms (R2 `iss`, R1 and R5 `window`) | |
+| Frame cost p95, mobile emulation, median of all poses | 5.2 ms, tier `medium` | 5.1 ms |
 | 3 s flights | no interval over 50 ms | same |
 
-Phones: the globe now takes about 203 of their 256 MB, so they keep up to 36 tiles; dives cost at
-most 0.62 MB. The added frame cost is the prototype's patches shading the ground twice; #253 draws
-the detail in one pass. `spike/surface/stress.mjs` (rapid flights,
-repeated dives, missing tiles, 429, offline) kept the globe whole, the cache at its budget and the
-JS heap flat (37.7 to 37.9 MB), with no page error.
+Separate page runs swung by 3 ms between repetitions (median p95 15.1 ms with tiles, 13.3 ms base,
+other GPU jobs on the Mac), so the cost is measured in one page with the modes alternated. The
+prototype of #252 drew patches over the globe and cost about 2 ms more. `spike/surface/stress.mjs`
+(rapid flights, repeated dives, missing tiles, 429, offline) kept the globe whole, the tile array
+full but never over it (88 and 36 layers), the JS heap flat (37.3 MB desktop, 36.3 MB mobile) and
+no page error.
+
+Captures in [`immersive/surface-detail/`](immersive/surface-detail/): `R1-poses.jpg` and
+`R5-poses.jpg` (`globe`, `regional`, `iss`, `window`, base above and tiles below, clouds on),
+`R5-horizon.jpg` (horizon view, clouds off) and `seams.jpg` (100 % centre crops, clouds off: the
+corner of four tiles of every level at 45° N 0° by day and by night, the antimeridian at 65.6° N,
+the south pole).
 
 ## Observed, procedural, assumed
 

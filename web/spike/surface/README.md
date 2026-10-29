@@ -1,12 +1,14 @@
 # Surface detail comparison (#125)
 
-Two prototypes on the globe, switched with `?surface=base|tiles|vectors|both` or Shift+S, in
-development and PR previews only:
+The globe draws the raster pyramid by default since #253. Development and PR previews switch with
+`?surface=tiles|base|vectors|both` or Shift+S, to compare against:
 
 - `tiles`: raster pyramid from the 500 m Blue Marble and Black Marble releases, loaded by visible
-  level (`src/globe/detail/`, #252); `?texel=<css px>` sets the refinement threshold (default 2).
+  level (`src/globe/detail/`, #252) and drawn by the Earth shader (#253); `?texel=<css px>` sets the
+  refinement threshold (default 2).
+- `base`: the global textures only.
 - `vectors`: Natural Earth 10m coastlines, borders, lakes and main cities as thin lines over the
-  current textures (`src/globe/detail/vectors.ts`).
+  current textures (`src/globe/detail/vectors.ts`), not adopted (ADR 0022).
 
 Run from `web/`:
 

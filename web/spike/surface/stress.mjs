@@ -77,13 +77,13 @@ const settle = async (ms = 1500, timeoutMs = 60_000) => {
 	}
 	return stats();
 };
-/** The globe is whole when its base mesh is drawn and the frame is not empty at the centre. */
+/** The globe is whole when the Earth is drawn and the frame is not empty at the centre. */
 const whole = async (name) => {
 	const png = await page.screenshot({ path: join(values.out, `${values.profile}-${name}.png`) });
 	const { data } = await sharp(png).resize({ width: 320 }).extract({ left: 80, top: 30, width: 160, height: 60 }).greyscale().raw().toBuffer({ resolveWithObject: true });
 	const mean = data.reduce((a, b) => a + b, 0) / data.length;
-	const visible = await page.evaluate(() => window.__app.surface.tiles.group.parent?.visible ?? false);
-	return { visible, mean: Math.round(mean) };
+	const detail = await page.evaluate(() => window.__app.surface.tiles.uniforms.surfaceOn.value > 0);
+	return { detail, mean: Math.round(mean) };
 };
 
 await page.goto(`${values.url}/?storm=${values.storm}&time=${values.time}&paused=1&surface=tiles`);
@@ -92,7 +92,7 @@ const report = { url: values.url, profile: values.profile, steps: {} };
 const step = async (name, extra = {}) => {
 	const s = await stats();
 	report.steps[name] = { ...extra, whole: await whole(name), heap: await heap(), requests: requests(), stats: s };
-	process.stdout.write(`${name}: ${JSON.stringify({ ...extra, textures: s.textures, bytes: s.bytes, deepest: s.deepest, requested: s.requested, aborted: s.aborted, unused: s.unused, failed: s.failed, missing: s.missing, meshes: s.meshes })}\n`);
+	process.stdout.write(`${name}: ${JSON.stringify({ ...extra, textures: s.textures, bytes: s.bytes, deepest: s.deepest, requested: s.requested, aborted: s.aborted, unused: s.unused, failed: s.failed, missing: s.missing, layers: s.layers, uploaded: s.uploaded })}\n`);
 };
 
 await fly(PLACES[0], 400, 3000);

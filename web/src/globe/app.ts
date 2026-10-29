@@ -114,8 +114,12 @@ export function createGlobeApp(
 	if (import.meta.env.DEV) applyDevReplay(clock, location.search);
 	const earth = createEarth(renderer, RADIUS, preset.textures);
 	scene.add(earth.mesh);
-	const surface = import.meta.env.DEV || BUILD.pr !== null
+	// Development and PR previews can switch to the base textures or the #125 prototypes to compare.
+	const compareSurface = import.meta.env.DEV || BUILD.pr !== null;
+	const surfaceBytes = renderParams ? 0 : surfaceBudgetMb(tier, phone) * 1e6;
+	const surface = surfaceBytes > 0
 		? new SurfaceDetail({
+				renderer,
 				earth: earth.material,
 				root: texturesRoot(),
 				surfaceRoot: surfaceRoot(),
@@ -123,16 +127,13 @@ export function createGlobeApp(
 				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
 				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
 				pixelRatio: () => renderer.getPixelRatio(),
-				maxBytes: surfaceBudgetMb(tier, phone) * 1e6,
-				...surfaceFromSearch(location.search),
+				maxBytes: surfaceBytes,
+				...(compareSurface ? surfaceFromSearch(location.search) : { mode: 'tiles', texelPixels: 2 }),
 			})
 		: undefined;
-	if (surface) {
-		earth.mesh.add(surface.tiles.group);
-		earth.mesh.add(surface.vectors.group);
-	}
+	if (surface) earth.mesh.add(surface.vectors.group);
 	const cycleSurface = (event: KeyboardEvent) => {
-		if (!surface || event.key !== 'S' || !event.shiftKey) return;
+		if (!surface || !compareSurface || event.key !== 'S' || !event.shiftKey) return;
 		surface.mode = SURFACE_MODES[(SURFACE_MODES.indexOf(surface.mode) + 1) % SURFACE_MODES.length];
 		console.info('surface:', surface.mode);
 	};
