@@ -1,4 +1,4 @@
-import { Matrix4, PerspectiveCamera, Scene, Vector2, WebGLRenderer } from 'three';
+import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
@@ -11,11 +11,13 @@ import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { CloudPlayback } from './clouds/playback';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { createCoverage } from './coverage';
-import { attachCoverageLabel } from './coverage/label';
+import { attachCoverageLabel, surfacePoint } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
 import { createEarth, surfaceRoot, texturesRoot } from './earth';
+import { StormFocus } from './focus';
+import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomStrength } from './lightning/zoom';
@@ -28,6 +30,7 @@ import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
+import { latLonToVector } from './sun';
 import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
 import { StormReplay } from './replay';
 import { StormTrack } from './replay/track';
@@ -54,6 +57,8 @@ export interface GlobeApp {
 	readonly clock: SceneClock;
 	readonly data: SceneData;
 	readonly replay: StormReplay;
+	/** The storm the scene is about, in replay or picked on the live globe, and its following. */
+	readonly focus: StormFocus;
 	shareUrl(): string;
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
@@ -191,6 +196,24 @@ export function createGlobeApp(
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
+	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+	const activeFeed = renderParams ? null : new ActiveFeed({
+		baseUrl: liveBaseUrl(),
+		now: () => clock.wallTime(),
+		onError: (error) => console.warn('active storms:', error),
+	});
+	const playbackDelays = () => (clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY);
+	const focus = new StormFocus({
+		clock,
+		replay,
+		feed: activeFeed,
+		controls,
+		track,
+		view: () => ({ fov: camera.fov, aspect: camera.aspect }),
+		observedTime: (sources) => observedTime(clock.time(), playbackDelays(), sources),
+		reducedMotion: () => reducedMotion.matches,
+	});
+	scene.add(focus.footprint.group);
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
@@ -248,8 +271,6 @@ export function createGlobeApp(
 	watchPixelRatio();
 	window.addEventListener('resize', resize);
 
-	const playbackDelays = () => (clock.mode === 'live' ? LIVE_DELAYS : NO_DELAY);
-
 	const viewport = new Vector2();
 	const fitClipPlanes = () => {
 		const { near, far } = clipPlanes(camera.position.length(), RADIUS, SHELLS);
@@ -261,10 +282,10 @@ export function createGlobeApp(
 
 	const draw = (time: number) => {
 		if (!renderParams) controls.update(time);
+		renderer.getSize(focus.footprint.viewport);
+		focus.update(performance.now());
 		fitClipPlanes();
 		const now = clock.time();
-		track.setStorm(clock.mode === 'replay' ? replay.state.selected : null);
-		track.setTime(now);
 		earth.setTime(now);
 		camera.updateMatrixWorld();
 		surface?.update(camera, renderParams?.height ?? window.innerHeight);
@@ -288,7 +309,7 @@ export function createGlobeApp(
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
 		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
-		lightning.stormView = clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading);
+		lightning.stormView = (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)) || focus.selected;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		thunder.update(now, delays);
@@ -311,6 +332,8 @@ export function createGlobeApp(
 				draw: () => draw(0),
 			})
 		: undefined;
+
+	const detachPicking = renderParams ? undefined : attachStormPicking(canvas, camera, focus, () => clock.mode === 'live');
 
 	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
 	const reload = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
@@ -337,6 +360,7 @@ export function createGlobeApp(
 		clock,
 		data,
 		replay,
+		focus,
 		shareUrl: () => navigation?.shareUrl() ?? location.href,
 		clouds,
 		cloudFeed,
@@ -345,7 +369,7 @@ export function createGlobeApp(
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
-		observedTime: () => observedTime(clock.time(), playbackDelays(), replay.state.selected?.storm.sources),
+		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
 		debug: {
@@ -363,6 +387,8 @@ export function createGlobeApp(
 			window.removeEventListener('pagehide', rememberFrame, { capture: true });
 			controls.dispose();
 			navigation?.dispose();
+			detachPicking?.();
+			focus.dispose();
 			replay.dispose();
 			track.dispose();
 			data.dispose();
@@ -383,5 +409,65 @@ export function createGlobeApp(
 			thunder.dispose();
 			renderer.dispose();
 		},
+	};
+}
+
+const TAP_SLOP_PX = 8;
+const TAP_MS = 600;
+/** Pick radius around a tap or the mouse, CSS px. */
+const PICK_PX = { mouse: 12, touch: 24 };
+
+/** Tap or click on a live storm to select it; the mouse cursor shows which ones can be picked. */
+function attachStormPicking(canvas: HTMLCanvasElement, camera: PerspectiveCamera, focus: StormFocus, live: () => boolean): () => void {
+	let down: { id: number; x: number; y: number; t: number; multi: boolean } | undefined;
+	let pointers = 0;
+	let hover: { x: number; y: number } | undefined;
+	let frame = 0;
+	const at = (x: number, y: number, px: number) => {
+		if (!live() || focus.cells().length === 0) return null;
+		const rect = canvas.getBoundingClientRect();
+		const ndc = new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+		const point = surfacePoint(ndc, camera, RADIUS);
+		if (!point) return null;
+		const distance = camera.position.distanceTo(new Vector3(...latLonToVector(point.lat, point.lon)).multiplyScalar(RADIUS));
+		const kmPerPx = (worldToKm(distance, RADIUS) * 2 * Math.tan((camera.fov * Math.PI) / 360)) / (rect.height || 1);
+		return { ...point, radiusKm: Math.max(px * kmPerPx, 8) };
+	};
+	const onDown = (event: PointerEvent) => {
+		pointers++;
+		if (pointers === 1) down = { id: event.pointerId, x: event.clientX, y: event.clientY, t: performance.now(), multi: false };
+		else if (down) down.multi = true;
+	};
+	const onUp = (event: PointerEvent) => {
+		pointers = Math.max(0, pointers - 1);
+		const start = down;
+		if (pointers === 0) down = undefined;
+		if (!start || start.multi || start.id !== event.pointerId || event.type === 'pointercancel') return;
+		if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP_PX || performance.now() - start.t > TAP_MS) return;
+		const hit = at(event.clientX, event.clientY, event.pointerType === 'touch' ? PICK_PX.touch : PICK_PX.mouse);
+		if (hit) focus.pick(hit.lat, hit.lon, hit.radiusKm);
+	};
+	const onMove = (event: PointerEvent) => {
+		if (event.pointerType !== 'mouse' || event.buttons !== 0) return;
+		hover = { x: event.clientX, y: event.clientY };
+		if (frame) return;
+		frame = requestAnimationFrame(() => {
+			frame = 0;
+			const hit = hover && at(hover.x, hover.y, PICK_PX.mouse);
+			const over = Boolean(hit && pickCell(focus.cells(), hit.lat, hit.lon, hit.radiusKm));
+			canvas.style.cursor = over ? 'pointer' : '';
+		});
+	};
+	canvas.addEventListener('pointerdown', onDown);
+	canvas.addEventListener('pointerup', onUp);
+	canvas.addEventListener('pointercancel', onUp);
+	canvas.addEventListener('pointermove', onMove);
+	return () => {
+		cancelAnimationFrame(frame);
+		canvas.style.cursor = '';
+		canvas.removeEventListener('pointerdown', onDown);
+		canvas.removeEventListener('pointerup', onUp);
+		canvas.removeEventListener('pointercancel', onUp);
+		canvas.removeEventListener('pointermove', onMove);
 	};
 }

@@ -82,8 +82,10 @@ import Version from './Version.astro';
 	<p class="stale cap" role="status" data-stale hidden></p>
 	<p class="replay-status" role="status" data-replay-status hidden></p>
 	<div class="share" data-share-tools hidden>
+		<button type="button" aria-pressed="false" data-follow>Follow</button>
 		<button type="button" aria-pressed="false" data-horizon>Horizon</button>
 		<button type="button" data-share>Share replay</button>
+		<button type="button" data-globe hidden>Globe</button>
 		<input type="text" readonly aria-label="Replay link" data-share-url hidden />
 		<span role="status" data-share-status></span>
 	</div>
@@ -115,7 +117,7 @@ import Version from './Version.astro';
 	}
 	.share { position: fixed; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
 	.share button[aria-pressed='true'] { color: var(--ink); }
-	.share button + button { margin-left: 16px; }
+	.share button:not(:first-child) { margin-left: 16px; }
 	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
 	.share input { width: 100%; padding: 8px; color: var(--ink); background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); }
 	.share span { display: block; color: var(--soft); font: 300 11px/1.5 var(--sans); }
@@ -621,7 +623,7 @@ import Version from './Version.astro';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
 	import { trackObservation } from '../globe/scene-time';
-	import { cloudCaption, formatDate, formatTime, positionCaption, zoneLabel } from './hud/format';
+	import { cloudCaption, endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -643,6 +645,9 @@ import Version from './Version.astro';
 		const shareInput = $<HTMLInputElement>('[data-share-url]');
 		const shareStatus = $('[data-share-status]');
 		const horizon = $<HTMLButtonElement>('[data-horizon]');
+		const follow = $<HTMLButtonElement>('[data-follow]');
+		const share = $<HTMLButtonElement>('[data-share]');
+		const globe = $<HTMLButtonElement>('[data-globe]');
 		const display = $('[data-display]');
 		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
@@ -678,8 +683,13 @@ import Version from './Version.astro';
 				if (shareInput) shareInput.hidden = true;
 				if (shareStatus) shareStatus.textContent = '';
 			}
-			if (shareTools) shareTools.hidden = !replay?.selected || Boolean(replay.loading);
-			horizon?.setAttribute('aria-pressed', String(app?.replay.grazing ?? false));
+			const live = app?.focus.status().live ?? null;
+			const opened = Boolean(replay?.selected && !replay.loading && app?.clock.mode === 'replay');
+			if (shareTools) shareTools.hidden = !opened && !live;
+			if (share) share.hidden = !opened;
+			if (globe) globe.hidden = !live;
+			follow?.setAttribute('aria-pressed', String(app?.focus.following ?? false));
+			horizon?.setAttribute('aria-pressed', String(app?.focus.horizon ?? false));
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
 			if (replayStatus) {
 				const selected = replay?.selected;
@@ -690,8 +700,10 @@ import Version from './Version.astro';
 				const position = selected && !replay.loading
 					? positionCaption(trackObservation(trackTimes.times, observed), observed)
 					: '';
+				const ended = selected && !replay.loading ? endedCaption(selected.storm, observed) : '';
 				const caption = replay?.loading ? 'Opening storm replay…' : replay?.error ?? (selected
-					? [`${selected.storm.label} · ${trackCaption(selected)}`, position].filter(Boolean).join('\n') : '');
+					? [`${selected.storm.label} · ${trackCaption(selected)}`, position, ended].filter(Boolean).join('\n')
+					: app ? liveCaption(app.focus.status(), app.clock.wallTime()).join('\n') : '');
 				replayStatus.hidden = !caption;
 				if (replayStatus.textContent !== caption) replayStatus.textContent = caption;
 			}
@@ -777,8 +789,17 @@ import Version from './Version.astro';
 			tick();
 		});
 		horizon?.addEventListener('click', () => {
-			if (!app?.replay.state.selected) return;
-			void app.replay.graze(!app.replay.grazing);
+			if (!app) return;
+			void app.focus.setHorizon(!app.focus.horizon);
+			tick();
+		});
+		follow?.addEventListener('click', () => {
+			if (!app) return;
+			app.focus.setFollow(!app.focus.following);
+			tick();
+		});
+		globe?.addEventListener('click', () => {
+			app?.focus.globe();
 			tick();
 		});
 		$('[data-share]')?.addEventListener('click', async () => {
@@ -802,9 +823,16 @@ import Version from './Version.astro';
 			tick();
 		});
 		document.addEventListener('keydown', (event) => {
-			if (event.key !== 'Escape' || !info?.open) return;
-			info.open = false;
-			info.querySelector('summary')?.focus();
+			if (event.key !== 'Escape') return;
+			if (info?.open) {
+				info.open = false;
+				info.querySelector('summary')?.focus();
+				return;
+			}
+			if (!app || document.querySelector('[data-storm-suggestions][open]')) return;
+			if (app.focus.following) app.focus.setFollow(false);
+			else if (app.focus.live) app.focus.globe();
+			tick();
 		});
 	}
 </script>

@@ -81,7 +81,8 @@ export function grazeStorm(detail: Pick<StormDetail, 'track' | 'bounds'>, time: 
 	return { ...target, altitude: worldToKm(floorRange(tilt, 1), 1) + 1, tilt: GRAZE.tilt, heading, duration: GRAZE.duration };
 }
 
-function ahead({ lat, lon }: { lat: number; lon: number }, headingDeg: number, km: number): { lat: number; lon: number } {
+/** Point `km` from (lat, lon) toward `headingDeg`. */
+export function ahead({ lat, lon }: { lat: number; lon: number }, headingDeg: number, km: number): { lat: number; lon: number } {
 	const rad = Math.PI / 180;
 	const d = km / 6371;
 	const b = headingDeg * rad;
@@ -90,7 +91,8 @@ function ahead({ lat, lon }: { lat: number; lon: number }, headingDeg: number, k
 	return { lat: lat2 / rad, lon: ((lon2 / rad + 540) % 360) - 180 };
 }
 
-function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+/** Initial bearing from `a` to `b`, degrees clockwise from north. */
+export function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
 	const rad = Math.PI / 180;
 	const y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
 	const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
