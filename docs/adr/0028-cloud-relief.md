@@ -15,9 +15,10 @@ temperature of an opaque top is the air temperature at its height. That height i
 estimated for the parallax correction (cooling below the surface at 6.5 K/km, smoothed over
 16 km). Nothing observes the base or what lies under the top.
 
-Constraints: no source is sharpened and no detail is invented ([ADR 0020](0020-immersive-storm-view.md),
-rule 12); the budgets of ADR 0020 hold on the reference Mac and on phones; the infrastructure stays
-free (R2 free tier goal, one object per frame); lightning channels stay inside the clouds.
+Constraints: no source is sharpened and no detail is invented ([ADR 0020](0020-immersive-storm-view.md)
+point 2, visual rule 12 of [immersive view](../immersive-view.md#visual-rules)); the budgets of
+ADR 0020 hold on the reference Mac and on phones; the infrastructure stays free (R2 free tier
+goal, one object per frame); lightning channels stay inside the clouds.
 
 Headroom today ([final validation](../immersive-view.md#final-validation)): frame cost p95 up to
 9.6 ms desktop for 10; GPU memory 332 MB desktop for 384 and 244 MB on phones for 256; a real phone
@@ -177,7 +178,7 @@ the client work.
   methodology and the debug toggle say so. Thin cirrus sit too low; warm low clouds stay faint, as
   with today's opacity.
 - No billowing detail: walls are as smooth as the 1 km opacity and 2 km heights that shape them.
-  Adding procedural detail would amend rule 12 of ADR 0020, a separate decision.
+  Adding procedural detail would amend visual rule 12, a separate decision.
 - The reference storms' packs predate the heights and their detail has expired: before and after
   captures render the five reference hours again locally with the new pipeline, as #131 did.
 - Offline rendering (`/render`) keeps the flat layer until it loads detail tiles.
