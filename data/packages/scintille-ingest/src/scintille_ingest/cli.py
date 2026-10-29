@@ -24,7 +24,9 @@ from scintille_lake.locks import partition_locks
 from scintille_ingest.clouds import check_heights, fci, gfs, gmgsi, profile
 from scintille_ingest.clouds.collector import CloudCollector, CompositeCollector
 from scintille_ingest.clouds.publish import CloudPublisher
+from scintille_ingest.clouds.reindex import days_between, reindex_day
 from scintille_ingest.clouds.sources import GOES_BUCKETS, HIMAWARI_BUCKET, Sources
+from scintille_ingest.clouds.storm_detail import StormTracks
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
@@ -104,6 +106,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     heights.add_argument("slots", type=_utc, nargs="+")
     heights.add_argument("--work", type=Path, default=Path("/tmp/scintille-cloud-heights"))
+    reindex = commands.add_parser(
+        "clouds-reindex", help="index archived cloud textures that no daily index lists"
+    )
+    reindex.add_argument("--first", type=date.fromisoformat, required=True, help="first day")
+    reindex.add_argument("--last", type=date.fromisoformat, required=True, help="last day")
+    reindex.add_argument("--dry-run", action="store_true", help="log, write nothing")
     calibrate = commands.add_parser(
         "calibrate", help="fit the intensity calibration on silver.flashes and write it"
     )
@@ -115,6 +123,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_calibrate(args.start, args.end, args.out)
     if args.command == "cloud-heights":
         return asyncio.run(run_cloud_heights(args.slots, args.work))
+    if args.command == "clouds-reindex":
+        return run_clouds_reindex(args.first, args.last, args.dry_run)
     if args.command == "live-probe":
         return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "clouds":
@@ -229,6 +239,7 @@ async def run_clouds(port: int) -> int:
         CloudPublisher(
             ObjectLiveStore(store, prefix="live/clouds/"),
             ObjectLiveStore(store, prefix="archive/clouds/"),
+            storms=StormTracks(ObjectLiveStore(store, prefix="storms/")),
         ),
         metrics=metrics,
     )
@@ -252,6 +263,7 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
     configure_json_logs()
     live: LiveStore
     archive: LiveStore
+    storms = None
     if out is not None:
         live, archive = FileLiveStore(out, "live/clouds/"), FileLiveStore(out, "archive/clouds/")
     else:
@@ -262,6 +274,7 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         store = live_store(bucket)
         live = ObjectLiveStore(store, prefix="live/clouds/")
         archive = ObjectLiveStore(store, prefix="archive/clouds/")
+        storms = StormTracks(ObjectLiveStore(store, prefix="storms/"))
     key = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_KEY")
     secret = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_SECRET")
     mtg = (
@@ -281,7 +294,9 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         ),
         gfs.GfsSkin(public_store(gfs.BUCKET)),
         public_store(gmgsi.BUCKET),
-        CloudPublisher(live, archive, attribution=COMPOSITE_ATTRIBUTION.format(year=year)),
+        CloudPublisher(
+            live, archive, attribution=COMPOSITE_ATTRIBUTION.format(year=year), storms=storms
+        ),
         Path(os.environ.get("SCINTILLE_CLOUD_WORK_DIR", "/tmp/scintille-clouds")),
         workers=int(os.environ.get("SCINTILLE_CLOUD_WORKERS", "2")),
         metrics=metrics,
@@ -313,6 +328,25 @@ async def run_cloud_heights(slots: Sequence[datetime], work: Path) -> int:
             await asyncio.to_thread(check_heights.compare, store, slot, surface, table, work)
         )
     print(check_heights.report(results))
+    return 0
+
+
+def run_clouds_reindex(first: date, last: date, dry_run: bool) -> int:
+    configure_json_logs()
+    bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+    if not bucket:
+        log.error("SCINTILLE_LIVE_BUCKET is not set")
+        return 2
+    store, noaa, forecasts = (
+        live_store(bucket),
+        public_store(gmgsi.BUCKET),
+        public_store(gfs.BUCKET),
+    )
+    now = datetime.now(UTC)
+    added = sum(
+        reindex_day(store, noaa, forecasts, day, now, dry_run) for day in days_between(first, last)
+    )
+    print(f"{added} frames indexed{' (dry run)' if dry_run else ''}")
     return 0
 
 

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "chunk_flashes": 65536,
+  "max_hour_chunks": 16,
+  "max_manifest_bytes": 262144,
+  "max_chunk_bytes": 2097152,
+  "chunk_path_pattern": "^\\.\\./chunks/[0-9a-f]{64}\\.bin\\.gz$"
+}
