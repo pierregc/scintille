@@ -42,7 +42,6 @@ default for `postgresql://`, every event write fails on `NOTIFY` and runs never 
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
 | Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |
 | Asset check | `lake_orphan_inventory` | Weekly (Sunday 03:00 UTC), warn: unreferenced files per table, never deleted ([lakehouse](lakehouse.md#maintenance)) |
-| Asset check | `raw_lifecycle_active` | Weekly, warn: no object under `raw/` older than 30 days plus 2 days of R2 delay |
 | Sensor | `silver_changed` | Rebuilds the open UTC day when `silver.flashes` gets a new snapshot (`daily` has `end_offset=1`) |
 | Sensor | `alert_on_failure` | Posts failed runs to `SCINTILLE_ALERT_WEBHOOK` |
 

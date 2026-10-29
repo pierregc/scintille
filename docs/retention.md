@@ -95,7 +95,7 @@ files and metadata. `other/` includes Iceberg files and unrelated bucket content
   account for lifecycle deletions/reuploads before interpreting changes as ingress. Verify live cleanup.
 - [ ] Separate observations from yearly/cache/cost estimates; state assumptions and current official
   pricing URL/date. Include metadata, orphans, retained files, operations, and cloud copies.
-- [ ] Verify actual managed snapshot settings (3 days, minimum 5), `raw/` and `archive/clouds/` 30-day
+- [ ] Verify actual managed snapshot settings (3 days, minimum 5), `raw/` 1-day and `archive/clouds/` 30-day
   lifecycle rules through read-only views. Defaults/checks alone do not prove configured thresholds.
 - [ ] Maintainer accepts or revises permanent silver retention and budget; defines older storm cloud
   replay, time padding, geographic/source association, tiers, late/rebuilt detections, and a protected
