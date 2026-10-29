@@ -173,11 +173,12 @@ Since #252 the pyramid of [ADR 0022](adr/0022-surface-imagery.md) loads through
 [`web/src/globe/detail/`](../web/src/globe/detail/), in development and PR previews with
 `?surface=tiles`: tiles wanted per layer by the 2 px rule at their nearest visible point, requested
 after 300 ms and never while the camera climbs, most blurred area first, 6 at once and 8 per second
-after a burst of 40; a GPU byte budget (96 MB, 5 MB on phones, none at `low`) evicts the least
+after a burst of 40; a GPU byte budget (96 MB, 40 MB on phones, none at `low`) evicts the least
 recently drawn; 404 shows the parent, 429 and errors back off.
 
-Measured 2026-10-29 on a local build against production data, five storms, clouds on, afterglow 0,
-desktop, with `bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`):
+Measured 2026-10-29 before the composite clouds (#131, about 47 MB less GPU memory), on a local
+build against production data, five storms, clouds on, afterglow 0, desktop, with
+`bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`):
 
 | | Tiles | Base |
 |---|---|---|
@@ -191,9 +192,9 @@ desktop, with `bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`):
 | Selection and loading, CPU per frame | 0.2 to 0.3 ms | |
 | 3 s flights | no interval over 50 ms | same |
 
-Phones: the globe already takes 250 of the 256 MB, so they keep 4 tiles until the Earth moves to
-KTX2; dives cost at most 0.62 MB. The added frame cost is the prototype's patches shading the
-ground twice; #253 draws the detail in one pass. `spike/surface/stress.mjs` (rapid flights,
+Phones: the globe now takes about 203 of their 256 MB, so they keep up to 36 tiles; dives cost at
+most 0.62 MB. The added frame cost is the prototype's patches shading the ground twice; #253 draws
+the detail in one pass. `spike/surface/stress.mjs` (rapid flights,
 repeated dives, missing tiles, 429, offline) kept the globe whole, the cache at its budget and the
 JS heap flat (37.7 to 37.9 MB), with no page error.
 
