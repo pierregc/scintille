@@ -21,7 +21,7 @@ from scintille_lake.config import LakeConfig
 from scintille_lake.connect import duckdb_attach, pyiceberg_catalog
 from scintille_lake.locks import partition_locks
 
-from scintille_ingest.clouds import fci, gfs, gmgsi
+from scintille_ingest.clouds import check_heights, fci, gfs, gmgsi, profile
 from scintille_ingest.clouds.collector import CloudCollector, CompositeCollector
 from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.clouds.reindex import days_between, reindex_day
@@ -101,6 +101,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     clouds.add_argument(
         "--out", type=Path, help="with --slot: write the bucket layout here instead of R2"
     )
+    heights = commands.add_parser(
+        "cloud-heights", help="compare cloud-top heights with GOES ACHA at these hours"
+    )
+    heights.add_argument("slots", type=_utc, nargs="+")
+    heights.add_argument("--work", type=Path, default=Path("/tmp/scintille-cloud-heights"))
     reindex = commands.add_parser(
         "clouds-reindex", help="index archived cloud textures that no daily index lists"
     )
@@ -116,6 +121,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "calibrate":
         return run_calibrate(args.start, args.end, args.out)
+    if args.command == "cloud-heights":
+        return asyncio.run(run_cloud_heights(args.slots, args.work))
     if args.command == "clouds-reindex":
         return run_clouds_reindex(args.first, args.last, args.dry_run)
     if args.command == "live-probe":
@@ -293,6 +300,7 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         Path(os.environ.get("SCINTILLE_CLOUD_WORK_DIR", "/tmp/scintille-clouds")),
         workers=int(os.environ.get("SCINTILLE_CLOUD_WORKERS", "2")),
         metrics=metrics,
+        profile=profile.GfsProfile(public_store(gfs.BUCKET)),
     )
     if slot is not None:
         await collector.publisher.restore()
@@ -306,6 +314,20 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
     _stop_on_signals(collector.stop)
     async with server:
         await collector.start()
+    return 0
+
+
+async def run_cloud_heights(slots: Sequence[datetime], work: Path) -> int:
+    store = public_store(GOES_BUCKETS["goes19"])
+    skin = gfs.GfsSkin(public_store(gfs.BUCKET))
+    profiles = profile.GfsProfile(public_store(gfs.BUCKET))
+    results = []
+    for slot in slots:
+        surface, table = await skin.at(slot), await profiles.at(slot)
+        results.append(
+            await asyncio.to_thread(check_heights.compare, store, slot, surface, table, work)
+        )
+    print(check_heights.report(results))
     return 0
 
 

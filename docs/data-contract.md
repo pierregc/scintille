@@ -210,6 +210,27 @@ that ignore it keep the global textures:
   `-storms.tiles` object with `coarse`, points the archive index to it, and deletes the full
   object; frames without such a storm lose their `detail` block. Everything under
   `archive/clouds/` goes after 30 days.
+- Cloud-top heights ([ADR 0028](adr/0028-cloud-relief.md)) travel in the same object, declared by
+  an optional `height` block inside `detail`; clients that ignore it read the opacity index as
+  before:
+
+  ```json
+  "height": {
+    "levels": [3, 4],
+    "max_km": 20,
+    "index_offset": 21504,
+    "index_bytes": 5120,
+    "reference": "gfs 2026101812 f003 0p50"
+  }
+  ```
+
+  A second index of the same form starts at `index_offset`, one pair per possible tile of
+  `levels`, and points to grayscale WebP tiles on the opacity grid (same size and border): 0 to
+  255 map onto 0 to `max_km` above sea level. Heights come from the infrared brightness
+  temperature matched to the GFS temperature profile named in `reference` (`lapse from …` when
+  the profile was missing). Clear texels carry the tops of the nearby clouds, so filtering never
+  slopes a top down to the ground. A `-storms.tiles` object keeps the level 4 heights under its
+  storms.
 
 ## Historical cloud discovery
 

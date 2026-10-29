@@ -53,6 +53,19 @@ class CloudTexture(BaseModel):
     size_bytes: int = Field(strict=True, ge=1, le=MAX_CLOUD_FRAME_BYTES)
 
 
+class CloudHeights(BaseModel):
+    """Cloud-top height tiles in the same pack, after the opacity index (ADR 0028)."""
+
+    levels: list[int]
+    max_km: float
+    """Grayscale 0 to 255 maps onto 0 to `max_km` above sea level."""
+    index_offset: int = Field(strict=True, ge=0)
+    index_bytes: int = Field(strict=True, ge=0)
+    """Same form as the opacity index, one pair per possible tile of `levels`."""
+    reference: str
+    """Temperature profile the heights come from, or the lapse rate fallback."""
+
+
 class CloudDetail(BaseModel):
     """Finer tiles of the same frame, for close views (ADR 0023)."""
 
@@ -71,6 +84,7 @@ class CloudDetail(BaseModel):
     size_bytes: int = Field(strict=True, ge=0)
     index_bytes: int = Field(strict=True, ge=0)
     """Length of the index at the start of the object."""
+    height: CloudHeights | None = None
 
 
 class CloudFrameRef(BaseModel):
@@ -180,12 +194,16 @@ class CloudPublisher:
         textures: dict[str, bytes],
         now: datetime,
         detail: Mapping[tiles.Key, bytes] | None = None,
+        heights: Mapping[tiles.Key, bytes] | None = None,
+        heights_reference: str = "",
     ) -> CloudFrameRef:
         """Detail tiles, textures, then the manifest, then the archive copies. Live textures that
         left the window are deleted on the next publish, so cached manifests still resolve."""
         time = time.astimezone(UTC)
         name = texture_name(time, product)
-        detail_ref = await self._detail(time, name, detail) if detail else None
+        detail_ref = (
+            await self._detail(time, name, detail, heights, heights_reference) if detail else None
+        )
         refs = {}
         for tier, data in textures.items():
             path = f"{tier}/{name}"
@@ -220,11 +238,16 @@ class CloudPublisher:
         return frame
 
     async def _detail(
-        self, time: datetime, name: str, detail: Mapping[tiles.Key, bytes]
+        self,
+        time: datetime,
+        name: str,
+        detail: Mapping[tiles.Key, bytes],
+        heights: Mapping[tiles.Key, bytes] | None = None,
+        heights_reference: str = "",
     ) -> CloudDetail:
         """Uploads the tiles as one object; the returned path is relative to the archive root."""
         path = detail_path(time, name)
-        data = tiles.pack(detail)
+        data = tiles.pack(detail, heights)
         await self.archive.put(path, data, PACK_HEADERS)
         return CloudDetail(
             path=path,
@@ -235,6 +258,15 @@ class CloudPublisher:
             fine=tiles.bitmap(detail, tiles.FINE_LEVEL),
             size_bytes=len(data),
             index_bytes=tiles.INDEX_SLOTS * 8,
+            height=CloudHeights(
+                levels=list(tiles.HEIGHT_LEVELS),
+                max_km=tiles.HEIGHT_MAX_KM,
+                index_offset=tiles.INDEX_SLOTS * 8,
+                index_bytes=tiles.HEIGHT_SLOTS * 8,
+                reference=heights_reference,
+            )
+            if heights is not None
+            else None,
         )
 
     def manifest(self, now: datetime) -> CloudManifest:
@@ -364,8 +396,17 @@ class CloudPublisher:
         kept = {k: tile for k in sorted(keys) if (tile := tiles.unpack(pack, k))}
         if not kept:
             return None
+        heights = (
+            {
+                k: tile
+                for k in sorted(keys)
+                if k.z in tiles.HEIGHT_LEVELS and (tile := tiles.unpack_height(pack, k))
+            }
+            if detail.height
+            else None
+        )
         storm_path = f"{path.removesuffix('.tiles')}-storms.tiles"
-        data = tiles.pack(kept)
+        data = tiles.pack(kept, heights)
         await self.archive.put(storm_path, data, PACK_HEADERS)
         log.info(
             "storm cloud detail kept",

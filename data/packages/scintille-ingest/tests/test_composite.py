@@ -301,10 +301,12 @@ def test_blend_weights_the_better_view_and_reports_coverage() -> None:
     east = composite.Satellite(
         uniform_disk(GOES_EAST, 260.0),
         None,
-        composite.heights(uniform_disk(GOES_EAST, 260.0), skin_at),
+        composite.heights(uniform_disk(GOES_EAST, 260.0), composite.lapse(skin_at)),
     )
     mtg = composite.Satellite(
-        uniform_disk(MTG, 220.0, km=1.0), None, composite.heights(uniform_disk(MTG, 220.0), skin_at)
+        uniform_disk(MTG, 220.0, km=1.0),
+        None,
+        composite.heights(uniform_disk(MTG, 220.0), composite.lapse(skin_at)),
     )
     lat = np.array([[0.0, 0.0, 0.0]])
     lon = np.array([[-75.0, -37.5, 0.0]])
@@ -350,7 +352,7 @@ def test_tile_geometry() -> None:
 
 def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     disk = uniform_disk(GOES_EAST, 250.0)
-    satellite = composite.Satellite(disk, None, composite.heights(disk, skin_at))
+    satellite = composite.Satellite(disk, None, composite.heights(disk, composite.lapse(skin_at)))
     skin = np.full((721, 1440), 300.0, np.float32)
     inputs = pyramid.Inputs((satellite,), skin, subsolar_point(SLOT))
     block = pyramid.block(inputs, 4, 3)
@@ -359,6 +361,19 @@ def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     image = Image.open(io.BytesIO(block.tiles[tiles.Key(3, 3, 4)])).convert("L")
     assert image.size == (tiles.TILE + 2 * tiles.BORDER,) * 2
     assert block.overview is not None and block.overview.shape == (tiles.TILE, tiles.TILE)
+
+
+def test_block_publishes_heights_of_levels_3_and_4() -> None:
+    disk = uniform_disk(GOES_EAST, 250.0)
+    top_at = composite.lapse(skin_at)
+    satellite = composite.Satellite(disk, None, composite.heights(disk, top_at))
+    inputs = pyramid.Inputs((satellite,), np.full((721, 1440), 300.0, np.float32), (0.0, 0.0))
+    block = pyramid.block(inputs, 4, 3)
+    assert {k.z for k in block.heights} == {3, 4}
+    assert set(block.heights) == {k for k in block.tiles if k.z in (3, 4)}
+    decoded = tiles.decode_height(block.heights[tiles.Key(3, 3, 4)])
+    assert decoded.shape == (tiles.TILE + 2 * tiles.BORDER,) * 2
+    assert float(np.median(decoded)) == pytest.approx(50 / 6.5, abs=0.2)
 
 
 def publisher(top: int | None = None) -> tuple[CloudPublisher, MemoryStore]:
@@ -429,6 +444,29 @@ def test_detail_under_the_top_storms_outlives_the_day() -> None:
     assert tiles.unpack(data, tiles.Key(5, 21, 21)) is None
     bits = np.unpackbits(np.frombuffer(base64.b64decode(ref.coarse), np.uint8), bitorder="little")
     assert np.flatnonzero(bits).tolist() == [tiles.index_slot(tiles.Key(4, 7, 17))]
+
+
+def test_storm_detail_keeps_the_heights_under_the_storm() -> None:
+    import obstore
+
+    pub, store = publisher(top=1)
+    catalog(store, [[storm("strong", SLOT - timedelta(minutes=30), 5000, 10.0, 20.0)]])
+    detail = {tiles.Key(4, 7, 17): b"l4", tiles.Key(4, 10, 10): b"w4"}
+    heights = {tiles.Key(4, 7, 17): b"h4", tiles.Key(4, 10, 10): b"x4", tiles.Key(3, 3, 8): b"h3"}
+    textures = {"2k": b"x", "4k": b"y"}
+    asyncio.run(pub.publish(SLOT, "first", "gfs", textures, SLOT, detail, heights, "gfs"))
+    next_day = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(next_day, "second", "gfs", textures, next_day, detail, heights, "gfs"))
+    day = ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
+    )
+    ref = day.frames[0].detail
+    assert ref is not None and ref.coarse is not None and ref.height is not None
+    path = posixpath.normpath(posixpath.join("archive/clouds/manifests", ref.path))
+    data = obstore.get(store, path).bytes().to_bytes()
+    assert tiles.unpack_height(data, tiles.Key(4, 7, 17)) == b"h4"
+    assert tiles.unpack_height(data, tiles.Key(4, 10, 10)) is None
+    assert tiles.unpack(data, tiles.Key(4, 7, 17)) == b"l4"
 
 
 def test_detail_waits_for_an_unreadable_storm_catalog_then_goes() -> None:
@@ -601,7 +639,7 @@ def test_hour_slots() -> None:
 class Rendered(CompositeCollector):
     rendered: list[datetime]
 
-    def _render(self, downloaded, directory, skin, fallback, slot):  # type: ignore[no-untyped-def]
+    def _render(self, downloaded, directory, skin, fallback, slot, table=None):  # type: ignore[no-untyped-def]
         self.rendered.append(slot)
         return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"})
 
