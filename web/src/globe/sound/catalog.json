@@ -1,0 +1,244 @@
+{
+	"pad": 0.5,
+	"tracks": [
+		{
+			"id": "700896",
+			"loop": 30,
+			"bytes": 372759
+		},
+		{
+			"id": "402338",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "384388",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "425984",
+			"loop": 79,
+			"bytes": 960827
+		},
+		{
+			"id": "435147",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "543228",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "609769",
+			"loop": 35,
+			"bytes": 432945
+		},
+		{
+			"id": "683324",
+			"loop": 71,
+			"bytes": 864906
+		},
+		{
+			"id": "792042",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "870290",
+			"loop": 80,
+			"bytes": 972739
+		},
+		{
+			"id": "876072",
+			"loop": 58,
+			"bytes": 708798
+		}
+	],
+	"crackles": [
+		{
+			"at": 0.96,
+			"bytes": 2550
+		},
+		{
+			"at": 1.36,
+			"bytes": 2550
+		},
+		{
+			"at": 2.24,
+			"bytes": 2550
+		},
+		{
+			"at": 2.92,
+			"bytes": 2550
+		},
+		{
+			"at": 4.32,
+			"bytes": 2550
+		},
+		{
+			"at": 4.48,
+			"bytes": 2550
+		},
+		{
+			"at": 4.92,
+			"bytes": 2550
+		},
+		{
+			"at": 5.14,
+			"bytes": 2550
+		},
+		{
+			"at": 7.59,
+			"bytes": 2550
+		},
+		{
+			"at": 8.16,
+			"bytes": 2550
+		},
+		{
+			"at": 9.02,
+			"bytes": 2550
+		},
+		{
+			"at": 10.29,
+			"bytes": 2550
+		},
+		{
+			"at": 10.43,
+			"bytes": 2550
+		},
+		{
+			"at": 10.85,
+			"bytes": 2550
+		},
+		{
+			"at": 11.07,
+			"bytes": 2550
+		},
+		{
+			"at": 11.27,
+			"bytes": 2550
+		},
+		{
+			"at": 11.77,
+			"bytes": 2550
+		},
+		{
+			"at": 12.03,
+			"bytes": 2550
+		},
+		{
+			"at": 12.23,
+			"bytes": 2550
+		},
+		{
+			"at": 12.5,
+			"bytes": 2550
+		},
+		{
+			"at": 12.65,
+			"bytes": 2550
+		},
+		{
+			"at": 12.83,
+			"bytes": 2550
+		},
+		{
+			"at": 12.97,
+			"bytes": 2550
+		},
+		{
+			"at": 16.29,
+			"bytes": 2550
+		}
+	],
+	"sources": [
+		{
+			"id": "700896",
+			"title": "Cosmic Ray (Ambient)",
+			"author": "younoise",
+			"url": "https://freesound.org/s/700896/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "402338",
+			"title": "ps Calm Aurorae",
+			"author": "arseniiv",
+			"url": "https://freesound.org/s/402338/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "384388",
+			"title": "Peaceful Drone",
+			"author": "mricken1",
+			"url": "https://freesound.org/s/384388/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "425984",
+			"title": "Space Drone Ambience 01",
+			"author": "Magmi.Soundtracks",
+			"url": "https://freesound.org/s/425984/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "435147",
+			"title": "Ambient Drone 21.07.2018",
+			"author": "kickhat",
+			"url": "https://freesound.org/s/435147/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "543228",
+			"title": "Angelic Guitar Pad",
+			"author": "LeSystemPerv",
+			"url": "https://freesound.org/s/543228/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "609769",
+			"title": "Calm airy tension drone",
+			"author": "xkeril",
+			"url": "https://freesound.org/s/609769/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "683324",
+			"title": "Aeons Whisper Pad",
+			"author": "LogicMoon",
+			"url": "https://freesound.org/s/683324/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "792042",
+			"title": "gsharp major 7, ember proxima",
+			"author": "Phrakture",
+			"url": "https://freesound.org/s/792042/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "870290",
+			"title": "Morning Relaxing Ambient Improvisation",
+			"author": "bassimat",
+			"url": "https://freesound.org/s/870290/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "876072",
+			"title": "Ambient Frozen Ice Ethereal Floating Landscape",
+			"author": "bassimat",
+			"url": "https://freesound.org/s/876072/",
+			"license": "CC0-1.0"
+		},
+		{
+			"id": "875011",
+			"title": "Electrical Static, crackles and pops",
+			"author": "cb9382",
+			"url": "https://freesound.org/s/875011/",
+			"license": "CC0-1.0"
+		}
+	]
+}

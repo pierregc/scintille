@@ -38,7 +38,7 @@ import { StormTrack } from './replay/track';
 import { ReplayNavigation } from './replay/navigation';
 import { readFrameCheckpoint, type FrameCheckpoint } from './replay/checkpoint';
 import { frameStorm } from './replay/framing';
-import { createThunder, type Thunder } from './thunder';
+import { createSound, type Sound } from './sound';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 
@@ -64,7 +64,7 @@ export interface GlobeApp {
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
-	readonly thunder: Thunder;
+	readonly sound: Sound;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
@@ -232,7 +232,7 @@ export function createGlobeApp(
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
-	const thunder = createThunder(live.ring, camera, RADIUS);
+	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
 		: undefined;
@@ -329,7 +329,7 @@ export function createGlobeApp(
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
-		thunder.update(now, delays);
+		sound.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (post) {
@@ -382,7 +382,7 @@ export function createGlobeApp(
 		clouds,
 		cloudFeed,
 		cloudStatus: () => cloudPlayback.status,
-		thunder,
+		sound,
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
@@ -425,7 +425,7 @@ export function createGlobeApp(
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
-			thunder.dispose();
+			sound.dispose();
 			renderer.dispose();
 		},
 	};

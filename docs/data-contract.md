@@ -1150,11 +1150,11 @@ injected archive source for fixtures or future time-range queries.
 
 Loading keeps the current observations until the new extract is complete. Replay stops live
 polling, retains the immutable extract on the CPU and moves a bounded window through the same
-ring used by lightning and thunder. Seeking updates that window on the next animation frame.
+ring used by lightning and sound. Seeking updates that window on the next animation frame.
 `data.live()` cancels pending loads, clears the replay window and starts a fresh live client;
 it downloads the current manifest's chunks again. Disposal releases the archive and subscriptions.
 CPU memory scales with the extract's flash count; the renderer ring and GPU capacity stay fixed.
-Sliding the same extract preserves logical flash indices and pending thunder; dataset replacement
+Sliding the same extract preserves logical flash indices and pending crackles; dataset replacement
 invalidates those consumers.
 Camera entry, historical cloud restoration and replay controls are handled by the subsequent
 replay tickets.
@@ -1167,9 +1167,9 @@ builds ignore this query. In dev, run `python3 fixtures/serve.py` alongside `pnp
 Preview builds bundle the metadata and gzip chunk under `/_replay-fixtures/`, without requiring
 a fixture upload to R2. These assets are omitted from production builds.
 
-Open that URL, choose the 5 min afterglow, enable thunder from the HUD, and observe the three
+Open that URL, choose the 5 min afterglow, enable sound from the HUD, and observe the three
 fixture flashes. Click Live,
-check that the old flashes and pending thunder disappear, then click Time travel to reload the
+check that the old flashes and pending crackles disappear, then click Time travel to reload the
 fixture in the same scene. Repeat these two controls without reloading the page.
 Use the browser's graphics/audio tools to check stable
 resources across repeated round trips. This fixture entry is for loader QA; it does not implement

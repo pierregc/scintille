@@ -17,6 +17,7 @@
     "test:seo": "node scripts/check-seo.mjs",
     "test": "vitest run",
     "textures": "node scripts/textures/build.mjs",
+    "sound": "node scripts/sound/build.mjs",
     "r2:upload": "node scripts/r2-upload.mjs"
   },
   "dependencies": {

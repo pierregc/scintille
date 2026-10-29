@@ -7,7 +7,7 @@ export interface Claim {
 	replaced: boolean;
 }
 
-/** Fixed set of voice slots, so thunder never piles up into a wall of noise. */
+/** Fixed set of voice slots, so crackles never pile up into a wall of noise. */
 export class VoicePool {
 	readonly max: number;
 	readonly #end: Float64Array;
