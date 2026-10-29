@@ -1,6 +1,6 @@
 # 0028 · Clouds in relief: observed tops, a translucent volume with styled detail
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 
 ## Context

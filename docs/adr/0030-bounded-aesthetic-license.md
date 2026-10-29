@@ -1,6 +1,6 @@
 # 0030 · Bounded aesthetic license: styled detail beside the observations
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 
 ## Context
