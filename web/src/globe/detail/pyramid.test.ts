@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestPoint, Presence, type PyramidManifest, texelPixels, tileBounds } from './pyramid';
+import { ancestorOf, childrenOf, finestLevel, nearestPoint, Presence, type PyramidManifest, rectIn, texelKm, texelPixels, tileBounds, tileBytes, tilePath } from './pyramid';
 
 const level = (columns: number, present: number[]) => {
 	const bits = new Uint8Array(Math.ceil((columns * columns) / 2 / 8));
@@ -49,5 +49,35 @@ describe('texelPixels', () => {
 	it('matches the immersive view scale at the ISS pose', () => {
 		// 400 km, 35° vertical field of view, 1080 px: 0.23 km per CSS px.
 		expect(texelPixels(0.5, 400, 35, 1080)).toBeCloseTo(2.1, 1);
+	});
+});
+
+describe('tile keys', () => {
+	it('finds ancestors, children and the rect inside an ancestor', () => {
+		expect(ancestorOf({ z: 5, x: 13, y: 6 }, 3)).toEqual({ z: 3, x: 3, y: 1 });
+		expect(ancestorOf({ z: 3, x: 3, y: 1 }, 4)).toEqual({ z: 3, x: 3, y: 1 });
+		expect(childrenOf({ z: 2, x: 1, y: 2 })).toEqual([
+			{ z: 3, x: 2, y: 4 },
+			{ z: 3, x: 3, y: 4 },
+			{ z: 3, x: 2, y: 5 },
+			{ z: 3, x: 3, y: 5 },
+		]);
+		// Column 1 of 4 from the west, row 0 of 4 from the north: v counts up from the south.
+		expect(rectIn({ z: 5, x: 13, y: 4 }, { z: 3, x: 3, y: 1 })).toEqual([0.25, 0.75, 0.25]);
+		expect(rectIn({ z: 3, x: 3, y: 1 }, { z: 3, x: 3, y: 1 })).toEqual([0, 0, 1]);
+	});
+
+	it('fills the path template', () => {
+		expect(tilePath({ ...manifest, path: '{layer}/{z}/{x}-{y}.webp' }, 'day', { z: 5, x: 7, y: 3 })).toBe('day/5/7-3.webp');
+	});
+
+	it('sizes a tile with its mipmaps', () => {
+		expect(tileBytes(manifest)).toBe(1_089_296);
+	});
+
+	it('finds the finest level of each layer', () => {
+		expect(finestLevel(manifest, 'day')).toBe(5);
+		expect(finestLevel({ ...manifest, levels: { 2: manifest.levels[2] } }, 'night')).toBe(2);
+		expect(texelKm(manifest, 2)).toBeCloseTo(3.711, 3);
 	});
 });

@@ -6,13 +6,12 @@ import { SurfaceVectors } from './vectors';
 export type SurfaceMode = 'base' | 'tiles' | 'vectors' | 'both';
 export const SURFACE_MODES: readonly SurfaceMode[] = ['base', 'tiles', 'vectors', 'both'];
 
-/** `?surface=base|tiles|vectors|both`, `?texel=<css px>` for the refinement threshold, `?nightlevel=` for the finest night level. */
-export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number; nightMaxLevel: number } {
+/** `?surface=base|tiles|vectors|both`, and `?texel=<css px>` for the refinement threshold. */
+export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number } {
 	const params = new URLSearchParams(search);
 	const mode = params.get('surface') as SurfaceMode;
 	const texel = Number(params.get('texel'));
-	const night = Number(params.get('nightlevel'));
-	return { mode: SURFACE_MODES.includes(mode) ? mode : 'base', texelPixels: texel > 0 ? texel : 2, nightMaxLevel: night >= 2 && night <= 5 ? night : 4 };
+	return { mode: SURFACE_MODES.includes(mode) ? mode : 'base', texelPixels: texel > 0 ? texel : 2 };
 }
 
 export interface SurfaceDetailOptions {
@@ -25,7 +24,8 @@ export interface SurfaceDetailOptions {
 	pixelRatio: () => number;
 	mode: SurfaceMode;
 	texelPixels: number;
-	nightMaxLevel: number;
+	/** GPU bytes the tiles may hold. */
+	maxBytes: number;
 }
 
 export class SurfaceDetail {
@@ -41,10 +41,7 @@ export class SurfaceDetail {
 			baseTexelKm: options.baseTexelKm,
 			texelPixels: options.texelPixels,
 			anisotropy: options.anisotropy,
-			dwellMs: 300,
-			nightMaxLevel: options.nightMaxLevel,
-			maxTextures: 96,
-			concurrency: 6,
+			maxBytes: options.maxBytes,
 		});
 		this.vectors = new SurfaceVectors(`${options.root}/vectors/lines.bin`, options.radius, options.earth.uniforms.sunDirection.value as Vector3, options.pixelRatio);
 	}
@@ -68,7 +65,7 @@ export class SurfaceDetail {
 		else this.vectors.group.visible = false;
 	}
 
-	stats(): { mode: SurfaceMode; tiles: SurfaceTilesStats; vectors: boolean } {
+	stats(): { mode: SurfaceMode; tiles: SurfaceTilesStats | null; vectors: boolean } {
 		return { mode: this.#mode, tiles: this.tiles.stats, vectors: this.vectors.loaded };
 	}
 

@@ -39,6 +39,7 @@ uniform sampler2D tileNight;
 uniform vec2 tileLayers;
 uniform vec2 tileInset;
 uniform float tileSize;
+uniform vec3 dayRect;
 uniform vec3 nightRect;
 
 // Cubic B-spline in four bilinear taps: night lights are 742 m sensor pixels, shown as soft points.
@@ -98,9 +99,8 @@ void main() {
 	vec3 night = texture2D(nightMap, uv).rgb;
 	float water = texture2D(oceanMask, uv).r;
 	#ifdef TILE
-	vec2 tileUv = vUv * tileInset.x + tileInset.y;
 	if (tileLayers.x > 0.5) {
-		vec4 texel = texture2D(tileDay, tileUv);
+		vec4 texel = texture2D(tileDay, (vUv * dayRect.z + dayRect.xy) * tileInset.x + tileInset.y);
 		day = texel.rgb;
 		water = texel.a;
 	}

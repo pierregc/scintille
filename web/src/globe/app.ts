@@ -119,6 +119,7 @@ export function createGlobeApp(
 				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
 				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
 				pixelRatio: () => renderer.getPixelRatio(),
+				maxBytes: preset.surfaceMb * 1e6,
 				...surfaceFromSearch(location.search),
 			})
 		: undefined;
@@ -202,6 +203,7 @@ export function createGlobeApp(
 		tier = next;
 		canvas.dataset.quality = tier;
 		if (!PRESETS[tier].cloudLight) clouds.setFlashLight(null);
+		if (surface) surface.tiles.maxBytes = PRESETS[tier].surfaceMb * 1e6;
 		if (!PRESETS[tier].postProcessing) {
 			post?.dispose();
 			post = undefined;
