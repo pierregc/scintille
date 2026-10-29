@@ -49,6 +49,8 @@ export interface Clouds {
 	readonly visible: boolean;
 	/** Observation time (UTC ms) of the frame mostly shown, or null when none is shown. */
 	readonly frameTime: number | null;
+	/** Observation times of the frames held, ascending. */
+	readonly frameTimes: readonly number[];
 	/**
 	 * Adds a frame to the timeline; the layer crossfades between the frames around the scene time.
 	 * It owns the texture: a frame with the same time replaces it, the oldest beyond the limit are disposed.
@@ -176,6 +178,9 @@ export function createClouds(
 		get frameTime() {
 			if (!covered()) return null;
 			return frames[Math.min(Math.round(position), frames.length - 1)].time;
+		},
+		get frameTimes() {
+			return frames.map((f) => f.time);
 		},
 		setFrame(next) {
 			if (disposed) return next.texture.dispose();

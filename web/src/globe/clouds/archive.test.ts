@@ -198,25 +198,49 @@ describe('archive cloud playback', () => {
 	});
 });
 
-it('releases owned textures on live/replay/live transitions and disposal', async () => {
-	const s = setup([0]);
+it('keeps the live frames on screen when replay opens, then hands them back', async () => {
+	const s = setup([-1, 0, 1]);
 	const liveTextures: Texture[] = [];
 	const live = { start: vi.fn(() => {
-		const texture = new Texture({ width: 2048, height: 1024 });
-		liveTextures.push(texture); s.clouds.setFrame({ texture, time: T0 });
+		for (const h of [-1, 0, 1]) {
+			const texture = new Texture({ width: 2048, height: 1024 });
+			liveTextures.push(texture); s.clouds.setFrame({ texture, time: T0 + h * HOUR });
+		}
 	}), stop: vi.fn(), settled: true, attribution: 'Live' };
 	const playback = new CloudPlayback(s.clouds, live, s.feed);
+	playback.update('live', T0); s.clouds.setTime(T0);
+	const disposals = liveTextures.map((texture) => vi.spyOn(texture, 'dispose'));
+	playback.update('replay', T0); s.clouds.setTime(T0);
+	expect(s.clouds.mesh.visible).toBe(true);
+	await s.feed.idle();
+	expect(s.load).not.toHaveBeenCalled();
+	expect(disposals.every((dispose) => dispose.mock.calls.length === 0)).toBe(true);
+	expect(s.clouds.frameTime).toBe(T0);
 	playback.update('live', T0);
-	const liveDisposed = vi.spyOn(liveTextures[0], 'dispose');
-	playback.update('replay', T0); await s.feed.idle();
-	expect(liveDisposed).toHaveBeenCalledOnce();
-	const historicalDisposed = vi.spyOn(s.textures[0], 'dispose');
-	playback.update('live', T0);
-	expect(historicalDisposed).toHaveBeenCalledOnce();
+	expect(disposals.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
 	expect(playback.status.attribution).toBe('Live');
-	const lastDisposed = vi.spyOn(liveTextures[1], 'dispose');
-	playback.dispose(); expect(lastDisposed).toHaveBeenCalledOnce();
-	s.clouds.dispose();
+	playback.dispose(); s.clouds.dispose();
+});
+
+it('drops live frames the archive does not list once its indices are known', async () => {
+	const s = setup([0]);
+	const texture = new Texture({ width: 2048, height: 1024 });
+	const dispose = vi.spyOn(texture, 'dispose');
+	s.clouds.setFrame({ texture, time: T0 + 2 * HOUR });
+	s.feed.setTime(T0); await s.feed.idle();
+	expect(dispose).toHaveBeenCalledOnce();
+	expect(s.clouds.frameTimes).toEqual([T0]);
+	s.feed.stop(); s.clouds.dispose();
+});
+
+it('keeps the live frames while the archive index is unavailable', async () => {
+	const s = setup([0]);
+	s.fetchFn.mockImplementation(async () => new Response(null, { status: 429 }));
+	const texture = new Texture({ width: 2048, height: 1024 });
+	s.clouds.setFrame({ texture, time: T0 });
+	s.feed.setTime(T0); await s.feed.idle(); s.clouds.setTime(T0);
+	expect(s.clouds.frameTime).toBe(T0);
+	s.feed.stop(); s.clouds.dispose();
 });
 
 it('bounds streamed responses and cancels over-limit bodies', async () => {

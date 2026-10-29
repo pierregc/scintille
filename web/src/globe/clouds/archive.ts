@@ -10,6 +10,7 @@ const DAY = 24 * HOUR;
 const REFRESH_MS = 60_000;
 const TEXTURE_PATH = new RegExp(RULES.texture_path_pattern);
 const DETAIL_PATH = new RegExp(RULES.detail_path_pattern);
+const dayOf = (time: number) => new Date(time).toISOString().slice(0, 10);
 
 interface ArchiveManifest extends Omit<CloudManifest, 'window_seconds'> {
 	schema_version: number;
@@ -41,7 +42,7 @@ export function parseArchive(json: unknown, day: string): ArchiveManifest {
 export interface ArchiveCloudOptions {
 	baseUrl: string;
 	tier: CloudTier;
-	clouds: Pick<Clouds, 'setFrame' | 'retainFrames'>;
+	clouds: Pick<Clouds, 'setFrame' | 'retainFrames' | 'frameTimes'>;
 	fetch?: typeof fetch;
 	now: () => number;
 	load?: (url: string, time: number, signal: AbortSignal) => Promise<CloudFrame>;
@@ -58,7 +59,10 @@ interface Work {
 	key: string;
 }
 
-/** Metadata refresh and texture loading have independent cancellation lifetimes. */
+/**
+ * Metadata refresh and texture loading have independent cancellation lifetimes. Stopping leaves the
+ * frames on the layer, for the next feed to keep or replace.
+ */
 export class ArchiveCloudFeed {
 	readonly #options: ArchiveCloudOptions;
 	readonly #fetch: typeof fetch;
@@ -97,7 +101,7 @@ export class ArchiveCloudFeed {
 	setTime(time: number): void {
 		if (!Number.isFinite(time)) return;
 		this.#time = time;
-		this.#days = [-DAY, 0, DAY].map((offset) => new Date(time + offset).toISOString().slice(0, 10));
+		this.#days = [-DAY, 0, DAY].map((offset) => dayOf(time + offset));
 		for (const day of this.#manifests.keys()) if (!this.#days.includes(day)) this.#manifests.delete(day);
 		this.#select();
 		this.#refresh();
@@ -154,12 +158,19 @@ export class ArchiveCloudFeed {
 				new URL(`archive/clouds/manifests/${day}.json`, this.#root).href, RULES.max_frames);
 		}).filter((f) => Math.abs(f.time - time) <= CLOUD_MAX_GAP_MS)
 			.sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time)).slice(0, 3);
+		// Frames already on the layer, such as the live ones when Travel in time opens, need no reload;
+		// they stay until the index of their day is read.
+		const held = this.#options.clouds.frameTimes;
+		for (const s of this.#sources) if (!this.#loaded.has(s.url) && held.includes(s.time)) this.#loaded.set(s.url, s.time);
 		const urls = new Set(this.#sources.map((s) => s.url));
 		let removed = false;
 		for (const url of this.#loaded.keys()) {
 			if (!urls.has(url)) { this.#loaded.delete(url); removed = true; }
 		}
-		if (removed) this.#options.clouds.retainFrames([...this.#loaded.values()]);
+		const kept = [...this.#loaded.values()];
+		const keep = held.filter((t) => kept.includes(t) ||
+			(Math.abs(t - time) <= CLOUD_MAX_GAP_MS && !this.#manifests.get(dayOf(t))?.manifest));
+		if (removed || keep.length < held.length) this.#options.clouds.retainFrames(keep);
 		for (const url of this.#failed.keys()) if (!urls.has(url)) this.#failed.delete(url);
 		if (this.#loading && !urls.has(this.#loading.key)) this.#loading.request.abort();
 		this.#attribution = this.#days.map((d) => this.#manifests.get(d)?.manifest?.attribution).find(Boolean) ?? null;
@@ -202,6 +213,5 @@ export class ArchiveCloudFeed {
 		this.#manifests.clear();
 		this.#loaded.clear();
 		this.#failed.clear();
-		this.#options.clouds.retainFrames([]);
 	}
 }
