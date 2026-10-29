@@ -1,6 +1,6 @@
 # 0026 · Live latency: one chunk per GLM slot, faster polling, 70 s playback delay
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 - Amends: [0004](0004-live-chunk-encoding.md) (chunk cadence, manifest cache)
 
