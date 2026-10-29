@@ -34,6 +34,14 @@ export interface GlobeControls {
 	flyTo(options: FlyToOptions, restore?: { preserveRange?: boolean }): Promise<boolean>;
 	isAt(options: FlyToOptions): boolean;
 	cancelFlight(): void;
+	/** Moves the camera to a view at once, without a flight; ignored during one. */
+	place(options: FlyToOptions): void;
+	/** Whether a flight is under way. */
+	flying(): boolean;
+	/** Whether the camera orbits a point on the ground rather than the globe centre. */
+	onSurface(): boolean;
+	/** Calls `listener` when the visitor starts moving the camera; returns the unsubscribe function. */
+	onInput(listener: () => void): () => void;
 	view(): CameraView;
 	dispose(): void;
 }
@@ -59,6 +67,8 @@ export function createGlobeControls(
 	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 	const idle = new IdleRotation();
+	const inputListeners = new Set<() => void>();
+	const userInput = () => { for (const listener of inputListeners) listener(); };
 	let flight: { path: Flight; start: number; done: (arrived: boolean) => void } | undefined;
 	// Roll left over from a flight, eased out on top of the orbit controls' world-up view.
 	let roll: { offset: Quaternion; start: number } | undefined;
@@ -159,6 +169,7 @@ export function createGlobeControls(
 	};
 
 	const onPointerDown = (event: PointerEvent) => {
+		userInput();
 		endFlight(false);
 		const touch = event.pointerType === 'touch';
 		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -236,6 +247,7 @@ export function createGlobeControls(
 	};
 
 	const onWheel = (event: WheelEvent) => {
+		userInput();
 		endFlight(false);
 		if (!surface) return;
 		event.preventDefault();
@@ -277,6 +289,21 @@ export function createGlobeControls(
 
 	return {
 		cancelFlight: () => endFlight(false),
+		place(options) {
+			if (flight) return;
+			const pose = destination(options);
+			if (pose.target.lengthSq() > 0) setSurface(surfaceFromPose(pose.position, pose.quaternion, pose.target));
+			else {
+				if (surface) toGlobe();
+				applyPose(pose);
+			}
+		},
+		flying: () => flight !== undefined,
+		onSurface: () => surface !== undefined,
+		onInput(listener) {
+			inputListeners.add(listener);
+			return () => inputListeners.delete(listener);
+		},
 		view() {
 			const direction = controls.target.lengthSq() > 0 ? controls.target.clone().normalize() : camera.position.clone().normalize();
 			return {
@@ -326,6 +353,7 @@ export function createGlobeControls(
 
 		dispose() {
 			endFlight(false);
+			inputListeners.clear();
 			controls.removeEventListener('start', onStart);
 			controls.removeEventListener('end', onEnd);
 			element.removeEventListener('pointerdown', onPointerDown);

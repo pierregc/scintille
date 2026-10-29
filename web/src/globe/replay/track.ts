@@ -1,5 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute, Group, LineBasicMaterial, LineSegments, Points, PointsMaterial, Vector3 } from 'three';
 import type { StormDetail, StormTrackPoint } from '../../contract/types';
+
+type TrackSample = Pick<StormTrackPoint, 'time' | 'lat' | 'lon'>;
 import { kmToWorld } from '../flight';
 import { latLonToVector } from '../sun';
 
@@ -15,7 +17,7 @@ interface TrackGeometry {
 }
 
 /** Great-circle connectors are explanatory paths, revealed only when both endpoints were observed. */
-export function trackGeometry(track: readonly StormTrackPoint[], radius: number): TrackGeometry {
+export function trackGeometry(track: readonly TrackSample[], radius: number): TrackGeometry {
 	const positions: number[] = [];
 	const observations: number[] = [];
 	const times: number[] = [];
@@ -48,6 +50,11 @@ export function trackGeometry(track: readonly StormTrackPoint[], radius: number)
 	return { positions, observations, times, ends };
 }
 
+/** Track colour of an ADR 0009 level. */
+export function trackColor(level: number): string {
+	return COLORS[level - 1] ?? COLORS[0];
+}
+
 export function trackCaption(detail: StormDetail): string {
 	return `Observed track · ${detail.storm.level_name} electrical activity (whole storm)`;
 }
@@ -66,7 +73,7 @@ export class StormTrack {
 	readonly group = new Group();
 	readonly #line = new LineSegments(new BufferGeometry(), new LineBasicMaterial({ transparent: true, opacity: 0.4, depthWrite: false }));
 	readonly #points = new Points(new BufferGeometry(), new PointsMaterial({ size: 3, sizeAttenuation: false, transparent: true, opacity: 0.65, depthWrite: false }));
-	#selected: StormDetail | null = null;
+	#key: object | null = null;
 	#times: number[] = [];
 	#ends: number[] = [];
 
@@ -76,16 +83,21 @@ export class StormTrack {
 	}
 
 	setStorm(detail: StormDetail | null): void {
-		if (detail === this.#selected) return;
-		this.#selected = detail;
+		this.setPath(detail, detail?.track ?? [], detail?.storm.level ?? 0);
+	}
+
+	/** Shows `track` until another key is set; a live cell passes its 10 minute path. */
+	setPath(key: object | null, track: readonly TrackSample[], level: number): void {
+		if (key === this.#key) return;
+		this.#key = key;
 		this.#line.geometry.dispose();
 		this.#points.geometry.dispose();
-		const geometry = trackGeometry(detail?.track ?? [], this.radius + kmToWorld(20, this.radius));
+		const geometry = trackGeometry(key ? track : [], this.radius + kmToWorld(20, this.radius));
 		this.#times = geometry.times;
 		this.#ends = geometry.ends;
 		this.#line.geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(geometry.positions, 3));
 		this.#points.geometry = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(geometry.observations, 3));
-		const color = COLORS[(detail?.storm.level ?? 0) - 1] ?? '#9faab8';
+		const color = trackColor(level);
 		this.#line.material.color.set(color);
 		this.#points.material.color.set(color);
 		this.setTime(-Infinity);
@@ -105,7 +117,7 @@ export class StormTrack {
 		this.#points.material.dispose();
 		this.group.removeFromParent();
 		this.group.clear();
-		this.#selected = null;
+		this.#key = null;
 		this.#times = [];
 		this.#ends = [];
 	}

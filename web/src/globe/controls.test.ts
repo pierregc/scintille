@@ -115,6 +115,33 @@ describe('createGlobeControls flight handoff', () => {
 		expect(tiltOf()).toBeLessThan(1);
 	});
 
+	it('places a surface view at once and reports visitor input', async () => {
+		const inputs: string[] = [];
+		const off = controls.onInput(() => inputs.push('input'));
+		controls.place({ lat: 10, lon: 20, altitude: 700, tilt: 20, heading: 30 });
+		expect(controls.onSurface()).toBe(true);
+		expect(controls.flying()).toBe(false);
+		const view = controls.view();
+		expect(view.lat).toBeCloseTo(10, 6);
+		expect(view.lon).toBeCloseTo(20, 6);
+		expect(view.altitude).toBeCloseTo(700, 3);
+		expect(view.tilt).toBeCloseTo(20, 6);
+		expect(view.heading).toBeCloseTo(30, 6);
+		controls.place({ lat: 10, lon: 20, altitude: 10, tilt: 20 });
+		expect(controls.view().altitude).toBeGreaterThan(400);
+		const flight = controls.flyTo({ lat: 0, lon: 0, altitude: 900, tilt: 20, duration: 1000 });
+		controls.place({ lat: 40, lon: 40, altitude: 700, tilt: 20 });
+		expect(controls.flying()).toBe(true);
+		expect(controls.view().lat).toBeLessThan(15);
+		fire('wheel', { deltaY: 10, deltaMode: 0 });
+		await expect(flight).resolves.toBe(false);
+		pointerDown();
+		expect(inputs).toEqual(['input', 'input']);
+		off();
+		pointerDown();
+		expect(inputs).toHaveLength(2);
+	});
+
 	it('tilts with a ctrl click, as on a Mac trackpad', () => {
 		const before = camera.position.clone();
 		drag(-100, { button: 0, ctrlKey: true });

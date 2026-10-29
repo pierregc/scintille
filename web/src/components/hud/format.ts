@@ -1,4 +1,6 @@
-import { formatAge } from '../../globe/live/freshness';
+import type { FocusStatus } from '../../globe/focus';
+import { ACTIVE_STALE_MS, LEVEL_NAMES } from '../../globe/focus/active';
+import { formatAge, SOURCE_LABELS } from '../../globe/live/freshness';
 import { SAME_TIME_MS, type TrackObservation } from '../../globe/scene-time';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -99,4 +101,31 @@ export function positionCaption(observation: TrackObservation, reference: number
 	const at = formatTime(observation.time, timeZone).slice(0, 5);
 	if (observation.state === 'lost') return `No position since ${at}`;
 	return `Position observed ${at}${ageSuffix(observation.time, reference)}`;
+}
+
+/** Second line of an open replay once its storm has ended. */
+export function endedCaption(storm: { t_end: string; closed: boolean }, reference: number, timeZone?: string): string {
+	const end = Date.parse(storm.t_end);
+	return storm.closed && reference > end ? `Ended · last flash ${formatTime(end, timeZone).slice(0, 5)}` : '';
+}
+
+/** Lines under a storm picked on the live globe. */
+export function liveCaption(
+	{ live, observation, observed }: Pick<FocusStatus, 'live' | 'observation' | 'observed'>,
+	wall: number,
+	timeZone?: string,
+): string[] {
+	if (!live) return [];
+	const hhmm = (ms: number) => formatTime(ms, timeZone).slice(0, 5);
+	const { cell, end } = live;
+	const lines = [`${cell.name ?? 'Storm'} · ${LEVEL_NAMES[cell.level - 1] ?? 'Active'} electrical activity so far`];
+	if (end?.reason === 'expired' && end.tEnd !== null) lines.push(`Ended · last flash ${hhmm(end.tEnd)}`);
+	else if (end?.reason === 'source-gap' && end.tEnd !== null) {
+		lines.push(`No data from ${cell.sources.map((s) => SOURCE_LABELS[s] ?? s).join(', ')} since ${hhmm(end.tEnd)}`);
+	} else if (end) lines.push('No longer tracked');
+	else lines.push(positionCaption({ state: observation.state, time: observation.point?.time ?? null }, observed, timeZone));
+	if (live.merged) lines.push(`${live.merged.name ?? 'The storm followed'} merged into it at ${hhmm(live.merged.at)}`);
+	if (live.splits.length) lines.push(`${live.splits.length === 1 ? 'A cell' : `${live.splits.length} cells`} split off`);
+	if (wall - live.publishedAt > ACTIVE_STALE_MS) lines.push(`Updates delayed since ${hhmm(live.publishedAt)}`);
+	return lines.filter(Boolean);
 }
