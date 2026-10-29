@@ -42,8 +42,8 @@ export interface DeviceHints {
 const WEAK_GPU = /mali|adreno \(tm\) [1-5]\d\d|powervr|intel\(r\) (hd|uhd) graphics|swiftshader|llvmpipe/i;
 const STRONG_GPU = /apple m\d|nvidia|geforce|rtx|radeon (rx|pro)|apple gpu/i;
 
-/** Phones keep 4 tiles: the globe already takes 250 of their 256 MB until its textures move to KTX2. */
-export const PHONE_SURFACE_MB = 5;
+/** Phones have 256 MB for the whole scene instead of 384 (ADR 0020); the globe takes about 205. */
+export const PHONE_SURFACE_MB = 40;
 
 export function isPhone({ screenMin, coarsePointer }: DeviceHints): boolean {
 	return coarsePointer && screenMin < 600;

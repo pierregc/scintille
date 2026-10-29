@@ -58,11 +58,11 @@ describe('FpsMonitor', () => {
 });
 
 describe('surfaceBudgetMb', () => {
-	it('gives no tiles to the low tier and a few to phones', () => {
+	it('gives no tiles to the low tier and fewer to phones', () => {
 		expect(surfaceBudgetMb('low', false)).toBe(0);
 		expect(surfaceBudgetMb('high', false)).toBe(96);
 		expect(surfaceBudgetMb('medium', false)).toBe(96);
-		expect(surfaceBudgetMb('medium', true)).toBe(5);
+		expect(surfaceBudgetMb('medium', true)).toBe(40);
 		expect(surfaceBudgetMb('low', true)).toBe(0);
 	});
 });
