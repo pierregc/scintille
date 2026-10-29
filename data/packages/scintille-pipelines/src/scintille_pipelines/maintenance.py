@@ -1,4 +1,4 @@
-"""Checks that table maintenance works: file sizes, orphan inventory, raw/ lifecycle."""
+"""Checks that table maintenance works: file sizes and orphan inventory."""
 
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
@@ -26,7 +26,6 @@ MB = 1024 * 1024
 SETTLE = timedelta(days=1)
 WINDOW_DAYS = 7
 # R2 applies lifecycle rules within about a day.
-LIFECYCLE_GRACE = timedelta(days=2)
 SAMPLE = 20
 
 
@@ -90,15 +89,6 @@ def list_objects(store: ObjectStore, prefix: str) -> Iterator[StoredObject]:
             yield StoredObject(meta["path"], meta["size"], meta["last_modified"])
 
 
-def raw_lifecycle(
-    oldest: datetime | None, now: datetime, retention: timedelta
-) -> tuple[bool, dict[str, object]]:
-    """The `raw/` rule is active when no object outlives retention plus R2's delay."""
-    age_days = None if oldest is None else round((now - oldest) / timedelta(days=1), 1)
-    passed = oldest is None or now - oldest <= retention + LIFECYCLE_GRACE
-    return passed, {"oldest_age_days": age_days, "limit_days": retention.days}
-
-
 def _metadata(values: dict[str, object]) -> dict[str, MetadataValue]:
     return {
         k: MetadataValue.json(v) if isinstance(v, dict | list) else MetadataValue.text(str(v))
@@ -150,20 +140,5 @@ def lake_orphan_inventory(lake: LakeResource, r2: R2Resource) -> AssetCheckResul
     )
 
 
-@asset_check(
-    asset=checks.SILVER.key,
-    description="The 30-day lifecycle rule on raw/ is active: no older raw file remains.",
-)
-def raw_lifecycle_active(r2: R2Resource) -> AssetCheckResult:
-    policy = MaintenancePolicy.from_env()
-    oldest = min((o.last_modified for o in list_objects(r2.store(), "raw/")), default=None)
-    passed, report = raw_lifecycle(
-        oldest, checks.clock(), timedelta(days=policy.raw_retention_days)
-    )
-    return AssetCheckResult(
-        passed=passed, severity=AssetCheckSeverity.WARN, metadata=_metadata(report)
-    )
-
-
 DAILY_MAINTENANCE = [lake_file_sizes]
-WEEKLY_MAINTENANCE = [lake_orphan_inventory, raw_lifecycle_active]
+WEEKLY_MAINTENANCE = [lake_orphan_inventory]

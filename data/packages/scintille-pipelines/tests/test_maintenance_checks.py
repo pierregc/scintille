@@ -1,12 +1,11 @@
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-import obstore
 import polars as pl
 import pyarrow as pa
 import pytest
 from dagster import AssetCheckResult, AssetChecksDefinition
-from obstore.store import LocalStore, MemoryStore
+from obstore.store import LocalStore
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
 from scintille_lake.maintenance import object_key
@@ -19,8 +18,6 @@ from scintille_pipelines.maintenance import (
     lake_file_sizes,
     lake_orphan_inventory,
     partition_file_stats,
-    raw_lifecycle,
-    raw_lifecycle_active,
     uncompacted,
 )
 from scintille_pipelines.resources import LakeResource, R2Resource
@@ -71,14 +68,6 @@ class LocalR2(R2Resource):
 
     def store(self) -> LocalStore:
         return LocalStore(self.root)
-
-
-class MemoryR2(R2Resource):
-    def store(self) -> MemoryStore:
-        return STORE
-
-
-STORE = MemoryStore()
 
 
 @pytest.fixture
@@ -144,18 +133,3 @@ def test_orphan_check_lists_only_unreferenced_files(
     result = run(lake_orphan_inventory, lake=lake, r2=LocalR2())
     assert not result.passed
     assert result.metadata["sample"].value == [object_key(str(stray))]
-
-
-def test_raw_lifecycle() -> None:
-    retention = timedelta(days=30)
-    assert raw_lifecycle(None, NOW, retention)[0]
-    assert raw_lifecycle(NOW - timedelta(days=31), NOW, retention)[0]
-    assert not raw_lifecycle(NOW - timedelta(days=33), NOW, retention)[0]
-
-
-def test_raw_lifecycle_check_reads_raw_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
-    obstore.put(STORE, "raw/glm-east/a.nc", b"x")
-    monkeypatch.setattr(checks, "clock", lambda: datetime.now(UTC))
-    assert run(raw_lifecycle_active, r2=MemoryR2()).passed
-    monkeypatch.setattr(checks, "clock", lambda: datetime.now(UTC) + timedelta(days=40))
-    assert not run(raw_lifecycle_active, r2=MemoryR2()).passed

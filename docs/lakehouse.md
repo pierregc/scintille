@@ -52,10 +52,9 @@ expiration; we only configure and watch them. Values live in `MaintenancePolicy`
 | Compaction target file size | 128 MB (R2 accepts 64 to 512) | `SCINTILLE_COMPACTION_TARGET_MB` |
 | Snapshot expiration | 3 days | `SCINTILLE_SNAPSHOT_RETENTION_DAYS` |
 | Snapshots always kept | 5 | `SCINTILLE_SNAPSHOTS_RETAINED_MIN` |
-| `raw/` lifecycle (checked, set in Terraform) | 30 days | `SCINTILLE_RAW_RETENTION_DAYS` |
 | Orphan inventory minimum file age | 7 days, must exceed snapshot expiration | `SCINTILLE_ORPHAN_MIN_AGE_DAYS` |
 
-The snapshot and `raw/` defaults are the ADR 0006 values; the retention decision (#41) may change
+The snapshot defaults are the ADR 0006 values; the retention decision (#41) may change
 them. A read-only `scintille-lake retention-report` command and the
 [retention measurement runbook](retention.md) collect evidence for the proposed policy. The catalog token in Terraform has no catalog permission, so the policy is applied by hand:
 

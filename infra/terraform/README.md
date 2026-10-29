@@ -23,7 +23,7 @@ Choices:
 - `scintille-live-preview` stays private, with no domain and no CORS. Previews read it server side
   through the `LIVE` binding; in the browser, Previews read the production feed on
   `data.scintille.app`, read-only ([deploy](../../docs/deploy.md#previews)).
-- `scintille-lake` is private. Objects under `raw/` are deleted after 30 days; incomplete multipart
+- `scintille-lake` is private. Objects under `raw/`, the former GLM cache, are deleted after 1 day; incomplete multipart
   uploads are aborted after 7 days (the rule R2 adds by default, kept because the lifecycle resource
   replaces all rules). R2 Data Catalog is enabled once by hand (the token has no catalog
   permission), see below; compaction and snapshot expiration are not managed here.
@@ -140,7 +140,7 @@ pnpm -C web exec wrangler r2 object delete scintille-live/tf-check.txt --remote
 # Lake and preview not public
 pnpm -C web exec wrangler r2 bucket dev-url get scintille-lake          # disabled
 pnpm -C web exec wrangler r2 bucket domain list scintille-lake          # none
-pnpm -C web exec wrangler r2 bucket lifecycle list scintille-lake       # raw/ after 30 days
+pnpm -C web exec wrangler r2 bucket lifecycle list scintille-lake       # raw/ after 1 day
 pnpm -C web exec wrangler basin catalog get scintille-lake             # active
 
 # www: at most 2 redirects, ends on the apex; HSTS present
