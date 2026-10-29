@@ -57,5 +57,30 @@ candidates AS (
     SELECT 'stationary', NULL, slug, row_number() OVER (ORDER BY flashes DESC, slug)
     FROM week
     WHERE hours >= $stationary_hours AND drift_km <= $stationary_km
+),
+-- Where each day, week or area winner ranks among the storms it was compared with.
+pools AS (
+    SELECT 'day' AS kind, NULL AS pool, * FROM day
+    UNION ALL
+    SELECT 'week', NULL, * FROM week
+    UNION ALL
+    SELECT 'area', area, * FROM day
+),
+pool_ranks AS (
+    SELECT
+        kind,
+        pool,
+        slug,
+        rank() OVER (PARTITION BY kind, pool ORDER BY flashes DESC) AS flashes_rank,
+        rank() OVER (PARTITION BY kind, pool ORDER BY countries DESC) AS countries_rank,
+        rank() OVER (PARTITION BY kind, pool ORDER BY distance_km DESC NULLS LAST)
+            AS distance_km_rank,
+        rank() OVER (PARTITION BY kind, pool ORDER BY hours DESC) AS hours_rank
+    FROM pools
 )
-SELECT kind, area, slug FROM candidates WHERE rank = 1 ORDER BY kind, area
+SELECT c.kind, c.area, c.slug, r.flashes_rank, r.countries_rank, r.distance_km_rank, r.hours_rank
+FROM candidates AS c
+LEFT JOIN pool_ranks AS r
+    ON r.kind = c.kind AND r.pool IS NOT DISTINCT FROM c.area AND r.slug = c.slug
+WHERE c.rank = 1
+ORDER BY c.kind, c.area

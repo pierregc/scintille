@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.7.0"]
-SCHEMA_VERSION: Final = "2.7.0"
+SchemaVersion = Literal["2.8.0"]
+SCHEMA_VERSION: Final = "2.8.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -569,6 +569,23 @@ class StormIndexPage(BaseModel):
     storms: list[StormSummary]
 
 
+class StormMetric(BaseModel):
+    """The one figure that makes a highlighted storm notable."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: Literal["flashes", "countries", "distance_km", "hours", "peak_rate", "area_km2"] = Field(
+        description=(
+            "Total flashes, countries crossed by the centroid, distance travelled, "
+            "duration, peak flashes per minute, or largest cell area."
+        )
+    )
+    value: float = Field(ge=0)
+    rank: int = Field(
+        ge=1, description="Rank among the storms the highlight was chosen from, 1 for the most."
+    )
+
+
 class StormHighlight(BaseModel):
     """One highlighted storm and the reason it was chosen."""
 
@@ -585,6 +602,9 @@ class StormHighlight(BaseModel):
         description="Broad area from the storm centroid, set when kind is area."
     )
     storm: StormSummary
+    metric: StormMetric | None | None = Field(
+        default=None, description="Null in files older than 2.8.0."
+    )
 
 
 class StormHighlights(BaseModel):

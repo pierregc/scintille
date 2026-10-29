@@ -87,7 +87,7 @@ def published_slugs(store: CatalogStore) -> set[str]:
 
 
 def selected_flashes(flashes: pl.DataFrame, tracks: pl.DataFrame) -> pl.DataFrame:
-    """Track-window bounds selection, explicitly broader than exact cell membership."""
+    """Track-window bounds from each cell's first flash, broader than exact cell membership."""
     selected = []
     for step in tracks.iter_rows(named=True):
         lon = pl.col("lon")
@@ -99,7 +99,7 @@ def selected_flashes(flashes: pl.DataFrame, tracks: pl.DataFrame) -> pl.DataFram
         selected.append(
             flashes.filter(
                 pl.col("event_time").is_between(
-                    step["window_start"], step["window_end"], closed="left"
+                    min(step["window_start"], step["t_start"]), step["window_end"], closed="left"
                 )
                 & pl.col("lat").is_between(step["south"], step["north"])
                 & longitude
