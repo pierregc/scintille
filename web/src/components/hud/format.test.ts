@@ -76,7 +76,7 @@ describe('storm captions', () => {
 
 	it('explains merges, splits, ends and late updates', () => {
 		expect(caption({ ...live, merged: { name: 'Lakeland', at: Date.parse('2026-07-15T18:44:10Z') } })).toContain('Lakeland merged into it at 18:44');
-		expect(caption({ ...live, splits: [cell] })).toContain('A cell split off');
+		expect(caption({ ...live, splits: [{ ...cell, t_start: '2026-07-15T18:33:00Z' }] })).toContain('A cell split off at 18:33');
 		expect(caption({ ...live, splits: [cell, cell] })).toContain('2 cells split off');
 		expect(caption({ ...live, end: { reason: 'expired', tEnd: Date.parse('2026-07-15T18:41:02Z') } })[1]).toBe('Ended · last flash 18:41');
 		expect(caption({ ...live, end: { reason: 'source-gap', tEnd: Date.parse('2026-07-15T18:29:40Z') } })[1]).toBe('No data from GLM East since 18:29');

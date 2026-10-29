@@ -192,7 +192,8 @@ export class StormFocus {
 		const observed = this.options.observedTime(subject?.sources ?? []);
 		const observation = subject ? observe(subject, observed) : PENDING;
 		this.#status = { subject, observation, observed, live: this.#live };
-		this.footprint.set(subject?.footprint(observation) ?? null, subject?.level ?? 0, now);
+		const over = this.#live?.end && this.#live.end.reason !== 'source-gap';
+		this.footprint.set(over ? null : (subject?.footprint(observation) ?? null), subject?.level ?? 0, now);
 		this.footprint.update(now);
 		if (subject?.kind === 'replay') track.setStorm(replay.state.selected);
 		else if (this.#live) track.setPath(this.#live.cell, this.#live.cell.path, this.#live.cell.level);

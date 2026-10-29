@@ -74,6 +74,62 @@ Cost, `bench.mjs` desktop headless, 60×, afterglow 0, R1, R2, R5: frame cost p9
 horizon view against 11.8 to 14.6 ms at `window` in the same run, no frame interval over 16.8 ms at p95.
 Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
 
+### Storm follow
+
+`Follow` keeps the camera on a storm (#258): the open replay, or a storm picked on the live globe
+([`focus/`](../web/src/globe/focus/)).
+
+- **Picking a live storm.** A tap or click selects the active cell under it, or the nearest one
+  within 12 CSS px (24 on touch), from `storms/active.json`. The globe polls it every 60 s with
+  revalidation while it is live (ADR 0021); a changed object is about 80 kB gzipped. The camera
+  frames the cell, its hull and 10 minute path appear, and each flash is drawn alone (afterglow 0)
+  as in a replay. `Globe` drops it and flies back out (Escape stops following first); leaving a
+  replay flies out too.
+- **Position and footprint.** Both follow [scene time](#scene-time): the latest position at or
+  before the observed time, never interpolated, shown for 90 minutes. Live, the 10 minute path point
+  and the hull of the current cell, solid. Replay, the catalog keeps one centroid and area per
+  hourly window, not the outline: a dashed circle of that area. A thin light line over a 1 px dark
+  shadow, so it reads over sunlit clouds and at night; changes fade over 500 ms.
+- **Framing.** The storm frame: tilt 20°, the footprint fitted in the safe area (`frameStorm`), never
+  below the floor, so it backs off as the storm grows. With `Horizon`, the horizon view along a fixed
+  heading: the one the view had, or the motion between the last two positions when switched on
+  while following. The heading never turns with the storm.
+- **Motion.** The camera glides to each new position with a critically damped spring (most of the
+  way in 2 s) and stops on it, never past it: it lags the observations and predicts nothing. A
+  position more than 4° away is reached by a flight. With reduced motion it moves at once.
+- **Leaving.** Any camera input (drag, wheel, pinch, tap on the globe) stops following at once.
+  Scrubbing, speed and pause keep it: the camera goes to the position of the new time.
+- **Splits, merges and ends.** A live storm is followed through `previous_ids`, `ended` and `into`
+  (`resolveCell`). A replaced id continues silently; a merger continues with the other storm and
+  says so ("Lakeland merged into it at 18:44"); a split leaves the main branch followed ("A cell
+  split off at 18:33"). An expired storm ("Ended · last flash 18:41") or one the feed no longer
+  lists ("No longer tracked") stops following and loses its hull, its path stays. A silent source
+  ("No data from MTG LI since 18:29") keeps it, as it may come back. A replay storm past its last
+  flash says "Ended · last flash 05:22".
+- **Lost updates.** A snapshot older than 15 minutes adds "Updates delayed since 10:05" and the last
+  one stays; a failed poll backs off. The camera holds the last position.
+
+Measured on the five storms with a local production build against production data, 60× from
+12 minutes before the reference hour, following, then the horizon view
+([`measurements.json`](immersive/follow/measurements.json)):
+
+| | R1 | R2 | R3 | R4 | R5 |
+|---|---|---|---|---|---|
+| Camera range while following, km | 545 to 658 | 568 to 821 | 432 | 432 | 432 |
+| Frames where the camera moved away from the position it follows | 0 | 0 | 0 | 0 | 0 |
+| Largest move between two frames, km | 0.7 | 0.9 | 0.8 | 0.6 | 0.3 |
+| Flashes of the last 10 minutes within half the view height, p10 | 85 % | 84 % | 97 % | 100 % | 100 % |
+
+Same page A/B on R1 and R5 (desktop, DPR 2): the footprint adds 2 draw calls (28 to 30) and no
+measurable frame cost (p95 14.7 against 14.7 ms and 10.7 against 11.0 ms; the Mac ran other GPU
+jobs). The follow update costs under 0.2 ms at p99 per frame at 600×, parsing a snapshot 0.6 ms
+(2.3 ms with a 4× slower CPU). Ten rounds of picking, following, opening a replay, following and
+returning to live kept WebGL buffers at 25 and vertex arrays at 18, and the JS heap between 37 and
+46 MB. Captures in [`immersive/follow/`](immersive/follow/) (clock in Paris time): `R1-follow.jpg`
+to `R5-follow.jpg`, `live.jpg` and `live-touch.jpg` (a live storm picked, followed, at the horizon,
+back to the globe), `R5-touch.jpg` (phone: follow, horizon, a drag stops it, scrubbing while
+following, back to live).
+
 ## Scale
 
 1 world unit is the Earth radius, 6,371 km (`kmToWorld`). The vertical field of view is 35°, so
@@ -306,8 +362,8 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
    flights and storm framing.
 9. **No visible pixels at the floor.** At the nearest visible point, a ground texel covers at most
    2 CSS px and a cloud texel at most 4 CSS px, with bicubic filtering for clouds.
-10. **Storm views without afterglow.** While a storm is open or followed, the afterglow is 0: each
-   flash shows its flicker and a fade of about a second, then leaves no trace.
+10. **Storm views without afterglow.** While a storm is open, picked on the live globe or followed,
+   the afterglow is 0: each flash shows its flicker and a fade of about a second, then leaves no trace.
 11. **Real time flicker.** A flash flickers for its observed duration in wall clock time at any
    replay speed: pulses about 60 ms apart (10 to 200 ms, as between real strokes), a rise within
    one frame, a decay of tens of milliseconds. Replay speed only compresses the gaps between

@@ -125,7 +125,8 @@ export function liveCaption(
 	} else if (end) lines.push('No longer tracked');
 	else lines.push(positionCaption({ state: observation.state, time: observation.point?.time ?? null }, observed, timeZone));
 	if (live.merged) lines.push(`${live.merged.name ?? 'The storm followed'} merged into it at ${hhmm(live.merged.at)}`);
-	if (live.splits.length) lines.push(`${live.splits.length === 1 ? 'A cell' : `${live.splits.length} cells`} split off`);
+	if (live.splits.length === 1) lines.push(`A cell split off at ${hhmm(Date.parse(live.splits[0].t_start))}`);
+	else if (live.splits.length > 1) lines.push(`${live.splits.length} cells split off`);
 	if (wall - live.publishedAt > ACTIVE_STALE_MS) lines.push(`Updates delayed since ${hhmm(live.publishedAt)}`);
 	return lines.filter(Boolean);
 }

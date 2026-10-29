@@ -105,7 +105,9 @@ describe('storm focus in live', () => {
 		gulf.tick();
 		expect(gulf.focus.live).toMatchObject({ id: 'synthetic-gulf-1808', end: { reason: 'expired' } });
 		expect(gulf.focus.following).toBe(false);
-		expect(gulf.focus.footprint.size).toBe(1);
+		gulf.tick(FOOTPRINT.fadeMs + 1);
+		expect(gulf.focus.footprint.size).toBe(0);
+		expect(gulf.track.group.visible).toBe(true);
 	});
 
 	it('leaves following on camera input and returns to the globe', async () => {
