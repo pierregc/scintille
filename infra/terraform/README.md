@@ -7,7 +7,7 @@ The VPS is not here: it is ordered by hand and configured by [`infra/vps/bootstr
 |---|---|
 | `r2.tf` | Buckets `scintille-live`, `scintille-live-preview`, `scintille-lake` (ENAM, Standard, `prevent_destroy`); `r2.dev` URL off on all three; `data.scintille.app` custom domain on `scintille-live`; CORS on `scintille-live`; lifecycle on `scintille-lake` |
 | `zone.tf` | Proxied `www` record, `www` → apex 301 redirect rule, Always Use HTTPS, HSTS |
-| `edge.tf` | Cache rule on `data.scintille.app`, WAF rule blocking query strings and writes there, per-IP rate limit |
+| `edge.tf` | Cache rule on `data.scintille.app`, WAF rule blocking query strings and writes there, per-IP rate limit, Smart Tiered Cache |
 | `d1.tf` | D1 databases `scintille-search` and `scintille-search-preview` (Western Europe, no replicas, `prevent_destroy`) for storm search ([ADR 0027](../../docs/adr/0027-storm-search.md)) |
 
 Ownership:
@@ -33,6 +33,8 @@ Choices:
   rarely reach R2 (billed per read). Query strings are blocked there since they would bypass the
   cache. The rate limit (Free plan: path only, 10 s) is a backstop for random paths; R2 has no
   spending cap.
+- Smart Tiered Cache sends edge misses to one upper tier next to the bucket, so the live manifest's
+  2 s `max-age` costs at most one R2 read every 2 s in all ([ADR 0026](../../docs/adr/0026-live-latency.md)).
 - HSTS: 6 months, `includeSubDomains`, no preload, `nosniff`. Every subdomain must stay HTTPS-only.
 
 ## Inputs

@@ -86,7 +86,7 @@ behind the Americas. Lower latency needs another channel, such as EUMETCast (#20
 ## Live feed on R2
 
 ```
-live/manifest.json                    Cache-Control: max-age=10
+live/manifest.json                    Cache-Control: max-age=2
 live/metrics.json                     Cache-Control: max-age=30
 live/coverage.geojson                 Cache-Control: max-age=3600
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
@@ -94,7 +94,8 @@ live/chunks/20260715T183030Z.bin.gz
 ...
 ```
 
-- A **chunk** holds the flashes **ingested** during a window `[start, end)`, 30 s today.
+- A **chunk** holds the flashes **ingested** during a window `[start, end)`, one per GLM slot
+  today, about 20 s ([ADR 0026](adr/0026-live-latency.md)).
   Chunks are keyed by ingest time, not event time, so a chunk is complete when its window ends and
   never changes afterwards: late data lands in a later chunk instead of rewriting an old one. Event
   times inside a chunk are therefore usually 20 to 60 s before its `start` (`event_offset_ms < 0`).
@@ -196,7 +197,8 @@ that ignore it keep the global textures:
   cubic filter needs no other tile.
 - Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
   1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
-  significant bit first.
+  significant bit first. A pack that keeps only some tiles of levels 3 and 4 lists them in
+  `coarse`: base64 of one bit per tile of those levels, in index order, least significant bit first.
 - All tiles of a frame are one object (`.tiles`, immutable): an index of `index_bytes`, one pair of
   little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
   order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
@@ -204,8 +206,32 @@ that ignore it keep the global textures:
 - The object is written once, before the manifests, under `archive/clouds/detail/`; the live
   manifest and the daily archive index both point there, each with a path relative to itself
   (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
-- Detail is kept one day: the publisher then deletes the object and removes the `detail` block
-  from its archive index, so older replays keep the `2k` and `4k` textures only.
+- Detail is kept one day. The publisher then writes the level 4 and 5 tiles under the ten strongest
+  storms of each UTC day (flashes × peak rate, track positions within an hour of the frame) to a
+  `-storms.tiles` object with `coarse`, points the archive index to it, and deletes the full
+  object; frames without such a storm lose their `detail` block. Everything under
+  `archive/clouds/` goes after 30 days.
+- Cloud-top heights ([ADR 0028](adr/0028-cloud-relief.md)) travel in the same object, declared by
+  an optional `height` block inside `detail`; clients that ignore it read the opacity index as
+  before:
+
+  ```json
+  "height": {
+    "levels": [3, 4],
+    "max_km": 20,
+    "index_offset": 21504,
+    "index_bytes": 5120,
+    "reference": "gfs 2026101812 f003 0p50"
+  }
+  ```
+
+  A second index of the same form starts at `index_offset`, one pair per possible tile of
+  `levels`, and points to grayscale WebP tiles on the opacity grid (same size and border): 0 to
+  255 map onto 0 to `max_km` above sea level. Heights come from the infrared brightness
+  temperature matched to the GFS temperature profile named in `reference` (`lapse from …` when
+  the profile was missing). Clear texels carry the tops of the nearby clouds, so filtering never
+  slopes a top down to the ground. A `-storms.tiles` object keeps the level 4 heights under its
+  storms.
 
 ## Historical cloud discovery
 
@@ -243,7 +269,8 @@ The canonical limits, tiers and texture-path rule are packaged in
 vectors exercise their accepted and rejected payloads without adding a generic runtime validator.
 `expires_at` is archive publication plus 30 days. The existing archive lifecycle can still remove
 referenced objects; indices do not promise permanent availability or exact cloud measurements at
-every scene instant. No existing unindexed archive is backfilled by this change.
+every scene instant. `scintille-ingest clouds-reindex --first DAY --last DAY` indexes textures
+archived before the indexes existed, without uploading them again ([ADR 0025](adr/0025-past-days-archive.md)).
 
 Interactive replay fetches at most three daily indices and keeps at most three frame textures close
 to the playhead, bounded by the existing 3-hour gap rule. Selection follows sub-hourly scrubs as well.
@@ -260,6 +287,40 @@ under `/_replay-fixtures/archive/clouds/` only in Preview builds. Their far-futu
 dates are synthetic so the real July imagery remains available for repeatable visual checks.
 Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
 does not include these fixtures. Dev uses the existing fixture server at the configured data root.
+
+## Flash archive
+
+Travel in time reads flashes before the live window from `archive/flashes/`
+([ADR 0025](adr/0025-past-days-archive.md)). The Dagster job `hourly_flash_archive` writes it from
+silver at :02 and :32, reading the two newest archived hours again for late rows, and rereads the
+previous day at 02:45. Limits and the chunk path rule are in `scintille_contract/flash_archive_rules.json`.
+
+```
+archive/flashes/index.json                     Cache-Control: public, max-age=60
+archive/flashes/manifests/2026-10-15.json      Cache-Control: public, max-age=60
+archive/flashes/chunks/<sha256>.bin.gz         Cache-Control: public, max-age=31536000, immutable
+```
+
+```json
+{
+  "schema_version": 1,
+  "day": "2026-10-15",
+  "generated_at": "2026-10-15T19:02:41Z",
+  "hours": [{
+    "start": "2026-10-15T18:00:00Z",
+    "flash_count": 203114,
+    "chunks": [{"path": "../chunks/3f1c...e9.bin.gz", "flash_count": 65536, "size_bytes": 604211,
+                "event_min": "2026-10-15T18:00:00.012Z", "event_max": "2026-10-15T18:19:07.441Z"}]
+  }]
+}
+```
+
+- Chunks use the live encoding with the hour as origin, at most 65,536 flashes each, in event time
+  order. An hour whose flashes changed gets new chunks; the replaced ones are deleted after the
+  day index is written, so a reader holding an old index refetches it on a missing chunk.
+- An hour without flashes in silver is absent: the reader shows missing data, never an empty sky.
+- `index.json` gives `first_day`, `last_hour` and `retention_days` (silver's, 21). Days before
+  `first_day` are deleted by the job; an R2 lifecycle rule removes anything older than 22 days.
 
 ## Chunk encoding
 
@@ -1110,6 +1171,6 @@ Open that URL, choose the 5 min afterglow, enable thunder from the HUD, and obse
 fixture flashes. Click Live,
 check that the old flashes and pending thunder disappear, then click Time travel to reload the
 fixture in the same scene. Repeat these two controls without reloading the page.
-Use the debug panel to inspect ring counts and the browser's graphics/audio tools to check stable
+Use the browser's graphics/audio tools to check stable
 resources across repeated round trips. This fixture entry is for loader QA; it does not implement
 production storm links or scene restoration.

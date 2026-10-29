@@ -59,3 +59,14 @@ resource "cloudflare_ruleset" "rate_limit" {
     }
   }]
 }
+
+# One upper tier next to the bucket: a short manifest max-age does not multiply R2 reads (ADR 0026).
+resource "cloudflare_argo_tiered_caching" "tiered" {
+  zone_id = var.zone_id
+  value   = "on"
+}
+
+resource "cloudflare_tiered_cache" "smart" {
+  zone_id = var.zone_id
+  value   = "on"
+}

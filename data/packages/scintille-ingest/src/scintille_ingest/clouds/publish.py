@@ -21,6 +21,7 @@ from scintille_contract.cloud_archive import (
 from scintille_ingest.runtime.live_feed import LiveStore
 
 from . import tiles
+from .storm_detail import Position, StormTracks, keys_under
 from .texture import TIERS
 
 log = logging.getLogger("scintille_ingest.clouds")
@@ -29,7 +30,10 @@ ATTRIBUTION = "Clouds: NOAA NESDIS GMGSI (contains EUMETSAT Meteosat and JMA Him
 WINDOW = timedelta(hours=6)
 ARCHIVE_RETENTION = timedelta(days=30)
 DETAIL_RETENTION = timedelta(days=1)
-"""Detail packs are the bulk of the archive; older replays keep the global textures."""
+"""Detail packs are the bulk of the archive; older replays keep the global textures, and the tiles
+under the day's strongest storms."""
+STORM_GRACE = timedelta(hours=6)
+"""How long an expired pack waits for an unreadable storm catalog before it goes whole."""
 TEXTURE_HEADERS = {
     "Content-Type": "image/webp",
     "Cache-Control": "public, max-age=31536000, immutable",
@@ -49,6 +53,19 @@ class CloudTexture(BaseModel):
     size_bytes: int = Field(strict=True, ge=1, le=MAX_CLOUD_FRAME_BYTES)
 
 
+class CloudHeights(BaseModel):
+    """Cloud-top height tiles in the same pack, after the opacity index (ADR 0028)."""
+
+    levels: list[int]
+    max_km: float
+    """Grayscale 0 to 255 maps onto 0 to `max_km` above sea level."""
+    index_offset: int = Field(strict=True, ge=0)
+    index_bytes: int = Field(strict=True, ge=0)
+    """Same form as the opacity index, one pair per possible tile of `levels`."""
+    reference: str
+    """Temperature profile the heights come from, or the lapse rate fallback."""
+
+
 class CloudDetail(BaseModel):
     """Finer tiles of the same frame, for close views (ADR 0023)."""
 
@@ -62,9 +79,12 @@ class CloudDetail(BaseModel):
     max_latitude: float
     fine: str
     """Finest level tiles present: base64 bitmap, row-major from the north-west, low bit first."""
+    coarse: str | None = None
+    """Other levels' tiles present, in index order, when a pack keeps only some of them."""
     size_bytes: int = Field(strict=True, ge=0)
     index_bytes: int = Field(strict=True, ge=0)
     """Length of the index at the start of the object."""
+    height: CloudHeights | None = None
 
 
 class CloudFrameRef(BaseModel):
@@ -148,9 +168,11 @@ class CloudPublisher:
         archive: LiveStore,
         window: timedelta = WINDOW,
         attribution: str = ATTRIBUTION,
+        storms: StormTracks | None = None,
     ) -> None:
         self.live = live
         self.archive = archive
+        self.storms = storms
         self.window = window
         self.attribution = attribution
         self.frames: list[CloudFrameRef] = []
@@ -172,12 +194,16 @@ class CloudPublisher:
         textures: dict[str, bytes],
         now: datetime,
         detail: Mapping[tiles.Key, bytes] | None = None,
+        heights: Mapping[tiles.Key, bytes] | None = None,
+        heights_reference: str = "",
     ) -> CloudFrameRef:
         """Detail tiles, textures, then the manifest, then the archive copies. Live textures that
         left the window are deleted on the next publish, so cached manifests still resolve."""
         time = time.astimezone(UTC)
         name = texture_name(time, product)
-        detail_ref = await self._detail(time, name, detail) if detail else None
+        detail_ref = (
+            await self._detail(time, name, detail, heights, heights_reference) if detail else None
+        )
         refs = {}
         for tier, data in textures.items():
             path = f"{tier}/{name}"
@@ -212,11 +238,16 @@ class CloudPublisher:
         return frame
 
     async def _detail(
-        self, time: datetime, name: str, detail: Mapping[tiles.Key, bytes]
+        self,
+        time: datetime,
+        name: str,
+        detail: Mapping[tiles.Key, bytes],
+        heights: Mapping[tiles.Key, bytes] | None = None,
+        heights_reference: str = "",
     ) -> CloudDetail:
         """Uploads the tiles as one object; the returned path is relative to the archive root."""
         path = detail_path(time, name)
-        data = tiles.pack(detail)
+        data = tiles.pack(detail, heights)
         await self.archive.put(path, data, PACK_HEADERS)
         return CloudDetail(
             path=path,
@@ -227,6 +258,15 @@ class CloudPublisher:
             fine=tiles.bitmap(detail, tiles.FINE_LEVEL),
             size_bytes=len(data),
             index_bytes=tiles.INDEX_SLOTS * 8,
+            height=CloudHeights(
+                levels=list(tiles.HEIGHT_LEVELS),
+                max_km=tiles.HEIGHT_MAX_KM,
+                index_offset=tiles.INDEX_SLOTS * 8,
+                index_bytes=tiles.HEIGHT_SLOTS * 8,
+                reference=heights_reference,
+            )
+            if heights is not None
+            else None,
         )
 
     def manifest(self, now: datetime) -> CloudManifest:
@@ -291,7 +331,8 @@ class CloudPublisher:
             log.exception("cloud archive publication failed")
 
     async def _expire_details(self, now: datetime) -> None:
-        """Deletes the detail packs published before the retention and unlists them."""
+        """Cuts the detail packs published before the retention down to the tiles under the top
+        storms, or deletes them, and updates their archive index."""
         cutoff = now - DETAIL_RETENTION
         for day in sorted({(cutoff - timedelta(days=1)).date(), cutoff.date()}):
             key = f"manifests/{day}.json"
@@ -300,19 +341,85 @@ class CloudPublisher:
                 if not data:
                     continue
                 manifest = ArchiveCloudManifest.model_validate_json(data)
-                frames = []
+                due = [
+                    f
+                    for f in manifest.frames
+                    if f.detail and f.detail.coarse is None and f.published_at < cutoff
+                ]
+                if not due:
+                    continue
+                positions = await self._storm_positions([f.time for f in due])
+                frames, stale = [], []
                 for frame in manifest.frames:
-                    if frame.detail and frame.published_at < cutoff:
-                        await self.archive.delete(frame.detail.path.removeprefix("../"))
-                        frame = frame.model_copy(update={"detail": None})
+                    if frame in due and frame.detail:
+                        if positions is None and frame.published_at >= cutoff - STORM_GRACE:
+                            frames.append(frame)
+                            continue
+                        kept = await self._storm_tiles(
+                            frame.detail, (positions or {}).get(frame.time, [])
+                        )
+                        stale.append(frame.detail.path.removeprefix("../"))
+                        frame = frame.model_copy(update={"detail": kept})
                     frames.append(frame)
                 if frames != manifest.frames:
                     updated = manifest.model_copy(update={"frames": frames, "generated_at": now})
                     await self.archive.put(
                         key, updated.model_dump_json().encode(), MANIFEST_HEADERS
                     )
+                for path in stale:
+                    await self.archive.delete(path)
             except Exception:
                 log.exception("cloud detail expiry failed", extra={"fields": {"day": str(day)}})
+
+    async def _storm_positions(
+        self, times: list[datetime]
+    ) -> dict[datetime, list[Position]] | None:
+        if self.storms is None:
+            return {}
+        try:
+            return await self.storms.positions(times)
+        except Exception:
+            log.warning("storm catalog unreadable; detail packs wait", exc_info=True)
+            return None
+
+    async def _storm_tiles(
+        self, detail: CloudDetail, positions: list[Position]
+    ) -> CloudDetail | None:
+        """A pack of the tiles under the storms, next to the full one; None when there are none."""
+        keys = keys_under(positions)
+        if not keys:
+            return None
+        path = detail.path.removeprefix("../")
+        pack = await self.archive.get(path)
+        if not pack:
+            return None
+        kept = {k: tile for k in sorted(keys) if (tile := tiles.unpack(pack, k))}
+        if not kept:
+            return None
+        heights = (
+            {
+                k: tile
+                for k in sorted(keys)
+                if k.z in tiles.HEIGHT_LEVELS and (tile := tiles.unpack_height(pack, k))
+            }
+            if detail.height
+            else None
+        )
+        storm_path = f"{path.removesuffix('.tiles')}-storms.tiles"
+        data = tiles.pack(kept, heights)
+        await self.archive.put(storm_path, data, PACK_HEADERS)
+        log.info(
+            "storm cloud detail kept",
+            extra={"fields": {"path": storm_path, "tiles": len(kept), "bytes": len(data)}},
+        )
+        return detail.model_copy(
+            update={
+                "path": f"../{storm_path}",
+                "fine": tiles.bitmap(kept, tiles.FINE_LEVEL),
+                "coarse": tiles.coarse_bitmap(kept),
+                "size_bytes": len(data),
+            }
+        )
 
     async def _delete(self, path: str) -> None:
         try:

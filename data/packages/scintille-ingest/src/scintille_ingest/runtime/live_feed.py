@@ -1,4 +1,4 @@
-"""Live feed publisher: 30-second chunks by ingest time, then the manifest, then expired chunks."""
+"""Live feed publisher: chunks by ingest time, then the manifest, then expired chunks."""
 
 import asyncio
 import contextlib
@@ -38,7 +38,7 @@ CHUNK_HEADERS = {
     "Content-Type": "application/octet-stream",
     "Cache-Control": "public, max-age=31536000, immutable",
 }
-MANIFEST_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public, max-age=10"}
+MANIFEST_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public, max-age=2"}
 COVERAGE_PATH = "coverage.geojson"
 COVERAGE_HEADERS = {"Content-Type": "application/geo+json", "Cache-Control": "public, max-age=3600"}
 
@@ -66,6 +66,32 @@ class StateDelays:
 
 PRODUCT_CADENCE: dict[str, timedelta] = {"mtg-li": timedelta(minutes=10)}
 """Time between two product files of a source, added to its state delays."""
+
+
+@dataclass(frozen=True)
+class FlushPolicy:
+    """When to publish the next chunk (ADR 0026): once every live source of `wait_for` delivered a
+    file, or `timeout` after the first pending flashes; never within `spacing` of the previous
+    chunk; an empty chunk after `idle` without data."""
+
+    wait_for: frozenset[str] = frozenset({"glm-east", "glm-west"})
+    timeout: timedelta = timedelta(seconds=10)
+    spacing: timedelta = timedelta(seconds=15)
+    idle: timedelta = timedelta(seconds=30)
+
+    def due(
+        self,
+        now: datetime,
+        previous: datetime,
+        first_pending: datetime | None,
+        delivered: set[str],
+        live: set[str],
+    ) -> datetime:
+        if first_pending is None:
+            return previous + self.idle
+        expected = self.wait_for & live
+        ready = now if expected and expected <= delivered else first_pending + self.timeout
+        return max(ready, previous + self.spacing)
 
 
 def _seconds(value: str | None, default: timedelta) -> timedelta:
@@ -222,14 +248,16 @@ class LiveFeed:
         store: LiveStore,
         *,
         outbox: Path,
-        chunk_seconds: int = 30,
+        chunk_seconds: int = 20,
         window: timedelta = timedelta(hours=1),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         metrics: Metrics | None = None,
         delays: StateDelays | None = None,
+        policy: FlushPolicy | None = None,
     ) -> None:
         self.store = store
         self.delays = delays or StateDelays()
+        self.policy = policy or FlushPolicy()
         self.chunk_seconds = chunk_seconds
         self.window = window
         self._clock = clock
@@ -244,6 +272,10 @@ class LiveFeed:
         self.manifest_at: datetime | None = None
         self._coverage_published = False
         self._stop = asyncio.Event()
+        self._delivered: set[str] = set()
+        self._first_pending: datetime | None = None
+        self._previous_flush: datetime | None = None
+        self._arrival = asyncio.Event()
 
     async def restore(self) -> None:
         """Continues the published chunk list and reloads the flashes no manifest lists yet."""
@@ -269,10 +301,16 @@ class LiveFeed:
             self._recent_ids.update(dict.fromkeys(frame["flash_id"].to_list(), at))
             for (source,), group in frame.group_by("source"):
                 self._seen(str(source), group, at)
+        if self._pending:
+            self._first_pending = self._clock()
+        if manifest:
+            self._previous_flush = manifest.generated_at
 
     async def publish(self, source: str, flashes: pl.DataFrame) -> None:
         """Idempotent by `flash_id` over the live window; an empty frame still counts as ingest."""
         now = self._clock()
+        self._delivered.add(source)
+        self._arrival.set()
         fresh = flashes.filter(~pl.col("flash_id").is_in(list(self._recent_ids)))
         if fresh.height == 0:
             self._seen(source, fresh, now)
@@ -280,6 +318,7 @@ class LiveFeed:
         name = self.outbox.add(fresh, now)
         self._recent_ids.update(dict.fromkeys(fresh["flash_id"].to_list(), now))
         self._pending.append((name, fresh))
+        self._first_pending = self._first_pending or now
         self._seen(source, fresh, now)
 
     def _seen(self, source: str, flashes: pl.DataFrame, at: datetime) -> None:
@@ -300,11 +339,14 @@ class LiveFeed:
     async def flush(self) -> ChunkRef | None:
         """Publishes the buffered flashes as one chunk; the manifest lists stored chunks only."""
         now = self._clock()
+        self._previous_flush = now
         start, end = self._next_window(now)
         if end <= start:
             return None
         path = chunk_name(start)
         batch, self._pending = self._pending, []
+        delivered, self._delivered = self._delivered, set()
+        first_pending, self._first_pending = self._first_pending, None
         try:
             frames = [frame for _, frame in batch]
             flashes = pl.concat(frames, how="vertical_relaxed") if frames else None
@@ -314,6 +356,8 @@ class LiveFeed:
         except BaseException:
             self.outbox.abort(path)
             self._pending = batch + self._pending
+            self._delivered |= delivered
+            self._first_pending = first_pending or self._first_pending
             raise
         self._unlisted.append(path)
         event_min, event_max = event_span(flashes)
@@ -403,14 +447,27 @@ class LiveFeed:
                 },
             )
 
+    def due(self, now: datetime) -> datetime:
+        """When the next chunk is due under the flush policy."""
+        live = {
+            source
+            for source, times in self._sources.items()
+            if times.last_ingest and now - times.last_ingest <= self.delays.delayed_after
+        }
+        previous = self._previous_flush or now - self.policy.spacing
+        return self.policy.due(now, previous, self._first_pending, self._delivered, live)
+
     async def run(self) -> None:
-        """Flushes on whole multiples of `chunk_seconds`; a failed write is retried next time."""
+        """Flushes when `due`; a failed write is retried after the policy's spacing."""
         await self.restore()
         while not self._stop.is_set():
+            self._arrival.clear()
             now = self._clock()
-            wait = self.chunk_seconds - now.timestamp() % self.chunk_seconds
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=wait)
+            wait = (self.due(now) - now).total_seconds()
+            if wait > 0:
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._arrival.wait(), timeout=wait)
+                continue
             try:
                 await self.flush()
             except Exception:
@@ -419,6 +476,7 @@ class LiveFeed:
 
     def stop(self) -> None:
         self._stop.set()
+        self._arrival.set()
 
 
 def parse_manifest(data: bytes) -> LiveManifest:
