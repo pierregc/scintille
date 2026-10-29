@@ -24,7 +24,7 @@ up() {
 # Removes the other tags of the repositories the given releases use; images of running containers stay.
 prune() {
 	local keep repo
-	keep=$(for tag in "$@"; do compose "$tag" config --images; done | sort -u)
+	keep=$(for tag in "$@"; do compose "$tag" config --images; done | sort -u) || return 0
 	for repo in $(printf '%s\n' "$keep" | sed 's/:[^:/]*$//' | sort -u); do
 		docker image ls --format '{{.Repository}}:{{.Tag}}' "$repo" | grep -v '<none>' | sort -u |
 			comm -23 - <(printf '%s\n' "$keep") | xargs -r docker image rm >/dev/null 2>&1 || true
