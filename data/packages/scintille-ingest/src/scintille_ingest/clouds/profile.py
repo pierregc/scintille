@@ -5,6 +5,8 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import obstore
@@ -63,6 +65,19 @@ class HeightTable:
     """Shape (knots, rows, columns)."""
     label: str
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """A memory-mapped table travels to worker processes as its file name."""
+        if isinstance(self.km, np.memmap) and self.km.filename:
+            return _reopen, (str(self.km.filename), self.label)
+        return HeightTable, (self.km, self.label)
+
+    def mapped(self, path: Path) -> "HeightTable":
+        """The same table backed by a file, shared by the worker processes."""
+        km = np.lib.format.open_memmap(path, mode="w+", dtype=np.float16, shape=self.km.shape)
+        km[:] = self.km
+        km.flush()
+        return _reopen(str(path), self.label)
+
     @classmethod
     def of(cls, stacked: Array, label: str) -> "HeightTable":
         """`stacked`: surface height and 2 m temperature, then height and temperature per level
@@ -97,6 +112,10 @@ class HeightTable:
                 for cc, wc in ((c0, 1 - fc), (c1, fc)):
                     out += self.km[kk, rr, cc] * (wk * wr * wc)
         return np.where(np.isfinite(bt), out, np.nan).astype(np.float32)
+
+
+def _reopen(path: str, label: str) -> HeightTable:
+    return HeightTable(np.lib.format.open_memmap(path, mode="r"), label)
 
 
 def column_heights(z: Array, t: Array, bt: Array) -> Array:

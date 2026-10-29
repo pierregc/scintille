@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 
 import numpy as np
 import obstore
@@ -107,3 +108,14 @@ def test_manifest_describes_the_height_index() -> None:
     assert ref.height is not None and ref.height.levels == [3, 4]
     assert ref.height.index_offset == tiles.INDEX_SLOTS * 8
     assert ref.height.index_bytes == 640 * 8 and ref.height.reference == "gfs 0p50"
+
+
+def test_mapped_tables_travel_by_file_name(tmp_path: Path) -> None:
+    import pickle
+
+    km = np.arange(2 * 3 * 4, dtype=np.float16).reshape(2, 3, 4)
+    table = profile.HeightTable(km, "test").mapped(tmp_path / "tops.npy")
+    data = pickle.dumps(table)
+    assert len(data) < 1000
+    copy = pickle.loads(data)
+    assert copy.label == "test" and np.array_equal(copy.km, km)

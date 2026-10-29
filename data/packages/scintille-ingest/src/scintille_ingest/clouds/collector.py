@@ -291,6 +291,7 @@ class CompositeCollector:
         table: HeightTable | None = None,
     ) -> pyramid.Rendered:
         directory.mkdir(parents=True, exist_ok=True)
+        table = table.mapped(directory / "tops.npy") if table else None
         base = pyramid.Inputs((), skin.values, subsolar_point(slot), fallback, table)
         satellites = decode(downloaded, directory, base.top_at)
         for path in downloaded.values():
