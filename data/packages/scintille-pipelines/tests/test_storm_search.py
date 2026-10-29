@@ -2,21 +2,31 @@ import json
 import math
 import os
 import random
+import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 from scintille_contract.models import StormSummary
 from scintille_pipelines.storm_search import (
-    COLS,
+    COARSE,
+    DAILY_ROWS,
     EARTH_KM,
+    FINE,
+    STATE_PATH,
+    D1Rest,
+    Result,
+    State,
     days,
     path_tiles,
     query_tiles,
+    reconcile,
     retained,
     search_row,
-    tile_of,
+    sync_search,
 )
 
 FIXTURE = Path(__file__).parents[4] / "fixtures" / "search" / "geometry.json"
@@ -33,14 +43,15 @@ def brute_distance(lat: float, lon: float, path: list[tuple[float, float]], radi
     p = _unit(lat, lon)
     best = math.inf
     vectors = [_unit(*point) for point in path]
+    t = np.linspace(0, 1, 2001)[:, None]
     for a, b in zip(vectors, vectors[1:] or vectors, strict=False):
         omega = math.acos(min(1.0, float(a @ b)))
-        for t in np.linspace(0, 1, 2001):
-            if omega < 1e-12:
-                v = a
-            else:
-                v = (math.sin((1 - t) * omega) * a + math.sin(t * omega) * b) / math.sin(omega)
-            best = min(best, math.atan2(np.linalg.norm(np.cross(p, v)), float(p @ v)))
+        if omega < 1e-12:
+            samples = a[None, :]
+        else:
+            samples = (np.sin((1 - t) * omega) * a + np.sin(t * omega) * b) / math.sin(omega)
+        angles = np.arctan2(np.linalg.norm(np.cross(samples, p), axis=1), samples @ p)
+        best = min(best, float(angles.min()))
     return max(0.0, best * EARTH_KM - radius)
 
 
@@ -65,34 +76,78 @@ def storm(**changes: object) -> StormSummary:
     return StormSummary.model_validate(base | changes)
 
 
-def track(*points: tuple[float, float, float]) -> list[dict[str, object]]:
+def track(*points: tuple[float, float, float]) -> list[dict[str, Any]]:
     return [
         {"time": T0 + timedelta(hours=i), "lat": lat, "lon": lon, "area_km2": area}
         for i, (lat, lon, area) in enumerate(points)
     ]
 
 
-def test_tiles_wrap_and_clamp() -> None:
-    assert tile_of(-90, -180) == 0
-    assert tile_of(89.99, 179.99) == 90 * COLS - 1
-    assert tile_of(90, 180) == tile_of(89.9, -180)
-    assert tile_of(45.8, 4.8) == 67 * COLS + 92
+class FakeD1:
+    """D1 stand-in: SQLite runs the same statements, one transaction per call."""
+
+    def __init__(self) -> None:
+        self.db = sqlite3.connect(":memory:", isolation_level=None)
+        self.db.row_factory = sqlite3.Row
+        self.calls = 0
+        self.fail_on: int | None = None
+
+    def run(self, statements: Sequence[tuple[str, Sequence[str]]]) -> list[Result]:
+        self.calls += 1
+        if self.fail_on == self.calls:
+            raise OSError("connection reset")
+        results = []
+        self.db.execute("BEGIN")
+        try:
+            for sql, params in statements:
+                before = self.db.total_changes
+                rows = [dict(row) for row in self.db.execute(sql, list(params)).fetchall()]
+                results.append(Result(rows, len(rows), self.db.total_changes - before))
+        except Exception:
+            self.db.execute("ROLLBACK")
+            raise
+        self.db.execute("COMMIT")
+        return results
+
+    def table(self, sql: str) -> list[tuple[Any, ...]]:
+        return [tuple(row) for row in self.db.execute(sql).fetchall()]
+
+
+class Store:
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+        self.objects[path] = data
+
+    def get(self, path: str) -> bytes | None:
+        return self.objects.get(path)
+
+
+def test_grids_wrap_and_clamp() -> None:
+    assert FINE.tile(-90, -180) == 0
+    assert FINE.tile(89.99, 179.99) == 90 * 180 - 1
+    assert FINE.tile(90, 180) == FINE.tile(89.9, -180)
+    assert FINE.tile(45.8, 4.8) == 67 * 180 + 92
+    assert COARSE.tile(45.8, 4.8) == 20_000 + 13 * 36 + 18
 
 
 def test_path_tiles_cross_the_date_line() -> None:
-    tiles = path_tiles([(-17.8, 179.5), (-17.6, -179.6)], 5)
-    assert {tile // COLS for tile in tiles} == {36}
-    assert {tile % COLS for tile in tiles} == {179, 0}
+    tiles = path_tiles([(-17.8, 179.5), (-17.6, -179.6)], 5, FINE)
+    assert {tile // 180 for tile in tiles} == {36}
+    assert {tile % 180 for tile in tiles} == {179, 0}
 
 
 def test_path_tiles_near_the_pole_take_the_whole_band() -> None:
-    assert len(path_tiles([(89.95, 10.0)], 1)) == COLS
+    assert len(path_tiles([(89.95, 10.0)], 1, FINE)) == 180
+    assert len(path_tiles([(89.95, 10.0)], 1, COARSE)) == 36
 
 
-def test_query_tiles_at_high_latitude_widen_in_longitude() -> None:
-    near_equator = query_tiles(0.5, 10.0, 200)
-    north = query_tiles(69.5, 18.9, 200)
-    assert len({t % COLS for t in north}) > len({t % COLS for t in near_equator})
+def test_query_tiles_widen_in_longitude_and_switch_grid_past_500_km() -> None:
+    assert len(query_tiles(69.5, 18.9, 200)) > len(query_tiles(0.5, 10.0, 200))
+    assert max(query_tiles(45.8, 4.8, 500)) < 20_000
+    coarse = query_tiles(45.8, 4.8, 3000)
+    assert min(coarse) >= 20_000 and len(coarse) < 150
 
 
 def test_days_span_utc_midnight() -> None:
@@ -100,15 +155,15 @@ def test_days_span_utc_midnight() -> None:
 
 
 def test_search_row_is_stable_and_bounded() -> None:
-    row = search_row(storm(), track((45.7, 4.7, 400.0), (45.9, 5.0, 1200.0), (46.1, 5.3, 300.0)))
-    assert row == search_row(
-        storm(), track((45.7, 4.7, 400.0), (45.9, 5.0, 1200.0), (46.1, 5.3, 300.0))
-    )
+    points = ((45.7, 4.7, 400.0), (45.9, 5.0, 1200.0), (46.1, 5.3, 300.0))
+    row = search_row(storm(), track(*points))
+    assert row == search_row(storm(), track(*points))
     assert row.radius_km == round(math.sqrt(1200 / math.pi), 1)
     assert row.score == 80.0
     assert {day for day, _ in row.tiles} == {20754, 20755}
+    assert {tile >= 20_000 for _, tile in row.tiles} == {True, False}
     assert json.loads(row.summary)["slug"] == "2026-10-28-lyon"
-    assert row.digest != search_row(storm(flashes=401), track((45.7, 4.7, 400.0))).digest
+    assert row.digest != search_row(storm(flashes=401), track(*points)).digest
 
 
 def test_search_row_needs_a_track() -> None:
@@ -133,35 +188,26 @@ def cases() -> dict[str, object]:
             bearing = rng.uniform(0, 2 * math.pi)
             step = rng.uniform(0, 1.2)
             lat = max(-89.0, min(89.0, lat + step * math.cos(bearing)))
-            lon = (
-                (lon + step * math.sin(bearing) / max(0.05, math.cos(math.radians(lat)))) + 540
-            ) % 360 - 180
+            east = step * math.sin(bearing) / max(0.05, math.cos(math.radians(lat)))
+            lon = (lon + east + 540) % 360 - 180
             points.append((lat, lon))
         path = [(round(a, 3), round(b, 3)) for a, b in points]
         radius = round(rng.uniform(0, 60), 1)
         queries = []
         for _ in range(6):
-            q_lat = max(-90.0, min(90.0, path[0][0] + rng.uniform(-6, 6)))
-            q_lon = (path[0][1] + rng.uniform(-12, 12) + 540) % 360 - 180
-            q_lat, q_lon = round(q_lat, 1), round(q_lon, 1)
+            spread = rng.choice([6, 30])
+            q_lat = round(max(-90.0, min(90.0, path[0][0] + rng.uniform(-spread, spread))), 1)
+            q_lon = round((path[0][1] + rng.uniform(-2 * spread, 2 * spread) + 540) % 360 - 180, 1)
             queries.append([q_lat, q_lon, round(brute_distance(q_lat, q_lon, path, radius), 3)])
-        paths.append(
-            {
-                "path": path,
-                "radius_km": radius,
-                "tiles": sorted(path_tiles(path, radius)),
-                "queries": queries,
-            }
-        )
+        tiles = path_tiles(path, radius, FINE) | path_tiles(path, radius, COARSE)
+        paths.append({"path": path, "radius_km": radius, "tiles": sorted(tiles), "queries": queries})
     grid = [
-        (lat, lon)
-        for lat in (-89.95, -45.8, 0.0, 45.8, 69.5, 88.0)
-        for lon in (-180, -0.1, 4.8, 179.9)
+        (lat, lon) for lat in (-89.95, -45.8, 0.0, 45.8, 69.5, 88.0) for lon in (-180, -0.1, 4.8, 179.9)
     ]
     return {
-        "tile_of": [[lat, lon, tile_of(lat, lon)] for lat, lon in grid],
+        "tile_of": [[lat, lon, FINE.tile(lat, lon), COARSE.tile(lat, lon)] for lat, lon in grid],
         "query_tiles": [
-            [lat, lon, km, query_tiles(lat, lon, km)] for lat, lon in grid for km in (10, 200, 500)
+            [lat, lon, km, query_tiles(lat, lon, km)] for lat, lon in grid for km in (10, 200, 500, 3000)
         ],
         "paths": paths,
     }
@@ -179,6 +225,117 @@ def test_a_storm_within_reach_shares_a_tile_with_the_query() -> None:
     for case in json.loads(FIXTURE.read_text())["paths"]:
         tiles = set(case["tiles"])
         for lat, lon, distance in case["queries"]:
-            for km in (10, 200, 500):
+            for km in (10, 200, 500, 3000):
                 if distance <= km:
                     assert tiles & set(query_tiles(lat, lon, km)), (case["path"], lat, lon, km)
+
+
+NOW = T0 + timedelta(hours=4)
+
+
+def catalog() -> tuple[list[StormSummary], dict[str, list[dict[str, Any]]]]:
+    storms = [
+        storm(),
+        storm(
+            storm_id="b2",
+            slug="2026-10-28-fiji",
+            t_start=T0 - timedelta(hours=30),
+            t_end=T0 - timedelta(hours=27),
+        ),
+        storm(
+            storm_id="c3",
+            slug="2026-08-01-old",
+            t_start=T0 - timedelta(days=80),
+            t_end=T0 - timedelta(days=80),
+        ),
+    ]
+    tracks = {
+        "a1": track((45.7, 4.7, 400.0), (45.9, 5.0, 1200.0)),
+        "b2": track((-17.8, 179.5, 900.0), (-17.6, -179.6, 900.0)),
+        "c3": track((10.0, 10.0, 100.0)),
+    }
+    return storms, tracks
+
+
+def test_sync_upserts_published_storms_within_retention() -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    metrics = sync_search(store, d1, storms, tracks, NOW)
+    assert metrics["search_upserted"] == 2 and metrics["search_pending"] == 0
+    assert d1.table("SELECT slug FROM storms ORDER BY slug") == [
+        ("2026-10-28-fiji",),
+        ("2026-10-28-lyon",),
+    ]
+    summary = json.loads(d1.table("SELECT summary FROM storms WHERE slug = '2026-10-28-lyon'")[0][0])
+    assert summary == json.loads(storms[0].model_dump_json())
+    tiles = d1.table("SELECT DISTINCT tile FROM storm_tiles WHERE slug = '2026-10-28-fiji'")
+    assert {t % 180 for (t,) in tiles if t < 20_000} == {179, 0}
+    meta = dict(d1.table("SELECT key, value FROM meta"))
+    assert meta["last_observation_time"] == "2026-10-29T01:10:00Z" and meta["pending"] == "0"
+
+
+def test_sync_writes_only_changes_and_removes_expired_storms() -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    sync_search(store, d1, storms, tracks, NOW)
+    tiles_before = d1.table("SELECT * FROM storm_tiles WHERE slug = '2026-10-28-lyon'")
+    again = sync_search(store, d1, storms, tracks, NOW)
+    assert again["search_upserted"] == 0 and again["search_deleted"] == 0
+    moved = {**tracks, "a1": track((45.7, 4.7, 400.0), (46.5, 6.5, 1200.0))}
+    changed = sync_search(store, d1, storms, moved, NOW)
+    assert changed["search_upserted"] == 1
+    assert d1.table("SELECT * FROM storm_tiles WHERE slug = '2026-10-28-lyon'") != tiles_before
+    later = sync_search(store, d1, storms, moved, T0 + timedelta(days=58) - timedelta(hours=1))
+    assert later["search_deleted"] == 1
+    assert d1.table("SELECT slug FROM storms") == [("2026-10-28-lyon",)]
+    assert d1.table("SELECT DISTINCT slug FROM storm_tiles") == [("2026-10-28-lyon",)]
+
+
+def test_an_interrupted_sync_resumes_without_duplicates() -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    d1.fail_on = 5
+    with pytest.raises(OSError):
+        sync_search(store, d1, storms, tracks, NOW)
+    state = State.load(store.objects[STATE_PATH])
+    assert state is not None and len(state.storms) == 2
+    d1.fail_on = None
+    assert sync_search(store, d1, storms, tracks, NOW)["search_upserted"] == 0
+
+
+def test_a_lost_state_is_rebuilt_from_d1() -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    sync_search(store, d1, storms, tracks, NOW)
+    d1.db.execute("INSERT INTO storm_tiles VALUES (1, 2, 'orphan')")
+    del store.objects[STATE_PATH]
+    rebuilt = reconcile(d1, page=2)
+    assert set(rebuilt.storms) == {"2026-10-28-fiji", "2026-10-28-lyon", "orphan"}
+    metrics = sync_search(store, d1, storms, tracks, NOW)
+    assert metrics["search_upserted"] == 0 and metrics["search_deleted"] == 1
+    assert d1.table("SELECT count(*) FROM storm_tiles WHERE slug = 'orphan'") == [(0,)]
+
+
+def test_the_daily_budget_defers_older_storms(monkeypatch: pytest.MonkeyPatch) -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    lyon = search_row(storms[0], tracks["a1"])
+    monkeypatch.setattr("scintille_pipelines.storm_search.DAILY_ROWS", 1 + len(lyon.tiles) + 3)
+    first = sync_search(store, d1, storms, tracks, NOW)
+    assert first["search_upserted"] == 1 and first["search_pending"] == 1
+    assert d1.table("SELECT slug FROM storms") == [("2026-10-28-lyon",)]
+    assert dict(d1.table("SELECT key, value FROM meta"))["pending"] == "1"
+    monkeypatch.setattr("scintille_pipelines.storm_search.DAILY_ROWS", DAILY_ROWS)
+    assert sync_search(store, d1, storms, tracks, NOW + timedelta(days=1))["search_pending"] == 0
+
+
+def test_storms_without_tracks_are_counted_not_indexed() -> None:
+    d1, store = FakeD1(), Store()
+    storms, tracks = catalog()
+    del tracks["a1"]
+    assert sync_search(store, d1, storms, tracks, NOW)["search_missing_tracks"] == 1
+
+
+def test_d1_rest_needs_a_token_and_an_account() -> None:
+    assert D1Rest.from_env({}) is None
+    assert D1Rest.from_env({"SCINTILLE_D1_TOKEN": "x"}) is None

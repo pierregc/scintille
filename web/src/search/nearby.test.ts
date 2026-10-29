@@ -17,12 +17,12 @@ describe('nearby query', () => {
 
 	it('refuses missing, malformed and excessive values instead of clamping them', () => {
 		for (const text of ['lon=4.8', 'lat=45.8', 'lat=91&lon=0', 'lat=0&lon=180.5', 'lat=1e1&lon=0', 'lat=0&lon=0&hours=169',
-			'lat=0&lon=0&hours=0', 'lat=0&lon=0&km=501', 'lat=0&lon=0&km=9', 'lat=0&lon=0&limit=9', 'lat=0&lon=0&hours=2.5', 'lat=0&lon=0&km=-10']) {
+			'lat=0&lon=0&hours=0', 'lat=0&lon=0&km=3001', 'lat=0&lon=0&km=9', 'lat=0&lon=0&limit=9', 'lat=0&lon=0&hours=2.5', 'lat=0&lon=0&km=-10']) {
 			expect(query(text).ok, text).toBe(false);
 		}
-		const result = query('lat=x&lon=0&km=900');
-		expect(result.ok ? [] : result.errors).toEqual(['lat must be a number from -90 to 90', 'km must be an integer from 10 to 500']);
-		expect(query('lat=0&lon=0&hours=168&km=500&limit=8').ok).toBe(true);
+		const result = query('lat=x&lon=0&km=9000');
+		expect(result.ok ? [] : result.errors).toEqual(['lat must be a number from -90 to 90', 'km must be an integer from 10 to 3000']);
+		expect(query('lat=0&lon=0&hours=168&km=3000&limit=8').ok).toBe(true);
 	});
 });
 

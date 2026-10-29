@@ -1,38 +1,45 @@
-/** Geometry of the storm search (ADR 0027): 2° tiles, distance to a storm path, rounding. */
+/** Geometry of the storm search (ADR 0027): tiles, distance to a storm path, rounding. */
 
 export const EARTH_KM = 6371;
 export const KM_PER_DEG = (Math.PI * EARTH_KM) / 180;
-export const TILE_DEG = 2;
-const ROWS = 180 / TILE_DEG;
-const COLS = 360 / TILE_DEG;
+/** 2° tiles for queries up to 500 km, 10° tiles beyond; ids match the pipeline's. */
+export const GRIDS = { fine: { deg: 2, offset: 0 }, coarse: { deg: 10, offset: 20_000 } } as const;
+export const FINE_MAX_KM = 500;
+type Grid = (typeof GRIDS)[keyof typeof GRIDS];
 
 /** Query points are rounded to 0.1°, about 11 km. */
 export const roundCoord = (value: number) => Math.round(value * 10) / 10;
 
 const wrap = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180;
-const row = (lat: number) => Math.min(ROWS - 1, Math.max(0, Math.floor((lat + 90) / TILE_DEG)));
-const col = (lon: number) => Math.floor((wrap(lon) + 180) / TILE_DEG) % COLS;
+const row = (grid: Grid, lat: number) => Math.min(180 / grid.deg - 1, Math.max(0, Math.floor((lat + 90) / grid.deg)));
 
-export const tileOf = (lat: number, lon: number) => row(lat) * COLS + col(lon);
+export function tileOf(lat: number, lon: number, grid: Grid = GRIDS.fine): number {
+	const cols = 360 / grid.deg;
+	return grid.offset + row(grid, lat) * cols + (Math.floor((wrap(lon) + 180) / grid.deg) % cols);
+}
+
+export const gridFor = (km: number): Grid => (km <= FINE_MAX_KM ? GRIDS.fine : GRIDS.coarse);
 
 /** Tiles of the box around a disc of `km` around a point, west to east across the date line. */
 export function queryTiles(lat: number, lon: number, km: number): number[] {
+	const grid = gridFor(km);
+	const cols = 360 / grid.deg;
 	const dLat = km / KM_PER_DEG;
 	const south = Math.max(-90, lat - dLat);
 	const north = Math.min(90, lat + dLat);
 	const widest = Math.max(Math.abs(south), Math.abs(north));
 	const dLon = widest >= 89.9 ? 180 : km / (KM_PER_DEG * Math.cos((widest * Math.PI) / 180));
-	const cols: number[] = [];
+	const colSet = new Set<number>();
 	if (dLon >= 180) {
-		for (let c = 0; c < COLS; c++) cols.push(c);
+		for (let c = 0; c < cols; c++) colSet.add(c);
 	} else {
-		const first = Math.floor((lon - dLon + 180) / TILE_DEG);
-		const last = Math.floor((lon + dLon + 180) / TILE_DEG);
-		for (let c = first; c <= last; c++) cols.push(((c % COLS) + COLS) % COLS);
+		const first = Math.floor((lon - dLon + 180) / grid.deg);
+		const last = Math.floor((lon + dLon + 180) / grid.deg);
+		for (let c = first; c <= last; c++) colSet.add(((c % cols) + cols) % cols);
 	}
-	const tiles = new Set<number>();
-	for (let r = row(south); r <= row(north); r++) for (const c of cols) tiles.add(r * COLS + c);
-	return [...tiles].sort((a, b) => a - b);
+	const tiles: number[] = [];
+	for (let r = row(grid, south); r <= row(grid, north); r++) for (const c of colSet) tiles.push(grid.offset + r * cols + c);
+	return tiles.sort((a, b) => a - b);
 }
 
 type Vec = [number, number, number];

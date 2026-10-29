@@ -3,7 +3,7 @@ import { pathDistanceKm, roundCoord, shownKm } from './geo';
 
 export const NEARBY_LIMITS = {
 	hours: { min: 1, max: 168, default: 72 },
-	km: { min: 10, max: 500, default: 200 },
+	km: { min: 10, max: 3000, default: 200 },
 	limit: { min: 1, max: 8, default: 4 },
 } as const;
 /** Two missed hourly catalog runs. */

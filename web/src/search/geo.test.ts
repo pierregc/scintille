@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { pathDistanceKm, queryTiles, roundCoord, shownKm, tileOf } from './geo';
+import { GRIDS, pathDistanceKm, queryTiles, roundCoord, shownKm, tileOf } from './geo';
 
 interface Fixture {
-	tile_of: [number, number, number][];
+	tile_of: [number, number, number, number][];
 	query_tiles: [number, number, number, number[]][];
 	paths: { path: [number, number][]; radius_km: number; tiles: number[]; queries: [number, number, number][] }[];
 }
@@ -12,7 +12,7 @@ const fixture: Fixture = JSON.parse(readFileSync(new URL('../../../fixtures/sear
 
 describe('search geometry, shared with the pipeline', () => {
 	it('numbers tiles like the pipeline', () => {
-		for (const [lat, lon, tile] of fixture.tile_of) expect(tileOf(lat, lon)).toBe(tile);
+		for (const [lat, lon, fine, coarse] of fixture.tile_of) expect([tileOf(lat, lon), tileOf(lat, lon, GRIDS.coarse)]).toEqual([fine, coarse]);
 		for (const [lat, lon, km, tiles] of fixture.query_tiles) expect(queryTiles(lat, lon, km)).toEqual(tiles);
 	});
 
@@ -27,7 +27,7 @@ describe('search geometry, shared with the pipeline', () => {
 			const own = new Set(tiles);
 			for (const [lat, lon] of fixture.paths.flatMap((c) => c.queries.map(([a, b]) => [a, b]))) {
 				const distance = pathDistanceKm(lat, lon, path, radius_km);
-				for (const km of [10, 200, 500]) {
+				for (const km of [10, 200, 500, 3000]) {
 					if (distance <= km) expect(queryTiles(lat, lon, km).some((t) => own.has(t))).toBe(true);
 				}
 			}
