@@ -142,6 +142,24 @@ describe('createGlobeControls flight handoff', () => {
 		expect(inputs).toHaveLength(2);
 	});
 
+	it('holds the idle rotation while asked, then waits a full idle delay', () => {
+		const start = camera.position.clone();
+		step(16);
+		step(16);
+		expect(camera.position.distanceTo(start)).toBeGreaterThan(1e-6);
+		controls.holdRotation(true);
+		for (let i = 0; i < 300; i++) step(16);
+		const held = camera.position.clone();
+		for (let i = 0; i < 100; i++) step(500);
+		expect(camera.position.distanceTo(held)).toBeLessThan(1e-9);
+		controls.holdRotation(false);
+		for (let i = 0; i < 39; i++) step(500);
+		expect(camera.position.distanceTo(held)).toBeLessThan(1e-9);
+		step(600);
+		step(16);
+		expect(camera.position.distanceTo(held)).toBeGreaterThan(1e-6);
+	});
+
 	it('tilts with a ctrl click, as on a Mac trackpad', () => {
 		const before = camera.position.clone();
 		drag(-100, { button: 0, ctrlKey: true });

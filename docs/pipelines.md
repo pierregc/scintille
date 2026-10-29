@@ -241,8 +241,8 @@ faster, 6 hours per run in order.
 Replay uses event-time hour chunks of at most 65,536 flashes, encoded with the live SCNT layout.
 Metadata is at most 256 KiB. An oversized export is logged and skipped, retaining its previous
 detail and summary when available.
-The current extraction selects each track step's spatial bounds in its own hour and deduplicates
-flash ids. `replay.selection = "track-bounds"` explicitly permits unrelated nearby flashes; its
+The current extraction selects each track step's spatial bounds from its cell's first flash, which
+may fall in the overlap before the hour, to the end of the hour, and deduplicates flash ids. `replay.selection = "track-bounds"` explicitly permits unrelated nearby flashes; its
 count is distinct from classified `storm.flashes`. It is not an exact cell membership export.
 No archive cloud manifest exists yet; historical cloud frame discovery remains #79's prerequisite.
 
@@ -279,7 +279,10 @@ Americas, Europe, Africa, Asia, split by centroid longitude and latitude), then 
 intense (peak per minute) and largest of the week, and the most flashes among storms that lasted
 3 hours with every track point within 40 km of their centroid. A storm already shown keeps its
 first title and the slot is left out, so no title goes to a runner up. Each summary carries
-`distance_km`, the length of its centroid track.
+`distance_km`, the length of its centroid track. Each highlight carries the one `metric` its card
+shows: the record itself (duration, peak per minute, largest cell area, flashes when stationary), or
+for the day, week and area winners whichever of flashes, countries crossed (3 or more, from the
+track centroids), distance and duration ranks best among the storms they were compared with.
 A failure keeps the previous file; the site falls back to the biggest storms of the first index pages while none exists.
 Region availability uses HEAD requests, and mixed storm/region sitemaps are named `pages-N.xml`.
 

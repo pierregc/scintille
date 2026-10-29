@@ -7,7 +7,7 @@
     "SchemaVersion": {
       "description": "Contract version (SemVer). Any change that breaks existing readers needs a major bump.",
       "type": "string",
-      "const": "2.6.1"
+      "const": "2.8.0"
     },
     "UtcTimestamp": {
       "description": "UTC instant, RFC 3339 with a Z suffix, up to microsecond precision.",

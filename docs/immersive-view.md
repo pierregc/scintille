@@ -108,6 +108,12 @@ Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
   flash says "Ended · last flash 05:22".
 - **Lost updates.** A snapshot older than 15 minutes adds "Updates delayed since 10:05" and the last
   one stays; a failed poll backs off. The camera holds the last position.
+- **Still camera.** While a storm is open, in replay or picked live, the globe never turns on its
+  own: only the visitor or `Follow` moves the camera. The idle turn comes back 20 s after leaving it.
+- **End of a replay.** Past the storm's last flash, `Replay from start` plays it again from its first
+  flash, the camera where it is. After 10 s playing past the end the globe goes back to live with
+  every flash and flies out, as `Back to live` does. Captures in
+  [`immersive/replay-end/`](immersive/replay-end/).
 
 Measured on the five storms with a local production build against production data, 60× from
 12 minutes before the reference hour, following, then the horizon view
@@ -314,8 +320,7 @@ between them, and says how far they are from the scene when it matters
   Samples come once per hourly window: up to 90 min old the position is shown with its age, then
   as "No position since". Nothing is shown before the first sample.
 - **Clouds.** Frames within 90 min of each other crossfade; across a wider gap (missing frames) the
-  nearest frame is shown alone. Its age appears from 15 min, earlier or later than the scene; beyond
-  3 h the layer hides ("No cloud data").
+  nearest frame is shown alone; beyond 3 h the layer hides.
 - **Live and replay.** Leaving a storm returns to the wall clock at 1×, the live clouds and no
   selection; browser history reopens the storm at its time, speed and pause state. Layer switches
   are kept.

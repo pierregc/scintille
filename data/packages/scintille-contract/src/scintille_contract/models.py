@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.6.1"]
-SCHEMA_VERSION: Final = "2.6.1"
+SchemaVersion = Literal["2.8.0"]
+SCHEMA_VERSION: Final = "2.8.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -320,6 +320,62 @@ class CatalogUsage(BaseModel):
     )
 
 
+class LakeSize(BaseModel):
+    """Size of the Iceberg tables, from the summary of each table's current snapshot, measured
+    about every hour. Files kept only for older snapshots, metadata and other objects in the
+    bucket are not counted.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    measured_at: UtcTimestamp | None = Field(
+        description="When the snapshots were read; null before the first measurement."
+    )
+    tables: int | None = Field(
+        description=(
+            "Tables in the bronze, silver and gold namespaces; null before the first measurement."
+        )
+    )
+    bytes: int | None = Field(
+        description=(
+            "Data files of the current snapshots, bytes; null before the first measurement."
+        )
+    )
+    data_files: int | None = Field(
+        description="Data files of the current snapshots; null before the first measurement."
+    )
+    records: int | None = Field(
+        description="Rows of the current snapshots; null before the first measurement."
+    )
+
+
+class StormCounts(BaseModel):
+    """Storms in the catalog after its latest hourly publication."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    measured_at: UtcTimestamp | None = Field(
+        description=(
+            "When the storm catalog was last published; null before the first publication."
+        )
+    )
+    detected: int | None = Field(
+        description=(
+            "Storms tracked and classified in the lake, every intensity level; null "
+            "before the first publication."
+        )
+    )
+    published: int | None = Field(
+        description=(
+            "Storms with a public page: intensity level 3 and above; null before the "
+            "first publication."
+        )
+    )
+    highlighted: int | None = Field(
+        description="Storms featured in the highlights; null before the first publication."
+    )
+
+
 class OpsMetrics(BaseModel):
     """live/metrics.json: operational metrics and freshness per layer, written every minute."""
 
@@ -331,6 +387,8 @@ class OpsMetrics(BaseModel):
     sources: list[SourceMetrics] = Field(description="One entry per source, in Source order.")
     quality: QualityStatus
     catalog: CatalogUsage
+    lake: LakeSize
+    storms: StormCounts
 
 
 CoverageKind = Literal["footprint", "no-coverage"]
@@ -511,6 +569,23 @@ class StormIndexPage(BaseModel):
     storms: list[StormSummary]
 
 
+class StormMetric(BaseModel):
+    """The one figure that makes a highlighted storm notable."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: Literal["flashes", "countries", "distance_km", "hours", "peak_rate", "area_km2"] = Field(
+        description=(
+            "Total flashes, countries crossed by the centroid, distance travelled, "
+            "duration, peak flashes per minute, or largest cell area."
+        )
+    )
+    value: float = Field(ge=0)
+    rank: int = Field(
+        ge=1, description="Rank among the storms the highlight was chosen from, 1 for the most."
+    )
+
+
 class StormHighlight(BaseModel):
     """One highlighted storm and the reason it was chosen."""
 
@@ -527,6 +602,9 @@ class StormHighlight(BaseModel):
         description="Broad area from the storm centroid, set when kind is area."
     )
     storm: StormSummary
+    metric: StormMetric | None | None = Field(
+        default=None, description="Null in files older than 2.8.0."
+    )
 
 
 class StormHighlights(BaseModel):

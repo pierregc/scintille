@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.6.1",
+  "schema_version": "2.8.0",
   "generated_at": "2026-07-15T19:00:00Z",
   "chunk_seconds": 30,
   "window_seconds": 3600,

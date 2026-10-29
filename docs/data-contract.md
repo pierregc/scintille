@@ -108,7 +108,8 @@ live/chunks/20260715T183030Z.bin.gz
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
 - A source's **state** comes from the time since its last product file: `live` up to
   `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
-  `offline`. Both delays are configurable ([hot path](hot-path.md#live-feed)).
+  `offline`. Both count from the next expected file, so MTG LI, which delivers every 10 minutes,
+  turns `delayed` after 12 minutes. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
@@ -344,7 +345,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.6.1**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.8.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -352,7 +353,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.6.1`.
+Value: `2.8.0`.
 
 ### UtcTimestamp
 
@@ -585,6 +586,33 @@ Iceberg catalog operations this month against the free tier.
 | `operations` | integer | yes | minimum `0` | Catalog operations made by lake-writer this month. |
 | `free_tier` | integer | yes | minimum `0` | Operations included each month by the catalog provider. |
 
+### LakeSize
+
+Defined in `data/contract/metrics.schema.json`.
+
+Size of the Iceberg tables, from the summary of each table's current snapshot, measured about every hour. Files kept only for older snapshots, metadata and other objects in the bucket are not counted.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the snapshots were read; null before the first measurement. |
+| `tables` | integer or null | yes |  | Tables in the bronze, silver and gold namespaces; null before the first measurement. |
+| `bytes` | integer or null | yes |  | Data files of the current snapshots, bytes; null before the first measurement. |
+| `data_files` | integer or null | yes |  | Data files of the current snapshots; null before the first measurement. |
+| `records` | integer or null | yes |  | Rows of the current snapshots; null before the first measurement. |
+
+### StormCounts
+
+Defined in `data/contract/metrics.schema.json`.
+
+Storms in the catalog after its latest hourly publication.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the storm catalog was last published; null before the first publication. |
+| `detected` | integer or null | yes |  | Storms tracked and classified in the lake, every intensity level; null before the first publication. |
+| `published` | integer or null | yes |  | Storms with a public page: intensity level 3 and above; null before the first publication. |
+| `highlighted` | integer or null | yes |  | Storms featured in the highlights; null before the first publication. |
+
 ### OpsMetrics
 
 Defined in `data/contract/metrics.schema.json`.
@@ -599,6 +627,8 @@ live/metrics.json: operational metrics and freshness per layer, written every mi
 | `sources` | array of [SourceMetrics](#sourcemetrics) | yes |  | One entry per source, in Source order. |
 | `quality` | [QualityStatus](#qualitystatus) | yes |  |  |
 | `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
+| `lake` | [LakeSize](#lakesize) | yes |  |  |
+| `storms` | [StormCounts](#stormcounts) | yes |  |  |
 
 ### CoverageKind
 
@@ -756,6 +786,18 @@ storms/index/<page>.json: zero-based pages counted from the oldest storm, each l
 | `total_pages` | integer | yes | minimum `1` |  |
 | `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
 
+### StormMetric
+
+Defined in `data/contract/storm.schema.json`.
+
+The one figure that makes a highlighted storm notable.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  | Total flashes, countries crossed by the centroid, distance travelled, duration, peak flashes per minute, or largest cell area. |
+| `value` | number | yes | minimum `0` |  |
+| `rank` | integer | yes | minimum `1` | Rank among the storms the highlight was chosen from, 1 for the most. |
+
 ### StormHighlight
 
 Defined in `data/contract/storm.schema.json`.
@@ -767,6 +809,7 @@ One highlighted storm and the reason it was chosen.
 | `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
 | `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
 | `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `metric` | [StormMetric](#stormmetric) or null | no |  | Null in files older than 2.8.0. |
 
 ### StormHighlights
 

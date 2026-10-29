@@ -36,6 +36,7 @@ function setup(snapshots: unknown[]) {
 		flying: () => false,
 		onSurface: () => current.tilt > 0,
 		onInput: (listener: () => void) => { input.add(listener); return () => input.delete(listener); },
+		holdRotation: () => {},
 		isAt: () => false,
 		cancelFlight: () => {},
 		centerOn: () => {},
