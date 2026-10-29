@@ -10,6 +10,9 @@ import { ReplayExpiredError, REPLAY_RETENTION_DAYS } from '../archive/storm';
 
 type Origin = 'user' | 'navigation';
 
+/** Wall time the replay keeps playing past the storm's last flash before the globe goes back to live, ms. */
+export const END_GRACE_MS = 10_000;
+
 export interface ReplayState {
 	selected: StormDetail | null;
 	loading: string | null;
@@ -24,6 +27,7 @@ export class StormReplay {
 	readonly #offMode: () => void;
 	readonly #listeners = new Set<(origin: Origin) => void>();
 	#graze: { pose: Required<FlyToOptions>; flying: boolean } | null = null;
+	#endedSince: number | null = null;
 
 	constructor(
 		readonly data: Pick<SceneData, 'openStorm' | 'live'>,
@@ -116,6 +120,31 @@ export class StormReplay {
 		return arrived;
 	}
 
+	/** Whether the open replay has played past the storm's last flash. */
+	get ended(): boolean {
+		const detail = this.#state.selected;
+		return Boolean(detail && !this.#state.loading && this.clock.mode === 'replay' && this.clock.time() > Date.parse(detail.storm.t_end));
+	}
+
+	/** Plays the open storm again from its first flash, leaving the camera where it is. */
+	restart(): void {
+		const detail = this.#state.selected;
+		if (!detail || this.#state.loading || this.clock.mode !== 'replay') return;
+		this.clock.seek(Date.parse(detail.storm.t_start));
+		this.clock.play();
+	}
+
+	/** Call once per frame: back to live, with every flash, after `END_GRACE_MS` of playing past the storm's end. */
+	update(): void {
+		if (!this.ended || !this.clock.playing) {
+			this.#endedSince = null;
+			return;
+		}
+		const now = this.clock.wallTime();
+		this.#endedSince ??= now;
+		if (now - this.#endedSince >= END_GRACE_MS) void this.live();
+	}
+
 	live(origin: Origin = 'user'): Promise<void> {
 		this.#clear();
 		const returning = this.data.live();
@@ -128,6 +157,7 @@ export class StormReplay {
 		this.#revision++;
 		this.controls.cancelFlight();
 		this.#graze = null;
+		this.#endedSince = null;
 		this.#state = { selected: null, loading: null, error: null };
 		return hadState;
 	}

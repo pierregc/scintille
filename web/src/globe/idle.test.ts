@@ -36,6 +36,16 @@ describe('IdleRotation', () => {
 		expect(idle.rotating(15_000 + IDLE_DELAY_MS)).toBe(true);
 	});
 
+	it('waits a full delay again without ending an input under way', () => {
+		const idle = new IdleRotation();
+		idle.wait(30_000);
+		expect(idle.rotating(30_000 + IDLE_DELAY_MS - 1)).toBe(false);
+		expect(idle.rotating(30_000 + IDLE_DELAY_MS)).toBe(true);
+		idle.start(60_000);
+		idle.wait(61_000);
+		expect(idle.rotating(200_000)).toBe(false);
+	});
+
 	it('accepts a custom delay', () => {
 		const idle = new IdleRotation(100);
 		idle.start(0);

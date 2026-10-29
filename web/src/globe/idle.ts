@@ -20,6 +20,11 @@ export class IdleRotation {
 		this.#lastInput = now;
 	}
 
+	/** Waits a full delay from `now` before rotating again, without ending an input under way. */
+	wait(now: number): void {
+		this.#lastInput = Math.max(this.#lastInput, now);
+	}
+
 	rotating(now: number): boolean {
 		return !this.#interacting && now - this.#lastInput >= this.#delay;
 	}

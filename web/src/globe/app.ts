@@ -281,7 +281,12 @@ export function createGlobeApp(
 	};
 
 	const draw = (time: number) => {
-		if (!renderParams) controls.update(time);
+		if (!renderParams) replay.update();
+		const stormView = (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)) || focus.selected;
+		if (!renderParams) {
+			controls.holdRotation(stormView || Boolean(replay.state.loading));
+			controls.update(time);
+		}
 		renderer.getSize(focus.footprint.viewport);
 		focus.update(performance.now());
 		fitClipPlanes();
@@ -310,7 +315,7 @@ export function createGlobeApp(
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
 		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
-		lightning.stormView = (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)) || focus.selected;
+		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		thunder.update(now, delays);

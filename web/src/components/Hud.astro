@@ -35,14 +35,14 @@ import StormSuggestions from './StormSuggestions.astro';
 	</section>
 
 	<p class="stale cap" role="status" data-stale hidden></p>
-	<p class="replay-status" role="status" data-replay-status hidden></p>
-	<div class="share" data-share-tools hidden>
-		<button type="button" aria-pressed="false" data-follow>Follow</button>
-		<button type="button" aria-pressed="false" data-horizon>Horizon</button>
-		<button type="button" data-share>Share replay</button>
-		<button type="button" data-globe hidden>Globe</button>
-		<input type="text" readonly aria-label="Replay link" data-share-url hidden />
-		<span role="status" data-share-status></span>
+	<div class="storm" data-storm-panel>
+		<p class="replay-status" role="status" data-replay-status hidden></p>
+		<div class="tools" data-storm-tools hidden>
+			<button type="button" aria-pressed="false" data-follow>Follow</button>
+			<button type="button" aria-pressed="false" data-horizon>Horizon</button>
+			<button type="button" data-globe hidden>Globe</button>
+			<button type="button" data-restart hidden>Replay from start</button>
+		</div>
 	</div>
 
 	<div class="layers" data-layers hidden>
@@ -61,28 +61,24 @@ import StormSuggestions from './StormSuggestions.astro';
 </main>
 
 <style>
-	.replay-status {
+	.storm {
 		position: fixed;
 		top: calc(var(--gut) + 100px);
 		left: var(--gut);
+		display: flex;
+		flex-direction: column;
 		max-width: min(24rem, calc(100vw - 2 * var(--gut)));
-		color: var(--soft);
-		font: 300 12px/1.6 var(--sans);
-		white-space: pre-line;
 		pointer-events: none;
 	}
-	.share > * { pointer-events: auto; }
+	.replay-status { color: var(--soft); font: 300 12px/1.6 var(--sans); white-space: pre-line; }
+	.tools { display: flex; flex-wrap: wrap; column-gap: 16px; }
+	.tools > * { pointer-events: auto; }
 	.hud button { -webkit-tap-highlight-color: transparent; }
-	.share { position: fixed; pointer-events: none; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
-	.share button[aria-pressed='true'] { color: var(--ink); }
-	.share button:not(:first-child) { margin-left: 16px; }
-	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
-	.share input { width: 100%; padding: 8px; color: var(--ink); background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); }
-	.share span { display: block; color: var(--soft); font: 300 11px/1.5 var(--sans); }
+	.tools button[aria-pressed='true'] { color: var(--ink); }
+	.tools button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
 	.hud[data-mode='live'][data-opening] .golive { display: inline-block; }
 	@media (max-width: 640px) {
-		.replay-status { top: auto; bottom: calc(var(--gut) + 128px); }
-		.share { top: auto; bottom: calc(var(--gut) + 180px); }
+		.storm { top: auto; bottom: calc(var(--gut) + 128px); flex-direction: column-reverse; }
 	}
 	.hud {
 		--ink: rgb(238 242 247 / 0.9);
@@ -500,17 +496,14 @@ import StormSuggestions from './StormSuggestions.astro';
 		const cloudTime = $('[data-cloud-time]');
 		const staleBanner = $('[data-stale]');
 		const replayStatus = $('[data-replay-status]');
-		const shareTools = $('[data-share-tools]');
-		const shareInput = $<HTMLInputElement>('[data-share-url]');
-		const shareStatus = $('[data-share-status]');
+		const stormTools = $('[data-storm-tools]');
 		const horizon = $<HTMLButtonElement>('[data-horizon]');
 		const follow = $<HTMLButtonElement>('[data-follow]');
-		const share = $<HTMLButtonElement>('[data-share]');
 		const globe = $<HTMLButtonElement>('[data-globe]');
+		const restart = $<HTMLButtonElement>('[data-restart]');
 		const display = $('[data-display]');
 		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
-		let shareStorm: string | undefined;
 		let trackTimes: { detail: unknown; times: number[] } = { detail: null, times: [] };
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
@@ -537,16 +530,11 @@ import StormSuggestions from './StormSuggestions.astro';
 
 		const tick = () => {
 			const replay = app?.replay.state;
-			if (shareStorm !== replay?.selected?.storm.slug) {
-				shareStorm = replay?.selected?.storm.slug;
-				if (shareInput) shareInput.hidden = true;
-				if (shareStatus) shareStatus.textContent = '';
-			}
 			const live = app?.focus.status().live ?? null;
 			const opened = Boolean(replay?.selected && !replay.loading && app?.clock.mode === 'replay');
-			if (shareTools) shareTools.hidden = !opened && !live;
-			if (share) share.hidden = !opened;
+			if (stormTools) stormTools.hidden = !opened && !live;
 			if (globe) globe.hidden = !live;
+			if (restart) restart.hidden = !app?.replay.ended;
 			follow?.setAttribute('aria-pressed', String(app?.focus.following ?? false));
 			horizon?.setAttribute('aria-pressed', String(app?.focus.horizon ?? false));
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
@@ -656,17 +644,9 @@ import StormSuggestions from './StormSuggestions.astro';
 			app?.focus.globe();
 			tick();
 		});
-		$('[data-share]')?.addEventListener('click', async () => {
-			if (!app?.replay.state.selected) return;
-			const url = app.shareUrl();
-			try {
-				await navigator.clipboard.writeText(url);
-				if (shareStatus) shareStatus.textContent = 'Replay link copied.';
-				if (shareInput) shareInput.hidden = true;
-			} catch {
-				if (shareStatus) shareStatus.textContent = 'Copy this replay link:';
-				if (shareInput) { shareInput.value = url; shareInput.hidden = false; shareInput.focus(); shareInput.select(); }
-			}
+		restart?.addEventListener('click', () => {
+			app?.replay.restart();
+			tick();
 		});
 		clouds?.addEventListener('click', () => {
 			if (app) app.clouds.setVisible(!app.clouds.visible);
