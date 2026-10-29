@@ -285,6 +285,7 @@ export function createGlobeApp(
 		renderer.getSize(focus.footprint.viewport);
 		focus.update(performance.now());
 		fitClipPlanes();
+		if (clock.playing && clock.atPresent()) void replay.live();
 		const now = clock.time();
 		earth.setTime(now);
 		camera.updateMatrixWorld();
