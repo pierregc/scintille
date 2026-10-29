@@ -1,6 +1,6 @@
 # 0027 · Storm search: D1 for place and time queries, static place index, coarse IP location
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-29
 
 ## Context
@@ -178,6 +178,12 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
   network included. Parsing and ranking 2,000 light candidates takes under 3 ms of CPU on a laptop.
   Wide queries cost the most reads: about 700 uncached ones a day would exhaust the read cap, so
   they are meant as an explicit second step where nothing is near.
+- Production, 2026-10-29: the first sync (20:24 UTC) indexed the 10,356 most recent storms within
+  the daily budget (49,995 rows); the other 22,083 follow over the next days (`complete` false until
+  then). Around Lyon nothing lies within 200 km over 72 h; 3,000 km over 7 days finds 250 storms,
+  the nearest at Brescia, 440 km (`production-lyon-2026-10-29.json`); each returned slug has its
+  detail and replay chunks published. Latency: 0.15 to 0.2 s uncached from France, 0.3 to 0.45 s
+  from Canada, 0.09 s from the edge cache.
 
 ## Sources
 
