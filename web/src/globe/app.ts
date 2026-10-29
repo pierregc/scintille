@@ -76,7 +76,7 @@ export interface GlobeApp {
 	dataStart(): number | null;
 	/** UTC midnight of the first day travel in time can show, once the archive index is known. */
 	archiveStart(): number | null;
-	/** Internals shown by the debug panel. */
+	/** Internals for tools and the HUD flash counter. */
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;

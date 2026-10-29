@@ -3,7 +3,6 @@ import '@fontsource/ibm-plex-sans/latin-200.css';
 import '@fontsource/ibm-plex-sans/latin-300.css';
 import '@fontsource/ibm-plex-mono/latin-200.css';
 import '@fontsource/ibm-plex-mono/latin-300.css';
-import DebugPanel from './DebugPanel.astro';
 import Timeline from './Timeline.astro';
 import StormSuggestions from './StormSuggestions.astro';
 ---
@@ -20,7 +19,6 @@ import StormSuggestions from './StormSuggestions.astro';
 		<a class="cap" href="/methodology">Methodology</a>
 	</div>
 
-	<DebugPanel />
 	<StormSuggestions />
 
 	<section class="clock" aria-label="Time">
@@ -28,6 +26,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		<div class="state">
 			<span class="pulse" aria-hidden="true"></span>
 			<span class="cap" data-state role="status">Live</span>
+			<span class="cap rate" data-rate hidden></span>
 			<button class="golive" type="button" data-live>Back to live</button>
 		</div>
 		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
@@ -220,6 +219,14 @@ import StormSuggestions from './StormSuggestions.astro';
 	}
 	.state .cap {
 		color: var(--soft);
+	}
+	.state .rate {
+		margin-left: 6px;
+		font-variant-numeric: tabular-nums;
+		transition: opacity 0.35s ease;
+	}
+	.rate[data-fade] {
+		opacity: 0;
 	}
 	.pulse {
 		width: 5px;
@@ -511,6 +518,9 @@ import StormSuggestions from './StormSuggestions.astro';
 		.dots i {
 			animation: none;
 		}
+		.state .rate {
+			transition: none;
+		}
 		a,
 		button,
 		summary {
@@ -526,6 +536,7 @@ import StormSuggestions from './StormSuggestions.astro';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge, SOURCE_REGIONS, sourcesNote } from '../globe/live/freshness';
 	import { trackObservation } from '../globe/scene-time';
+	import { flashRate, rateLabel } from './hud/rate';
 	import { endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
@@ -541,6 +552,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		const sources = $('[data-sources]');
 		const sourcesNoteLine = $('[data-sources-note]');
 		const staleBanner = $('[data-stale]');
+		const rate = $('[data-rate]');
 		const staleText = $('[data-stale-text]');
 		const replayStatus = $('[data-replay-status]');
 		const stormTools = $('[data-storm-tools]');
@@ -587,6 +599,32 @@ import StormSuggestions from './StormSuggestions.astro';
 			}
 		};
 
+		const rateShown = () => Boolean(app && app.clock.mode === 'live' && !app.feedStatus().stale);
+		let rateText = '';
+		const updateRate = () => {
+			if (!rate) return;
+			const text = app && rateShown() ? rateLabel(flashRate(app.debug.ring, app.debug.delays(), app.clock.time())) : '';
+			if (text === rateText && rate.hidden === !text) return;
+			rateText = text;
+			if (!text) {
+				rate.hidden = true;
+				return;
+			}
+			if (rate.hidden) {
+				rate.textContent = text;
+				rate.dataset.fade = '';
+				rate.hidden = false;
+				requestAnimationFrame(() => requestAnimationFrame(() => delete rate.dataset.fade));
+				return;
+			}
+			rate.dataset.fade = '';
+			setTimeout(() => {
+				rate.textContent = rateText;
+				delete rate.dataset.fade;
+			}, 350);
+		};
+		setInterval(updateRate, 5000);
+
 		const tick = () => {
 			const replay = app?.replay.state;
 			const live = app?.focus.status().live ?? null;
@@ -626,6 +664,7 @@ import StormSuggestions from './StormSuggestions.astro';
 			const mode = app?.clock.mode === 'live' || !app ? 'live' : 'replay';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
+			if (rate && rate.hidden === rateShown()) updateRate();
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
 			const stormView = app?.lightning.stormView ?? false;

@@ -1086,6 +1086,6 @@ Open that URL, choose the 5 min afterglow, enable thunder from the HUD, and obse
 fixture flashes. Click Live,
 check that the old flashes and pending thunder disappear, then click Time travel to reload the
 fixture in the same scene. Repeat these two controls without reloading the page.
-Use the debug panel to inspect ring counts and the browser's graphics/audio tools to check stable
+Use the browser's graphics/audio tools to check stable
 resources across repeated round trips. This fixture entry is for loader QA; it does not implement
 production storm links or scene restoration.
