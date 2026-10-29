@@ -587,7 +587,7 @@ import StormSuggestions from './StormSuggestions.astro';
 				cloudTime.hidden = !caption;
 				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
 			}
-			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
+			sound?.setAttribute('aria-pressed', String(app?.sound.enabled ?? false));
 			const stormView = app?.lightning.stormView ?? false;
 			if (afterglow) afterglow.title = stormView ? 'Storm views show each flash alone' : '';
 			for (const { minutes, button } of displayButtons) {
@@ -631,7 +631,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		window.addEventListener(GLOBE_READY, (event) => {
 			app = (event as CustomEvent<GlobeApp>).detail;
 			if (layers) layers.hidden = false;
-			if (sound) sound.hidden = !app.thunder.supported;
+			if (sound) sound.hidden = !app.sound.supported;
 			tick();
 		});
 		window.addEventListener(GLOBE_GONE, () => {
@@ -673,7 +673,7 @@ import StormSuggestions from './StormSuggestions.astro';
 			tick();
 		});
 		sound?.addEventListener('click', () => {
-			if (app) app.thunder.setEnabled(!app.thunder.enabled);
+			if (app) app.sound.setEnabled(!app.sound.enabled);
 			tick();
 		});
 		document.addEventListener('keydown', (event) => {

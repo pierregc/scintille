@@ -3,9 +3,10 @@ import type { Vec3 } from '../sun';
 import { distanceKm, facesCamera, type Voicing, voicing } from './spatial';
 import { VoicePool } from './voices';
 
-export const MAX_VOICES = 6;
-/** Wall-clock seconds between two new voices, so a burst of flashes does not sound like a drum roll. */
-export const MIN_GAP_S = 0.25;
+export const MAX_VOICES = 8;
+/** Wall-clock seconds between two new crackles, plus up to JITTER_S at random, so a burst never ticks like a clock. */
+export const MIN_GAP_S = 0.14;
+export const JITTER_S = 0.2;
 /** A playhead jump longer than this (scene ms) is a seek, not playback: it stays silent. */
 export const MAX_STEP_MS = 60_000;
 /** Flashes considered per frame, to bound the cost of fast replays. */
@@ -17,8 +18,8 @@ const DEG = Math.PI / 180;
 export interface Listener {
 	/** Camera position in world units. */
 	position: Vec3;
-	/** Horizontal screen position (-1 to 1) of a world point, or null when it is off screen. */
-	screenX(point: Vec3): number | null;
+	/** Writes the screen position (-1 to 1) of a world point into `out`; false when it is off screen. */
+	screen(point: Vec3, out: [number, number]): boolean;
 }
 
 export interface Trigger extends Voicing {
@@ -28,32 +29,36 @@ export interface Trigger extends Voicing {
 	replaced: boolean;
 	/** Ring slot of the flash. */
 	flash: number;
-	/** Audio time the thunder starts at. */
+	/** Audio time the crackle starts at. */
 	start: number;
 }
 
 export interface SchedulerOptions {
 	radius?: number;
 	maxVoices?: number;
-	/** Length of one thunder voice, seconds. */
+	/** Longest crackle, seconds. */
 	voiceSeconds: number;
+	random?: () => number;
 }
 
-/** Picks which flashes crossing the playhead get a thunder voice, and how they sound. */
-export class ThunderScheduler {
+/** Picks which flashes crossing the playhead get a crackle, and how it sounds. */
+export class CrackleScheduler {
 	readonly #ring: FlashRing;
 	readonly #radius: number;
 	readonly #voiceSeconds: number;
+	readonly #random: () => number;
 	readonly #pool: VoicePool;
 	readonly #direction: Vec3 = [0, 0, 0];
 	readonly #point: Vec3 = [0, 0, 0];
+	readonly #screen: [number, number] = [0, 0];
 	#last = Number.NaN;
-	#lastStart = Number.NEGATIVE_INFINITY;
+	#next = Number.NEGATIVE_INFINITY;
 
-	constructor(ring: FlashRing, { radius = 1, maxVoices = MAX_VOICES, voiceSeconds }: SchedulerOptions) {
+	constructor(ring: FlashRing, { radius = 1, maxVoices = MAX_VOICES, voiceSeconds, random = Math.random }: SchedulerOptions) {
 		this.#ring = ring;
 		this.#radius = radius;
 		this.#voiceSeconds = voiceSeconds;
+		this.#random = random;
 		this.#pool = new VoicePool(maxVoices);
 	}
 
@@ -70,21 +75,22 @@ export class ThunderScheduler {
 	/** Releases every voice, after the audio graph stopped them. */
 	reset(): void {
 		this.#pool.reset();
-		this.#lastStart = Number.NEGATIVE_INFINITY;
+		this.#next = Number.NEGATIVE_INFINITY;
 	}
 
-	/** Returns the voice to start for flashes played since the previous call, at most one per call. */
+	/** Returns the crackle to start for flashes played since the previous call, at most one per call. */
 	update(sceneTime: number, audioTime: number, listener: Listener, delays: SourceDelays = NO_DELAY): Trigger | null {
 		const from = this.#last;
 		this.#last = sceneTime;
 		const step = sceneTime - from;
 		if (!(step > 0 && step <= MAX_STEP_MS)) return null;
-		if (audioTime - this.#lastStart < MIN_GAP_S) return null;
+		if (audioTime < this.#next) return null;
 
 		const ring = this.#ring;
 		const r = this.#radius;
 		const dir = this.#direction;
 		const point = this.#point;
+		const screen = this.#screen;
 		let best: Voicing | null = null;
 		let bestSlot = -1;
 		for (const delay of delays.values) {
@@ -104,9 +110,8 @@ export class ThunderScheduler {
 				point[0] = dir[0] * r;
 				point[1] = dir[1] * r;
 				point[2] = dir[2] * r;
-				const x = listener.screenX(point);
-				if (x === null) continue;
-				const v = voicing(ring.intensity[s], distanceKm(dir, listener.position, r), x);
+				if (!listener.screen(point, screen)) continue;
+				const v = voicing(ring.intensity[s], distanceKm(dir, listener.position, r), screen[0], screen[1]);
 				if (v.gain >= MIN_GAIN && (!best || v.gain > best.gain)) {
 					best = v;
 					bestSlot = s;
@@ -115,11 +120,10 @@ export class ThunderScheduler {
 		}
 		if (!best) return null;
 
-		const start = audioTime + best.delay;
-		const claim = this.#pool.claim(audioTime, start + this.#voiceSeconds, best.gain);
+		const claim = this.#pool.claim(audioTime, audioTime + this.#voiceSeconds, best.gain);
 		if (!claim) return null;
-		this.#lastStart = audioTime;
-		return { ...best, voice: claim.slot, replaced: claim.replaced, flash: bestSlot, start };
+		this.#next = audioTime + MIN_GAP_S + JITTER_S * this.#random();
+		return { ...best, voice: claim.slot, replaced: claim.replaced, flash: bestSlot, start: audioTime };
 	}
 
 	/** Index (oldest = 0) of the first stored flash strictly after `time`; assumes time order. */

@@ -109,22 +109,33 @@ permission or credit. The site's attribution must credit NASA.
 
 ## Sound
 
-Thunder is synthesized in the browser with Web Audio (`web/src/globe/thunder/synth.ts`): a noise crack
-followed by a rolling brown-noise rumble, six seeded variants built when sound is first turned on. No
-recording is used, so there is no third-party license and nothing to download.
+An ambient soundscape (#359): CC0 ambient tracks relayed in crossfades, and a short electric crackle for
+flashes on screen. Built by `web/scripts/sound/build.mjs` (needs `ffmpeg` with libmp3lame) into
+`web/public/sound/`, served with the site, and described by `web/src/globe/sound/catalog.json`.
+
+```sh
+pnpm -C web sound   # downloads the pinned Freesound previews once, about 40 MB
+```
+
+- **Sources**: Freesound HQ previews, all CC0, pinned by size and SHA-256 in `scripts/sound/sources.json`;
+  titles, authors and links are in the catalog. No attribution is required.
+- **Tracks**: a segment of at most 84 s per recording, normalized to -24 dBFS RMS, its last 4 s crossfaded
+  into its start so it loops seamlessly, with 0.5 s of loop before and after so MP3 padding never reaches
+  the loop points. MP3 96 kbps stereo, 0.4 to 1 MB each.
+- **Crackles**: the 24 sharpest attacks of one static recording (a rise of more than 6 dB in 10 ms, at
+  least 120 ms apart), 0.26 s each, band-passed 0.9 to 9 kHz. MP3 64 kbps mono, about 2 kB each.
 
 Sound is off by default (browsers block audio until a user gesture) and turned on with the Sound switch.
-Each flash crossing the playhead may get a voice:
+The first track and the crackles load then; each next track loads 15 s before it fades in.
 
-- stereo pan from its horizontal screen position;
-- volume from its intensity and the camera-to-flash distance, with a low-pass filter that dulls far thunder;
-- delay from that distance at a **stylized** speed of sound of 6000 km/s, capped at 4 s. The real speed
-  (0.34 km/s) would delay thunder by hours when seen from orbit, so the delay only conveys "far" or "near".
-  The methodology page (#87) should say so.
-
-At most six voices play at once, one new voice every 250 ms at most: once the gap has passed, the loudest
-flash crossed in the next frame gets the voice, and flashes crossed during the gap stay silent. The mix
-goes through a compressor used as a limiter, then a soft clipper that keeps the output below full scale.
+- A random track plays for 90 s, then the next one, never the same twice in a row, fades in over 8 s.
+- Each flash crossing the playhead may get a crackle: one every 0.14 to 0.34 s at most, the loudest flash
+  crossed since. Volume follows intensity and camera distance, a low-pass softens far flashes, and the
+  playback rate varies from 0.8 to 1.25.
+- Crackles are placed in 3D with an HRTF panner: the screen edges sound 80° to the side and 45° up or
+  down, wider than the field of view. Best with headphones.
+- At most eight crackles play at once; the mix goes through a gentle compressor. The audio context runs
+  at 32 kHz when the browser allows it, which holds a decoded 84 s track in about 21 MB.
 
 ## Cloud fixture
 
