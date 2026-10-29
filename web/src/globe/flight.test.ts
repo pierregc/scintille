@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parseDevFlights } from './dev-flight';
-import { easeInOut, Flight, kmToWorld, northTangent, poseAt } from './flight';
+import { CAMERA_FLOOR_KM, easeInOut, Flight, headingOf, kmToWorld, northTangent, poseAt, worldToKm } from './flight';
 import { latLonToVector } from './sun';
 
 const R = 1;
@@ -103,5 +103,28 @@ describe('helpers', () => {
 			{ lat: -33.87, lon: 151.21, altitude: 8000, tilt: 30 },
 		]);
 		expect(parseDevFlights('')).toEqual([]);
+	});
+});
+
+describe('heading and floor', () => {
+	const floor = (pose: { position: Vector3 }) => worldToKm(pose.position.length() - R, R);
+
+	it.each([0, 90, 200])('faces %s degrees from north and reads it back', (heading) => {
+		const pose = poseAt(PARIS.lat, PARIS.lon, kmToWorld(740, R), 60, R, heading);
+		const normal = new Vector3(...latLonToVector(PARIS.lat, PARIS.lon));
+		const forward = new Vector3(0, 0, -1).applyQuaternion(pose.quaternion).projectOnPlane(normal);
+		expect(headingOf(normal, forward)).toBeCloseTo(heading, 6);
+	});
+
+	it('faces east at heading 90', () => {
+		const pose = poseAt(0, 0, kmToWorld(740, R), 60, R, 90);
+		const forward = new Vector3(0, 0, -1).applyQuaternion(pose.quaternion);
+		expect(forward.z).toBeLessThan(-0.5);
+	});
+
+	it('never takes the camera under the floor between two poses at the floor', () => {
+		const a = poseAt(PARIS.lat, PARIS.lon, kmToWorld(1250, R), 75, R, 0);
+		const b = poseAt(PARIS.lat + 0.5, PARIS.lon, kmToWorld(1250, R), 75, R, 180);
+		for (const pose of samples(new Flight(a, b, R), 100)) expect(floor(pose)).toBeGreaterThan(CAMERA_FLOOR_KM - 1e-6);
 	});
 });

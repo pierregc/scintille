@@ -1,10 +1,11 @@
-/** Tile pyramid layout and level selection for surface detail (#125 prototype). */
+/** Tile pyramid layout and level selection for surface detail (ADR 0022). */
 
 export interface PyramidLevel {
 	columns: number;
 	rows: number;
 	degrees: number;
-	layers: Record<Layer, { present: string }>;
+	/** A layer is absent from the levels finer than its source: night stops at level 4. */
+	layers: Partial<Record<Layer, { present: string }>>;
 }
 
 export interface PyramidManifest {
@@ -50,7 +51,8 @@ export class Presence {
 	constructor(private readonly manifest: PyramidManifest) {
 		for (const [z, level] of Object.entries(manifest.levels)) {
 			for (const layer of ['day', 'night'] as const) {
-				this.#bits.set(`${layer}${z}`, Uint8Array.from(atob(level.layers[layer].present), (c) => c.charCodeAt(0)));
+				const present = level.layers[layer]?.present;
+				if (present !== undefined) this.#bits.set(`${layer}${z}`, Uint8Array.from(atob(present), (c) => c.charCodeAt(0)));
 			}
 		}
 	}

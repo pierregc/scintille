@@ -1,15 +1,20 @@
 // Uploads repository files to R2 with Wrangler. See docs/deploy.md.
-// Usage: node scripts/r2-upload.mjs fixtures --local | fixtures --preview | textures
+// Usage: node scripts/r2-upload.mjs fixtures --local | fixtures --preview | textures | surface
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { SURFACE_VERSION } from './textures/surface.mjs';
 
 const WEB = join(import.meta.dirname, '..');
 const FIXTURES = join(WEB, '..', 'fixtures');
 const TEXTURES = join(WEB, 'scripts', 'textures', 'out');
 export const TEXTURES_PREFIX = 'textures/v2';
+export const SURFACE = join(TEXTURES, 'surface');
+export const SURFACE_PREFIX = `textures/v${SURFACE_VERSION}`;
+const PUBLIC = 'https://data.scintille.app';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
@@ -42,17 +47,79 @@ export function plan(paths, root, prefix = '') {
 	return [...groups.values()];
 }
 
-async function upload(bucket, groups, location) {
+/** Surface tiles first, then their manifest alone, so a published manifest never lists a missing tile. */
+export function surfacePlan(paths) {
+	const tiles = plan(paths.filter((p) => p.endsWith('.webp')), SURFACE, SURFACE_PREFIX);
+	const manifest = plan(paths.filter((p) => relative(SURFACE, p) === 'manifest.json'), SURFACE, SURFACE_PREFIX);
+	if (tiles.length !== 1 || manifest.length !== 1) throw new Error(`no surface pyramid in ${SURFACE}, run node scripts/textures/tiles.mjs first`);
+	return [...tiles, ...manifest];
+}
+
+/** The local pyramid must have passed its check, and a published one under the same version must be the same build. */
+async function assertSurfaceReady() {
+	const manifest = JSON.parse(await readFile(join(SURFACE, 'manifest.json'), 'utf8'));
+	const check = JSON.parse(await readFile(join(TEXTURES, 'surface-check.json'), 'utf8').catch(() => '{}'));
+	if (check.digest !== manifest.digest || check.failures?.length !== 0) {
+		throw new Error('run node scripts/textures/check-tiles.mjs and fix its failures first');
+	}
+	const res = await fetch(`${PUBLIC}/${SURFACE_PREFIX}/manifest.json`);
+	if (res.status === 404) return true;
+	if (!res.ok) throw new Error(`published manifest: ${res.status}`);
+	const published = await res.json();
+	if (published.digest !== manifest.digest) {
+		throw new Error(`${SURFACE_PREFIX} holds another build (${published.digest.slice(0, 12)}): bump SURFACE_VERSION in scripts/textures/surface.mjs`);
+	}
+	console.log(`${SURFACE_PREFIX}: build ${manifest.digest.slice(0, 12)} already published`);
+	return false;
+}
+
+/**
+ * Objects not published yet, read through the public domain (Wrangler cannot list a bucket). Paced
+ * under the zone's rate limit of 300 requests per 10 s per IP, waiting out a 429 when one comes.
+ */
+async function unpublished(entries) {
+	const left = [];
+	let next = 0;
+	await Promise.all(Array.from({ length: 4 }, async () => {
+		while (next < entries.length) {
+			const entry = entries[next++];
+			for (;;) {
+				await sleep(200);
+				const res = await fetch(`${PUBLIC}/${entry.key}`, { method: 'HEAD' });
+				if (res.status === 429) {
+					await sleep(10_000);
+					continue;
+				}
+				if (!res.ok) left.push(entry);
+				break;
+			}
+		}
+	}));
+	return left;
+}
+
+/**
+ * One `wrangler r2 bulk put` per group of headers. With `resume`, a failed group (rate limit, gateway
+ * timeout) waits, then sends only what is not published yet.
+ */
+async function upload(bucket, groups, location, { resume = false, attempts = 3 } = {}) {
 	const dir = await mkdtemp(join(tmpdir(), 'scintille-r2-'));
 	try {
 		for (const [i, group] of groups.entries()) {
 			const list = join(dir, `${i}.json`);
-			await writeFile(list, JSON.stringify(group.entries));
-			const args = ['r2', 'bulk', 'put', bucket, '--filename', list, location];
-			args.push('--content-type', group.type, '--cache-control', group.cache);
-			console.log(`${bucket}: ${group.entries.length} objects (${group.type})`);
-			const run = spawnSync('wrangler', args, { cwd: WEB, stdio: 'inherit', shell: false });
-			if (run.status !== 0) throw new Error(`wrangler exited with ${run.status ?? run.signal}`);
+			for (let attempt = 1; ; attempt++) {
+				const entries = resume ? await unpublished(group.entries) : group.entries;
+				if (entries.length === 0) break;
+				await writeFile(list, JSON.stringify(entries));
+				const args = ['r2', 'bulk', 'put', bucket, '--filename', list, location, '--concurrency', resume ? '4' : '20'];
+				args.push('--content-type', group.type, '--cache-control', group.cache);
+				console.log(`${bucket}: ${entries.length} objects (${group.type})`);
+				const run = spawnSync('wrangler', args, { cwd: WEB, stdio: 'inherit', shell: false });
+				if (run.status === 0) break;
+				if (attempt === attempts) throw new Error(`wrangler exited with ${run.status ?? run.signal}`);
+				console.warn(`${bucket}: wrangler exited with ${run.status ?? run.signal}, retrying in a minute`);
+				await sleep(60_000);
+			}
 		}
 	} finally {
 		await rm(dir, { recursive: true, force: true });
@@ -66,11 +133,18 @@ async function main([what, flag]) {
 		return upload(bucket, groups, flag === '--local' ? '--local' : '--remote');
 	}
 	if (what === 'textures' && flag === undefined) {
-		const groups = plan(await files(TEXTURES), TEXTURES, TEXTURES_PREFIX);
+		const groups = plan((await files(TEXTURES)).filter((p) => !relative(TEXTURES, p).startsWith('surface')), TEXTURES, TEXTURES_PREFIX);
 		if (groups.length === 0) throw new Error(`no textures in ${TEXTURES}, run pnpm -C web textures first`);
 		return upload('scintille-live', groups, '--remote');
 	}
-	throw new Error('usage: r2-upload.mjs fixtures --local | fixtures --preview | textures');
+	if (what === 'surface' && flag === undefined) {
+		const groups = surfacePlan(await files(SURFACE));
+		if (!(await assertSurfaceReady())) return;
+		const [tiles, manifest] = groups;
+		await upload('scintille-live', [tiles], '--remote', { resume: true, attempts: 30 });
+		return upload('scintille-live', [manifest], '--remote');
+	}
+	throw new Error('usage: r2-upload.mjs fixtures --local | fixtures --preview | textures | surface');
 }
 
 if (process.argv[1] === import.meta.filename) {

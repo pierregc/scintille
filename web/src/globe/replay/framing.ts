@@ -1,10 +1,14 @@
 import { PerspectiveCamera, Vector3 } from 'three';
-import type { StormBounds } from '../../contract/types';
+import type { StormBounds, StormDetail } from '../../contract/types';
 import { type FlyToOptions, kmToWorld, poseAt, worldToKm } from '../flight';
+import { floorRange } from '../surface';
 import { latLonToVector } from '../sun';
 import { fitDistance } from '../viewport';
 
-export const REPLAY_FRAME = { duration: 2800, tilt: 20, viewportFraction: 0.62, minAltitudeKm: 300 };
+export const REPLAY_FRAME = { duration: 2800, tilt: 20, viewportFraction: 0.62 };
+
+/** Look toward the horizon from the camera floor: horizon in the upper third, storm below the centre. */
+export const GRAZE = { duration: 3200, tilt: 72, leadKm: 200 };
 
 /** A spherical cap enclosing the full geographic box, including wrapped longitude intervals. */
 export function stormCap(bounds: StormBounds): { lat: number; lon: number; angle: number } {
@@ -31,7 +35,7 @@ export function stormCap(bounds: StormBounds): { lat: number; lon: number; angle
 export function frameStorm(bounds: StormBounds, fov: number, aspect: number): Required<FlyToOptions> {
 	const { lat, lon, angle } = stormCap(bounds);
 	if (angle > Math.PI / 3) {
-		return { lat, lon, altitude: worldToKm(fitDistance(1, fov, aspect) * 1.25 - 1, 1), tilt: 0, duration: REPLAY_FRAME.duration };
+		return { lat, lon, altitude: worldToKm(fitDistance(1, fov, aspect) * 1.25 - 1, 1), tilt: 0, heading: 0, duration: REPLAY_FRAME.duration };
 	}
 	const { west, east, south, north } = bounds;
 	const width = east >= west ? east - west : east + 360 - west;
@@ -53,12 +57,42 @@ export function frameStorm(bounds: StormBounds, fov: number, aspect: number): Re
 			return p.z > -1 && p.z < 1 && Math.max(Math.abs(p.x), Math.abs(p.y)) < REPLAY_FRAME.viewportFraction;
 		});
 	};
-	let low = REPLAY_FRAME.minAltitudeKm;
+	let low = worldToKm(floorRange((REPLAY_FRAME.tilt * Math.PI) / 180, 1), 1);
 	let high = worldToKm(fitDistance(1, fov, aspect) * 2, 1);
 	for (let i = 0; i < 32; i++) {
 		const mid = (low + high) / 2;
 		if (fits(mid)) high = mid;
 		else low = mid;
 	}
-	return { lat, lon, altitude: high * 1.02, tilt: REPLAY_FRAME.tilt, duration: REPLAY_FRAME.duration };
+	return { lat, lon, altitude: Math.max(high * 1.02, low), tilt: REPLAY_FRAME.tilt, heading: 0, duration: REPLAY_FRAME.duration };
+}
+
+/** Looks over the storm's position at `time` toward the horizon, along its motion. */
+export function grazeStorm(detail: Pick<StormDetail, 'track' | 'bounds'>, time: number): Required<FlyToOptions> {
+	const track = [...detail.track].sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+	let index = 0;
+	for (let i = 0; i < track.length; i++) if (Date.parse(track[i].time) <= time) index = i;
+	const { lat, lon } = track[index] ?? stormCap(detail.bounds);
+	const from = track[Math.max(index - 1, 0)];
+	const to = track[Math.min(index + 1, track.length - 1)];
+	const heading = from && to && from !== to ? bearing(from, to) : 0;
+	const target = ahead({ lat, lon }, heading, GRAZE.leadKm);
+	const tilt = (GRAZE.tilt * Math.PI) / 180;
+	return { ...target, altitude: worldToKm(floorRange(tilt, 1), 1) + 1, tilt: GRAZE.tilt, heading, duration: GRAZE.duration };
+}
+
+function ahead({ lat, lon }: { lat: number; lon: number }, headingDeg: number, km: number): { lat: number; lon: number } {
+	const rad = Math.PI / 180;
+	const d = km / 6371;
+	const b = headingDeg * rad;
+	const lat2 = Math.asin(Math.sin(lat * rad) * Math.cos(d) + Math.cos(lat * rad) * Math.sin(d) * Math.cos(b));
+	const lon2 = lon * rad + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat * rad), Math.cos(d) - Math.sin(lat * rad) * Math.sin(lat2));
+	return { lat: lat2 / rad, lon: ((lon2 / rad + 540) % 360) - 180 };
+}
+
+function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+	const rad = Math.PI / 180;
+	const y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
+	const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
+	return ((Math.atan2(y, x) / rad) + 360) % 360;
 }

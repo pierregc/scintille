@@ -82,6 +82,7 @@ import Version from './Version.astro';
 	<p class="stale cap" role="status" data-stale hidden></p>
 	<p class="replay-status" role="status" data-replay-status hidden></p>
 	<div class="share" data-share-tools hidden>
+		<button type="button" aria-pressed="false" data-horizon>Horizon</button>
 		<button type="button" data-share>Share replay</button>
 		<input type="text" readonly aria-label="Replay link" data-share-url hidden />
 		<span role="status" data-share-status></span>
@@ -113,6 +114,8 @@ import Version from './Version.astro';
 		white-space: pre-line;
 	}
 	.share { position: fixed; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
+	.share button[aria-pressed='true'] { color: var(--ink); }
+	.share button + button { margin-left: 16px; }
 	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
 	.share input { width: 100%; padding: 8px; color: var(--ink); background: rgb(3 8 16 / 0.92); border: 1px solid var(--hair); }
 	.share span { display: block; color: var(--soft); font: 300 11px/1.5 var(--sans); }
@@ -639,6 +642,7 @@ import Version from './Version.astro';
 		const shareTools = $('[data-share-tools]');
 		const shareInput = $<HTMLInputElement>('[data-share-url]');
 		const shareStatus = $('[data-share-status]');
+		const horizon = $<HTMLButtonElement>('[data-horizon]');
 		const display = $('[data-display]');
 		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
@@ -675,6 +679,7 @@ import Version from './Version.astro';
 				if (shareStatus) shareStatus.textContent = '';
 			}
 			if (shareTools) shareTools.hidden = !replay?.selected || Boolean(replay.loading);
+			horizon?.setAttribute('aria-pressed', String(app?.replay.grazing ?? false));
 			root.toggleAttribute('data-opening', Boolean(replay?.loading || replay?.error));
 			if (replayStatus) {
 				const selected = replay?.selected;
@@ -769,6 +774,11 @@ import Version from './Version.astro';
 		});
 		$('[data-live]')?.addEventListener('click', () => {
 			void app?.replay.live();
+			tick();
+		});
+		horizon?.addEventListener('click', () => {
+			if (!app?.replay.state.selected) return;
+			void app.replay.graze(!app.replay.grazing);
 			tick();
 		});
 		$('[data-share]')?.addEventListener('click', async () => {

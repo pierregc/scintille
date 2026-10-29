@@ -4,7 +4,8 @@ SELECT
     e.source,
     count(l.source) AS files,
     any_value(e.expected) AS expected_files,
-    count(DISTINCT l.product_start) FILTER (WHERE l.status = 'ok') / any_value(e.expected) AS completeness,
+    -- A cycle shift can add a short product (145 MTG LI files on some days).
+    least(1.0, count(DISTINCT l.product_start) FILTER (WHERE l.status = 'ok') / any_value(e.expected)) AS completeness,
     count(l.source) FILTER (WHERE l.status <> 'ok') AS failed_files,
     quantile_cont(epoch(l.received_at - l.product_end), 0.5) AS latency_p50_s,
     quantile_cont(epoch(l.received_at - l.product_end), 0.95) AS latency_p95_s

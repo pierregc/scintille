@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { type CameraPose, FLIGHT, kmToWorld, lookRotation } from './flight';
+import { CAMERA_FLOOR_KM, type CameraPose, FLIGHT, kmToWorld, lookRotation } from './flight';
 
 /** A camera orbiting a point on the ground. */
 export interface SurfaceView {
@@ -14,9 +14,6 @@ export interface SurfaceView {
 }
 
 export const SURFACE = {
-	/** Lowest the camera may fly above the ground, above the lightning cloud tops. */
-	minHeightKm: 15,
-	minRangeKm: 20,
 	/** Radians of tilt or turn per pixel dragged. */
 	anglePerPixel: 0.005,
 	/** Range factor per wheel pixel. */
@@ -44,17 +41,20 @@ export function surfaceFromPose(position: Vector3, quaternion: Quaternion, targe
 	return { normal, heading: horizontal.normalize(), range, tilt };
 }
 
-/** Largest tilt that keeps the camera above the minimum height. */
+/** Largest tilt that keeps the camera above the floor. */
 export function maxTilt(range: number, radius: number): number {
-	const floor = radius + kmToWorld(SURFACE.minHeightKm, radius);
+	const floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
 	const cos = (floor * floor - radius * radius - range * range) / (2 * radius * range);
 	const limit = (FLIGHT.maxTiltDeg * Math.PI) / 180;
 	if (cos <= Math.cos(limit)) return limit;
 	return cos >= 1 ? 0 : Math.acos(cos);
 }
 
-export function minRange(radius: number): number {
-	return kmToWorld(SURFACE.minRangeKm, radius);
+/** Shortest range that keeps the camera above the floor at `tilt` radians. */
+export function floorRange(tilt: number, radius: number): number {
+	const floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
+	const c = radius * Math.cos(tilt);
+	return -c + Math.sqrt(c * c + floor * floor - radius * radius);
 }
 
 /** Tilts with a vertical drag (up looks toward the horizon) and turns with a horizontal one. */
@@ -76,9 +76,9 @@ export function panSurface(view: SurfaceView, dx: number, dy: number, radius: nu
 	return { ...view, normal, heading };
 }
 
-/** Zooms by `pixels` of wheel (positive moves away), keeping the camera above the minimum height. */
+/** Zooms by `pixels` of wheel (positive moves away), stopping at the floor without changing the tilt. */
 export function zoomSurface(view: SurfaceView, pixels: number, radius: number): SurfaceView {
-	const range = Math.max(view.range * Math.exp(pixels * SURFACE.zoomPerPixel), minRange(radius));
+	const range = Math.max(view.range * Math.exp(pixels * SURFACE.zoomPerPixel), floorRange(view.tilt, radius));
 	return { ...view, range, tilt: Math.min(view.tilt, maxTilt(range, radius)) };
 }
 

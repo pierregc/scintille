@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { objectHeaders, plan } from './r2-upload.mjs';
+import { objectHeaders, plan, SURFACE, surfacePlan } from './r2-upload.mjs';
 
 interface R2Binding {
 	binding: string;
@@ -46,6 +46,14 @@ describe('r2-upload', () => {
 		expect(groups.map((g) => g.entries.map((e: { key: string }) => e.key))).toEqual([
 			['textures/v1/4k/day.webp', 'textures/v1/2k/mask.webp'],
 			['textures/v1/4k/day.ktx2'],
+		]);
+	});
+
+	it('uploads the surface tiles before their manifest', () => {
+		const groups = surfacePlan([join(SURFACE, 'manifest.json'), join(SURFACE, 'day/5/3-2.webp'), join(SURFACE, 'night/2/0-0.webp')]);
+		expect(groups.map((g) => [g.cache, g.entries.map((e: { key: string }) => e.key)])).toEqual([
+			['public, max-age=31536000, immutable', ['textures/v3/day/5/3-2.webp', 'textures/v3/night/2/0-0.webp']],
+			['public, max-age=10', ['textures/v3/manifest.json']],
 		]);
 	});
 });

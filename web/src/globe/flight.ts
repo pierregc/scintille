@@ -3,6 +3,9 @@ import { latLonToVector } from './sun';
 
 const EARTH_RADIUS_KM = 6371;
 
+/** Lowest camera height above the ground in every mode, the ISS altitude (ADR 0020). */
+export const CAMERA_FLOOR_KM = 400;
+
 export interface FlyToOptions {
 	lat: number;
 	lon: number;
@@ -10,9 +13,14 @@ export interface FlyToOptions {
 	altitude?: number;
 	/** Angle from looking straight down, degrees; 0 keeps the whole globe framed. */
 	tilt?: number;
+	/** Direction the camera faces, degrees clockwise from north. */
+	heading?: number;
 	/** Milliseconds; defaults to a length that grows with the distance travelled. */
 	duration?: number;
 }
+
+/** A camera position as shared in links; heading defaults to north. */
+export type CameraView = Required<Omit<FlyToOptions, 'duration' | 'heading'>> & { heading?: number };
 
 /** Flight tuning, exposed for the cinematic presets (#83). */
 export const FLIGHT = {
@@ -31,10 +39,10 @@ export interface CameraPose {
 	quaternion: Quaternion;
 }
 
-/** Pose above (lat, lon): `altitude` world units above the surface point, `tilt` degrees from nadir, north up. */
-export function poseAt(lat: number, lon: number, altitude: number, tiltDeg: number, radius: number): CameraPose {
+/** Pose above (lat, lon): `altitude` world units above the surface point, `tilt` degrees from nadir, facing `headingDeg` from north. */
+export function poseAt(lat: number, lon: number, altitude: number, tiltDeg: number, radius: number, headingDeg = 0): CameraPose {
 	const normal = new Vector3(...latLonToVector(lat, lon));
-	const north = northTangent(normal);
+	const north = headingTangent(normal, headingDeg);
 	const tilt = (Math.min(Math.max(tiltDeg, 0), FLIGHT.maxTiltDeg) * Math.PI) / 180;
 	const surface = normal.clone().multiplyScalar(radius);
 	const offset = normal
@@ -53,6 +61,20 @@ export function northTangent(normal: Vector3): Vector3 {
 	const tangent = y.clone().addScaledVector(normal, -normal.dot(y));
 	if (tangent.lengthSq() < 1e-10) return new Vector3(-1, 0, 0).cross(normal).normalize();
 	return tangent.normalize();
+}
+
+/** Unit tangent `headingDeg` clockwise from north. */
+export function headingTangent(normal: Vector3, headingDeg: number): Vector3 {
+	const north = northTangent(normal);
+	const angle = (headingDeg * Math.PI) / 180;
+	return north.clone().multiplyScalar(Math.cos(angle)).addScaledVector(north.clone().cross(normal), Math.sin(angle));
+}
+
+/** Degrees clockwise from north of a tangent at `normal`, in [0, 360). */
+export function headingOf(normal: Vector3, tangent: Vector3): number {
+	const north = northTangent(normal);
+	const deg = (Math.atan2(tangent.dot(north.clone().cross(normal)), tangent.dot(north)) * 180) / Math.PI;
+	return (deg + 360) % 360;
 }
 
 export function lookRotation(eye: Vector3, target: Vector3, up: Vector3): Quaternion {
@@ -90,8 +112,10 @@ export class Flight {
 	readonly #arc: number;
 	readonly #axis: Vector3;
 	readonly #residual: Quaternion;
+	readonly #floor: number;
 
 	constructor(from: CameraPose, to: CameraPose, radius: number, duration?: number) {
+		this.#floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
 		this.#from = from;
 		this.#to = to;
 		this.#fromDir = (from.target.lengthSq() > 0 ? from.target : from.position).clone().normalize();
@@ -119,10 +143,16 @@ export class Flight {
 		const anchor = slerpDirection(this.#fromDir, this.#toDir, this.#angle, e).multiplyScalar(
 			lerp(this.#from.target.length(), this.#to.target.length(), e),
 		);
-		const range = lerp(this.#fromRange, this.#toRange, e) + this.#arc * Math.sin(Math.PI * t);
 		const back = new Vector3(0, 0, 1).applyQuaternion(quaternion);
+		const range = Math.max(lerp(this.#fromRange, this.#toRange, e) + this.#arc * Math.sin(Math.PI * t), rangeToHeight(anchor, back, this.#floor));
 		return { position: anchor.clone().addScaledVector(back, range), target: anchor, quaternion };
 	}
+}
+
+/** Distance along `back` from `anchor` at which the camera reaches `distance` from the globe centre. */
+function rangeToHeight(anchor: Vector3, back: Vector3, distance: number): number {
+	const b = anchor.dot(back);
+	return -b + Math.sqrt(Math.max(b * b - anchor.lengthSq() + distance * distance, 0));
 }
 
 function lerp(a: number, b: number, t: number): number {
