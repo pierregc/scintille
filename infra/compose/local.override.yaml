@@ -12,9 +12,11 @@ services:
       SCINTILLE_R2_SECRET_ACCESS_KEY: scintille-local-secret
   lake-writer:
     network_mode: service:lake-s3
+  # The composite needs EUMETSAT credentials and minutes per frame: local stacks keep GMGSI.
   clouds:
     network_mode: service:lake-s3
     environment:
+      SCINTILLE_CLOUD_SOURCE: gmgsi
       SCINTILLE_LIVE_BUCKET: scintille-lake
       SCINTILLE_R2_ENDPOINT: http://localhost:9000
       SCINTILLE_R2_ACCESS_KEY_ID: scintille-local
