@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# A release that changes a command and fails its health check is rolled back with the previous compose file.
+# A release that changes a command and fails its health check is rolled back with the previous compose file;
+# other tags of the release's repositories are removed.
 set -euo pipefail
 dir=$(mktemp -d)
 trap 'docker compose -p deploy-test down -t 0 >/dev/null 2>&1 || true; rm -rf "$dir"' EXIT
@@ -24,7 +25,13 @@ YAML
 release good "touch /tmp/ok && sleep 600"
 release bad "sleep 600"
 export DEPLOY_WAIT_TIMEOUT=30
+docker pull --quiet mirror.gcr.io/library/busybox:1.37 >/dev/null
+docker tag mirror.gcr.io/library/busybox:1.37 mirror.gcr.io/library/busybox:deploy-test-stale
 "$dir/deploy.sh" good
+if docker image inspect mirror.gcr.io/library/busybox:deploy-test-stale >/dev/null 2>&1; then
+	echo "an unused image was kept" >&2
+	exit 1
+fi
 if "$dir/deploy.sh" bad; then
 	echo "bad release was not rejected" >&2
 	exit 1
@@ -32,4 +39,5 @@ fi
 test "$(cat "$dir/.deployed")" = good
 cmd=$(docker inspect --format '{{json .Config.Cmd}}' "$(docker compose -p deploy-test ps -q app)")
 grep -q "touch /tmp/ok" <<< "$cmd" || { echo "running $cmd" >&2; exit 1; }
-echo "rollback restored the previous compose file"
+docker image inspect mirror.gcr.io/library/busybox:1.37 >/dev/null
+echo "rollback restored the previous compose file and stale tags were removed"
