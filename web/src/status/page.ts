@@ -135,8 +135,10 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	banner.hidden = view.banner === '';
 
 	if (full) {
-		const max = niceMax(Math.max(0, ...view.sources.flatMap((s) => s.flashesPerMinute)));
-		q('[data-sources]').replaceChildren(...view.sources.map((s) => sourceBlock(s, max)));
+		// One axis per source: MTG LI arrives in 10 minute bursts that would flatten the GLM charts.
+		q('[data-sources]').replaceChildren(
+			...view.sources.map((s) => sourceBlock(s, niceMax(Math.max(0, ...s.flashesPerMinute)))),
+		);
 	} else {
 		for (const s of view.sources) {
 			const node = root.querySelector(`[data-lastfile="${s.source}"]`);
@@ -156,8 +158,28 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	sync(q('[data-quality]'), quality);
 
 	const lake = el('dl');
-	if (view.catalog) lake.append(row('Catalog operations', view.catalog.text), row('Free tier used', view.catalog.share));
+	if (view.lake) {
+		lake.append(
+			row('Size', view.lake.size),
+			row('Tables', view.lake.tables),
+			row('Data files', view.lake.files),
+			row('Rows', view.lake.rows),
+			row('Measured', view.lake.measured.text, view.lake.measured),
+		);
+	}
+	if (view.catalog) lake.append(row('Catalog ops, month', view.catalog.text), row('Free tier used', view.catalog.share));
 	sync(q('[data-lake]'), lake);
+
+	const storms = el('dl');
+	if (view.storms) {
+		storms.append(
+			row('Detected', view.storms.detected),
+			row('Published', view.storms.published),
+			row('Highlighted', view.storms.highlighted),
+			row('Updated', view.storms.measured.text, view.storms.measured),
+		);
+	}
+	sync(q('[data-storms]'), storms);
 }
 
 /** Polls `live/metrics.json` and keeps the page in step; ages tick every second. */

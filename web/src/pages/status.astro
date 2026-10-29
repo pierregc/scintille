@@ -8,7 +8,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <BaseLayout
 	title="Status · Scintille"
-	description="Live operational metrics of the Scintille lightning feed: throughput, latency, completeness and freshness against their targets."
+	description="Live operational metrics of the Scintille lightning feed: throughput, latency, completeness, freshness, lakehouse size and storms."
 >
 	<main class="status" data-stale="true">
 		<header class="top">
@@ -30,15 +30,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 				<div data-quality></div>
 			</section>
 			<section>
-				<h2>Lakehouse, this month</h2>
+				<h2>Lakehouse</h2>
 				<div data-lake></div>
+			</section>
+			<section>
+				<h2>Storms</h2>
+				<div data-storms></div>
 			</section>
 		</div>
 
 		<p class="note">
-			Measured by the ingestion service and refreshed every minute. Flashes are counted per minute of
-			ingestion; the last minute is still in progress. Lakehouse size and storms detected are not
-			published yet.
+			Refreshed every minute. Flashes are counted per minute of ingestion; the last minute is still in
+			progress. Lakehouse size counts the current table snapshots, measured hourly. Storms are
+			published from level 3.
 		</p>
 	</main>
 </BaseLayout>
@@ -143,6 +147,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 48px;
 		margin-top: 56px;
+	}
+	.layers {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 40px;
 	}
 	.status[data-stale='true'] .sources,
 	.status[data-stale='true'] .layers {
@@ -256,6 +264,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 	:focus-visible {
 		outline: 1px solid var(--soft);
 		outline-offset: 5px;
+	}
+	@media (max-width: 1080px) {
+		.layers {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
 	}
 	@media (max-width: 860px) {
 		.sources,

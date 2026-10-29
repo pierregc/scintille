@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
 from dagster import (
     AssetCheckExecutionContext,
@@ -11,23 +12,30 @@ from dagster import (
     AssetSelection,
     DagsterInstance,
     Definitions,
+    MaterializeResult,
     asset,
     asset_check,
+    build_sensor_context,
     define_asset_job,
     materialize,
 )
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
+from scintille_ingest.runtime.ops import LAKE_STATUS, STORMS_STATUS
 from scintille_lake.migrate import migrate
 from scintille_pipelines import checks, definitions
 from scintille_pipelines.ops_status import (
+    STORM_CATALOG,
     CheckResult,
+    lake_due,
+    lake_size,
     latest_checks,
     latest_gold_build,
+    latest_storm_counts,
     ops_status,
     summarize,
 )
-from scintille_pipelines.resources import LakeResource
+from scintille_pipelines.resources import LakeResource, PostgresResource
 
 T0 = datetime(2026, 7, 15, 19, 10, tzinfo=UTC)
 
@@ -105,6 +113,81 @@ def test_reads_the_latest_gold_build() -> None:
     materialize([example], instance=instance)
     built = latest_gold_build(instance, [example.key])
     assert built is not None and datetime.now(UTC) - built < timedelta(minutes=1)
+
+
+def test_lake_size_adds_up_current_snapshots(tmp_path: Path) -> None:
+    catalog = SqliteLake(path=str(tmp_path)).catalog()
+    migrate(catalog)
+    empty = lake_size(catalog)
+    assert empty["tables"] >= 3 and empty["bytes"] == empty["records"] == 0
+    table = catalog.create_table(("gold", "example"), schema=pa.schema([("x", pa.int64())]))
+    for n in (3, 4):
+        table.append(pa.table({"x": list(range(n))}, schema=pa.schema([("x", pa.int64())])))
+    size = lake_size(catalog)
+    files = table.inspect.data_files()
+    assert size["tables"] == empty["tables"] + 1
+    assert size["records"] == 7 and size["data_files"] == files.num_rows == 2
+    assert size["bytes"] == pa.compute.sum(files["file_size_in_bytes"]).as_py()
+
+
+def test_storm_counts_come_from_the_latest_catalog_publication() -> None:
+    @asset(key=STORM_CATALOG)
+    def storm_catalog() -> MaterializeResult:  # type: ignore[type-arg]
+        return MaterializeResult(metadata={"detected": 40, "storms": 12, "highlights": 5})
+
+    instance = DagsterInstance.ephemeral()
+    assert latest_storm_counts(instance) is None
+    materialize([storm_catalog], instance=instance)
+    counts = latest_storm_counts(instance)
+    assert counts is not None
+    at, value = counts
+    assert value == {"detected": 40, "published": 12, "highlighted": 5}
+    assert datetime.now(UTC) - at < timedelta(minutes=1)
+
+
+def test_lake_size_is_measured_once_an_hour() -> None:
+    assert lake_due(None, T0)
+    assert not lake_due((T0 - timedelta(minutes=59)).isoformat(), T0)
+    assert lake_due((T0 - timedelta(hours=1)).isoformat(), T0)
+
+
+def test_sensor_records_storm_counts_and_lake_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lake = SqliteLake(path=str(tmp_path))
+    migrate(lake.catalog())
+    recorded: dict[str, tuple[datetime, dict[str, object]]] = {}
+
+    class Ops:
+        def __init__(self, dsn: str) -> None:
+            pass
+
+        def put_status(self, name: str, value: dict[str, object], at: datetime) -> None:
+            recorded[name] = (at, dict(value))
+
+        def close(self) -> None:
+            pass
+
+    @asset(key=STORM_CATALOG)
+    def storm_catalog() -> MaterializeResult:  # type: ignore[type-arg]
+        return MaterializeResult(metadata={"detected": 3, "storms": 1, "highlights": 1})
+
+    instance = DagsterInstance.ephemeral()
+    materialize([storm_catalog], instance=instance)
+    defs = Definitions(assets=[storm_catalog], sensors=[ops_status])
+    monkeypatch.setattr("scintille_pipelines.ops_status.PostgresOps", Ops)
+    context = build_sensor_context(
+        instance=instance,
+        definitions=defs,
+        resources={"postgres": PostgresResource(), "lake": lake},
+    )
+    ops_status(context)
+    assert recorded[STORMS_STATUS][1] == {"detected": 3, "published": 1, "highlighted": 1}
+    assert recorded[LAKE_STATUS][1] == lake_size(lake.catalog())
+    assert context.cursor is not None
+    recorded.clear()
+    ops_status(context)
+    assert LAKE_STATUS not in recorded and STORMS_STATUS in recorded
 
 
 def test_sensor_is_registered_and_running_by_default() -> None:
