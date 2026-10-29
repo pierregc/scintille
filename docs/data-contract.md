@@ -911,7 +911,9 @@ its schema version is in the binary header, and publication/observation timestam
 its enclosing detail document. This clarifies #74's singular extract filename and its requirement
 for timestamps on every file without changing the live encoding. The replay selection provenance
 is mandatory: `track-bounds` may include nearby unrelated flashes, so its count is separate from
-the storm's classified count. No cloud archive discovery is implied by this contract.
+the storm's classified count. No cloud archive discovery is implied by this contract. Chunks are
+deleted 60 days after they are written, so a replay is kept at least 60 days after the storm starts;
+the detail document stays and readers report an older replay as expired.
 
 `storms/index/<page>.json` uses zero-based pages of 50 summaries counted from the oldest storm by
 start, then storm id; each page lists its storms recent first. A new storm only changes the last
