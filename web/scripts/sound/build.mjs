@@ -28,13 +28,9 @@ const TRACKS = [
 	{ id: '700896', title: 'Cosmic Ray (Ambient)', author: 'younoise', src: '700/700896_2346185', from: 4, to: 38 },
 	{ id: '402338', title: 'ps Calm Aurorae', author: 'arseniiv', src: '402/402338_1951924', from: 2, to: 94 },
 	{ id: '384388', title: 'Peaceful Drone', author: 'mricken1', src: '384/384388_7043106', from: 25, to: 140 },
-	{ id: '425984', title: 'Space Drone Ambience 01', author: 'Magmi.Soundtracks', src: '425/425984_6900479', from: 17, to: 100 },
-	{ id: '435147', title: 'Ambient Drone 21.07.2018', author: 'kickhat', src: '435/435147_4322723', from: 2, to: 104 },
-	{ id: '543228', title: 'Angelic Guitar Pad', author: 'LeSystemPerv', src: '543/543228_9986925', from: 5, to: 140 },
 	{ id: '609769', title: 'Calm airy tension drone', author: 'xkeril', src: '609/609769_13504080', from: 3, to: 42 },
 	{ id: '683324', title: 'Aeons Whisper Pad', author: 'LogicMoon', src: '683/683324_462105', from: 1, to: 76 },
 	{ id: '792042', title: 'gsharp major 7, ember proxima', author: 'Phrakture', src: '792/792042_468390', from: 10, to: 120 },
-	{ id: '870290', title: 'Morning Relaxing Ambient Improvisation', author: 'bassimat', src: '870/870290_15636277', from: 2, to: 120 },
 	{ id: '876072', title: 'Ambient Frozen Ice Ethereal Floating Landscape', author: 'bassimat', src: '876/876072_15636277', from: 2, to: 64 },
 ];
 const STATIC = { id: '875011', title: 'Electrical Static, crackles and pops', src: '875/875011_19181807' };

@@ -8,8 +8,8 @@ import { CrackleScheduler, type Listener, MAX_VOICES, type Trigger } from './sch
 /** Enough for the content (crackles stop at 9 kHz), and a third of the memory of 48 kHz for decoded tracks. */
 const SAMPLE_RATE = 32_000;
 const MASTER_GAIN = 0.8;
-const BED_GAIN = 0.5;
-const CRACKLE_GAIN = 0.6;
+const BED_GAIN = 0.7;
+const CRACKLE_GAIN = 1.5;
 const FADE_S = 0.05;
 const MIN_RATE = 0.8;
 const RATE_RANGE = 0.45;
@@ -17,12 +17,22 @@ const CRACKLE_S = 0.26 / MIN_RATE;
 /** The next track starts loading this long before it fades in. */
 const PRELOAD_S = 15;
 
+/** Slider positions in [0, 1]; the gain follows the square, closer to how loudness is heard. */
+export interface SoundLevels {
+	music: number;
+	flashes: number;
+}
+
+export const DEFAULT_LEVELS: SoundLevels = { music: 0.6, flashes: 0.8 };
+
 export interface Sound {
 	/** Web Audio is available in this browser. */
 	readonly supported: boolean;
 	readonly enabled: boolean;
 	/** Turns sound on or off; call from a user gesture so the browser lets audio start. */
 	setEnabled(on: boolean): void;
+	readonly levels: SoundLevels;
+	setLevels(levels: Partial<SoundLevels>): void;
 	/** Crackles for flashes the playhead crossed since the last frame, each source `delays` behind; relays the ambient tracks. */
 	update(sceneTime: number, delays?: SourceDelays): void;
 	dispose(): void;
@@ -42,6 +52,8 @@ interface Bed {
 interface Graph {
 	context: AudioContext;
 	master: GainNode;
+	music: GainNode;
+	flashes: GainNode;
 	crackles: AudioBuffer[];
 	voices: (Voice | null)[];
 	bed: Bed | null;
@@ -78,6 +90,7 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 	};
 	let graph: Graph | undefined;
 	let enabled = false;
+	const levels: SoundLevels = { ...DEFAULT_LEVELS };
 	let generation = ring.generation;
 
 	const load = (context: AudioContext, path: string) =>
@@ -113,8 +126,8 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 		source.loopEnd = catalog.pad + track.loop;
 		const gain = context.createGain();
 		gain.gain.setValueAtTime(0, now);
-		gain.gain.linearRampToValueAtTime(BED_GAIN, now + fade);
-		source.connect(gain).connect(g.master);
+		gain.gain.linearRampToValueAtTime(1, now + fade);
+		source.connect(gain).connect(g.music);
 		source.start(now, catalog.pad + Math.random() * track.loop);
 		g.bed = { track, source, gain };
 		g.swapAt = now + RELAY_S;
@@ -151,7 +164,13 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 		const master = context.createGain();
 		master.gain.value = 0;
 		master.connect(compressor).connect(context.destination);
-		const g: Graph = { context, master, crackles: [], voices: Array.from({ length: MAX_VOICES }, () => null), bed: null, swapAt: 0, upcoming: null };
+		const music = context.createGain();
+		music.gain.value = BED_GAIN * levels.music ** 2;
+		music.connect(master);
+		const flashes = context.createGain();
+		flashes.gain.value = CRACKLE_GAIN * levels.flashes ** 2;
+		flashes.connect(master);
+		const g: Graph = { context, master, music, flashes, crackles: [], voices: Array.from({ length: MAX_VOICES }, () => null), bed: null, swapAt: 0, upcoming: null };
 		Promise.all(catalog.crackles.map((_, i) => load(context, `crackles/${String(i).padStart(2, '0')}.mp3`)))
 			.then((buffers) => {
 				g.crackles = buffers;
@@ -181,13 +200,13 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 		filter.type = 'lowpass';
 		filter.frequency.value = t.cutoff;
 		const gain = context.createGain();
-		gain.gain.value = t.gain * CRACKLE_GAIN;
+		gain.gain.value = t.gain;
 		const panner = context.createPanner();
 		panner.panningModel = 'HRTF';
 		panner.distanceModel = 'linear';
 		panner.rolloffFactor = 0;
 		[panner.positionX.value, panner.positionY.value, panner.positionZ.value] = t.position;
-		source.connect(filter).connect(gain).connect(panner).connect(g.master);
+		source.connect(filter).connect(gain).connect(panner).connect(g.flashes);
 		const voice = { source, gain };
 		source.onended = () => {
 			panner.disconnect();
@@ -219,6 +238,19 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 					if (!enabled && context.state === 'running') void context.suspend();
 				}, 500);
 			}
+		},
+		get levels() {
+			return { ...levels };
+		},
+		setLevels(next) {
+			for (const key of ['music', 'flashes'] as const) {
+				const v = next[key];
+				if (v !== undefined && Number.isFinite(v)) levels[key] = Math.min(1, Math.max(0, v));
+			}
+			if (!graph) return;
+			const now = graph.context.currentTime;
+			graph.music.gain.setTargetAtTime(BED_GAIN * levels.music ** 2, now, FADE_S);
+			graph.flashes.gain.setTargetAtTime(CRACKLE_GAIN * levels.flashes ** 2, now, FADE_S);
 		},
 		update(sceneTime, delays) {
 			if (generation !== ring.generation) {

@@ -17,21 +17,6 @@
 			"bytes": 972739
 		},
 		{
-			"id": "425984",
-			"loop": 79,
-			"bytes": 960827
-		},
-		{
-			"id": "435147",
-			"loop": 80,
-			"bytes": 972739
-		},
-		{
-			"id": "543228",
-			"loop": 80,
-			"bytes": 972739
-		},
-		{
 			"id": "609769",
 			"loop": 35,
 			"bytes": 432945
@@ -43,11 +28,6 @@
 		},
 		{
 			"id": "792042",
-			"loop": 80,
-			"bytes": 972739
-		},
-		{
-			"id": "870290",
 			"loop": 80,
 			"bytes": 972739
 		},
@@ -178,27 +158,6 @@
 			"license": "CC0-1.0"
 		},
 		{
-			"id": "425984",
-			"title": "Space Drone Ambience 01",
-			"author": "Magmi.Soundtracks",
-			"url": "https://freesound.org/s/425984/",
-			"license": "CC0-1.0"
-		},
-		{
-			"id": "435147",
-			"title": "Ambient Drone 21.07.2018",
-			"author": "kickhat",
-			"url": "https://freesound.org/s/435147/",
-			"license": "CC0-1.0"
-		},
-		{
-			"id": "543228",
-			"title": "Angelic Guitar Pad",
-			"author": "LeSystemPerv",
-			"url": "https://freesound.org/s/543228/",
-			"license": "CC0-1.0"
-		},
-		{
 			"id": "609769",
 			"title": "Calm airy tension drone",
 			"author": "xkeril",
@@ -217,13 +176,6 @@
 			"title": "gsharp major 7, ember proxima",
 			"author": "Phrakture",
 			"url": "https://freesound.org/s/792042/",
-			"license": "CC0-1.0"
-		},
-		{
-			"id": "870290",
-			"title": "Morning Relaxing Ambient Improvisation",
-			"author": "bassimat",
-			"url": "https://freesound.org/s/870290/",
 			"license": "CC0-1.0"
 		},
 		{

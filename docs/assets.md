@@ -114,7 +114,7 @@ flashes on screen. Built by `web/scripts/sound/build.mjs` (needs `ffmpeg` with l
 `web/public/sound/`, served with the site, and described by `web/src/globe/sound/catalog.json`.
 
 ```sh
-pnpm -C web sound   # downloads the pinned Freesound previews once, about 40 MB
+pnpm -C web sound   # downloads the pinned Freesound previews once, about 20 MB
 ```
 
 - **Sources**: Freesound HQ previews, all CC0, pinned by size and SHA-256 in `scripts/sound/sources.json`;
@@ -129,12 +129,14 @@ Sound is off by default (browsers block audio until a user gesture) and turned o
 The first track and the crackles load then; each next track loads 15 s before it fades in.
 
 - A random track plays for 90 s, then the next one, never the same twice in a row, fades in over 8 s.
-- Each flash crossing the playhead may get a crackle: one every 0.14 to 0.34 s at most, the loudest flash
-  crossed since. Volume follows intensity and camera distance, a low-pass softens far flashes, and the
-  playback rate varies from 0.8 to 1.25.
+- Each flash crossing the playhead may get a crackle: one every 0.05 to 0.11 s at most (about 12 a
+  second), the loudest flash crossed since. Volume follows intensity (to the power 1.5, so faint flashes
+  stay in the background) and camera distance, a low-pass softens far flashes, and the playback rate
+  varies from 0.8 to 1.25.
 - Crackles are placed in 3D with an HRTF panner: the screen edges sound 80° to the side and 45° up or
   down, wider than the field of view. Best with headphones.
-- At most eight crackles play at once; the mix goes through a gentle compressor. The audio context runs
+- Music and Flashes sliders under the Sound switch set each bus from 0 (muted) to full, squared; they
+  are saved in `localStorage`. At most 16 crackles play at once; the mix goes through a gentle compressor. The audio context runs
   at 32 kHz when the browser allows it, which holds a decoded 84 s track in about 21 MB.
 
 ## Cloud fixture

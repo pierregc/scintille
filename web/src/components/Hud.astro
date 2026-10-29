@@ -48,6 +48,10 @@ import StormSuggestions from './StormSuggestions.astro';
 		<div class="group" role="group" aria-label="Layers">
 			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
 			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
+			<div class="mix" data-mix hidden>
+				<label class="level"><span class="cap">Music</span><input type="range" min="0" max="100" step="1" value="60" data-level="music" /></label>
+				<label class="level"><span class="cap">Flashes</span><input type="range" min="0" max="100" step="1" value="80" data-level="flashes" /></label>
+			</div>
 		</div>
 		<div class="afterglow" data-afterglow>
 			<span class="cap" id="afterglow-label">Afterglow</span>
@@ -366,6 +370,51 @@ import StormSuggestions from './StormSuggestions.astro';
 		gap: 14px;
 		justify-items: end;
 	}
+	.mix {
+		display: grid;
+		gap: 4px;
+		justify-items: end;
+		margin-top: -6px;
+	}
+	.level {
+		display: inline-flex;
+		gap: 10px;
+		align-items: center;
+		min-height: 24px;
+		cursor: pointer;
+	}
+	.level input {
+		width: 84px;
+		height: 24px;
+		margin: 0;
+		background: none;
+		cursor: pointer;
+		appearance: none;
+	}
+	.level input::-webkit-slider-runnable-track {
+		height: 1px;
+		background: var(--soft);
+	}
+	.level input::-moz-range-track {
+		height: 1px;
+		background: var(--soft);
+	}
+	.level input::-webkit-slider-thumb {
+		width: 9px;
+		height: 9px;
+		margin-top: -4px;
+		background: var(--ink);
+		border: 0;
+		border-radius: 50%;
+		appearance: none;
+	}
+	.level input::-moz-range-thumb {
+		width: 9px;
+		height: 9px;
+		background: var(--ink);
+		border: 0;
+		border-radius: 50%;
+	}
 	.afterglow {
 		display: grid;
 		gap: 6px;
@@ -538,6 +587,7 @@ import StormSuggestions from './StormSuggestions.astro';
 	import { trackObservation } from '../globe/scene-time';
 	import { flashRate, rateLabel } from './hud/rate';
 	import { endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
+	import { LEVELS_KEY, levelKey, savedLevels } from './hud/levels';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -549,6 +599,8 @@ import StormSuggestions from './StormSuggestions.astro';
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
 		const sound = $<HTMLButtonElement>('[data-sound]');
+		const mix = $('[data-mix]');
+		const levelInputs = [...root.querySelectorAll<HTMLInputElement>('[data-level]')];
 		const sources = $('[data-sources]');
 		const sourcesNoteLine = $('[data-sources-note]');
 		const staleBanner = $('[data-stale]');
@@ -667,6 +719,7 @@ import StormSuggestions from './StormSuggestions.astro';
 			if (rate && rate.hidden === rateShown()) updateRate();
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
 			sound?.setAttribute('aria-pressed', String(app?.sound.enabled ?? false));
+			if (mix) mix.hidden = !app?.sound.enabled;
 			const stormView = app?.lightning.stormView ?? false;
 			if (afterglow) afterglow.title = stormView ? 'Storm views show each flash alone' : '';
 			for (const { minutes, button } of displayButtons) {
@@ -711,6 +764,8 @@ import StormSuggestions from './StormSuggestions.astro';
 			app = (event as CustomEvent<GlobeApp>).detail;
 			if (layers) layers.hidden = false;
 			if (sound) sound.hidden = !app.sound.supported;
+			app.sound.setLevels(savedLevels());
+			for (const input of levelInputs) input.value = String(Math.round(app.sound.levels[levelKey(input)] * 100));
 			tick();
 		});
 		window.addEventListener(GLOBE_GONE, () => {
@@ -750,6 +805,17 @@ import StormSuggestions from './StormSuggestions.astro';
 			if (app) app.sound.setEnabled(!app.sound.enabled);
 			tick();
 		});
+		for (const input of levelInputs) {
+			input.addEventListener('input', () => {
+				if (!app) return;
+				app.sound.setLevels({ [levelKey(input)]: Number(input.value) / 100 });
+				try {
+					localStorage.setItem(LEVELS_KEY, JSON.stringify(app.sound.levels));
+				} catch {
+					// Private mode: the levels last for the page only.
+				}
+			});
+		}
 		document.addEventListener('keydown', (event) => {
 			if (event.key !== 'Escape') return;
 			if (!app || document.querySelector('[data-storm-suggestions][open]')) return;
