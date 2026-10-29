@@ -50,8 +50,8 @@ describe('frameSources', () => {
 	it('keeps the newest frames of one tier, oldest first, resolved against the manifest', () => {
 		const sources = frameSources(manifest([2, 0, 1, 3]), '2k', `${BASE}live/clouds/manifest.json`, 2);
 		expect(sources).toEqual([
-			{ time: T0 + 2 * HOUR, url: `${BASE}live/clouds/2k/f2.webp` },
-			{ time: T0 + 3 * HOUR, url: `${BASE}live/clouds/2k/f3.webp` },
+			{ time: T0 + 2 * HOUR, url: `${BASE}live/clouds/2k/f2.webp`, detail: null },
+			{ time: T0 + 3 * HOUR, url: `${BASE}live/clouds/2k/f3.webp`, detail: null },
 		]);
 		expect(frameSources(manifest([0, 1], ['2k']), '4k', BASE, 3)).toEqual([]);
 		expect(frameSources(manifest([0, 1]), '2k', BASE, 0)).toEqual([]);
