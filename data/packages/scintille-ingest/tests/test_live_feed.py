@@ -18,6 +18,7 @@ from scintille_ingest.runtime.live_feed import (
     COVERAGE_HEADERS,
     MANIFEST_HEADERS,
     PRODUCT_CADENCE,
+    FlushPolicy,
     LiveFeed,
     StateDelays,
     source_state,
@@ -116,7 +117,7 @@ def test_publishes_chunks_then_the_manifest(tmp_path: Path) -> None:
     assert store.objects["manifest.json"][1] == MANIFEST_HEADERS
     chunk = decode(gzip.decompress(data))
     assert chunk.count == first.flash_count == 3
-    assert chunk.columns["event_offset_ms"][0] == pytest.approx(-40_000 + 0, abs=1)
+    assert chunk.columns["event_offset_ms"][0] == pytest.approx(-50_000, abs=1)
     assert chunk.columns["quality"].tolist() == [4, 0, 0]
     assert manifest.sources[0].state == "live"
 
@@ -411,3 +412,65 @@ def test_publishes_the_coverage_map_once(tmp_path: Path) -> None:
     assert store.objects["coverage.geojson"][0] == b"stale"
     asyncio.run(LiveFeed(store, outbox=tmp_path, clock=clock).publish_coverage())
     assert store.objects["coverage.geojson"][0] == data
+
+
+def test_flush_policy_waits_for_every_live_glm_source() -> None:
+    policy, s = FlushPolicy(), timedelta(seconds=1)
+    glm = {"glm-east", "glm-west"}
+    due = policy.due
+    assert due(T0, T0 - 60 * s, None, set(), glm) == T0 - 30 * s
+    assert due(T0, T0 - 60 * s, T0 - 2 * s, {"glm-east"}, glm) == T0 + 8 * s
+    assert due(T0, T0 - 60 * s, T0 - 2 * s, glm, glm) == T0
+    assert due(T0, T0 - 60 * s, T0 - 2 * s, {"glm-east"}, {"glm-east", "mtg-li"}) == T0
+    assert due(T0, T0 - 5 * s, T0 - 2 * s, glm, glm) == T0 + 10 * s
+    assert due(T0, T0 - 60 * s, T0 - 2 * s, {"mtg-li"}, glm | {"mtg-li"}) == T0 + 8 * s
+    assert due(T0, T0 - 60 * s, T0, {"mtg-li"}, {"mtg-li"}) == T0 + 10 * s
+
+
+def test_a_chunk_is_due_once_both_glm_satellites_delivered(tmp_path: Path) -> None:
+    store, clock = FakeStore(), Clock()
+    feed = LiveFeed(store, outbox=tmp_path, clock=clock)
+
+    async def scenario() -> None:
+        await feed.publish("glm-east", flashes("glm-east", clock.now - timedelta(seconds=30), 2))
+        await feed.publish("glm-west", flashes("glm-west", clock.now - timedelta(seconds=30), 2))
+        await feed.flush()
+        clock.now += timedelta(seconds=20)
+        assert feed.due(clock.now) == clock.now + timedelta(seconds=10)
+        await feed.publish(
+            "glm-east", flashes("glm-east", clock.now - timedelta(seconds=30), 2, "b")
+        )
+        assert feed.due(clock.now) == clock.now + timedelta(seconds=10)
+        clock.now += timedelta(seconds=4)
+        await feed.publish("glm-west", pl.DataFrame(schema=FLASH_SCHEMA))
+        assert feed.due(clock.now) == clock.now
+        await feed.flush()
+        assert feed.due(clock.now) == clock.now + timedelta(seconds=30)
+
+    asyncio.run(scenario())
+    manifest = store.manifest()
+    assert manifest is not None
+    assert [c.flash_count for c in manifest.chunks] == [4, 2]
+
+
+def test_run_publishes_once_the_policy_is_due(tmp_path: Path) -> None:
+    store = FakeStore()
+    policy = FlushPolicy(timeout=timedelta(seconds=0.05), spacing=timedelta(0))
+    feed = LiveFeed(store, outbox=tmp_path, policy=policy)
+
+    async def scenario() -> None:
+        running = asyncio.create_task(feed.run())
+        await asyncio.sleep(0.05)
+        now = datetime.now(UTC)
+        await feed.publish("mtg-li", flashes("mtg-li", now - timedelta(minutes=5), 3))
+        for _ in range(50):
+            await asyncio.sleep(0.02)
+            if store.manifest():
+                break
+        feed.stop()
+        await running
+
+    asyncio.run(scenario())
+    manifest = store.manifest()
+    assert manifest is not None
+    assert [c.flash_count for c in manifest.chunks] == [3]

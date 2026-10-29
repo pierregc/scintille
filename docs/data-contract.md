@@ -86,7 +86,7 @@ behind the Americas. Lower latency needs another channel, such as EUMETCast (#20
 ## Live feed on R2
 
 ```
-live/manifest.json                    Cache-Control: max-age=10
+live/manifest.json                    Cache-Control: max-age=2
 live/metrics.json                     Cache-Control: max-age=30
 live/coverage.geojson                 Cache-Control: max-age=3600
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
@@ -94,7 +94,8 @@ live/chunks/20260715T183030Z.bin.gz
 ...
 ```
 
-- A **chunk** holds the flashes **ingested** during a window `[start, end)`, 30 s today.
+- A **chunk** holds the flashes **ingested** during a window `[start, end)`, one per GLM slot
+  today, about 20 s ([ADR 0026](adr/0026-live-latency.md)).
   Chunks are keyed by ingest time, not event time, so a chunk is complete when its window ends and
   never changes afterwards: late data lands in a later chunk instead of rewriting an old one. Event
   times inside a chunk are therefore usually 20 to 60 s before its `start` (`event_offset_ms < 0`).

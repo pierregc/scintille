@@ -1,0 +1,234 @@
+{
+  "measured_at": "2026-10-29T17:47:52.971872+00:00",
+  "noaa": {
+    "glm-east": {
+      "files": 503,
+      "file_end_to_listable_s": {
+        "p50": 10.0,
+        "p95": 22.0,
+        "p99": 27.0,
+        "p99.9": 37.0,
+        "max": 40.0,
+        "mean": 11.4,
+        "n": 503
+      },
+      "event_to_listable_s": {
+        "p50": 21.0,
+        "p95": 35.5,
+        "p99": 42.0,
+        "p99.9": 52.7,
+        "max": 60.0,
+        "mean": 21.4,
+        "n": 20623
+      }
+    },
+    "glm-west": {
+      "files": 503,
+      "file_end_to_listable_s": {
+        "p50": 10.0,
+        "p95": 22.0,
+        "p99": 29.0,
+        "p99.9": 35.5,
+        "max": 36.0,
+        "mean": 11.3,
+        "n": 503
+      },
+      "event_to_listable_s": {
+        "p50": 21.0,
+        "p95": 35.5,
+        "p99": 42.0,
+        "p99.9": 52.0,
+        "max": 56.0,
+        "mean": 21.3,
+        "n": 20623
+      }
+    }
+  },
+  "feed_listed_s": {
+    "glm-east": {
+      "p50": 40.9,
+      "p95": 60.6,
+      "p99": 70.3,
+      "p99.9": 79.2,
+      "max": 80.7,
+      "mean": 41.1,
+      "n": 59178
+    },
+    "glm-west": {
+      "p50": 41.9,
+      "p95": 62.3,
+      "p99": 72.8,
+      "p99.9": 79.5,
+      "max": 80.2,
+      "mean": 42.3,
+      "n": 3488
+    },
+    "mtg-li": {
+      "p50": 390.8,
+      "p95": 657.2,
+      "p99": 685.1,
+      "p99.9": 712.5,
+      "max": 715.6,
+      "mean": 389.2,
+      "n": 138143
+    }
+  },
+  "chains": {
+    "today": {
+      "listed_s": {
+        "p50": 42.0,
+        "p95": 60.0,
+        "p99": 69.4,
+        "p99.9": 79.6,
+        "max": 89.9,
+        "mean": 42.1,
+        "n": 40240
+      },
+      "client_s": {
+        "p50": 61.9,
+        "p95": 86.3,
+        "p99": 96.1,
+        "p99.9": 107.0,
+        "max": 120.5,
+        "mean": 62.1,
+        "n": 40240
+      },
+      "puts_per_month": 172431,
+      "late": {
+        "60": {
+          "flashes_pct": 55.221,
+          "gaps_per_viewer_day": 6970.0
+        },
+        "70": {
+          "flashes_pct": 29.488,
+          "gaps_per_viewer_day": 4765.7
+        },
+        "90": {
+          "flashes_pct": 2.818,
+          "gaps_per_viewer_day": 834.8
+        },
+        "120": {
+          "flashes_pct": 0.002,
+          "gaps_per_viewer_day": 2.1
+        }
+      }
+    },
+    "client_only": {
+      "listed_s": {
+        "p50": 39.1,
+        "p95": 58.9,
+        "p99": 68.2,
+        "p99.9": 78.4,
+        "max": 80.4,
+        "mean": 39.3,
+        "n": 40240
+      },
+      "client_s": {
+        "p50": 42.6,
+        "p95": 62.6,
+        "p99": 71.6,
+        "p99.9": 81.9,
+        "max": 85.6,
+        "mean": 42.8,
+        "n": 40240
+      },
+      "puts_per_month": 172834,
+      "late": {
+        "60": {
+          "flashes_pct": 8.415,
+          "gaps_per_viewer_day": 2533.6
+        },
+        "70": {
+          "flashes_pct": 1.389,
+          "gaps_per_viewer_day": 420.8
+        },
+        "90": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        },
+        "120": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        }
+      }
+    },
+    "proposed": {
+      "listed_s": {
+        "p50": 27.8,
+        "p95": 42.2,
+        "p99": 52.1,
+        "p99.9": 64.1,
+        "max": 73.1,
+        "mean": 28.2,
+        "n": 40240
+      },
+      "client_s": {
+        "p50": 31.3,
+        "p95": 45.9,
+        "p99": 55.7,
+        "p99.9": 68.7,
+        "max": 76.8,
+        "mean": 31.7,
+        "n": 40240
+      },
+      "puts_per_month": 262089,
+      "late": {
+        "60": {
+          "flashes_pct": 0.512,
+          "gaps_per_viewer_day": 156.1
+        },
+        "70": {
+          "flashes_pct": 0.075,
+          "gaps_per_viewer_day": 19.8
+        },
+        "90": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        },
+        "120": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        }
+      }
+    },
+    "push": {
+      "listed_s": {
+        "p50": 27.8,
+        "p95": 42.2,
+        "p99": 52.1,
+        "p99.9": 64.1,
+        "max": 73.1,
+        "mean": 28.2,
+        "n": 40240
+      },
+      "client_s": {
+        "p50": 28.0,
+        "p95": 42.3,
+        "p99": 52.2,
+        "p99.9": 64.3,
+        "max": 73.2,
+        "mean": 28.4,
+        "n": 40240
+      },
+      "puts_per_month": 262089,
+      "late": {
+        "60": {
+          "flashes_pct": 0.256,
+          "gaps_per_viewer_day": 99.6
+        },
+        "70": {
+          "flashes_pct": 0.03,
+          "gaps_per_viewer_day": 17.2
+        },
+        "90": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        },
+        "120": {
+          "flashes_pct": 0.0,
+          "gaps_per_viewer_day": 0.0
+        }
+      }
+    }
+  }
+}

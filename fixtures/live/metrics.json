@@ -72,8 +72,8 @@
         2116,
         1042
       ],
-      "latency_p50_seconds": 47.6,
-      "latency_p95_seconds": 68.4,
+      "latency_p50_seconds": 27.6,
+      "latency_p95_seconds": 40.8,
       "completeness": 1.0,
       "last_file_time": "2026-07-15T18:59:40Z",
       "error_budget_remaining": 0.94
@@ -143,8 +143,8 @@
         0,
         0
       ],
-      "latency_p50_seconds": 49.2,
-      "latency_p95_seconds": 68.6,
+      "latency_p50_seconds": 28.1,
+      "latency_p95_seconds": 41.3,
       "completeness": 0.933,
       "last_file_time": "2026-07-15T18:55:40Z",
       "error_budget_remaining": 0.61
@@ -214,8 +214,8 @@
         637,
         1295
       ],
-      "latency_p50_seconds": 49.0,
-      "latency_p95_seconds": 83.1,
+      "latency_p50_seconds": 382.6,
+      "latency_p95_seconds": 650.9,
       "completeness": 1.0,
       "last_file_time": "2026-07-15T18:59:30Z",
       "error_budget_remaining": 0.88

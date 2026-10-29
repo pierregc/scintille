@@ -67,7 +67,7 @@
       "mode": "live",
       "storm": false,
       "clock": "2026-10-18T23:30:00Z",
-      "observed": "2026-10-18T23:28:00Z",
+      "observed": "2026-10-18T23:28:50Z",
       "clouds": "2026-10-18T23:00:00Z"
     },
     {
@@ -75,7 +75,7 @@
       "mode": "live",
       "storm": false,
       "clock": "2026-10-19T01:45:00Z",
-      "observed": "2026-10-19T01:43:00Z",
+      "observed": "2026-10-19T01:43:50Z",
       "clouds": "2026-10-18T23:00:00Z"
     },
     {
@@ -83,7 +83,7 @@
       "mode": "live",
       "storm": false,
       "clock": "2026-10-19T02:30:00Z",
-      "observed": "2026-10-19T02:28:00Z",
+      "observed": "2026-10-19T02:28:50Z",
       "clouds": null
     }
   ]

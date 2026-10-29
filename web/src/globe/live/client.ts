@@ -2,7 +2,7 @@ import type { ChunkRef, LiveManifest } from '../../contract/types';
 import { CONTRACT_MAJOR, ChunkFormatError, fetchChunk, type DecodedChunk } from './decode';
 import type { FlashRing } from './ring';
 
-export const DEFAULT_POLL_INTERVAL_MS = 30_000;
+export const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
 export interface Backoff {
 	initialMs: number;
@@ -43,6 +43,8 @@ export interface LiveClientOptions {
 	visibility?: Visibility;
 	random?: () => number;
 	onManifest?: (manifest: LiveManifest) => void;
+	/** Every chunk pushed into the ring, with its manifest entry. */
+	onChunk?: (chunk: DecodedChunk, ref: ChunkRef) => void;
 	onError?: (error: unknown) => void;
 	/** Wall clock, UTC ms; when unset, the client does not record when data was loaded. */
 	now?: () => number;
@@ -59,6 +61,7 @@ export class LiveClient {
 	readonly #visibility: Visibility;
 	readonly #random: () => number;
 	readonly #onManifest?: (manifest: LiveManifest) => void;
+	readonly #onChunk?: (chunk: DecodedChunk, ref: ChunkRef) => void;
 	readonly #onError: (error: unknown) => void;
 	readonly #seen = new Set<string>();
 	readonly #now: () => number;
@@ -85,6 +88,7 @@ export class LiveClient {
 		this.#visibility = options.visibility ?? documentVisibility;
 		this.#random = options.random ?? Math.random;
 		this.#onManifest = options.onManifest;
+		this.#onChunk = options.onChunk;
 		this.#onError = options.onError ?? (() => {});
 		this.#now = options.now ?? (() => Number.NaN);
 	}
@@ -225,5 +229,6 @@ export class LiveClient {
 		this.#seen.add(ref.path);
 		this.#loaded.set(ref.path, [Date.parse(ref.start), Date.parse(ref.end)]);
 		this.#ring.push(chunk);
+		this.#onChunk?.(chunk, ref);
 	}
 }
