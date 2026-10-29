@@ -114,8 +114,11 @@ import Version from './Version.astro';
 		color: var(--soft);
 		font: 300 12px/1.6 var(--sans);
 		white-space: pre-line;
+		pointer-events: none;
 	}
-	.share { position: fixed; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
+	.share > * { pointer-events: auto; }
+	.hud button { -webkit-tap-highlight-color: transparent; }
+	.share { position: fixed; pointer-events: none; top: calc(var(--gut) + 202px); left: var(--gut); max-width: min(24rem, calc(100vw - 2 * var(--gut))); }
 	.share button[aria-pressed='true'] { color: var(--ink); }
 	.share button:not(:first-child) { margin-left: 16px; }
 	.share button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }

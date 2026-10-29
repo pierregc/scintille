@@ -2,6 +2,9 @@
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
 //   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--journey] [--headed] [--video]
+//   [--warm] [--network 4g|slow4g]
+// --warm opens the storm once before measuring, so the load is from the browser cache.
+// --network throttles every request of the measured page (Chrome DevTools presets).
 // --journey adds a pan at the `iss` pose (2° east) after it and a return to `globe` at the end.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -29,6 +32,8 @@ const { values } = parseArgs({
 		journey: { type: 'boolean', default: false },
 		headed: { type: 'boolean', default: false },
 		video: { type: 'boolean', default: false },
+		warm: { type: 'boolean', default: false },
+		network: { type: 'string' },
 	},
 });
 
@@ -41,6 +46,12 @@ const GL_ARGS = {
 	gpu: ['--ignore-gpu-blocklist', '--enable-gpu'],
 	swiftshader: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 };
+const NETWORKS = {
+	'4g': { latency: 150, downloadThroughput: (9e6 / 8) * 0.9, uploadThroughput: (1.5e6 / 8) * 0.9 },
+	slow4g: { latency: 562.5, downloadThroughput: (1.6e6 / 8) * 0.9, uploadThroughput: (0.75e6 / 8) * 0.9 },
+};
+if (values.network && !(values.network in NETWORKS)) throw new Error(`--network must be one of ${Object.keys(NETWORKS).join(', ')}`);
+
 const PROFILES = {
 	desktop: { viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 2 },
 	mobile: Object.fromEntries(Object.entries(devices['iPhone 15']).filter(([key]) => key !== 'defaultBrowserType')),
@@ -358,17 +369,29 @@ async function benchStorm(browser, storm, outDir) {
 			localStorage.setItem('scintille.clouds.visible', clouds ? '1' : '0');
 		} catch { /* private mode */ }
 	}, { minutes: values.afterglow !== undefined ? Number(values.afterglow) : storm.afterglow ?? 0, clouds: values.clouds });
-	const page = await context.newPage();
-	page.setDefaultTimeout(120_000);
-	page.on('console', (message) => { if (message.type() === 'error') process.stderr.write(`page: ${message.text()}\n`); });
-	const transfer = new Transfer(page);
-	const result = { id: storm.id, slug: storm.slug, time: storm.time, poses: {} };
-
 	const first = new URL(base);
 	first.searchParams.set('storm', storm.slug);
 	first.searchParams.set('time', storm.time);
 	first.searchParams.set('paused', '1');
 	if (values.surface) first.searchParams.set('surface', values.surface);
+	if (values.warm) {
+		const warmup = await context.newPage();
+		await warmup.goto(first.href);
+		await warmup.waitForFunction(() => globalThis.scintilleBench?.app && !globalThis.scintilleBench.app.replay.state.loading && globalThis.scintilleBench.app.replay.state.selected, null, { timeout: 120_000 });
+		await warmup.waitForTimeout(5000);
+		await warmup.close();
+	}
+	const page = await context.newPage();
+	page.setDefaultTimeout(values.network ? 600_000 : 120_000);
+	if (values.network) {
+		const cdp = await context.newCDPSession(page);
+		await cdp.send('Network.enable');
+		await cdp.send('Network.emulateNetworkConditions', { offline: false, ...NETWORKS[values.network] });
+	}
+	page.on('console', (message) => { if (message.type() === 'error') process.stderr.write(`page: ${message.text()}\n`); });
+	const transfer = new Transfer(page);
+	const result = { id: storm.id, slug: storm.slug, time: storm.time, poses: {} };
+
 	const started = performance.now();
 	await page.goto(first.href);
 	await page.waitForFunction(() => globalThis.scintilleBench?.app && !globalThis.scintilleBench.app.replay.state.loading && globalThis.scintilleBench.app.replay.state.selected);
@@ -457,6 +480,8 @@ const report = {
 	afterglow: values.afterglow ?? 'per storm',
 	surface: values.surface ?? null,
 	journey: values.journey,
+	warm: values.warm,
+	network: values.network ?? null,
 	speed: values.speed ?? 'opened at 60',
 	clouds: values.clouds,
 	gl: values.gl,
