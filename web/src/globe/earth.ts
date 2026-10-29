@@ -68,7 +68,6 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 			terminatorTint: { value: 0.5 },
 			coverageMap: { value: noGaps },
 			coverageShade: { value: 1 },
-			uvRect: { value: new Vector4(0, 0, 1, 1) },
 		},
 	});
 	const mesh = new Mesh(geometry, material);

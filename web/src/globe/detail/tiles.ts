@@ -1,21 +1,8 @@
-import {
-	DataTexture,
-	Frustum,
-	Group,
-	LinearMipmapLinearFilter,
-	Matrix4,
-	Mesh,
-	type PerspectiveCamera,
-	ShaderMaterial,
-	SphereGeometry,
-	SRGBColorSpace,
-	Texture,
-	Vector2,
-	Vector3,
-	Vector4,
-} from 'three';
+import { DataTexture, Frustum, Matrix4, NearestFilter, type PerspectiveCamera, RGBAFormat, type ShaderMaterial, UnsignedByteType, Vector3, Vector4 } from 'three';
+import { type AtlasRenderer, emptyArray, TileAtlas } from './atlas';
 import { DEFAULT_LOADER, type Patch, TileLoader, TileLoadError, type TileLoaderStats, type TileSource } from './loader';
-import { finestLevel, type Layer, Presence, type PyramidManifest, rectIn, texelKm, tileBounds, tileBytes, tilePath } from './pyramid';
+import { type PagePatch, type PageSource, SurfacePages } from './pages';
+import { finestLevel, type Layer, Presence, type PyramidManifest, texelKm, tileBytes, tilePath } from './pyramid';
 import { RADIUS_KM, TileSelector } from './select';
 
 export interface SurfaceTilesOptions {
@@ -31,23 +18,35 @@ export interface SurfaceTilesOptions {
 	fetch?: typeof fetch;
 }
 
-export type SurfaceTilesStats = TileLoaderStats & { manifest: 'loading' | 'ready' | 'failed'; meshes: number };
+export type SurfaceTilesStats = TileLoaderStats & { manifest: 'loading' | 'ready' | 'failed'; layers: number; uploaded: number };
 
-interface Drawn {
-	mesh: Mesh;
-	material: ShaderMaterial;
-	shownAt: number;
+/** A decoded tile until it is copied to the GPU, then its layer in the tile array. */
+export interface TileImage {
+	bitmap: ImageBitmap | null;
+	layer: number;
 }
 
 const MANIFEST_RETRY_MS = [2000, 5000, 15_000, 60_000];
-const MESH_KEEP_MS = 3000;
-const MAX_MESHES = 256;
 /** Height growth per frame above which the camera counts as climbing: no new requests then. */
 const CLIMB = 5e-4;
-const WHOLE: [number, number, number] = [0, 0, 1];
+/** The array texture's layer index is one page byte. */
+const MAX_LAYERS = 255;
 
-/** Fetches, decodes and disposes one tile texture; HTTP status decides between retrying and giving up. */
-export function textureSource(root: string, manifest: PyramidManifest, anisotropy: number, fetcher: typeof fetch = fetch): TileSource<Texture> {
+/**
+ * Linear mean of the 4k global textures over the tiles of each level, divided by the tiles' own:
+ * the pyramid was downsampled from 15″ in sRGB, so its finer night levels hold more light. Scaling
+ * the tiles keeps brightness and colour the same through level changes. Measured on every tile.
+ */
+export const DAY_GAIN = 0.98;
+export const NIGHT_GAIN: Readonly<Record<number, readonly [number, number, number]>> = {
+	2: [0.98, 0.99, 1],
+	3: [0.95, 0.97, 1],
+	4: [0.91, 0.95, 0.99],
+};
+
+/** Fetches and decodes one tile, rows from the south; HTTP status decides between retrying and giving up. */
+export function imageSource(root: string, manifest: PyramidManifest, fetcher: typeof fetch = fetch, release: (image: TileImage) => void = () => {}): TileSource<TileImage> {
+	const span = manifest.tileTexels + 2 * manifest.border;
 	return {
 		async load(layer, key, signal) {
 			const res = await fetcher(`${root}/${tilePath(manifest, layer, key)}`, { signal });
@@ -64,55 +63,97 @@ export function textureSource(root: string, manifest: PyramidManifest, anisotrop
 			} catch {
 				throw new TileLoadError({ kind: 'missing' }, 'undecodable');
 			}
-			const texture = new Texture(bitmap);
-			texture.flipY = false;
-			texture.colorSpace = SRGBColorSpace;
-			texture.anisotropy = anisotropy;
-			texture.minFilter = LinearMipmapLinearFilter;
-			texture.onUpdate = () => bitmap.close();
-			texture.needsUpdate = true;
-			return texture;
+			if (bitmap.width !== span || bitmap.height !== span) {
+				bitmap.close();
+				throw new TileLoadError({ kind: 'missing' }, 'wrong size');
+			}
+			return { bitmap, layer: -1 };
 		},
-		dispose(texture) {
-			texture.dispose();
-			(texture.image as ImageBitmap | null)?.close?.();
+		dispose(image) {
+			image.bitmap?.close();
+			image.bitmap = null;
+			release(image);
 		},
 	};
 }
 
-/** Visible surface detail (ADR 0022) drawn over the base Earth with its shader, one patch per area. */
+/** Uniforms the Earth shader reads the surface detail from (`SURFACE` define). */
+function surfaceUniforms() {
+	return {
+		surfaceTiles: { value: emptyArray() },
+		surfacePages: { value: emptyPages() },
+		surfaceGrid: { value: new Vector4(1, 1, 1, 0) },
+		surfaceFinest: { value: 0 },
+		surfaceOn: { value: 0 },
+		surfaceDayGain: { value: DAY_GAIN },
+		surfaceNightGain: { value: Array.from({ length: 6 }, (_, z) => new Vector3(...(NIGHT_GAIN[z] ?? [1, 1, 1]))) },
+	};
+}
+
+function emptyPages(): DataTexture {
+	return pageTexture(new Uint8Array(8), 2, 1);
+}
+
+function pageTexture(data: Uint8Array, width: number, height: number): DataTexture {
+	const texture = new DataTexture(data, width, height, RGBAFormat, UnsignedByteType);
+	texture.minFilter = NearestFilter;
+	texture.magFilter = NearestFilter;
+	texture.generateMipmaps = false;
+	texture.needsUpdate = true;
+	return texture;
+}
+
+/**
+ * Visible surface detail (ADR 0022), drawn by the Earth shader in one pass: loaded tiles live in
+ * one texture array, and a page table per finest cell names the tile shown there for day and night
+ * and the one it fades from.
+ */
 export class SurfaceTiles {
-	readonly group = new Group();
+	readonly uniforms = surfaceUniforms();
 	#manifest: PyramidManifest | null = null;
 	#selector: TileSelector | null = null;
-	#loader: TileLoader<Texture> | null = null;
+	#loader: TileLoader<TileImage> | null = null;
+	#pages: SurfacePages | null = null;
+	#atlas: TileAtlas | null = null;
 	#state: SurfaceTilesStats['manifest'] = 'loading';
-	#meshes = new Map<string, Drawn>();
-	#black = new DataTexture(new Uint8Array(4), 1, 1);
 	#frustum = new Frustum();
 	#matrix = new Matrix4();
 	#lastHeight = Number.NaN;
-	#pruned = 0;
 	#retry: ReturnType<typeof setTimeout> | undefined;
 	#disposed = false;
 	#maxBytes: number;
+	#uploaded = 0;
 
 	#online = () => this.#loader?.retryNow();
 
-	constructor(private readonly earth: ShaderMaterial, private readonly options: SurfaceTilesOptions) {
-		this.#black.needsUpdate = true;
+	constructor(private readonly renderer: AtlasRenderer, earth: ShaderMaterial, private readonly options: SurfaceTilesOptions) {
 		this.#maxBytes = options.maxBytes;
+		earth.defines = { ...earth.defines, SURFACE: '' };
+		Object.assign(earth.uniforms, this.uniforms);
+		earth.needsUpdate = true;
 		this.#fetchManifest(0);
 		globalThis.addEventListener?.('online', this.#online);
 	}
 
 	get stats(): SurfaceTilesStats | null {
-		return this.#loader ? { ...this.#loader.stats, manifest: this.#state, meshes: this.#meshes.size } : null;
+		return this.#loader
+			? { ...this.#loader.stats, manifest: this.#state, layers: this.#atlas?.layers ?? 0, uploaded: this.#uploaded }
+			: null;
 	}
 
 	set maxBytes(bytes: number) {
 		this.#maxBytes = bytes;
-		if (this.#loader) this.#loader.maxBytes = bytes;
+		if (bytes <= 0) {
+			this.clear();
+			this.#dropAtlas();
+		}
+		if (this.#loader) this.#loader.maxBytes = this.#capacity();
+	}
+
+	#capacity(): number {
+		const manifest = this.#manifest;
+		if (!manifest || !this.#atlas) return this.#maxBytes;
+		return Math.min(this.#maxBytes, this.#atlas.layers * tileBytes(manifest));
 	}
 
 	#fetchManifest(attempt: number) {
@@ -133,9 +174,11 @@ export class SurfaceTiles {
 
 	#init(manifest: PyramidManifest) {
 		const presence = new Presence(manifest);
-		const loader = new TileLoader(textureSource(this.options.root, manifest, this.options.anisotropy, this.options.fetch), {
+		const levels = Object.keys(manifest.levels).map(Number);
+		const finest = Math.max(...levels);
+		const loader = new TileLoader(imageSource(this.options.root, manifest, this.options.fetch, (image) => this.#release(image)), {
 			...DEFAULT_LOADER,
-			coarsest: Math.min(...Object.keys(manifest.levels).map(Number)),
+			coarsest: Math.min(...levels),
 			finest: { day: finestLevel(manifest, 'day'), night: finestLevel(manifest, 'night') },
 			texelKm: (z) => texelKm(manifest, z),
 			baseTexelKm: this.options.baseTexelKm,
@@ -148,8 +191,15 @@ export class SurfaceTiles {
 			texelPixels: this.options.texelPixels,
 			has: (layer: Layer, key) => presence.has(layer, key) && !loader.isMissing(layer, key),
 		});
+		const { columns, rows } = manifest.levels[finest];
+		const pages = new SurfacePages(columns, rows, finest);
+		this.uniforms.surfacePages.value.dispose();
+		this.uniforms.surfacePages.value = pageTexture(pages.data, columns * 2, rows);
+		this.uniforms.surfaceGrid.value.set(columns, rows, manifest.tileTexels, manifest.border);
+		this.uniforms.surfaceFinest.value = finest;
 		this.#manifest = manifest;
 		this.#loader = loader;
+		this.#pages = pages;
 		this.#state = 'ready';
 	}
 
@@ -157,7 +207,8 @@ export class SurfaceTiles {
 		const manifest = this.#manifest;
 		const selector = this.#selector;
 		const loader = this.#loader;
-		if (!manifest || !selector || !loader || this.#disposed) return;
+		const pages = this.#pages;
+		if (!manifest || !selector || !loader || !pages || this.#disposed) return;
 		this.#matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 		this.#frustum.setFromProjectionMatrix(this.#matrix);
 		const heightKm = (camera.position.length() / this.options.radius - 1) * RADIUS_KM;
@@ -165,79 +216,68 @@ export class SurfaceTiles {
 		this.#lastHeight = heightKm;
 		const scale = viewHeight / (2 * Math.tan((camera.fov * Math.PI) / 360));
 		const selection = this.#maxBytes > 0 ? selector.select({ position: camera.position, frustum: this.#frustum, sun, scale }) : { day: [], night: [] };
-		this.#draw(loader.update(selection, { hold, scale }), manifest);
+		const patches = loader.update(selection, { hold, scale });
+		if (pages.update(this.#place(patches, manifest), performance.now())) this.uniforms.surfacePages.value.needsUpdate = true;
+		this.uniforms.surfaceOn.value = pages.active ? 1 : 0;
 	}
 
-	#draw(patches: Patch<Texture>[], manifest: PyramidManifest) {
-		const now = performance.now();
-		for (const drawn of this.#meshes.values()) drawn.mesh.visible = false;
-		for (const patch of patches) {
-			const drawn = this.#meshes.get(patch.id) ?? this.#create(patch, manifest);
-			const uniforms = drawn.material.uniforms;
-			uniforms.tileDay.value = patch.day?.resource ?? this.#black;
-			uniforms.tileNight.value = patch.night?.resource ?? this.#black;
-			(uniforms.dayRect.value as Vector3).set(...(patch.day ? rectIn(patch.key, patch.day.key) : WHOLE));
-			(uniforms.nightRect.value as Vector3).set(...(patch.night ? rectIn(patch.key, patch.night.key) : WHOLE));
-			(uniforms.tileLayers.value as Vector2).set(patch.day ? 1 : 0, patch.night ? 1 : 0);
-			drawn.mesh.visible = true;
-			drawn.shownAt = now;
+	/** Page sources of the patches, copying newly arrived tiles to the GPU. */
+	#place(patches: Patch<TileImage>[], manifest: PyramidManifest): PagePatch[] {
+		const placed: PagePatch[] = [];
+		for (const { key, day, night } of patches) {
+			const d = day && this.#upload(day.resource, day.key.z, manifest);
+			const n = night && this.#upload(night.resource, night.key.z, manifest);
+			if (d || n) placed.push({ key, day: d, night: n });
 		}
-		if (this.#meshes.size <= MAX_MESHES && now - this.#pruned < MESH_KEEP_MS) return;
-		this.#pruned = now;
-		const stale = [...this.#meshes].filter(([, d]) => !d.mesh.visible).sort((a, b) => a[1].shownAt - b[1].shownAt);
-		let excess = this.#meshes.size - MAX_MESHES;
-		for (const [id, drawn] of stale) {
-			if (excess <= 0 && now - drawn.shownAt < MESH_KEEP_MS) break;
-			this.#remove(id, drawn);
-			excess--;
+		return placed;
+	}
+
+	#upload(image: TileImage, z: number, manifest: PyramidManifest): PageSource | undefined {
+		if (image.layer < 0) {
+			if (!image.bitmap) return undefined;
+			const atlas = this.#ensureAtlas(manifest);
+			const layer = atlas?.upload(image.bitmap) ?? null;
+			if (layer === null) return undefined;
+			image.bitmap.close();
+			image.bitmap = null;
+			image.layer = layer;
+			this.#uploaded++;
 		}
+		return { layer: image.layer, z };
 	}
 
-	#create(patch: Patch<Texture>, manifest: PyramidManifest): Drawn {
-		const { key } = patch;
-		const bounds = tileBounds(key, manifest);
-		const deg = manifest.levels[key.z].degrees;
-		const rad = Math.PI / 180;
-		const segments = key.z >= 4 ? 8 : 16;
-		const geometry = new SphereGeometry(this.options.radius, segments, segments, (bounds.west + 180) * rad, deg * rad, (90 - bounds.north) * rad, deg * rad);
-		const span = manifest.tileTexels + 2 * manifest.border;
-		const material = new ShaderMaterial({
-			vertexShader: this.earth.vertexShader,
-			fragmentShader: this.earth.fragmentShader,
-			defines: { TILE: '' },
-			uniforms: {
-				...this.earth.uniforms,
-				uvRect: { value: new Vector4((bounds.west + 180) / 360, (bounds.south + 90) / 180, deg / 360, deg / 180) },
-				tileDay: { value: this.#black },
-				tileNight: { value: this.#black },
-				tileLayers: { value: new Vector2() },
-				tileInset: { value: new Vector2(manifest.tileTexels / span, manifest.border / span) },
-				tileSize: { value: span },
-				dayRect: { value: new Vector3(0, 0, 1) },
-				nightRect: { value: new Vector3(0, 0, 1) },
-			},
-			polygonOffset: true,
-			polygonOffsetFactor: -1,
-			polygonOffsetUnits: -4 * key.z,
-		});
-		const mesh = new Mesh(geometry, material);
-		mesh.renderOrder = key.z;
-		this.group.add(mesh);
-		const drawn = { mesh, material, shownAt: 0 };
-		this.#meshes.set(patch.id, drawn);
-		return drawn;
+	/** The tile array, allocated once the first tile is needed, for as many tiles as the budget holds. */
+	#ensureAtlas(manifest: PyramidManifest): TileAtlas | null {
+		if (this.#atlas) return this.#atlas;
+		const layers = Math.min(MAX_LAYERS, Math.floor(this.#maxBytes / tileBytes(manifest)));
+		if (layers < 1) return null;
+		this.#atlas = new TileAtlas(this.renderer, layers, manifest.tileTexels + 2 * manifest.border, this.options.anisotropy);
+		this.uniforms.surfaceTiles.value.dispose();
+		this.uniforms.surfaceTiles.value = this.#atlas.texture;
+		if (this.#loader) this.#loader.maxBytes = this.#capacity();
+		return this.#atlas;
 	}
 
-	#remove(id: string, { mesh, material }: Drawn) {
-		mesh.geometry.dispose();
-		material.dispose();
-		this.group.remove(mesh);
-		this.#meshes.delete(id);
+	#release(image: TileImage) {
+		if (image.layer < 0) return;
+		this.#pages?.release(image.layer);
+		this.#atlas?.free(image.layer);
+		image.layer = -1;
 	}
 
+	#dropAtlas() {
+		if (!this.#atlas) return;
+		this.uniforms.surfaceTiles.value = emptyArray();
+		this.#atlas.dispose();
+		this.#atlas = null;
+	}
+
+	/** Drops every tile and request at once; tiles known to be missing stay known. */
 	clear(): void {
 		this.#loader?.clear();
-		for (const [id, drawn] of [...this.#meshes]) this.#remove(id, drawn);
+		this.#pages?.clear();
+		this.uniforms.surfacePages.value.needsUpdate = true;
+		this.uniforms.surfaceOn.value = 0;
 	}
 
 	dispose(): void {
@@ -245,7 +285,8 @@ export class SurfaceTiles {
 		globalThis.removeEventListener?.('online', this.#online);
 		clearTimeout(this.#retry);
 		this.#loader?.dispose();
-		for (const [id, drawn] of [...this.#meshes]) this.#remove(id, drawn);
-		this.#black.dispose();
+		this.#dropAtlas();
+		this.uniforms.surfaceTiles.value.dispose();
+		this.uniforms.surfacePages.value.dispose();
 	}
 }
