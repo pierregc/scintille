@@ -85,6 +85,25 @@ describe('replay', () => {
 		expect(() => clock.setSpeed(Number.NaN)).toThrow(RangeError);
 	});
 
+	it('holds at the present instead of running into the future', () => {
+		clock.replay(T0 - 60_000, 3600);
+		expect(clock.atPresent()).toBe(false);
+		wall += 1000;
+		expect(clock.time()).toBe(wall);
+		expect(clock.atPresent()).toBe(true);
+		wall += 1000;
+		expect(clock.time()).toBe(wall);
+	});
+
+	it('clamps starts and seeks to the present', () => {
+		clock.replay(T0 + 3_600_000);
+		expect(clock.time()).toBe(T0);
+		clock.pause();
+		clock.seek(T0 + 60_000);
+		wall += 5000;
+		expect(clock.time()).toBe(T0);
+	});
+
 	it('returns to the wall clock when going live', () => {
 		clock.replay(STORM, 60);
 		clock.pause();
