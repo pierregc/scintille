@@ -31,7 +31,7 @@ export interface SurfaceTilesOptions {
 	fetch?: typeof fetch;
 }
 
-export type SurfaceTilesStats = TileLoaderStats & { manifest: 'loading' | 'ready' | 'failed' };
+export type SurfaceTilesStats = TileLoaderStats & { manifest: 'loading' | 'ready' | 'failed'; meshes: number };
 
 interface Drawn {
 	mesh: Mesh;
@@ -92,18 +92,22 @@ export class SurfaceTiles {
 	#frustum = new Frustum();
 	#matrix = new Matrix4();
 	#lastHeight = Number.NaN;
+	#pruned = 0;
 	#retry: ReturnType<typeof setTimeout> | undefined;
 	#disposed = false;
 	#maxBytes: number;
+
+	#online = () => this.#loader?.retryNow();
 
 	constructor(private readonly earth: ShaderMaterial, private readonly options: SurfaceTilesOptions) {
 		this.#black.needsUpdate = true;
 		this.#maxBytes = options.maxBytes;
 		this.#fetchManifest(0);
+		globalThis.addEventListener?.('online', this.#online);
 	}
 
 	get stats(): SurfaceTilesStats | null {
-		return this.#loader ? { ...this.#loader.stats, manifest: this.#state } : null;
+		return this.#loader ? { ...this.#loader.stats, manifest: this.#state, meshes: this.#meshes.size } : null;
 	}
 
 	set maxBytes(bytes: number) {
@@ -178,7 +182,8 @@ export class SurfaceTiles {
 			drawn.mesh.visible = true;
 			drawn.shownAt = now;
 		}
-		if (this.#meshes.size <= patches.length) return;
+		if (this.#meshes.size <= MAX_MESHES && now - this.#pruned < MESH_KEEP_MS) return;
+		this.#pruned = now;
 		const stale = [...this.#meshes].filter(([, d]) => !d.mesh.visible).sort((a, b) => a[1].shownAt - b[1].shownAt);
 		let excess = this.#meshes.size - MAX_MESHES;
 		for (const [id, drawn] of stale) {
@@ -237,6 +242,7 @@ export class SurfaceTiles {
 
 	dispose(): void {
 		this.#disposed = true;
+		globalThis.removeEventListener?.('online', this.#online);
 		clearTimeout(this.#retry);
 		this.#loader?.dispose();
 		for (const [id, drawn] of [...this.#meshes]) this.#remove(id, drawn);

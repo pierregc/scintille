@@ -106,7 +106,7 @@ export interface TileLoaderStats {
 	missing: number;
 	aborted: number;
 	evicted: number;
-	/** Loaded textures dropped without ever being drawn. */
+	/** Loaded textures never drawn, cached or evicted. */
 	unused: number;
 	deepest: number;
 }
@@ -230,6 +230,14 @@ export class TileLoader<T> {
 		}
 		this.#stats = this.#summary(wanted, patches.length, candidates.length - started, deepest);
 		return patches;
+	}
+
+	/** Lifts every backoff, e.g. when the browser comes back online. */
+	retryNow(): void {
+		this.#pausedUntil = 0;
+		this.#errors = 0;
+		for (const slot of this.#slots.day.values()) slot.retryAt = 0;
+		for (const slot of this.#slots.night.values()) slot.retryAt = 0;
 	}
 
 	/** Drops every texture and request; tiles known to be missing stay known. */
@@ -402,12 +410,16 @@ export class TileLoader<T> {
 	#summary(wanted: number, drawn: number, queued: number, deepest: number): TileLoaderStats {
 		let textures = 0;
 		let missing = 0;
+		let undrawn = 0;
 		for (const layer of LAYERS) {
 			for (const slot of this.#slots[layer].values()) {
-				if (slot.state === 'ready') textures++;
-				else if (slot.state === 'missing') missing++;
+				if (slot.state === 'ready') {
+					textures++;
+					if (!slot.drawn) undrawn++;
+				} else if (slot.state === 'missing') missing++;
 			}
 		}
-		return { wanted, drawn, textures, bytes: this.#bytes, queued, loading: this.#active, missing, deepest, ...this.#counts };
+		const counts = { ...this.#counts, unused: this.#counts.unused + undrawn };
+		return { wanted, drawn, textures, bytes: this.#bytes, queued, loading: this.#active, missing, deepest, ...counts };
 	}
 }

@@ -332,6 +332,25 @@ describe('TileLoader', () => {
 		expect(source.calls.map((c) => c.id)).toEqual(['day:5/1-1', 'day:5/2-2']);
 	});
 
+	it('retries at once when told the network is back', async () => {
+		const loader = make();
+		const sel = selection([k(5, 1, 1)]);
+		run(loader, sel, 1400);
+		for (let i = 0; i < 4; i++) {
+			source.pending()[0].reject(new TypeError('offline'));
+			await flush();
+			run(loader, sel, time + 70_000);
+		}
+		expect(source.calls).toHaveLength(5);
+		source.pending()[0].reject(new TypeError('offline'));
+		await flush();
+		run(loader, sel, time + 1000);
+		expect(source.calls).toHaveLength(5);
+		loader.retryNow();
+		run(loader, sel, time + 20);
+		expect(source.calls).toHaveLength(6);
+	});
+
 	it('gives up on missing tiles and reports them', async () => {
 		const loader = make();
 		const sel = selection([k(5, 1, 1)]);
