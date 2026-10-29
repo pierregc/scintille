@@ -8,5 +8,7 @@
   "detail_levels": [3, 4, 5],
   "detail_tile_size": 640,
   "detail_border": 2,
+  "detail_height_levels": [3, 4],
+  "detail_height_max_km": 20,
   "tiers": ["2k", "4k"]
 }

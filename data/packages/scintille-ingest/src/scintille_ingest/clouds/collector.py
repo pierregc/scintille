@@ -19,6 +19,7 @@ from scintille_ingest.runtime.metrics import Metrics
 from . import pyramid
 from .gfs import GfsSkin, SkinTemperature
 from .gmgsi import GmgsiProduct, Mosaic, list_products, read_mosaic
+from .profile import GfsProfile, HeightTable
 from .publish import CloudPublisher
 from .sources import SlotFiles, Sources, decode
 from .sun import subsolar_point
@@ -164,6 +165,7 @@ class CompositeCollector:
         *,
         workers: int = 2,
         metrics: Metrics | None = None,
+        profile: GfsProfile | None = None,
         cadence: float = 60.0,
         max_backoff: float = 600.0,
         deadline: timedelta = timedelta(minutes=45),
@@ -173,6 +175,7 @@ class CompositeCollector:
         self.sources = sources
         self.download_timeout = download_timeout
         self.skin = skin
+        self.profile = profile
         self.fallback = fallback
         self.publisher = publisher
         self.work_dir = work_dir
@@ -217,15 +220,23 @@ class CompositeCollector:
             )
             fetched = self._clock()
             skin = await self.skin.at(files.slot)
+            table = await self.profile.at(files.slot) if self.profile else None
             fallback = await asyncio.to_thread(self._fallback, files.slot)
             rendered = await asyncio.to_thread(
-                self._render, downloaded, directory / "disks", skin, fallback, files.slot
+                self._render, downloaded, directory / "disks", skin, fallback, files.slot, table
             )
         finally:
             await asyncio.to_thread(shutil.rmtree, directory, True)
         now = self._clock()
         await self.publisher.publish(
-            files.slot, files.product, skin.label, rendered.textures, now, rendered.tiles
+            files.slot,
+            files.product,
+            skin.label,
+            rendered.textures,
+            now,
+            rendered.tiles,
+            rendered.heights,
+            table.label if table else f"lapse from {skin.label}",
         )
         self.metrics.inc("cloud_frames_total")
         self.metrics.set("cloud_frame_age_seconds", (now - files.slot).total_seconds())
@@ -240,6 +251,7 @@ class CompositeCollector:
                     "satellites": files.complete_satellites,
                     "tiles": len(rendered.tiles),
                     "tile_bytes": sum(len(b) for b in rendered.tiles.values()),
+                    "height_bytes": sum(len(b) for b in rendered.heights.values()),
                     "bytes": {tier: len(b) for tier, b in rendered.textures.items()},
                     "max_rss_mb": _max_rss_mb(resource.RUSAGE_SELF),
                     "worker_max_rss_mb": _max_rss_mb(resource.RUSAGE_CHILDREN),
@@ -276,14 +288,17 @@ class CompositeCollector:
         skin: SkinTemperature,
         fallback: Mosaic | None,
         slot: datetime,
+        table: HeightTable | None = None,
     ) -> pyramid.Rendered:
         directory.mkdir(parents=True, exist_ok=True)
-        base = pyramid.Inputs((), skin.values, subsolar_point(slot), fallback)
-        satellites = decode(downloaded, directory, base.skin_at)
+        base = pyramid.Inputs((), skin.values, subsolar_point(slot), fallback, table)
+        satellites = decode(downloaded, directory, base.top_at)
         for path in downloaded.values():
             for file in path:
                 file.unlink(missing_ok=True)
-        inputs = pyramid.Inputs(tuple(satellites), skin.values, subsolar_point(slot), fallback)
+        inputs = pyramid.Inputs(
+            tuple(satellites), skin.values, subsolar_point(slot), fallback, table
+        )
         return pyramid.frame(inputs, self.workers)
 
     async def run(self) -> None:

@@ -298,10 +298,12 @@ def test_blend_weights_the_better_view_and_reports_coverage() -> None:
     east = composite.Satellite(
         uniform_disk(GOES_EAST, 260.0),
         None,
-        composite.heights(uniform_disk(GOES_EAST, 260.0), skin_at),
+        composite.heights(uniform_disk(GOES_EAST, 260.0), composite.lapse(skin_at)),
     )
     mtg = composite.Satellite(
-        uniform_disk(MTG, 220.0, km=1.0), None, composite.heights(uniform_disk(MTG, 220.0), skin_at)
+        uniform_disk(MTG, 220.0, km=1.0),
+        None,
+        composite.heights(uniform_disk(MTG, 220.0), composite.lapse(skin_at)),
     )
     lat = np.array([[0.0, 0.0, 0.0]])
     lon = np.array([[-75.0, -37.5, 0.0]])
@@ -347,7 +349,7 @@ def test_tile_geometry() -> None:
 
 def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     disk = uniform_disk(GOES_EAST, 250.0)
-    satellite = composite.Satellite(disk, None, composite.heights(disk, skin_at))
+    satellite = composite.Satellite(disk, None, composite.heights(disk, composite.lapse(skin_at)))
     skin = np.full((721, 1440), 300.0, np.float32)
     inputs = pyramid.Inputs((satellite,), skin, subsolar_point(SLOT))
     block = pyramid.block(inputs, 4, 3)
@@ -356,6 +358,19 @@ def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     image = Image.open(io.BytesIO(block.tiles[tiles.Key(3, 3, 4)])).convert("L")
     assert image.size == (tiles.TILE + 2 * tiles.BORDER,) * 2
     assert block.overview is not None and block.overview.shape == (tiles.TILE, tiles.TILE)
+
+
+def test_block_publishes_heights_of_levels_3_and_4() -> None:
+    disk = uniform_disk(GOES_EAST, 250.0)
+    top_at = composite.lapse(skin_at)
+    satellite = composite.Satellite(disk, None, composite.heights(disk, top_at))
+    inputs = pyramid.Inputs((satellite,), np.full((721, 1440), 300.0, np.float32), (0.0, 0.0))
+    block = pyramid.block(inputs, 4, 3)
+    assert {k.z for k in block.heights} == {3, 4}
+    assert set(block.heights) == {k for k in block.tiles if k.z in (3, 4)}
+    decoded = tiles.decode_height(block.heights[tiles.Key(3, 3, 4)])
+    assert decoded.shape == (tiles.TILE + 2 * tiles.BORDER,) * 2
+    assert float(np.median(decoded)) == pytest.approx(50 / 6.5, abs=0.2)
 
 
 def publisher() -> tuple[CloudPublisher, MemoryStore]:
@@ -511,7 +526,7 @@ def test_hour_slots() -> None:
 class Rendered(CompositeCollector):
     rendered: list[datetime]
 
-    def _render(self, downloaded, directory, skin, fallback, slot):  # type: ignore[no-untyped-def]
+    def _render(self, downloaded, directory, skin, fallback, slot, table=None):  # type: ignore[no-untyped-def]
         self.rendered.append(slot)
         return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"})
 
