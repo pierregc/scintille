@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 import sitemap from '@astrojs/sitemap';
 import { buildInfo } from './scripts/build-info.mjs';
+import { places } from './scripts/places.mjs';
 import { replayFixtures } from './scripts/replay-fixtures.mjs';
 
 // https://astro.build/config
@@ -11,5 +12,5 @@ export default defineConfig({
 	adapter: cloudflare({ imageService: 'passthrough' }),
 	session: false,
 	vite: { define: { __SCINTILLE_BUILD__: JSON.stringify(buildInfo()) } },
-	integrations: [replayFixtures(), sitemap({ filter: (page) => !page.endsWith('/render/') })],
+	integrations: [replayFixtures(), places(), sitemap({ filter: (page) => !page.endsWith('/render/') })],
 });
