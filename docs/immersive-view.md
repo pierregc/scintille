@@ -374,7 +374,8 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
    one frame, a decay of tens of milliseconds. Replay speed only compresses the gaps between
    flashes.
 12. **No false precision.** Flash positions are not interpolated or snapped. Surface and clouds
-   show source detail only; magnification uses smooth filtering, never sharpening or added noise.
+   keep their sources' values at the sources' scale; below it they may carry styled detail within
+   the bounds of [ADR 0030](adr/0030-bounded-aesthetic-license.md). Magnification never sharpens.
 
 ## Budgets
 
