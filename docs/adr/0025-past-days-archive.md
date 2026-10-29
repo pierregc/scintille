@@ -1,6 +1,6 @@
 # 0025 · Past days in Travel in time: an hourly flash archive
 
-- Status: proposed
+- Status: accepted (21 days, 29 October)
 - Date: 2026-10-29
 
 ## Context
@@ -43,40 +43,43 @@ expires by 30 October.
 
 ## Decision
 
-Proposed: the third option. Storm replays keep their chunks, which stay small.
+The third option. Storm replays keep their chunks, which stay small.
 
 **Archive.** A `flash_archive` asset, partitioned by UTC hour, encodes silver flashes like storm
 replay chunks: SCNT gzip, at most 65,536 flashes per chunk, immutable content-addressed paths
 `archive/flashes/chunks/<sha256>.bin.gz`. A daily index `archive/flashes/manifests/YYYY-MM-DD.json`
-lists each hour's chunks, flash counts and event bounds; republishing an hour replaces its entry.
-Its own job runs at :20 for the previous hour, like the storm catalog, and catches up from the last
-published hour. An R2 lifecycle rule deletes `archive/flashes/` after the retention.
+lists each hour's chunks, flash counts and event bounds; an hour without flashes is absent. Its job
+runs at :02 and :32, catches up from the last archived hour and reads the two newest hours again;
+a run at 02:45 rereads the previous day. An hour that changed gets new chunks and its old ones are
+deleted, so late rows cost no storage.
 
-**Calendar.** `archive/index.json` (short cache) gives the first and last day with flashes and with
-clouds and the last archived hour. The date picker only offers those days. An hour with no archive
-inside them shows that lightning data is missing, never an empty sky.
+**Calendar.** `archive/flashes/index.json` (short cache) gives the first day, the last archived hour
+and the retention. The date picker only offers those days. An hour with no archive shows that
+lightning data is missing, never an empty sky.
 
-**Client.** Free replay reads the flash index of the playhead day and its neighbours, like clouds,
-and loads the hours that overlap the display window and the next hour: at most 3 hours, about
-20 MB of memory at the peak hour. `SceneData` moves them into the renderer ring as for storms
-([ADR 0013](0013-replay-feed-lifecycle.md)). After the last archived hour, flashes come from the live
-feed; its window grows from 60 to 90 minutes to cover the publication delay, and live flashes older
-than the archive end are skipped so none is drawn twice.
+**Client.** Free replay before the live window reads the flash index of the playhead day and its
+neighbours, like clouds, and streams its chunks into the renderer ring in event order, as the live
+feed does: the ring keeps the display window and the next chunk, so memory does not grow. Inside
+the live window, free replay keeps the live feed. An hour is archived two minutes after it ends and
+complete thirty minutes later, well before it leaves the 60-minute live window: the two meet with at
+most a two-minute hole, two minutes per hour, and the live contract does not change.
 
-**Backfill.** A catch up from silver over 12 October to now. A one-off command writes the cloud
+**Backfill.** Without history the job starts where silver is kept, so it catches up from 12 October
+by itself, a day per run. A one-off command writes the cloud
 indexes of 12 to 16 October from the textures already there: product found in NOAA's listing by the
 digest in the texture name, reference recomputed from the upload time; no texture is uploaded again.
 
-**Retention.** 21 days, like silver: the archive stays rebuildable for its whole life.
+**Retention.** 21 days, like silver: the archive stays rebuildable for its whole life. The job
+deletes the days that leave it; an R2 lifecycle rule at 22 days is the backstop.
 
 ## Consequences
 
 | Cost | Value |
 | --- | --- |
 | Storage | about 0.95 GB at 21 days (0.65 GB at 14, 1.4 GB at 30) |
-| Writes | about 150 per day (chunks, index, day list), 4,500 per month of 1 M free |
+| Writes | about 500 per day (chunks, day indexes, index), 15,000 per month of 1 M free |
 | Reads | tens of silver reads per hourly run; browsers read immutable chunks through the CDN |
-| VPS | one run of about a minute per hour |
+| VPS | two short runs per hour, one longer run per day |
 
 R2 at steady state, end of December, with this archive at 21 days:
 
@@ -98,5 +101,4 @@ that expiry the total passes 10 GB before the end of the year, with or without t
 - Clouds keep 30 days for storm replays; the calendar offers 21.
 - At 3600×, a day plays in 24 s and needs about 50 MB: a slow connection waits on the next hour, and
   the HUD says so.
-- Rows that land in silver after their hour was published are missing until it is republished; an
-  hourly check compares counts per hour between silver and the archive.
+- Rows that land in silver more than an hour late appear after the next daily reread.
