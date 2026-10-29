@@ -26,6 +26,8 @@ export interface CloudDetailRef {
 	levels: number[];
 	max_latitude: number;
 	fine: string;
+	/** Tiles of the other levels in index order, when the pack keeps only some of them. */
+	coarse?: string | null;
 	index_bytes: number;
 }
 
@@ -38,6 +40,8 @@ export interface DetailSource {
 	maxLatitude: number;
 	/** Finest level tiles present, one bit each, row-major from the north-west. */
 	fine: Uint8Array;
+	/** Other levels' tiles present, one bit each in index order; null when all within ±maxLatitude. */
+	coarse: Uint8Array | null;
 }
 
 export interface TileKey {
@@ -54,16 +58,26 @@ export function detailSource(ref: unknown, manifestUrl: string): DetailSource | 
 	if (typeof r.path !== 'string' || !r.path.endsWith('.tiles') ||
 		r.tile_size !== RULES.detail_tile_size || r.border !== RULES.detail_border ||
 		!Array.isArray(r.levels) || r.levels.join() !== levels.join() ||
-		typeof r.max_latitude !== 'number' || typeof r.fine !== 'string' ||
+		typeof r.max_latitude !== 'number' ||
 		r.index_bytes !== indexSlots(levels) * 8) return null;
-	let fine: Uint8Array;
-	try { fine = Uint8Array.from(atob(r.fine), (c) => c.charCodeAt(0)); }
-	catch { return null; }
 	const finest = levels[levels.length - 1];
-	if (fine.length !== Math.ceil((columns(finest) * rows(finest)) / 8)) return null;
+	const fine = bits(r.fine, columns(finest) * rows(finest));
+	const coarse = r.coarse == null ? null : bits(r.coarse, indexSlots(levels.slice(0, -1)));
+	if (!fine || coarse === undefined) return null;
 	const url = new URL(r.path, manifestUrl).href;
-	return { url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine };
+	return { url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine, coarse };
 }
+
+/** A base64 bitmap of `count` bits; undefined when malformed. */
+function bits(encoded: unknown, count: number): Uint8Array | undefined {
+	if (typeof encoded !== 'string') return undefined;
+	try {
+		const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+		return bytes.length === Math.ceil(count / 8) ? bytes : undefined;
+	} catch { return undefined; }
+}
+
+const bitSet = (bitmap: Uint8Array, bit: number) => (bitmap[bit >> 3] & (1 << (bit & 7))) !== 0;
 
 const indexSlots = (levels: readonly number[]) => levels.reduce((n, z) => n + rows(z) * columns(z), 0);
 
@@ -81,11 +95,9 @@ export const texelDegrees = (z: number, tileSize: number) => 180 / (2 ** z * til
 export function hasTile(source: DetailSource, { z, x, y }: TileKey): boolean {
 	if (x < 0 || x >= columns(z) || y < 0 || y >= rows(z)) return false;
 	const finest = source.levels[source.levels.length - 1];
-	if (z === finest) {
-		const bit = y * columns(z) + x;
-		return (source.fine[bit >> 3] & (1 << (bit & 7))) !== 0;
-	}
+	if (z === finest) return bitSet(source.fine, y * columns(z) + x);
 	if (!source.levels.includes(z)) return false;
+	if (source.coarse) return bitSet(source.coarse, indexSlot(source.levels, { z, x, y }));
 	const north = 90 - (y * 180) / 2 ** z;
 	const south = north - 180 / 2 ** z;
 	return south < source.maxLatitude && north > -source.maxLatitude;

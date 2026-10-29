@@ -49,6 +49,8 @@ export interface Clouds {
 	readonly visible: boolean;
 	/** Observation time (UTC ms) of the frame mostly shown, or null when none is shown. */
 	readonly frameTime: number | null;
+	/** Observation times of the frames held, ascending. */
+	readonly frameTimes: readonly number[];
 	/**
 	 * Adds a frame to the timeline; the layer crossfades between the frames around the scene time.
 	 * It owns the texture: a frame with the same time replaces it, the oldest beyond the limit are disposed.
@@ -98,7 +100,6 @@ export function createClouds(
 			cloudMap: { value: null as Texture | null },
 			cloudMapNext: { value: null as Texture | null },
 			cloudMix: { value: 0 },
-			cloudMapSize: { value: new Vector2(1, 1) },
 			cloudMaxOpacity: { value: 0.92 },
 			cloudFadeLatitudes: { value: new Vector2(...CLOUD_FADE_LATITUDES.map((lat) => Math.sin(lat * DEG))) },
 			cloudShown: { value: 0 },
@@ -160,11 +161,9 @@ export function createClouds(
 	const show = () => {
 		if (frames.length === 0) return;
 		const { a, b, mix } = blendPair(position, frames.length);
-		const image = frames[a].texture.image as { width: number; height: number };
 		material.uniforms.cloudMap.value = frames[a].texture;
 		material.uniforms.cloudMapNext.value = frames[b].texture;
 		material.uniforms.cloudMix.value = mix;
-		material.uniforms.cloudMapSize.value.set(image.width, image.height);
 	};
 
 	return {
@@ -176,6 +175,9 @@ export function createClouds(
 		get frameTime() {
 			if (!covered()) return null;
 			return frames[Math.min(Math.round(position), frames.length - 1)].time;
+		},
+		get frameTimes() {
+			return frames.map((f) => f.time);
 		},
 		setFrame(next) {
 			if (disposed) return next.texture.dispose();
@@ -197,10 +199,11 @@ export function createClouds(
 			syncVisibility();
 		},
 		retainFrames(times) {
+			const shown = mesh.visible && frames.length > 0 ? shownTime() : Number.NaN;
 			for (let i = frames.length - 1; i >= 0; i--) {
 				if (!times.includes(frames[i].time)) frames.splice(i, 1)[0].texture.dispose();
 			}
-			position = target();
+			position = Number.isFinite(shown) && frames.length > 0 ? framePosition(frames.map((f) => f.time), shown) : target();
 			if (frames.length === 0) {
 				material.uniforms.cloudMap.value = null;
 				material.uniforms.cloudMapNext.value = null;

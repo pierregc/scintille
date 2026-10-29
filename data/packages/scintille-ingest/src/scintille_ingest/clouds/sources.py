@@ -17,7 +17,7 @@ from obstore.store import ObjectStore
 from scintille_ingest.mtg.discovery import Listed
 
 from . import abi, ahi, fci
-from .composite import Satellite, SkinAt, heights
+from .composite import Satellite, TopAt, heights
 from .disk import mapped
 
 log = logging.getLogger("scintille_ingest.clouds")
@@ -172,9 +172,7 @@ def _save(fetch: Callable[[str, str], bytes], product: str, entry: str, target: 
     target.write_bytes(fetch(product, entry))
 
 
-def decode(
-    downloaded: Mapping[str, list[Path]], directory: Path, skin_at: SkinAt
-) -> list[Satellite]:
+def decode(downloaded: Mapping[str, list[Path]], directory: Path, top_at: TopAt) -> list[Satellite]:
     """Decodes every complete satellite into memory-mapped disks under `directory`."""
     allocate = mapped(directory)
     satellites = []
@@ -185,7 +183,7 @@ def decode(
             infrared = abi.read(ir[0], satellite, allocate)
             satellites.append(
                 Satellite(
-                    infrared, abi.read(vis[0], satellite, allocate), heights(infrared, skin_at)
+                    infrared, abi.read(vis[0], satellite, allocate), heights(infrared, top_at)
                 )
             )
     ir = downloaded.get(f"himawari09/{ahi.INFRARED}")
@@ -193,12 +191,12 @@ def decode(
     if ir and vis:
         infrared = ahi.read(ir, "himawari09", allocate)
         satellites.append(
-            Satellite(infrared, ahi.read(vis, "himawari09", allocate), heights(infrared, skin_at))
+            Satellite(infrared, ahi.read(vis, "himawari09", allocate), heights(infrared, top_at))
         )
     chunks = downloaded.get("mtg-i1/chunks")
     if chunks:
         infrared = fci.read(chunks, fci.INFRARED, allocate)
         satellites.append(
-            Satellite(infrared, fci.read(chunks, fci.VISIBLE, allocate), heights(infrared, skin_at))
+            Satellite(infrared, fci.read(chunks, fci.VISIBLE, allocate), heights(infrared, top_at))
         )
     return satellites

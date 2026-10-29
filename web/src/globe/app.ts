@@ -1,6 +1,7 @@
 import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
+import { FlashDays } from './archive/days';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
@@ -73,6 +74,8 @@ export interface GlobeApp {
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
+	/** UTC midnight of the first day travel in time can show, once the archive index is known. */
+	archiveStart(): number | null;
 	/** Internals shown by the debug panel. */
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
@@ -194,10 +197,11 @@ export function createGlobeApp(
 		onChunk: (chunk, ref) => late.add(chunk, Date.parse(ref.start), clock.wallTime()),
 	};
 	const live = startLiveFeed(feedOptions);
+	const flashDays = new FlashDays({ baseUrl: liveBaseUrl(), now: () => clock.wallTime() });
 	const data = new SceneData(clock, live, (ring) => {
 		late.since = clock.wallTime();
 		return startLiveFeed({ ...feedOptions, ring });
-	});
+	}, renderParams ? undefined : flashDays);
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
@@ -224,6 +228,7 @@ export function createGlobeApp(
 		capacity: preset.maxFlashes ?? live.ring.capacity,
 		lightMapWidth: preset.cloudLight ? 1024 : 0,
 		clouds: clouds.opacity,
+		phone,
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
@@ -301,7 +306,8 @@ export function createGlobeApp(
 		camera.updateMatrixWorld();
 		surface?.update(camera, renderParams?.height ?? window.innerHeight);
 		atmosphere.setTime(now);
-		if (!renderParams) cloudPlayback.update(clock.mode, now);
+		// Live clouds would load only to be dropped while a storm opens.
+		if (!renderParams && !(clock.mode === 'live' && replay.state.loading)) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
 		if (cloudDetail) {
 			camera.updateMatrixWorld();
@@ -383,6 +389,7 @@ export function createGlobeApp(
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
+		archiveStart: () => flashDays.index()?.firstDay ?? null,
 		debug: {
 			ring: live.ring,
 			get client() { return data.liveClient; },

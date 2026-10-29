@@ -1,8 +1,10 @@
 import asyncio
+import base64
 import bz2
 import io
 import json
 import math
+import posixpath
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from scintille_ingest.clouds.disk import Disk, bilinear, mapped
 from scintille_ingest.clouds.gfs import SkinTemperature
 from scintille_ingest.clouds.publish import ArchiveCloudManifest, CloudManifest, CloudPublisher
 from scintille_ingest.clouds.sources import Sources
+from scintille_ingest.clouds.storm_detail import Position, StormTracks, keys_under
 from scintille_ingest.clouds.sun import cos_zenith, subsolar_point
 from scintille_ingest.mtg.discovery import Listed
 from scintille_ingest.runtime.live_feed import ObjectLiveStore
@@ -298,10 +301,12 @@ def test_blend_weights_the_better_view_and_reports_coverage() -> None:
     east = composite.Satellite(
         uniform_disk(GOES_EAST, 260.0),
         None,
-        composite.heights(uniform_disk(GOES_EAST, 260.0), skin_at),
+        composite.heights(uniform_disk(GOES_EAST, 260.0), composite.lapse(skin_at)),
     )
     mtg = composite.Satellite(
-        uniform_disk(MTG, 220.0, km=1.0), None, composite.heights(uniform_disk(MTG, 220.0), skin_at)
+        uniform_disk(MTG, 220.0, km=1.0),
+        None,
+        composite.heights(uniform_disk(MTG, 220.0), composite.lapse(skin_at)),
     )
     lat = np.array([[0.0, 0.0, 0.0]])
     lon = np.array([[-75.0, -37.5, 0.0]])
@@ -347,7 +352,7 @@ def test_tile_geometry() -> None:
 
 def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     disk = uniform_disk(GOES_EAST, 250.0)
-    satellite = composite.Satellite(disk, None, composite.heights(disk, skin_at))
+    satellite = composite.Satellite(disk, None, composite.heights(disk, composite.lapse(skin_at)))
     skin = np.full((721, 1440), 300.0, np.float32)
     inputs = pyramid.Inputs((satellite,), skin, subsolar_point(SLOT))
     block = pyramid.block(inputs, 4, 3)
@@ -358,16 +363,139 @@ def test_block_renders_every_level_and_level_3_averages_level_4() -> None:
     assert block.overview is not None and block.overview.shape == (tiles.TILE, tiles.TILE)
 
 
-def publisher() -> tuple[CloudPublisher, MemoryStore]:
+def test_block_publishes_heights_of_levels_3_and_4() -> None:
+    disk = uniform_disk(GOES_EAST, 250.0)
+    top_at = composite.lapse(skin_at)
+    satellite = composite.Satellite(disk, None, composite.heights(disk, top_at))
+    inputs = pyramid.Inputs((satellite,), np.full((721, 1440), 300.0, np.float32), (0.0, 0.0))
+    block = pyramid.block(inputs, 4, 3)
+    assert {k.z for k in block.heights} == {3, 4}
+    assert set(block.heights) == {k for k in block.tiles if k.z in (3, 4)}
+    decoded = tiles.decode_height(block.heights[tiles.Key(3, 3, 4)])
+    assert decoded.shape == (tiles.TILE + 2 * tiles.BORDER,) * 2
+    assert float(np.median(decoded)) == pytest.approx(50 / 6.5, abs=0.2)
+
+
+def publisher(top: int | None = None) -> tuple[CloudPublisher, MemoryStore]:
     store = MemoryStore()
+    storms = StormTracks(ObjectLiveStore(store, "storms/"), top) if top else None
     return (
         CloudPublisher(
             ObjectLiveStore(store, "live/clouds/"),
             ObjectLiveStore(store, "archive/clouds/"),
             attribution="test",
+            storms=storms,
         ),
         store,
     )
+
+
+Entry = tuple[dict[str, object], dict[str, object]]
+
+
+def storm(slug: str, start: datetime, flashes: int, lat: float, lon: float) -> Entry:
+    stamp = start.isoformat().replace("+00:00", "Z")
+    summary = {"slug": slug, "t_start": stamp, "flashes": flashes, "peak_rate": 10}
+    point = {"time": stamp, "lat": lat, "lon": lon, "flash_count": flashes, "area_km2": 100.0}
+    return summary, {"storm": summary, "track": [point]}
+
+
+def catalog(store: MemoryStore, pages: list[list[Entry]]) -> None:
+    import obstore
+
+    for number, page in enumerate(pages):
+        index = {"total_pages": len(pages), "storms": [summary for summary, _ in page]}
+        names = [str(number)] + (["latest"] if number == len(pages) - 1 else [])
+        for name in names:
+            obstore.put(store, f"storms/index/{name}.json", json.dumps(index).encode())
+        for summary, doc in page:
+            obstore.put(store, f"storms/{summary['slug']}.json", json.dumps(doc).encode())
+
+
+def test_detail_under_the_top_storms_outlives_the_day() -> None:
+    import obstore
+
+    pub, store = publisher(top=1)
+    strong = storm("strong", SLOT - timedelta(minutes=30), 5000, 10.0, 20.0)
+    weak = storm("weak", SLOT, 50, -30.0, -60.0)
+    later = storm("later", SLOT + timedelta(hours=20), 9000, 40.0, 100.0)
+    catalog(store, [[weak, strong], [later]])
+    under = {tiles.Key(3, 3, 8): b"l3", tiles.Key(4, 7, 17): b"l4", tiles.Key(5, 14, 35): b"l5"}
+    elsewhere = {tiles.Key(4, 10, 10): b"w4", tiles.Key(5, 21, 21): b"w5"}
+    textures = {"2k": b"x", "4k": b"y"}
+    asyncio.run(pub.publish(SLOT, "first", "gfs", textures, SLOT, under | elsewhere))
+    next_day = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(next_day, "second", "gfs", textures, next_day, elsewhere))
+    packs = sorted(
+        m["path"] for batch in obstore.list(store, prefix="archive/clouds/detail/") for m in batch
+    )
+    assert len(packs) == 2 and packs[0].endswith("-storms.tiles")
+    day = ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
+    )
+    ref = day.frames[0].detail
+    assert ref is not None and ref.coarse is not None
+    assert posixpath.normpath(posixpath.join("archive/clouds/manifests", ref.path)) == packs[0]
+    data = obstore.get(store, packs[0]).bytes().to_bytes()
+    assert ref.size_bytes == len(data)
+    assert tiles.from_bitmap(ref.fine, 5) == {tiles.Key(5, 14, 35)}
+    assert tiles.unpack(data, tiles.Key(4, 7, 17)) == b"l4"
+    assert tiles.unpack(data, tiles.Key(3, 3, 8)) is None
+    assert tiles.unpack(data, tiles.Key(5, 21, 21)) is None
+    bits = np.unpackbits(np.frombuffer(base64.b64decode(ref.coarse), np.uint8), bitorder="little")
+    assert np.flatnonzero(bits).tolist() == [tiles.index_slot(tiles.Key(4, 7, 17))]
+
+
+def test_storm_detail_keeps_the_heights_under_the_storm() -> None:
+    import obstore
+
+    pub, store = publisher(top=1)
+    catalog(store, [[storm("strong", SLOT - timedelta(minutes=30), 5000, 10.0, 20.0)]])
+    detail = {tiles.Key(4, 7, 17): b"l4", tiles.Key(4, 10, 10): b"w4"}
+    heights = {tiles.Key(4, 7, 17): b"h4", tiles.Key(4, 10, 10): b"x4", tiles.Key(3, 3, 8): b"h3"}
+    textures = {"2k": b"x", "4k": b"y"}
+    asyncio.run(pub.publish(SLOT, "first", "gfs", textures, SLOT, detail, heights, "gfs"))
+    next_day = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(next_day, "second", "gfs", textures, next_day, detail, heights, "gfs"))
+    day = ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
+    )
+    ref = day.frames[0].detail
+    assert ref is not None and ref.coarse is not None and ref.height is not None
+    path = posixpath.normpath(posixpath.join("archive/clouds/manifests", ref.path))
+    data = obstore.get(store, path).bytes().to_bytes()
+    assert tiles.unpack_height(data, tiles.Key(4, 7, 17)) == b"h4"
+    assert tiles.unpack_height(data, tiles.Key(4, 10, 10)) is None
+    assert tiles.unpack(data, tiles.Key(4, 7, 17)) == b"l4"
+
+
+def test_detail_waits_for_an_unreadable_storm_catalog_then_goes() -> None:
+    import obstore
+
+    class Unreadable(ObjectLiveStore):
+        async def get(self, path: str) -> bytes | None:
+            raise OSError("catalog down")
+
+    pub, store = publisher()
+    pub.storms = StormTracks(Unreadable(store, "storms/"))
+    textures = {"2k": b"x", "4k": b"y"}
+    asyncio.run(pub.publish(SLOT, "first", "gfs", textures, SLOT, {tiles.Key(4, 7, 17): b"l4"}))
+
+    def packs_of_first_day() -> list[str]:
+        prefix = "archive/clouds/detail/2026/10/18/"
+        return [m["path"] for batch in obstore.list(store, prefix=prefix) for m in batch]
+
+    after = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(after, "second", "gfs", textures, after))
+    assert len(packs_of_first_day()) == 1
+    after = SLOT + timedelta(hours=32)
+    asyncio.run(pub.publish(after, "third", "gfs", textures, after))
+    assert packs_of_first_day() == []
+
+
+def test_keys_under_a_storm_wrap_the_antimeridian() -> None:
+    keys = keys_under([Position(0.0, 179.99, 50.0)], levels=(5,))
+    assert {k.x for k in keys} == {0, tiles.columns(5) - 1}
 
 
 def test_detail_tiles_are_written_once_and_both_manifests_point_to_them() -> None:
@@ -511,7 +639,7 @@ def test_hour_slots() -> None:
 class Rendered(CompositeCollector):
     rendered: list[datetime]
 
-    def _render(self, downloaded, directory, skin, fallback, slot):  # type: ignore[no-untyped-def]
+    def _render(self, downloaded, directory, skin, fallback, slot, table=None):  # type: ignore[no-untyped-def]
         self.rendered.append(slot)
         return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"})
 

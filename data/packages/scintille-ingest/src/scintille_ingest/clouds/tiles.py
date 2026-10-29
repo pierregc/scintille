@@ -8,7 +8,13 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
-from scintille_contract.cloud_archive import DETAIL_BORDER, DETAIL_LEVELS, DETAIL_TILE_SIZE
+from scintille_contract.cloud_archive import (
+    DETAIL_BORDER,
+    DETAIL_HEIGHT_LEVELS,
+    DETAIL_HEIGHT_MAX_KM,
+    DETAIL_LEVELS,
+    DETAIL_TILE_SIZE,
+)
 
 TILE = DETAIL_TILE_SIZE
 """Texels per tile side, borders excluded."""
@@ -16,6 +22,9 @@ BORDER = DETAIL_BORDER
 """Texels copied from the neighbouring tiles on each side, so cubic filtering needs no neighbour."""
 LEVELS = tuple(DETAIL_LEVELS)
 FINE_LEVEL = LEVELS[-1]
+HEIGHT_LEVELS = tuple(DETAIL_HEIGHT_LEVELS)
+HEIGHT_MAX_KM = float(DETAIL_HEIGHT_MAX_KM)
+"""Height tiles map 0 to 255 onto 0 to this many km above sea level (ADR 0028)."""
 MAX_LATITUDE = 72.7
 WEBP_QUALITY = 75
 
@@ -73,6 +82,15 @@ def encode(opacity: NDArray[np.floating]) -> bytes:
     return buffer.getvalue()
 
 
+def encode_height(km: NDArray[np.floating]) -> bytes:
+    return encode(np.asarray(km, np.float32) / HEIGHT_MAX_KM)
+
+
+def decode_height(data: bytes) -> NDArray[np.float32]:
+    values = np.asarray(Image.open(io.BytesIO(data)).convert("L"), np.float32)
+    return (values * np.float32(HEIGHT_MAX_KM / 255)).astype(np.float32)
+
+
 def bitmap(keys: Iterable[Key], z: int) -> str:
     """Base64 of a bit per tile of level `z`, row-major from the north-west, least significant bit
     first."""
@@ -83,33 +101,61 @@ def bitmap(keys: Iterable[Key], z: int) -> str:
     return base64.b64encode(np.packbits(bits, bitorder="little").tobytes()).decode()
 
 
+def coarse_bitmap(keys: Iterable[Key]) -> str:
+    """Base64 of a bit per tile of the levels above the finest, in pack index order, least
+    significant bit first."""
+    bits = np.zeros(COARSE_SLOTS, np.uint8)
+    for key in keys:
+        if key.z != FINE_LEVEL:
+            bits[index_slot(key)] = 1
+    return base64.b64encode(np.packbits(bits, bitorder="little").tobytes()).decode()
+
+
 def from_bitmap(encoded: str, z: int) -> set[Key]:
     bits = np.unpackbits(np.frombuffer(base64.b64decode(encoded), np.uint8), bitorder="little")
     return {Key(z, int(i) // columns(z), int(i) % columns(z)) for i in np.flatnonzero(bits)}
 
 
-def index_slot(key: Key) -> int:
-    """Position of a tile in the pack index: levels in order, then rows, then columns."""
-    before = sum(rows(z) * columns(z) for z in LEVELS if z < key.z)
+def index_slot(key: Key, levels: tuple[int, ...] = LEVELS) -> int:
+    """Position of a tile in a pack index: levels in order, then rows, then columns."""
+    before = sum(rows(z) * columns(z) for z in levels if z < key.z)
     return before + key.y * columns(key.z) + key.x
 
 
-INDEX_SLOTS = sum(rows(z) * columns(z) for z in LEVELS)
+def slots(levels: tuple[int, ...]) -> int:
+    return sum(rows(z) * columns(z) for z in levels)
 
 
-def pack(tiles: Mapping[Key, bytes]) -> bytes:
+INDEX_SLOTS = slots(LEVELS)
+COARSE_SLOTS = INDEX_SLOTS - rows(FINE_LEVEL) * columns(FINE_LEVEL)
+HEIGHT_SLOTS = slots(HEIGHT_LEVELS)
+
+
+def pack(tiles: Mapping[Key, bytes], heights: Mapping[Key, bytes] | None = None) -> bytes:
     """One object per frame: an index of (offset, length) little-endian uint32 pairs, one per
-    possible tile (length 0 where absent), then the WebP tiles back to back."""
+    possible opacity tile (length 0 where absent); with `heights`, a second index of the same form
+    for the height levels; then the WebP tiles back to back. Offsets count from the start."""
     index = np.zeros((INDEX_SLOTS, 2), "<u4")
+    height_index = np.zeros((HEIGHT_SLOTS if heights is not None else 0, 2), "<u4")
     body = io.BytesIO()
-    start = INDEX_SLOTS * 8
+    start = (INDEX_SLOTS + len(height_index)) * 8
     for key in sorted(tiles):
         data = tiles[key]
         index[index_slot(key)] = (start + body.tell(), len(data))
         body.write(data)
-    return index.tobytes() + body.getvalue()
+    for key in sorted(heights or {}):
+        data = (heights or {})[key]
+        height_index[index_slot(key, HEIGHT_LEVELS)] = (start + body.tell(), len(data))
+        body.write(data)
+    return index.tobytes() + height_index.tobytes() + body.getvalue()
 
 
 def unpack(data: bytes, key: Key) -> bytes | None:
     offset, length = np.frombuffer(data, "<u4", 2, index_slot(key) * 8)
+    return data[int(offset) : int(offset) + int(length)] if length else None
+
+
+def unpack_height(data: bytes, key: Key) -> bytes | None:
+    at = (INDEX_SLOTS + index_slot(key, HEIGHT_LEVELS)) * 8
+    offset, length = np.frombuffer(data, "<u4", 2, at)
     return data[int(offset) : int(offset) + int(length)] if length else None
