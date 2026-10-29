@@ -21,7 +21,6 @@ flowchart LR
     end
 
     subgraph r2["Cloudflare R2"]
-        raw[("raw/<br/>30-day cache")]
         live[("live/<br/>manifest + 30 s chunks")]
         subgraph lake["Iceberg via R2 Data Catalog"]
             bronze[("bronze.ingest_log")]
@@ -36,7 +35,6 @@ flowchart LR
 
     glm --> live_proc
     li --> live_proc
-    live_proc --> raw
     live_proc -->|seconds| live
     live_proc --> spool
     spool --> writer
@@ -50,7 +48,6 @@ flowchart LR
     gold --> dagster
     dagster --> pub
     archives -.->|backfill| dagster
-    raw -.->|reprocessing| dagster
     dagster -.->|partition rebuild| silver
     live --> browser
     pub --> worker

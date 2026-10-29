@@ -47,7 +47,6 @@ from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
 from scintille_ingest.runtime.ops import OpsPublisher, PostgresOps
-from scintille_ingest.runtime.raw_cache import ObjectRawCache, r2_store_from_env
 from scintille_ingest.runtime.service import IngestLive
 from scintille_ingest.runtime.sources import GlmSource, MtgSource, Source
 from scintille_ingest.runtime.spool import Spool
@@ -173,7 +172,6 @@ async def run_live(spool_dir: Path, port: int) -> int:
         PostgresState(dsn),
         spool,
         publisher=feed,
-        raw_cache=ObjectRawCache(r2_store_from_env()),
         heartbeat=heartbeat_from_env("SCINTILLE_HEALTHCHECK_URL", "ingest-live", metrics),
         metrics=metrics,
     )

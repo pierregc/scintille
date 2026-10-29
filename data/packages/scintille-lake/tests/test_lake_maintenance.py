@@ -24,7 +24,7 @@ OLD = NOW - timedelta(days=30)
 
 def test_default_policy_follows_adr_0006() -> None:
     policy = MaintenancePolicy()
-    assert (policy.snapshot_retention_days, policy.raw_retention_days) == (3, 30)
+    assert policy.snapshot_retention_days == 3
     assert policy.wrangler_commands("scintille-lake") == [
         "npx wrangler basin catalog compaction enable scintille-lake"
         " --token $R2_CATALOG_TOKEN --target-size 128",
@@ -45,7 +45,6 @@ def test_policy_from_env() -> None:
         {"compaction_target_mb": 32},
         {"compaction_target_mb": 1024},
         {"snapshot_retention_days": 0},
-        {"raw_retention_days": 0},
         {"snapshot_retention_days": 7, "orphan_min_age_days": 7},
     ],
 )

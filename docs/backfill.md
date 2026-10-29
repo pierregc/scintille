@@ -26,4 +26,4 @@ source at a time, with the same parsing and validation code as the hot path
 Launch from the Dagster UI: select partitions (any date range × source) and materialize. Runs are
 queued one backfill at a time (the asset is in the `noaa` pool, limited to one run in
 `dagster.yaml`); every partition is independent, so a stopped backfill resumes by launching the
-missing partitions. Backfills always read NOAA; they do not read the hot path's `raw/` cache yet.
+missing partitions. Backfills always read NOAA.

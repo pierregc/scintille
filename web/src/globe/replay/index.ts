@@ -6,6 +6,7 @@ import type { FlyToOptions } from '../flight';
 import { frameStorm, grazeStorm } from './framing';
 import type { ReplayLocation } from './url';
 import { sameFrame } from './checkpoint';
+import { ReplayExpiredError, REPLAY_RETENTION_DAYS } from '../archive/storm';
 
 type Origin = 'user' | 'navigation';
 
@@ -61,9 +62,12 @@ export class StormReplay {
 				this.#emit(origin);
 			}
 			return revision === this.#revision;
-		} catch {
+		} catch (error) {
 			if (revision !== this.#revision) return false;
-			this.#state = { ...this.#state, loading: null, error: 'This storm replay could not be opened. Try another storm or return to live.' };
+			const message = error instanceof ReplayExpiredError
+				? `Replays are kept ${REPLAY_RETENTION_DAYS} days. Try a more recent storm or return to live.`
+				: 'This storm replay could not be opened. Try another storm or return to live.';
+			this.#state = { ...this.#state, loading: null, error: message };
 			return false;
 		}
 	}

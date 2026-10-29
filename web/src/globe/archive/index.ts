@@ -86,7 +86,7 @@ export class SceneData {
 	async openStorm(baseUrl: string, slug: string, speed = 1, fetchFn: typeof fetch = fetch): Promise<StormDetail | null> {
 		let detail: StormDetail | undefined;
 		const opened = await this.#open(async (signal) => {
-			const storm = await stormSource(baseUrl, slug, signal, fetchFn);
+			const storm = await stormSource(baseUrl, slug, signal, fetchFn, this.#clock.wallTime());
 			detail = storm.detail;
 			return storm.source;
 		}, speed);

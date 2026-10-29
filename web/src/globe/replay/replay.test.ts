@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
 import type { StormDetail } from '../../contract/types';
 import { SceneData } from '../archive';
+import { ReplayExpiredError } from '../archive/storm';
 import { SceneClock } from '../clock';
 import { kmToWorld, poseAt } from '../flight';
 import type { LiveFeed } from '../live';
@@ -90,6 +91,9 @@ describe('production replay entry', () => {
 		expect(await replay.open('unavailable')).toBe(false);
 		expect(replay.state.selected).toBe(detail);
 		expect(replay.state.error).toContain('could not be opened');
+		data.openStorm.mockRejectedValueOnce(new ReplayExpiredError());
+		expect(await replay.open('expired')).toBe(false);
+		expect(replay.state.error).toContain('kept 60 days');
 		let resolve!: (value: StormDetail) => void;
 		data.openStorm.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
 		const pending = replay.open('slow');

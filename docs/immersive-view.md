@@ -182,6 +182,7 @@ R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but n
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated | `SKELETON` |
 | Cloud top 12 km, cloud shell 10 km | Assumed | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
+| Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight, assumed scattering | `veil.ts` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Scene time

@@ -109,7 +109,7 @@ backfill, set `VPS_DEPLOY` to `false`, then back to `true` and rerun `images` on
 - **`smoke`**: starts the VPS stack locally (`infra/compose/compose.local.yaml`, which layers the
   production compose file on the local lakehouse) and checks, in order: the Dagster webserver answers,
   the daemon passes its liveness check, containers run as the non-root user `10001`, `ingest`
-  exposes metrics, raw GLM files reach the raw cache, the live manifest lists chunks with flashes,
+  exposes metrics, the live manifest lists chunks with flashes,
   and the cloud manifest lists frames. This job reads the real NOAA buckets, so an upstream outage
   can turn it red.
 - **`rollback`**: runs `infra/compose/test_deploy.sh`, which deploys a healthy release, then a broken
