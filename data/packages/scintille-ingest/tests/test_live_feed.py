@@ -17,6 +17,7 @@ from scintille_ingest.runtime.live_feed import (
     CHUNK_HEADERS,
     COVERAGE_HEADERS,
     MANIFEST_HEADERS,
+    PRODUCT_CADENCE,
     LiveFeed,
     StateDelays,
     source_state,
@@ -336,6 +337,13 @@ def test_source_states_age_out() -> None:
     assert source_state(T0 - timedelta(seconds=90), T0) == "live"
     assert source_state(T0 - timedelta(minutes=5), T0) == "delayed"
     assert source_state(T0 - timedelta(minutes=11), T0) == "offline"
+
+
+def test_slow_sources_age_out_after_their_cadence() -> None:
+    cadence = PRODUCT_CADENCE["mtg-li"]
+    assert source_state(T0 - timedelta(minutes=11), T0, cadence=cadence) == "live"
+    assert source_state(T0 - timedelta(minutes=15), T0, cadence=cadence) == "delayed"
+    assert source_state(T0 - timedelta(minutes=21), T0, cadence=cadence) == "offline"
 
 
 def test_state_delays_are_configurable() -> None:

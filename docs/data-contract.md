@@ -108,7 +108,8 @@ live/chunks/20260715T183030Z.bin.gz
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
 - A source's **state** comes from the time since its last product file: `live` up to
   `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
-  `offline`. Both delays are configurable ([hot path](hot-path.md#live-feed)).
+  `offline`. Both count from the next expected file, so MTG LI, which delivers every 10 minutes,
+  turns `delayed` after 12 minutes. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
