@@ -40,6 +40,8 @@ CHUNK_HEADERS = {
 HIGHLIGHTS_PATH = "storms/highlights.json"
 PURGE_PATH = "_pipeline/storms/purge.json"
 PUBLISHED_PATH = "_pipeline/storms/published.json"
+INDEX_STATE_PATH = "_pipeline/storms/index-pages.json"
+LATEST_INDEX_PATH = "storms/index/latest.json"
 log = logging.getLogger(__name__)
 
 
@@ -136,7 +138,8 @@ def replay_chunks(flashes: pl.DataFrame) -> tuple[StormReplay, dict[str, bytes]]
 
 
 def index_pages(storms: Sequence[StormSummary], now: datetime) -> list[StormIndexPage]:
-    ordered = sorted(storms, key=lambda storm: (storm.t_start, storm.storm_id), reverse=True)
+    """Pages counted from the oldest storm, so new storms only change the last pages."""
+    ordered = sorted(storms, key=lambda storm: (storm.t_start, storm.storm_id))
     count = max(1, (len(ordered) + INDEX_PAGE_SIZE - 1) // INDEX_PAGE_SIZE)
     last = max((storm.t_end for storm in ordered), default=None)
     return [
@@ -148,10 +151,14 @@ def index_pages(storms: Sequence[StormSummary], now: datetime) -> list[StormInde
             page_size=INDEX_PAGE_SIZE,
             total_storms=len(ordered),
             total_pages=count,
-            storms=ordered[page * INDEX_PAGE_SIZE : (page + 1) * INDEX_PAGE_SIZE],
+            storms=ordered[page * INDEX_PAGE_SIZE : (page + 1) * INDEX_PAGE_SIZE][::-1],
         )
         for page in range(count)
     ]
+
+
+def page_digest(page: StormIndexPage) -> str:
+    return hashlib.sha256(b"\n".join(s.model_dump_json().encode() for s in page.storms)).hexdigest()
 
 
 def _xml(root: ET.Element, now: datetime, last: datetime | None) -> bytes:
@@ -258,10 +265,17 @@ def publish_catalog(
                 )
         pending = set(json.loads(store.get(PURGE_PATH) or b"[]"))
         referenced = {ref.path for detail in details for ref in detail.replay.chunks}
+        # Chunks are content addressed: those of a stored detail are already published.
+        published_chunks = {
+            ref.path
+            for body in stored.values()
+            if body is not None
+            for ref in read_detail(body).replay.chunks
+        }
         list(
             pool.map(
                 lambda path: store.put(path, chunks[path], CHUNK_HEADERS),
-                referenced & chunks.keys(),
+                (referenced & chunks.keys()) - published_chunks,
             )
         )
         changed = []
@@ -284,8 +298,18 @@ def publish_catalog(
         list(pool.map(lambda path: store.put(path, bodies[path], JSON_HEADERS), changed))
     published.update(storm.slug for storm in all_storms)
     store.put(PUBLISHED_PATH, json.dumps(sorted(published)).encode(), JSON_HEADERS)
-    for page in index_pages(all_storms, now):
+    pages = index_pages(all_storms, now)
+    digests = [page_digest(page) for page in pages]
+    previous = json.loads(store.get(INDEX_STATE_PATH) or b"[]")
+    rewritten = [
+        page
+        for page, digest in zip(pages, digests, strict=True)
+        if page.page >= len(previous) or previous[page.page] != digest
+    ]
+    for page in rewritten:
         store.put(f"storms/index/{page.page}.json", page.model_dump_json().encode(), JSON_HEADERS)
+    store.put(LATEST_INDEX_PATH, pages[-1].model_dump_json().encode(), JSON_HEADERS)
+    store.put(INDEX_STATE_PATH, json.dumps(digests).encode(), JSON_HEADERS)
     picked = highlights(all_storms) if highlights is not None else None
     if picked is not None:
         store.put(HIGHLIGHTS_PATH, picked.model_dump_json().encode(), JSON_HEADERS)
@@ -304,6 +328,7 @@ def publish_catalog(
     store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
     return {
         "changed": len(changed),
+        "index_pages_written": len(rewritten),
         "storms": len(all_storms),
         "skipped_storms": len(skipped),
         "pending_purge_tags": len(pending),

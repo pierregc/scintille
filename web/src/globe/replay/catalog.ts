@@ -5,8 +5,10 @@ import { CONTRACT_MAJOR } from '../live/decode';
 export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, highlights: 12, highlightBytes: 64 * 1024, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export function parseCatalogPage(value: unknown, page: number): StormIndexPage {
-	if (!record(value) || Number(String(value.schema_version).split('.')[0]) !== CONTRACT_MAJOR || value.page !== page ||
+/** `page` null accepts `latest.json`, which must be the last page. */
+export function parseCatalogPage(value: unknown, page: number | null): StormIndexPage {
+	if (!record(value) || Number(String(value.schema_version).split('.')[0]) !== CONTRACT_MAJOR ||
+		(page === null ? value.page !== Number(value.total_pages) - 1 : value.page !== page) ||
 		value.page_size !== 50 || !Number.isSafeInteger(value.total_pages) || Number(value.total_pages) < 1 ||
 		!Number.isSafeInteger(value.total_storms) || Number(value.total_storms) < 0 ||
 		!Number.isFinite(Date.parse(String(value.published_at))) || !Array.isArray(value.storms) || value.storms.length > 50) {
@@ -118,23 +120,28 @@ export async function loadSuggestions(baseUrl: string, signal: AbortSignal, fetc
 	return cards.length ? { cards, publishedAt: Date.parse(value.published_at), partial: false } : loadRecent(root, signal, fetchFn);
 }
 
+/** `latest.json` first, then the pages before it: pages count from the oldest storm. */
 async function loadRecent(root: string, signal: AbortSignal, fetchFn: typeof fetch): Promise<StormSuggestions> {
 	const storms: StormSummary[] = [];
-	let pages = 1, publishedAt = 0, partial = false;
-	for (let page = 0; page < Math.min(pages, CATALOG_LIMITS.pages); page++) {
+	let partial = false;
+	const latest = await fetchPage(root, null, signal, fetchFn);
+	storms.push(...latest.storms);
+	for (let page = latest.page - 1; page >= Math.max(0, latest.page - CATALOG_LIMITS.pages + 1); page--) {
 		try {
-			const abort = AbortSignal.any([signal, AbortSignal.timeout(CATALOG_LIMITS.timeoutMs)]);
-			const response = await fetchFn(new URL(`storms/index/${page}.json`, root), { signal: abort });
-			if (!response.ok) throw new Error(`catalog HTTP ${response.status}`);
-			const metadata = parseCatalogPage(JSON.parse(new TextDecoder().decode(await boundedBody(response, CATALOG_LIMITS.pageBytes))), page);
-			if (page === 0) { pages = metadata.total_pages; publishedAt = Date.parse(metadata.published_at); }
-			storms.push(...metadata.storms);
+			storms.push(...(await fetchPage(root, page, signal, fetchFn)).storms);
 		} catch (error) {
-			if (signal.aborted || page === 0) throw error;
+			if (signal.aborted) throw error;
 			partial = true;
 			break;
 		}
 	}
 	signal.throwIfAborted();
-	return { cards: chooseStorms(storms).map((storm) => ({ storm, reason: null })), publishedAt, partial };
+	return { cards: chooseStorms(storms).map((storm) => ({ storm, reason: null })), publishedAt: Date.parse(latest.published_at), partial };
+}
+
+async function fetchPage(root: string, page: number | null, signal: AbortSignal, fetchFn: typeof fetch): Promise<StormIndexPage> {
+	const abort = AbortSignal.any([signal, AbortSignal.timeout(CATALOG_LIMITS.timeoutMs)]);
+	const response = await fetchFn(new URL(`storms/index/${page ?? 'latest'}.json`, root), { signal: abort });
+	if (!response.ok) throw new Error(`catalog HTTP ${response.status}`);
+	return parseCatalogPage(JSON.parse(new TextDecoder().decode(await boundedBody(response, CATALOG_LIMITS.pageBytes))), page);
 }

@@ -355,7 +355,7 @@
           }
         }
       },
-      "description": "storms/index/<page>.json: zero-based pages, recent first, read one page per request."
+      "description": "storms/index/<page>.json: zero-based pages counted from the oldest storm, each listed recent first; storms/index/latest.json repeats the last page and holds the current totals."
     },
     "StormHighlight": {
       "type": "object",

@@ -16,7 +16,7 @@ export function replayFixtures() {
 				const metadataPath = 'storms/2026-07-15-orlando.json';
 				/** @type {import('../src/contract/types').StormDetail} */
 				const metadata = JSON.parse(await readFile(join(root, metadataPath), 'utf8'));
-				for (const path of ['storms/index/0.json', 'storms/highlights.json', metadataPath, ...metadata.replay.chunks.map((chunk) => chunk.path)]) {
+				for (const path of ['storms/index/0.json', 'storms/index/latest.json', 'storms/highlights.json', metadataPath, ...metadata.replay.chunks.map((chunk) => chunk.path)]) {
 					const target = join(fileURLToPath(dir), '_replay-fixtures', path);
 					await mkdir(dirname(target), { recursive: true });
 					await copyFile(join(root, path), target);

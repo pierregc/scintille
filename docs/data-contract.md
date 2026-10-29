@@ -347,7 +347,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.6.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.6.1**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -355,7 +355,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.6.0`.
+Value: `2.6.1`.
 
 ### UtcTimestamp
 
@@ -746,7 +746,7 @@ Storm metrics and persisted classification.
 
 Defined in `data/contract/storm.schema.json`.
 
-storms/index/<page>.json: zero-based pages, recent first, read one page per request.
+storms/index/<page>.json: zero-based pages counted from the oldest storm, each listed recent first; storms/index/latest.json repeats the last page and holds the current totals.
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
@@ -913,9 +913,12 @@ for timestamps on every file without changing the live encoding. The replay sele
 is mandatory: `track-bounds` may include nearby unrelated flashes, so its count is separate from
 the storm's classified count. No cloud archive discovery is implied by this contract.
 
-`storms/index/<page>.json` uses zero-based pages of 50 summaries ordered by start descending, then
-storm id descending. Page zero exists for an empty catalog. The total page count is authoritative;
-old pages can remain after a catalog shrinks and must not be exposed beyond that count. Sitemap
+`storms/index/<page>.json` uses zero-based pages of 50 summaries counted from the oldest storm by
+start, then storm id; each page lists its storms recent first. A new storm only changes the last
+pages, so older pages are written once. `storms/index/latest.json` repeats the last page on every
+run: read it first, then step back by page number. Its totals are authoritative; an older page keeps
+the totals of its own publication. Page zero exists for an empty catalog. Old pages can remain after
+a catalog shrinks and must not be exposed beyond the total page count. Sitemap
 files include schema and freshness metadata in XML comments, preserve the sitemap protocol, and
 stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #75 detail file.
 

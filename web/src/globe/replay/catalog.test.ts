@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import fixture from '../../../../fixtures/storms/index/0.json';
+import fixture from '../../../../fixtures/storms/index/latest.json';
 import highlights from '../../../../fixtures/storms/highlights.json';
 import type { StormSummary } from '../../contract/types';
 import { CATALOG_LIMITS, chooseStorms, loadSuggestions, parseCatalogPage, parseHighlights, reason, stormFacts, stormWhen } from './catalog';
@@ -23,7 +23,7 @@ it('falls back to recent index pages when highlights are empty, and fails on oth
 		requests.push(String(input));
 		return String(input).endsWith('/highlights.json') ? Response.json({ ...highlights, highlights: [] }) : Response.json(fixture);
 	});
-	expect(requests).toEqual(['https://feed.test/storms/highlights.json', 'https://feed.test/storms/index/0.json']);
+	expect(requests).toEqual(['https://feed.test/storms/highlights.json', 'https://feed.test/storms/index/latest.json']);
 	expect(empty.cards[0].reason).toBeNull();
 	await expect(loadSuggestions('https://feed.test/', new AbortController().signal, async () => new Response('', { status: 503 }))).rejects.toThrow('HTTP 503');
 	await expect(loadSuggestions('https://feed.test/', new AbortController().signal, async () => new Response('x'.repeat(CATALOG_LIMITS.highlightBytes + 1)))).rejects.toThrow('too large');
@@ -53,21 +53,22 @@ it('reads the production catalog fixture without confusing storm metrics with re
 	const requests: string[] = [];
 	const fetchFn = indexOnly((input) => { requests.push(input); return Response.json(fixture); });
 	const result = await loadSuggestions('https://feed.test/data', new AbortController().signal, fetchFn);
-	expect(requests).toEqual(['https://feed.test/data/storms/index/0.json']);
+	expect(requests).toEqual(['https://feed.test/data/storms/index/latest.json']);
 	expect(result.cards[0].storm.flashes).toBe(fixture.storms[0].flashes);
 	expect(result.publishedAt).toBe(Date.parse(fixture.published_at));
 	expect(result.partial).toBe(false);
 });
 
-it('bounds page requests and tolerates duplicate slugs during publication', async () => {
-	let requests = 0;
+it('reads latest.json then steps back, bounding page requests and tolerating duplicate slugs', async () => {
+	const requests: string[] = [];
 	const fetchFn = indexOnly((input) => {
-		const page = Number(new URL(input).pathname.split('/').at(-1)?.replace('.json', ''));
-		requests++;
-		return Response.json({ ...fixture, page, total_pages: 1_000_000 });
+		const name = new URL(input).pathname.split('/').at(-1)?.replace('.json', '') ?? '';
+		requests.push(name);
+		return Response.json({ ...fixture, page: name === 'latest' ? 999_999 : Number(name), total_pages: 1_000_000 });
 	});
 	const result = await loadSuggestions('https://feed.test/', new AbortController().signal, fetchFn);
-	expect(requests).toBe(CATALOG_LIMITS.pages);
+	expect(requests).toEqual(['latest', '999998', '999997']);
+	expect(requests).toHaveLength(CATALOG_LIMITS.pages);
 	expect(result.cards).toHaveLength(1);
 });
 
@@ -76,7 +77,7 @@ it('shows no invented storms for empty catalogs and keeps valid first-page resul
 	expect(empty.cards).toEqual([]);
 	let requests = 0;
 	const partial = await loadSuggestions('https://feed.test/', new AbortController().signal, indexOnly(() => {
-		return ++requests === 1 ? Response.json({ ...fixture, total_pages: 3 }) : new Response('offline', { status: 503 });
+		return ++requests === 1 ? Response.json({ ...fixture, page: 2, total_pages: 3 }) : new Response('offline', { status: 503 });
 	}));
 	expect(partial.partial).toBe(true);
 	expect(partial.cards).toHaveLength(1);
@@ -88,6 +89,8 @@ describe('bounded, validated discovery', () => {
 			{ ...fixture, storms: [{ ...fixture.storms[0], level: 99 }] },
 			{ ...fixture, storms: [{ ...fixture.storms[0], flashes: '3' }] },
 		]) expect(() => parseCatalogPage(value, 0)).toThrow('invalid');
+		expect(() => parseCatalogPage({ ...fixture, total_pages: 2 }, null)).toThrow('invalid');
+		expect(parseCatalogPage(fixture, null).page).toBe(0);
 	});
 	it('rejects oversized responses and first-page failures', async () => {
 		await expect(loadSuggestions('https://feed.test/', new AbortController().signal, indexOnly(() => new Response('x'.repeat(CATALOG_LIMITS.pageBytes + 1))))).rejects.toThrow('too large');
