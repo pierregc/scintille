@@ -6,7 +6,6 @@ import '@fontsource/ibm-plex-mono/latin-300.css';
 import DebugPanel from './DebugPanel.astro';
 import Timeline from './Timeline.astro';
 import StormSuggestions from './StormSuggestions.astro';
-import Version from './Version.astro';
 ---
 
 <main class="hud" data-hud data-mode="live">
@@ -19,50 +18,6 @@ import Version from './Version.astro';
 
 	<div class="corner">
 		<a class="cap" href="/methodology">Methodology</a>
-		<details class="info" data-info>
-			<summary class="cap">About this globe</summary>
-			<div class="sheet">
-				<p class="lead">
-					Lightning across the planet, in near real time. Satellites watching the Earth from orbit record the
-					light of each flash they detect, day and night, and every one of them lands here shortly after, on a
-					globe lit by the Sun as it is right now.
-				</p>
-
-				<h2>What the dots mean</h2>
-				<p>
-					One dot is one lightning flash, detected from orbit by its optical pulse. That includes flashes
-					inside and between clouds, not only those that reach the ground.
-				</p>
-				<p>
-					Brightness follows the optical energy the satellite measured for that flash. The instruments do not
-					measure exactly the same quantity, so their values are brought to a common scale.
-				</p>
-				<p>
-					Coverage has gaps. The satellites see only part of the planet, and detection weakens near the edge of
-					their view. Where there is no data, the globe says so: an empty region is not a region without
-					lightning.
-				</p>
-
-				<h2>Sources</h2>
-				<ul>
-					<li>
-						<a href="https://www.goes-r.gov/spacesegment/glm.html">NOAA GOES Geostationary Lightning Mapper</a> (GLM), on GOES-East and GOES-West, over the Americas and the surrounding oceans.
-					</li>
-					<li>
-						<a href="https://www.eumetsat.int/meteosat-third-generation">EUMETSAT MTG Lightning Imager</a> (LI), over Europe, Africa and most of the Atlantic Ocean.
-					</li>
-				</ul>
-				<p class="attribution">
-					GLM data courtesy of NOAA. Contains modified EUMETSAT data. Earth imagery: NASA Earth Observatory.
-					<span data-cloud-credit>Clouds: NOAA GOES-East and GOES-West, JMA Himawari-9 via NOAA, contains modified EUMETSAT Meteosat data 2026; gaps from NOAA NESDIS GMGSI.</span>
-				</p>
-
-				<nav aria-label="More about Scintille">
-					<a href="/methodology">Methodology and sources</a>
-				</nav>
-				<Version />
-			</div>
-		</details>
 	</div>
 
 	<DebugPanel />
@@ -443,88 +398,8 @@ import Version from './Version.astro';
 		text-decoration: none;
 		cursor: pointer;
 	}
-	.corner .cap:hover,
-	.info[open] > summary {
+	.corner .cap:hover {
 		color: var(--soft);
-	}
-	.info {
-		position: relative;
-	}
-	.info > summary {
-		list-style: none;
-	}
-	.info > summary::-webkit-details-marker {
-		display: none;
-	}
-	.info[open]::before {
-		position: fixed;
-		inset: 0 0 0 auto;
-		z-index: -1;
-		width: min(44rem, 100vw);
-		pointer-events: none;
-		content: '';
-		background: linear-gradient(270deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, transparent);
-	}
-	.hud:has(.info[open]) .layers,
-	.hud:has(.info[open]) :global(.debug) {
-		visibility: hidden;
-	}
-	.sheet {
-		position: absolute;
-		right: 0;
-		bottom: calc(100% + 20px);
-		box-sizing: border-box;
-		width: min(25rem, calc(100vw - 2 * var(--gut)));
-		max-height: calc(100svh - 2 * var(--gut) - 220px);
-		padding-right: 10px;
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		color: var(--soft);
-		font: 300 14px/1.75 var(--sans);
-		scrollbar-color: var(--hair) transparent;
-		scrollbar-width: thin;
-	}
-	.sheet .lead {
-		color: var(--ink);
-		font: 200 18px/1.55 var(--sans);
-	}
-	.sheet h2 {
-		margin: 26px 0 8px;
-		color: var(--dim);
-		font: 300 10px/1 var(--mono);
-		letter-spacing: 0.24em;
-		text-transform: uppercase;
-	}
-	.sheet p,
-	.sheet ul {
-		margin: 0 0 12px;
-	}
-	.sheet ul {
-		padding-left: 14px;
-	}
-	.sheet a {
-		color: var(--ink);
-		text-decoration-color: var(--hair);
-		text-underline-offset: 4px;
-	}
-	.sheet .attribution {
-		margin-top: 18px;
-		color: var(--dim);
-		font: 300 10.5px/1.6 var(--mono);
-	}
-	.sheet nav {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 20px;
-		margin-top: 20px;
-	}
-	.sheet nav a {
-		padding: 6px 0;
-		color: var(--soft);
-		font: 300 10px/1 var(--mono);
-		letter-spacing: 0.2em;
-		text-decoration: none;
-		text-transform: uppercase;
 	}
 
 	/* No WebGL: the text goes back in flow, above the fallback image. */
@@ -538,15 +413,8 @@ import Version from './Version.astro';
 		display: grid;
 		justify-items: start;
 	}
-	:global(body:has([data-globe-fallback]:not([hidden]))) .frame,
-	:global(body:has([data-globe-fallback]:not([hidden]))) .info[open]::before {
+	:global(body:has([data-globe-fallback]:not([hidden]))) .frame {
 		display: none;
-	}
-	:global(body:has([data-globe-fallback]:not([hidden]))) .sheet {
-		position: static;
-		width: auto;
-		max-height: none;
-		margin-top: 20px;
 	}
 
 	@media (max-width: 640px) {
@@ -596,16 +464,6 @@ import Version from './Version.astro';
 		.hud[data-mode='replay'] .corner {
 			bottom: calc(var(--gut) + 96px);
 		}
-		.info[open]::before {
-			inset: auto 0 0;
-			width: auto;
-			height: 80svh;
-			background: linear-gradient(0deg, rgb(0 0 0 / 0.86), rgb(0 0 0 / 0.7) 70%, transparent);
-		}
-		.sheet {
-			width: calc(100vw - 2 * var(--gut));
-			max-height: 58svh;
-		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.pulse {
@@ -621,7 +479,7 @@ import Version from './Version.astro';
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge } from '../globe/live/freshness';
@@ -638,10 +496,8 @@ import Version from './Version.astro';
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
 		const sound = $<HTMLButtonElement>('[data-sound]');
-		const info = $<HTMLDetailsElement>('[data-info]');
 		const sources = $('[data-sources]');
 		const cloudTime = $('[data-cloud-time]');
-		const cloudCredit = $('[data-cloud-credit]');
 		const staleBanner = $('[data-stale]');
 		const replayStatus = $('[data-replay-status]');
 		const shareTools = $('[data-share-tools]');
@@ -731,8 +587,6 @@ import Version from './Version.astro';
 				cloudTime.hidden = !caption;
 				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
 			}
-			const credit = app?.cloudStatus().attribution?.trim().replace(/\.+$/, '');
-			if (cloudCredit && credit && cloudCredit.textContent !== `${credit}.`) cloudCredit.textContent = `${credit}.`;
 			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
 			const stormView = app?.lightning.stormView ?? false;
 			if (afterglow) afterglow.title = stormView ? 'Storm views show each flash alone' : '';
@@ -784,9 +638,6 @@ import Version from './Version.astro';
 			app = undefined;
 			if (layers) layers.hidden = true;
 		});
-		window.addEventListener(GLOBE_FALLBACK, () => {
-			if (info) info.open = true;
-		});
 		$('[data-live]')?.addEventListener('click', () => {
 			void app?.replay.live();
 			tick();
@@ -827,11 +678,6 @@ import Version from './Version.astro';
 		});
 		document.addEventListener('keydown', (event) => {
 			if (event.key !== 'Escape') return;
-			if (info?.open) {
-				info.open = false;
-				info.querySelector('summary')?.focus();
-				return;
-			}
 			if (!app || document.querySelector('[data-storm-suggestions][open]')) return;
 			if (app.focus.following) app.focus.setFollow(false);
 			else if (app.focus.live) app.focus.globe();
