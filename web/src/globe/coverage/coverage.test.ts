@@ -34,23 +34,8 @@ class OutageFeed extends FakeFeed {
 class FakeCanvas {
 	width = 0;
 	height = 0;
-	readonly fills: string[] = [];
 	getContext() {
-		const fills = this.fills;
-		return {
-			globalCompositeOperation: 'source-over',
-			fillStyle: '',
-			beginPath() {},
-			moveTo() {},
-			lineTo() {},
-			closePath() {},
-			clearRect() {
-				fills.length = 0;
-			},
-			fill() {
-				fills.push(this.globalCompositeOperation);
-			},
-		};
+		return { fillStyle: '', beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, clearRect() {}, fill() {} };
 	}
 }
 
@@ -61,39 +46,28 @@ async function outageFeed(): Promise<OutageFeed> {
 }
 
 describe('createCoverage', () => {
-	it('greys out a source within one poll of its outage, and back', async () => {
+	it('marks only the no coverage area, whatever the source states', async () => {
 		const feed = await outageFeed();
 		await feed.publish(1_784_138_400, 30, 2);
-		const canvas = new FakeCanvas();
 		const coverage = createCoverage({
 			baseUrl: 'https://data.example/',
 			fetch: feed.serve,
-			canvas: canvas as unknown as HTMLCanvasElement,
+			canvas: new FakeCanvas() as unknown as HTMLCanvasElement,
 		});
+		feed.west = 'offline';
 		const client = new LiveClient({
 			baseUrl: 'https://data.example/',
 			ring: new FlashRing(100),
 			fetch: feed.serve,
 			visibility: new FakeVisibility(),
 			pollIntervalMs: 1e9,
-			onManifest: (manifest) => coverage.setManifest(manifest),
+			onManifest: () => coverage.retry(),
 		});
 		client.start();
 		await client.idle();
 		await coverage.ready();
-		expect(coverage.at(20, -160)).toBeNull();
-		expect(coverage.at(30, 100)).toEqual({ kind: 'no-coverage' });
-		const version = coverage.texture.version;
-
-		feed.west = 'offline';
-		await client.poll();
-		expect(coverage.at(20, -160)).toEqual({ kind: 'down', sources: ['glm-west'] });
-		expect(canvas.fills.filter((mode) => mode === 'source-over')).toHaveLength(3);
-		expect(coverage.texture.version).toBeGreaterThan(version);
-
-		feed.west = 'live';
-		await client.poll();
-		expect(coverage.at(20, -160)).toBeNull();
+		expect(coverage.at(20, -160)).toBe(false);
+		expect(coverage.at(30, 100)).toBe(true);
 		client.stop();
 	});
 
@@ -109,11 +83,11 @@ describe('createCoverage', () => {
 		});
 		await coverage.ready();
 		expect(errors).toHaveLength(1);
-		expect(coverage.at(30, 100)).toBeNull();
+		expect(coverage.at(30, 100)).toBe(false);
 
 		feed.failing = false;
-		coverage.setManifest(feed.manifest());
+		coverage.retry();
 		await coverage.ready();
-		expect(coverage.at(30, 100)).toEqual({ kind: 'no-coverage' });
+		expect(coverage.at(30, 100)).toBe(true);
 	});
 });

@@ -1,10 +1,6 @@
 import { type Camera, Ray, Raycaster, Sphere, Vector2, Vector3 } from 'three';
-import { SOURCE_LABELS } from '../live/freshness';
-import type { Gap } from './map';
 
 const RAD = 180 / Math.PI;
-/** Hover grace before the label hides, so the pointer can reach its link. */
-const HIDE_DELAY_MS = 300;
 const TAP_SLOP_PX = 8;
 const OFFSET_PX = 14;
 
@@ -18,37 +14,26 @@ export function surfacePoint(ndc: Vector2, camera: Camera, radius: number): { la
 	return { lat: Math.asin(Math.max(-1, Math.min(1, hit.y))) * RAD, lon: Math.atan2(-hit.z, hit.x) * RAD };
 }
 
-/** Second line of the label. */
-export function gapDetail(gap: Gap): string {
-	if (gap.kind === 'no-coverage') return 'Outside the view of the satellites we use';
-	const names = gap.sources.map((s) => SOURCE_LABELS[s] ?? s).join(', ');
-	return `${names} ${gap.sources.length > 1 ? 'are' : 'is'} not delivering data`;
-}
-
 export interface CoverageLabelOptions {
 	canvas: HTMLCanvasElement;
 	label: HTMLElement;
 	camera: Camera;
 	radius: number;
-	at(lat: number, lon: number): Gap | null;
+	at(lat: number, lon: number): boolean;
 }
 
 /** Shows the coverage label on hover (mouse) or tap (touch) over a gap; returns the detach function. */
 export function attachCoverageLabel({ canvas, label, camera, radius, at }: CoverageLabelOptions): () => void {
-	const detail = label.querySelector<HTMLElement>('[data-coverage-detail]');
-	let hideTimer: ReturnType<typeof setTimeout> | undefined;
 	let down: { x: number; y: number } | undefined;
 
 	const gapUnder = (x: number, y: number) => {
 		const rect = canvas.getBoundingClientRect();
 		const ndc = new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
 		const point = surfacePoint(ndc, camera, radius);
-		return point ? at(point.lat, point.lon) : null;
+		return point ? at(point.lat, point.lon) : false;
 	};
 
-	const show = (gap: Gap, x: number, y: number) => {
-		clearTimeout(hideTimer);
-		if (detail) detail.textContent = gapDetail(gap);
+	const show = (x: number, y: number) => {
 		label.hidden = false;
 		const width = label.offsetWidth;
 		const height = label.offsetHeight;
@@ -57,16 +42,10 @@ export function attachCoverageLabel({ canvas, label, camera, radius, at }: Cover
 		label.style.transform = `translate(${Math.max(8, left)}px, ${Math.max(8, top)}px)`;
 	};
 
-	const hideSoon = () => {
-		clearTimeout(hideTimer);
-		if (!label.hidden) hideTimer = setTimeout(() => (label.hidden = true), HIDE_DELAY_MS);
-	};
-
 	const onMove = (event: PointerEvent) => {
 		if (event.pointerType === 'touch' || event.buttons !== 0) return;
-		const gap = gapUnder(event.clientX, event.clientY);
-		if (gap) show(gap, event.clientX, event.clientY);
-		else hideSoon();
+		if (gapUnder(event.clientX, event.clientY)) show(event.clientX, event.clientY);
+		else label.hidden = true;
 	};
 	const onDown = (event: PointerEvent) => {
 		down = { x: event.clientX, y: event.clientY };
@@ -77,29 +56,22 @@ export function attachCoverageLabel({ canvas, label, camera, radius, at }: Cover
 		down = undefined;
 		if (event.pointerType !== 'touch' || !start) return;
 		if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP_PX) return;
-		const gap = gapUnder(event.clientX, event.clientY);
-		if (gap) show(gap, event.clientX, event.clientY);
+		if (gapUnder(event.clientX, event.clientY)) show(event.clientX, event.clientY);
 	};
-	const keep = () => clearTimeout(hideTimer);
 	// A touch pointer leaves right after every tap.
 	const onLeave = (event: PointerEvent) => {
-		if (event.pointerType !== 'touch') hideSoon();
+		if (event.pointerType !== 'touch') label.hidden = true;
 	};
 
 	canvas.addEventListener('pointermove', onMove);
 	canvas.addEventListener('pointerdown', onDown);
 	canvas.addEventListener('pointerup', onUp);
 	canvas.addEventListener('pointerleave', onLeave);
-	label.addEventListener('pointerenter', keep);
-	label.addEventListener('pointerleave', onLeave);
 	return () => {
-		clearTimeout(hideTimer);
 		label.hidden = true;
 		canvas.removeEventListener('pointermove', onMove);
 		canvas.removeEventListener('pointerdown', onDown);
 		canvas.removeEventListener('pointerup', onUp);
 		canvas.removeEventListener('pointerleave', onLeave);
-		label.removeEventListener('pointerenter', keep);
-		label.removeEventListener('pointerleave', onLeave);
 	};
 }

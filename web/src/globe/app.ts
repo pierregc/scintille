@@ -187,11 +187,11 @@ export function createGlobeApp(
 		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
 		: undefined;
 
-	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: (manifest) => coverage.setManifest(manifest) });
+	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: () => coverage.retry() });
 	const data = new SceneData(clock, live, (ring) => startLiveFeed({
 		ring,
 		now: () => clock.wallTime(),
-		onManifest: (manifest) => coverage.setManifest(manifest),
+		onManifest: () => coverage.retry(),
 	}));
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
