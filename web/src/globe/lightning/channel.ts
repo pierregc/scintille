@@ -13,9 +13,6 @@ export const CHANNEL = {
 	cloudBranchTau: 0.12,
 	/** Share of an in-cloud path lit at the first pulse; the leaders then cover the rest. */
 	cloudStart: 0.2,
-	/** In-cloud channels blur over this much cloud, km, and keep this share of their light. */
-	veilKm: 0.6,
-	veilLevel: 0.45,
 	/** Share of a channel's light left over sunlit clouds, which outshine a thin channel seen from orbit. */
 	dayLevel: 0.3,
 	/** In-cloud light drifts along the channel over the flash, this many observed radii either side of the position. */

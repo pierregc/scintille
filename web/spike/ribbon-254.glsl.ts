@@ -94,8 +94,8 @@ void main() {
 		light *= ground ? haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld)) : 0.0;
 	}
 	// In-cloud channels are seen through the cloud: wider, softer and dimmer.
-	float width = ground ? widthPx : max(widthPx, ${f(CHANNEL.veilKm)} / kmPerPx);
-	if (!ground) light *= ${f(CHANNEL.veilLevel)} * sqrt(widthPx / width);
+	float width = ground ? widthPx : max(widthPx, 0.6 / kmPerPx);
+	if (!ground) light *= 0.45 * sqrt(widthPx / width);
 	if (light < 0.002) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
