@@ -40,6 +40,7 @@ default for `postgresql://`, every event write fails on `NOTIFY` and runs never 
 | Asset | `gold/storm_names` | Place name and slug of each new storm, from embedded open data ([below](#storm-names)) |
 | Asset check | `unique_slugs` | Blocking: one name per storm, no slug used twice |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
+| Schedule | `silver_retention_schedule` | 03:40 UTC: drops silver days older than 21 days; gold and the catalog stay |
 | Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |
 | Asset check | `lake_orphan_inventory` | Weekly (Sunday 03:00 UTC), warn: unreferenced files per table, never deleted ([lakehouse](lakehouse.md#maintenance)) |
 | Sensor | `silver_changed` | Rebuilds the open UTC day when `silver.flashes` gets a new snapshot (`daily` has `end_offset=1`) |

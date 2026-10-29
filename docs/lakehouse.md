@@ -53,6 +53,7 @@ expiration; we only configure and watch them. Values live in `MaintenancePolicy`
 | Snapshot expiration | 3 days | `SCINTILLE_SNAPSHOT_RETENTION_DAYS` |
 | Snapshots always kept | 5 | `SCINTILLE_SNAPSHOTS_RETAINED_MIN` |
 | Orphan inventory minimum file age | 7 days, must exceed snapshot expiration | `SCINTILLE_ORPHAN_MIN_AGE_DAYS` |
+| Silver retention, whole days dropped by `silver_retention` at 03:40 UTC | 21 days, at least 7 | `SCINTILLE_SILVER_RETENTION_DAYS` |
 
 The snapshot defaults are the ADR 0006 values; the retention decision (#41) may change
 them. A read-only `scintille-lake retention-report` command and the

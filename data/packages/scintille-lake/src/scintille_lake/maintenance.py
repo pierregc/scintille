@@ -1,9 +1,9 @@
-"""Table maintenance: retention policy and orphan file inventory (never deletes)."""
+"""Table maintenance: retention policy, silver expiry and orphan file inventory."""
 
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlparse
 
 from pyiceberg.manifest import ManifestFile
@@ -21,6 +21,7 @@ class MaintenancePolicy:
     snapshot_retention_days: int = 3
     snapshots_retained_min: int = 5
     orphan_min_age_days: int = 7
+    silver_retention_days: int = 21
 
     def __post_init__(self) -> None:
         low, high = TARGET_RANGE_MB
@@ -28,6 +29,9 @@ class MaintenancePolicy:
             raise ValueError(f"compaction target must be within {low} to {high} MB")
         if self.snapshot_retention_days < 1 or self.snapshots_retained_min < 1:
             raise ValueError("snapshot retention must keep at least one day and one snapshot")
+        # storm_cells reads 3 days of silver; keep room for catalog catch-ups.
+        if self.silver_retention_days < 7:
+            raise ValueError("silver retention must keep at least 7 days")
         # An orphan candidate must be older than any snapshot we keep.
         if self.orphan_min_age_days <= self.snapshot_retention_days:
             raise ValueError("orphan minimum age must exceed snapshot retention")
@@ -51,6 +55,17 @@ class MaintenancePolicy:
             f" --older-than-days {self.snapshot_retention_days}"
             f" --retain-last {self.snapshots_retained_min}",
         ]
+
+
+def expire_silver(table: Table, today: date, days: int) -> date:
+    """Drops whole days older than `days`; storage is freed once their snapshots expire."""
+    cutoff = today - timedelta(days=days)
+    start = datetime(cutoff.year, cutoff.month, cutoff.day, tzinfo=UTC)
+    table.delete(
+        f"event_time < '{start.isoformat()}'",
+        snapshot_properties={"scintille.retention": cutoff.isoformat()},
+    )
+    return cutoff
 
 
 def object_key(uri: str) -> str:
