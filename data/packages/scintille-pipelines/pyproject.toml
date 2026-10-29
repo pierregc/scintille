@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 scintille-active-storms = "scintille_pipelines.active_service:main"
+scintille-storm-search = "scintille_pipelines.storm_search:main"
 
 [tool.uv.sources]
 scintille-contract = { workspace = true }

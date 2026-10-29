@@ -91,6 +91,21 @@ describe('LiveClient', () => {
 		live.stop();
 	});
 
+	it('reports every chunk it loads, once, with its manifest entry', async () => {
+		await feed.publish(T0, 30, 2);
+		const seen: [number, string][] = [];
+		const live = client({ onChunk: (chunk, ref) => seen.push([chunk.count, ref.start]) });
+		live.start();
+		await settle();
+		await feed.publish(T0 + 30, 20, 3);
+		await tick(POLL);
+		expect(seen).toEqual([
+			[2, new Date(T0 * 1000).toISOString()],
+			[3, new Date((T0 + 30) * 1000).toISOString()],
+		]);
+		live.stop();
+	});
+
 	it('resolves chunk paths against the manifest URL', async () => {
 		await feed.publish(T0, 30, 1);
 		const live = client({ baseUrl: 'https://data.example' });

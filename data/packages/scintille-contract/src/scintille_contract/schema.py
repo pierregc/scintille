@@ -18,6 +18,7 @@ SCHEMA_FILES = (
     "coverage.schema.json",
     "storm.schema.json",
     "active.schema.json",
+    "search.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 

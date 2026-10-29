@@ -1,6 +1,7 @@
 import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
+import { FlashDays } from './archive/days';
 import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
@@ -22,7 +23,7 @@ import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomStrength } from './lightning/zoom';
-import { type FlashRing, type LiveClient, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
+import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
 import { BLOOM, createPostProcessing, type PostProcessing } from './post';
@@ -38,7 +39,7 @@ import { StormTrack } from './replay/track';
 import { ReplayNavigation } from './replay/navigation';
 import { readFrameCheckpoint, type FrameCheckpoint } from './replay/checkpoint';
 import { frameStorm } from './replay/framing';
-import { createThunder, type Thunder } from './thunder';
+import { createSound, type Sound } from './sound';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 import { CLOUD_ARCHIVE_RULES } from '../contract/cloud-archive';
@@ -65,7 +66,7 @@ export interface GlobeApp {
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
-	readonly thunder: Thunder;
+	readonly sound: Sound;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
@@ -75,8 +76,10 @@ export interface GlobeApp {
 	hasData(time: number): boolean;
 	/** Earliest loaded observation window (UTC ms), or null. */
 	dataStart(): number | null;
-	/** Internals shown by the debug panel. */
-	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; quality(): string };
+	/** UTC midnight of the first day travel in time can show, once the archive index is known. */
+	archiveStart(): number | null;
+	/** Internals for tools and the HUD flash counter. */
+	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
 	/** Surface detail prototypes (#125), in development and PR previews only. */
@@ -216,12 +219,18 @@ export function createGlobeApp(
 		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
 		: undefined;
 
-	const live = startLiveFeed({ now: () => clock.wallTime(), onManifest: () => coverage.retry() });
-	const data = new SceneData(clock, live, (ring) => startLiveFeed({
-		ring,
+	const late = new LateFlashes(LIVE_DELAYS, clock.wallTime());
+	const feedOptions: Partial<LiveClientOptions> = {
 		now: () => clock.wallTime(),
 		onManifest: () => coverage.retry(),
-	}));
+		onChunk: (chunk, ref) => late.add(chunk, Date.parse(ref.start), clock.wallTime()),
+	};
+	const live = startLiveFeed(feedOptions);
+	const flashDays = new FlashDays({ baseUrl: liveBaseUrl(), now: () => clock.wallTime() });
+	const data = new SceneData(clock, live, (ring) => {
+		late.since = clock.wallTime();
+		return startLiveFeed({ ...feedOptions, ring });
+	}, renderParams ? undefined : flashDays);
 	const replay = new StormReplay(data, clock, controls, replayBase, () => ({ fov: camera.fov, aspect: camera.aspect }));
 	const track = new StormTrack(RADIUS);
 	scene.add(track.group);
@@ -252,7 +261,7 @@ export function createGlobeApp(
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
-	const thunder = createThunder(live.ring, camera, RADIUS);
+	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
 		: undefined;
@@ -358,7 +367,7 @@ export function createGlobeApp(
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
-		thunder.update(now, delays);
+		sound.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {
@@ -427,17 +436,19 @@ export function createGlobeApp(
 		clouds,
 		cloudFeed,
 		cloudStatus: () => cloudPlayback.status,
-		thunder,
+		sound,
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),
+		archiveStart: () => flashDays.index()?.firstDay ?? null,
 		debug: {
 			ring: live.ring,
 			get client() { return data.liveClient; },
 			delays: playbackDelays,
+			late,
 			quality: () => tier,
 		},
 		render,
@@ -478,7 +489,7 @@ export function createGlobeApp(
 			stars.dispose();
 			post?.dispose();
 			lightning.dispose();
-			thunder.dispose();
+			sound.dispose();
 			renderer.dispose();
 		},
 	};

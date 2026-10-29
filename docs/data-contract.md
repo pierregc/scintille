@@ -86,7 +86,7 @@ behind the Americas. Lower latency needs another channel, such as EUMETCast (#20
 ## Live feed on R2
 
 ```
-live/manifest.json                    Cache-Control: max-age=10
+live/manifest.json                    Cache-Control: max-age=2
 live/metrics.json                     Cache-Control: max-age=30
 live/coverage.geojson                 Cache-Control: max-age=3600
 live/chunks/20260715T183000Z.bin.gz   Cache-Control: public, max-age=31536000, immutable
@@ -94,7 +94,8 @@ live/chunks/20260715T183030Z.bin.gz
 ...
 ```
 
-- A **chunk** holds the flashes **ingested** during a window `[start, end)`, 30 s today.
+- A **chunk** holds the flashes **ingested** during a window `[start, end)`, one per GLM slot
+  today, about 20 s ([ADR 0026](adr/0026-live-latency.md)).
   Chunks are keyed by ingest time, not event time, so a chunk is complete when its window ends and
   never changes afterwards: late data lands in a later chunk instead of rewriting an old one. Event
   times inside a chunk are therefore usually 20 to 60 s before its `start` (`event_offset_ms < 0`).
@@ -405,7 +406,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.8.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.9.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -413,7 +414,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.8.0`.
+Value: `2.9.0`.
 
 ### UtcTimestamp
 
@@ -995,6 +996,91 @@ storms/active.json: storms active now and their current cells, rewritten after e
 | `cells` | array of [ActiveCell](#activecell) | yes |  | Active storms, one current cell each, strongest first. |
 | `ended` | array of [EndedStorm](#endedstorm) | yes |  | Storms that left cells during the last two hours, newest first. |
 
+### NearbyQuery
+
+Defined in `data/contract/search.schema.json`.
+
+The query as answered: the point rounded to 0.1°, the window ending at the request time.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `hours` | integer | yes | minimum `1`, maximum `168` |  |
+| `km` | integer | yes | minimum `10`, maximum `3000` |  |
+| `limit` | integer | yes | minimum `1`, maximum `8` |  |
+| `window_start` | [UtcTimestamp](#utctimestamp) | yes |  |  |
+| `window_end` | [UtcTimestamp](#utctimestamp) | yes |  | The request time. |
+
+### SearchCatalog
+
+Defined in `data/contract/search.schema.json`.
+
+What the search index holds: published storms of min_level and above, kept retention_days.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `min_level` | integer | yes | minimum `1` |  |
+| `retention_days` | integer | yes | minimum `1` |  |
+| `published_at` | [UtcTimestamp](#utctimestamp) | yes |  | Last sync of the index. |
+| `last_observation_time` | [UtcTimestamp](#utctimestamp) or null | yes |  |  |
+| `stale` | boolean | yes |  | The last observation is more than 3 hours old. |
+| `complete` | boolean | yes |  | False while some published storms wait to be indexed. |
+
+### NearbyStorm
+
+Defined in `data/contract/search.schema.json`.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `distance_km` | number | yes | minimum `0` |  |
+| `score` | number | yes | minimum `0` | ADR 0009 score: square root of flashes times peak rate. |
+
+### SearchError
+
+Defined in `data/contract/search.schema.json`.
+
+Refused or failed search: invalid (400), too-broad (422, more candidates than one answer reads), unavailable (503).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  |  |
+| `errors` | array of string | yes |  |  |
+
+### VisitorLocation
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/location: the city of the visitor's IP address according to Cloudflare, rounded to 0.1°. Never stored or cached; no time zone, postal code or address.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `status` | None | yes |  | unavailable when the city or its coordinates are unknown; a country alone is not a location. |
+| `source` | `"ip"` | yes |  |  |
+| `lat` | number or null | yes |  |  |
+| `lon` | number or null | yes |  |  |
+| `city` | string or null | yes |  |  |
+| `region` | string or null | yes |  |  |
+| `country_code` | string or null | yes |  |  |
+
+### StormsNearby
+
+Defined in `data/contract/search.schema.json`.
+
+GET /api/storms/nearby (ADR 0027): published storms whose observed interval meets the window and whose path comes within the radius, best first. Depends on the URL only.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `query` | [NearbyQuery](#nearbyquery) | yes |  |  |
+| `catalog` | [SearchCatalog](#searchcatalog) | yes |  |  |
+| `distance` | `"path-minus-radius"` | yes |  | Great-circle distance to the arcs joining the storm's hourly centroids, minus the radius of a disc with its largest hourly area, at least 0, rounded to 10 km. |
+| `total` | integer | yes | minimum `0` | Matching storms before the limit. |
+| `storms` | array of [NearbyStorm](#nearbystorm) | yes |  |  |
+
 <!-- END GENERATED REFERENCE -->
 
 ## Storm catalog on R2
@@ -1064,11 +1150,11 @@ injected archive source for fixtures or future time-range queries.
 
 Loading keeps the current observations until the new extract is complete. Replay stops live
 polling, retains the immutable extract on the CPU and moves a bounded window through the same
-ring used by lightning and thunder. Seeking updates that window on the next animation frame.
+ring used by lightning and sound. Seeking updates that window on the next animation frame.
 `data.live()` cancels pending loads, clears the replay window and starts a fresh live client;
 it downloads the current manifest's chunks again. Disposal releases the archive and subscriptions.
 CPU memory scales with the extract's flash count; the renderer ring and GPU capacity stay fixed.
-Sliding the same extract preserves logical flash indices and pending thunder; dataset replacement
+Sliding the same extract preserves logical flash indices and pending crackles; dataset replacement
 invalidates those consumers.
 Camera entry, historical cloud restoration and replay controls are handled by the subsequent
 replay tickets.
@@ -1081,10 +1167,10 @@ builds ignore this query. In dev, run `python3 fixtures/serve.py` alongside `pnp
 Preview builds bundle the metadata and gzip chunk under `/_replay-fixtures/`, without requiring
 a fixture upload to R2. These assets are omitted from production builds.
 
-Open that URL, choose the 5 min afterglow, enable thunder from the HUD, and observe the three
+Open that URL, choose the 5 min afterglow, enable sound from the HUD, and observe the three
 fixture flashes. Click Live,
-check that the old flashes and pending thunder disappear, then click Time travel to reload the
+check that the old flashes and pending crackles disappear, then click Time travel to reload the
 fixture in the same scene. Repeat these two controls without reloading the page.
-Use the debug panel to inspect ring counts and the browser's graphics/audio tools to check stable
+Use the browser's graphics/audio tools to check stable
 resources across repeated round trips. This fixture entry is for loader QA; it does not implement
 production storm links or scene restoration.

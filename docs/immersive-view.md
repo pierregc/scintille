@@ -359,7 +359,7 @@ between them, and says how far they are from the scene when it matters
 ([`scene-time.ts`](../web/src/globe/scene-time.ts), #255).
 
 - **Observed time.** The time of the newest flashes drawn: the clock in replay; in live, the clock
-  minus the slowest delay among the open storm's sources (`LIVE_DELAY_MS`, GLM 2 min, LI 12 min),
+  minus the slowest delay among the open storm's sources (`LIVE_DELAY_MS`, GLM 70 s, LI 12 min),
   or the fastest one on the globe. Ages are measured from it.
 - **Storm position.** The latest track sample at or before the observed time, never interpolated.
   Samples come once per hourly window: up to 90 min old the position is shown with its age, then

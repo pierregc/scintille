@@ -21,7 +21,7 @@ flowchart LR
     end
 
     subgraph r2["Cloudflare R2"]
-        live[("live/<br/>manifest + 30 s chunks")]
+        live[("live/<br/>manifest + 20 s chunks")]
         subgraph lake["Iceberg via R2 Data Catalog"]
             bronze[("bronze.ingest_log")]
             silver[("silver.flashes")]

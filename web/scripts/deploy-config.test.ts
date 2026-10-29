@@ -8,10 +8,17 @@ interface R2Binding {
 	bucket_name: string;
 }
 
+interface D1Binding {
+	binding: string;
+	database_name: string;
+	database_id: string;
+}
+
 const raw = readFileSync(join(import.meta.dirname, '..', 'wrangler.jsonc'), 'utf8');
 const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
 	r2_buckets: R2Binding[];
-	previews: { r2_buckets: R2Binding[] };
+	d1_databases: D1Binding[];
+	previews: { r2_buckets: R2Binding[]; d1_databases: D1Binding[] };
 	assets: { run_worker_first: boolean };
 	cache: { enabled: boolean };
 	routes: { pattern: string; custom_domain: boolean }[];
@@ -20,12 +27,15 @@ const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '')) as {
 describe('wrangler.jsonc', () => {
 	it('binds production to scintille-live', () => {
 		expect(config.r2_buckets).toEqual([{ binding: 'LIVE', bucket_name: 'scintille-live' }]);
+		expect(config.d1_databases.map((db) => [db.binding, db.database_name])).toEqual([['SEARCH', 'scintille-search']]);
 		expect(config.routes).toEqual([{ pattern: 'scintille.app', custom_domain: true }]);
 	});
 
 	it('never binds a Preview to production data', () => {
 		expect(config.previews.r2_buckets).toEqual([{ binding: 'LIVE', bucket_name: 'scintille-live-preview' }]);
 		expect(JSON.stringify(config.previews)).not.toMatch(/"scintille-live"/);
+		expect(config.previews.d1_databases.map((db) => [db.binding, db.database_name])).toEqual([['SEARCH', 'scintille-search-preview']]);
+		expect(config.previews.d1_databases[0].database_id).not.toBe(config.d1_databases[0].database_id);
 	});
 
 	it('keeps static assets in front of the Worker and Workers Cache off', () => {

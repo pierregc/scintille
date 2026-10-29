@@ -13,7 +13,9 @@
 	"preview_urls": true,
 	"cache": { "enabled": false },
 	"r2_buckets": [{ "binding": "LIVE", "bucket_name": "scintille-live" }],
+	"d1_databases": [{ "binding": "SEARCH", "database_name": "scintille-search", "database_id": "a987885c-c381-4030-947e-3209276a32bf" }],
 	"previews": {
-		"r2_buckets": [{ "binding": "LIVE", "bucket_name": "scintille-live-preview" }]
+		"r2_buckets": [{ "binding": "LIVE", "bucket_name": "scintille-live-preview" }],
+		"d1_databases": [{ "binding": "SEARCH", "database_name": "scintille-search-preview", "database_id": "32d93d6e-91b0-437b-9b01-ff1550cbdb53" }]
 	}
 }

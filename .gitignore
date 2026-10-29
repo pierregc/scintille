@@ -39,3 +39,4 @@ web/public/textures
 *.tfstate.*
 *.tfplan
 *.tfvars
+web/scripts/sound/.cache/
