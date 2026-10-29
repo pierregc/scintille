@@ -149,8 +149,8 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
 | R2 class A, 1 million a month | +720 (sync state) |
 | Static assets | about 600 place files, free |
 
-- These are the first on-demand routes: a request that matches no static file now runs the Worker,
-  404s included, as ADR 0005 planned.
+- These are the first on-demand routes. The adapter's Worker already answers requests that match no
+  static file (404s); static assets stay free and unmetered.
 - A bot or a bug can exhaust a D1 cap and make search unavailable until 00:00 UTC. On Workers Free it
   cannot cost money. `caches.default` absorbs repeated queries in each data center.
 - Each query waits for one round trip to the D1 primary; read replication (Sessions API) only if
