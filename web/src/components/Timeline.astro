@@ -22,16 +22,14 @@
 		class="scale replay-only"
 		role="slider"
 		tabindex="0"
-		aria-label="Time of day"
+		aria-label="Time"
 		aria-valuemin="0"
 		aria-valuemax="1439"
 		aria-valuenow="0"
 		data-scale
 	>
-		<div class="ticks"></div>
-		<span class="lbl" style="left:0">00</span><span class="lbl" style="left:25%">06</span><span class="lbl" style="left:50%"
-			>12</span
-		><span class="lbl" style="left:75%">18</span><span class="lbl" style="left:100%">24</span>
+		<div class="ticks" data-ticks></div>
+		<div data-labels></div>
 		<div class="head" data-head><b data-head-time></b></div>
 	</div>
 	<div class="live-only spacer" aria-hidden="true"></div>
@@ -139,15 +137,23 @@
 		bottom: 8px;
 		left: 0;
 		height: 6px;
-		background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48));
 	}
-	.scale .lbl {
+	.scale .ticks :global(i) {
+		position: absolute;
+		width: 1px;
+		height: 100%;
+		background: var(--hair);
+	}
+	.scale :global(.lbl) {
 		position: absolute;
 		bottom: -8px;
 		color: var(--dim);
 		font: 300 9px/1 var(--mono);
 		letter-spacing: 0.1em;
 		transform: translateX(-50%);
+	}
+	.scale :global(.lbl.end) {
+		transform: translateX(-100%);
 	}
 	.scale .head {
 		position: absolute;
@@ -164,6 +170,10 @@
 		color: var(--glow);
 		font: 300 10px/1 var(--mono);
 		white-space: nowrap;
+	}
+	.scale .head[data-flip] b {
+		right: 8px;
+		left: auto;
 	}
 	@media (max-width: 640px) {
 		.strip {
@@ -195,14 +205,17 @@
 	import {
 		DEFAULT_SPEED,
 		dateInputValue,
-		dayFraction,
 		dayStart,
 		keyStep,
 		parseDateInput,
 		REPLAY_LOOKBACK_MS,
+		scaleMarks,
+		scaleWindow,
 		SPEEDS,
 		speedLabel,
 		timeAtFraction,
+		windowFraction,
+		type ScaleWindow,
 	} from './hud/timeline';
 
 	const strip = document.querySelector<HTMLElement>('[data-strip]');
@@ -214,7 +227,11 @@
 		const scale = $('[data-scale]');
 		const head = $('[data-head]');
 		const headTime = $('[data-head-time]');
+		const ticks = $('[data-ticks]');
+		const labels = $('[data-labels]');
 		let app: GlobeApp | undefined;
+		let drag: ScaleWindow | undefined;
+		let layout = '';
 
 		const speedButtons = SPEEDS.map((speed) => {
 			const button = document.createElement('button');
@@ -230,24 +247,43 @@
 		});
 
 		const now = () => app?.clock.time() ?? Date.now();
+		const wall = () => app?.clock.wallTime() ?? Date.now();
+		const view = () => drag ?? scaleWindow(now(), wall());
 		const seek = (time: number) => {
 			if (app?.clock.mode !== 'replay') return;
 			app.clock.seek(time);
 			tick();
 		};
+		const pct = (at: number) => `${(at * 100).toFixed(3)}%`;
+
+		function draw(w: ScaleWindow) {
+			const key = `${Math.floor(w.start / 60_000)}:${Math.floor(w.end / 60_000)}`;
+			if (key === layout) return;
+			layout = key;
+			const marks = scaleMarks(w);
+			if (ticks) ticks.innerHTML = marks.ticks.map((at) => `<i style="left:${pct(at)}"></i>`).join('');
+			if (labels) labels.innerHTML = marks.labels.map(({ at, text }) => `<span class="lbl${at === 1 ? ' end' : ''}" style="left:${pct(at)}">${text}</span>`).join('');
+		}
 
 		function tick() {
 			const clock = app?.clock;
 			if (!clock) return;
 			const t = clock.time();
-			const fraction = dayFraction(t);
-			if (head) head.style.left = `${(fraction * 100).toFixed(3)}%`;
+			const w = view();
+			draw(w);
+			const fraction = windowFraction(w, t);
+			if (head) {
+				head.style.left = pct(fraction);
+				head.toggleAttribute('data-flip', fraction > 0.85);
+			}
 			const label = formatTime(t).slice(0, 5);
 			if (headTime && headTime.textContent !== label) headTime.textContent = label;
 			scale?.setAttribute('aria-valuenow', String(Math.floor(fraction * 1440)));
 			scale?.setAttribute('aria-valuetext', `${label} ${zoneLabel(undefined, t)}`);
 			const iso = dateInputValue(t);
 			if (day && document.activeElement !== day && day.value !== iso) day.value = iso;
+			const today = dateInputValue(wall());
+			if (day && day.max !== today) day.max = today;
 			if (play) {
 				play.toggleAttribute('data-paused', !clock.playing);
 				play.setAttribute('aria-label', clock.playing ? 'Pause' : 'Play');
@@ -287,31 +323,39 @@
 		play?.addEventListener('click', togglePlay);
 		day?.addEventListener('change', () => {
 			const start = parseDateInput(day.value);
-			if (start !== null) seek(start + (now() - dayStart(now())));
+			if (start === null) return;
+			const target = start + (now() - dayStart(now()));
+			seek(target < wall() ? target : wall() - REPLAY_LOOKBACK_MS);
 		});
 
 		const seekToPointer = (event: PointerEvent) => {
 			if (!scale) return;
 			const rect = scale.getBoundingClientRect();
-			seek(timeAtFraction(dayStart(now()), (event.clientX - rect.left) / rect.width));
+			seek(timeAtFraction(view(), (event.clientX - rect.left) / rect.width));
 		};
 		scale?.addEventListener('pointerdown', (event) => {
 			scale.setPointerCapture(event.pointerId);
+			drag = scaleWindow(now(), wall());
 			seekToPointer(event);
+		});
+		scale?.addEventListener('lostpointercapture', () => {
+			drag = undefined;
+			tick();
 		});
 		scale?.addEventListener('pointermove', (event) => {
 			if (scale.hasPointerCapture(event.pointerId)) seekToPointer(event);
 		});
 		scale?.addEventListener('keydown', (event) => {
-			const start = dayStart(now());
+			const w = view();
+			const end = timeAtFraction(w, 1);
 			let target: number | undefined;
 			if (event.key === ' ') {
 				event.preventDefault();
 				return togglePlay();
 			}
-			if (event.key === 'Home') target = start;
-			else if (event.key === 'End') target = timeAtFraction(start, 1);
-			else if (keyStep(event.key, event.shiftKey)) target = Math.min(Math.max(now() + keyStep(event.key, event.shiftKey), start), timeAtFraction(start, 1));
+			if (event.key === 'Home') target = w.start;
+			else if (event.key === 'End') target = end;
+			else if (keyStep(event.key, event.shiftKey)) target = Math.min(Math.max(now() + keyStep(event.key, event.shiftKey), w.start), end);
 			if (target === undefined) return;
 			event.preventDefault();
 			seek(target);
