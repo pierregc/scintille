@@ -41,7 +41,7 @@
 	[data-catalog-retry]:hover { color: var(--soft); }
 	:focus-visible, [data-storm-cards] :global(button:focus-visible) { outline: 1px solid var(--soft); outline-offset: 3px; }
 	[hidden] { display: none !important; }
-	:global(.hud:has([data-storm-suggestions][open]) :is([data-share-tools], [data-replay-status])) { visibility: hidden; }
+	:global(.hud:has([data-storm-suggestions][open]) [data-storm-panel]) { visibility: hidden; }
 	@media (max-width: 640px) {
 		.suggestions { top: calc(var(--gut) + 96px); width: min(21rem, calc(100vw - 2 * var(--gut))); }
 		.suggestions[open]::before { inset: 0; width: auto; background: linear-gradient(180deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.4) 60%, transparent); }

@@ -12,7 +12,7 @@ import { LiveClient } from '../live/client';
 import { FlashRing } from '../live/ring';
 import { FakeFeed, FakeVisibility } from '../live/testing';
 import { latLonToVector } from '../sun';
-import { StormReplay } from './index';
+import { END_GRACE_MS, StormReplay } from './index';
 import { frameStorm, GRAZE, REPLAY_FRAME, stormCap } from './framing';
 
 const detail = fixture as StormDetail;
@@ -151,4 +151,41 @@ it('holds the start instant during the camera flight before autoplay so a short 
 	wall += 100;
 	expect(clock.time()).toBe(start + 6000);
 	replay.dispose();
+});
+
+it('restarts an ended replay in place and returns to live once it has played past the end', async () => {
+	let wall = Date.UTC(2027, 0, 1);
+	const clock = new SceneClock(() => wall);
+	const start = Date.parse(detail.storm.t_start);
+	const end = Date.parse(detail.storm.t_end);
+	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return detail; }), live: vi.fn().mockImplementation(async () => clock.live()) };
+	const controls = { flyTo: vi.fn().mockResolvedValue(true), cancelFlight: vi.fn(), isAt: () => false };
+	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
+	try {
+		await replay.open(detail.storm.slug);
+		expect(replay.ended).toBe(false);
+		clock.seek(end + 1);
+		expect(replay.ended).toBe(true);
+		replay.update();
+		wall += END_GRACE_MS - 1;
+		replay.update();
+		expect(clock.mode).toBe('replay');
+		clock.pause();
+		wall += 60_000;
+		replay.update();
+		expect(clock.mode).toBe('replay');
+		replay.restart();
+		expect(clock.time()).toBe(start);
+		expect(clock.playing).toBe(true);
+		expect(replay.ended).toBe(false);
+		expect(controls.flyTo).toHaveBeenCalledTimes(1);
+		clock.seek(end + 3_600_000);
+		replay.update();
+		wall += END_GRACE_MS;
+		replay.update();
+		expect(data.live).toHaveBeenCalledTimes(1);
+		expect(clock.mode).toBe('live');
+		expect(replay.state.selected).toBeNull();
+		expect(replay.ended).toBe(false);
+	} finally { replay.dispose(); }
 });
