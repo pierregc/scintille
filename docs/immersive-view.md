@@ -167,6 +167,37 @@ At 600× and 3600×, the 500 flash budget keeps the frame cost at 10 to 15 ms an
 R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but near white pixels reach
 12 % (600×) and 22 % (3600×) at `iss`: those speeds show ten minutes or an hour per second.
 
+## Surface detail loading
+
+Since #252 the pyramid of [ADR 0022](adr/0022-surface-imagery.md) loads through
+[`web/src/globe/detail/`](../web/src/globe/detail/), in development and PR previews with
+`?surface=tiles`: tiles wanted per layer by the 2 px rule at their nearest visible point, requested
+after 300 ms and never while the camera climbs, most blurred area first, 6 at once and 8 per second
+after a burst of 40; a GPU byte budget (96 MB, 40 MB on phones, none at `low`) evicts the least
+recently drawn; 404 shows the parent, 429 and errors back off.
+
+Measured 2026-10-29 before the composite clouds (#131, about 47 MB less GPU memory), on a local
+build against production data, five storms, clouds on, afterglow 0, desktop, with
+`bench.mjs --journey` (pan of 2° at `iss`, then back to `globe`):
+
+| | Tiles | Base |
+|---|---|---|
+| First load, Earth | 1.26 to 2.27 MB | 1.02 MB |
+| Dive `globe` to `iss` | 0.04 to 0.27 MB | 0 |
+| Pan at `iss`, `iss` to `window` | 0 to 0.05 MB, 0.01 to 0.95 MB | 0 |
+| Back to `globe` | 0 | 0 |
+| GPU textures and buffers | up to 374 MB (87 tiles) | 282 MB |
+| Tiles loaded but never drawn | 0 or 1 per storm | |
+| Frame cost p95, back to back, not interleaved | 8.2 to 14.4 ms, median 11.7 | 5.3 to 12 ms, median 9.7 |
+| Selection and loading, CPU per frame | 0.2 to 0.3 ms | |
+| 3 s flights | no interval over 50 ms | same |
+
+Phones: the globe now takes about 203 of their 256 MB, so they keep up to 36 tiles; dives cost at
+most 0.62 MB. The added frame cost is the prototype's patches shading the ground twice; #253 draws
+the detail in one pass. `spike/surface/stress.mjs` (rapid flights,
+repeated dives, missing tiles, 429, offline) kept the globe whole, the cache at its budget and the
+JS heap flat (37.7 to 37.9 MB), with no page error.
+
 ## Observed, procedural, assumed
 
 | Element | Status | Source in the renderer |

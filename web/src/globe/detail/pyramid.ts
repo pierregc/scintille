@@ -10,6 +10,8 @@ export interface PyramidLevel {
 
 export interface PyramidManifest {
 	version: number;
+	/** Tile path template, e.g. `{layer}/{z}/{x}-{y}.webp`. */
+	path?: string;
 	tileTexels: number;
 	border: number;
 	maxLevel: number;
@@ -42,6 +44,52 @@ export function tileBounds({ z, x, y }: TileKey, manifest: PyramidManifest): Til
 
 export function keyOf({ z, x, y }: TileKey): string {
 	return `${z}/${x}-${y}`;
+}
+
+export function tilePath(manifest: PyramidManifest, layer: Layer, { z, x, y }: TileKey): string {
+	return (manifest.path ?? '{layer}/{z}/{x}-{y}.webp')
+		.replace('{layer}', layer)
+		.replace('{z}', String(z))
+		.replace('{x}', String(x))
+		.replace('{y}', String(y));
+}
+
+/** Ancestor of a tile at level `z` (the tile itself when `z` is its own level). */
+export function ancestorOf({ z, x, y }: TileKey, level: number): TileKey {
+	const shift = z - level;
+	return shift > 0 ? { z: level, x: x >> shift, y: y >> shift } : { z, x, y };
+}
+
+export function childrenOf({ z, x, y }: TileKey): TileKey[] {
+	return [0, 1].flatMap((dy) => [0, 1].map((dx) => ({ z: z + 1, x: 2 * x + dx, y: 2 * y + dy })));
+}
+
+/** Offset and scale of a tile inside one of its ancestors, in texture coordinates (v up). */
+export function rectIn({ z, x, y }: TileKey, ancestor: TileKey): [number, number, number] {
+	const n = 2 ** (z - ancestor.z);
+	return [(x % n) / n, (n - 1 - (y % n)) / n, 1 / n];
+}
+
+/** Finest level a layer exists at. */
+export function finestLevel(manifest: PyramidManifest, layer: Layer): number {
+	let finest = -1;
+	for (const [z, level] of Object.entries(manifest.levels)) if (level.layers[layer]) finest = Math.max(finest, Number(z));
+	return finest;
+}
+
+export function texelKm(manifest: PyramidManifest, z: number): number {
+	return (manifest.levels[z].degrees / manifest.tileTexels) * KM_PER_DEG;
+}
+
+/** GPU bytes of one RGBA8 tile with its mipmaps. */
+export function tileBytes(manifest: PyramidManifest): number {
+	let size = manifest.tileTexels + 2 * manifest.border;
+	let bytes = 0;
+	for (;;) {
+		bytes += size * size * 4;
+		if (size === 1) return bytes;
+		size = Math.max(1, size >> 1);
+	}
 }
 
 /** Which tiles of each layer exist; flat tiles (open water, unlit night) are left out of the pyramid. */

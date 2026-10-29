@@ -1,5 +1,4 @@
 import {
-	Box3,
 	DataTexture,
 	Frustum,
 	Group,
@@ -15,18 +14,9 @@ import {
 	Vector3,
 	Vector4,
 } from 'three';
-import { latLonToVector } from '../sun';
-import {
-	KM_PER_DEG,
-	keyOf,
-	type Layer,
-	nearestPoint,
-	Presence,
-	type PyramidManifest,
-	type TileKey,
-	tileBounds,
-	texelPixels,
-} from './pyramid';
+import { DEFAULT_LOADER, type Patch, TileLoader, TileLoadError, type TileLoaderStats, type TileSource } from './loader';
+import { finestLevel, type Layer, Presence, type PyramidManifest, rectIn, texelKm, tileBounds, tileBytes, tilePath } from './pyramid';
+import { RADIUS_KM, TileSelector } from './select';
 
 export interface SurfaceTilesOptions {
 	root: string;
@@ -35,258 +25,180 @@ export interface SurfaceTilesOptions {
 	baseTexelKm: number;
 	/** Refine while a texel covers more CSS pixels than this. */
 	texelPixels: number;
-	/** A tile is requested once wanted this long, so flights do not load what they pass through. */
-	dwellMs: number;
-	/** Finer tiles reuse their ancestor's night lights at this level: VIIRS pixels are 742 m. */
-	nightMaxLevel: number;
 	anisotropy: number;
-	maxTextures: number;
-	concurrency: number;
+	/** GPU bytes the tiles may hold. */
+	maxBytes: number;
+	fetch?: typeof fetch;
 }
 
-export interface SurfaceTilesStats {
-	wanted: number;
-	drawn: number;
-	textures: number;
-	pending: number;
-	loaded: number;
-	failed: number;
-	deepest: number;
+export type SurfaceTilesStats = TileLoaderStats & { manifest: 'loading' | 'ready' | 'failed'; meshes: number };
+
+interface Drawn {
+	mesh: Mesh;
+	material: ShaderMaterial;
+	shownAt: number;
 }
 
-interface Entry {
-	key: TileKey;
-	id: string;
-	textures: Partial<Record<Layer, Texture>>;
-	loading: Partial<Record<Layer, AbortController>>;
-	mesh?: Mesh;
-	/** Where the night texture comes from when this level is finer than the night lights. */
-	night?: Entry;
-	used: number;
-	wanted: number;
-	since: number;
+const MANIFEST_RETRY_MS = [2000, 5000, 15_000, 60_000];
+const MESH_KEEP_MS = 3000;
+const MAX_MESHES = 256;
+/** Height growth per frame above which the camera counts as climbing: no new requests then. */
+const CLIMB = 5e-4;
+const WHOLE: [number, number, number] = [0, 0, 1];
+
+/** Fetches, decodes and disposes one tile texture; HTTP status decides between retrying and giving up. */
+export function textureSource(root: string, manifest: PyramidManifest, anisotropy: number, fetcher: typeof fetch = fetch): TileSource<Texture> {
+	return {
+		async load(layer, key, signal) {
+			const res = await fetcher(`${root}/${tilePath(manifest, layer, key)}`, { signal });
+			if (res.status === 429) {
+				const seconds = Number(res.headers.get('retry-after'));
+				throw new TileLoadError({ kind: 'throttled', retryAfterMs: seconds > 0 ? seconds * 1000 : undefined });
+			}
+			if ([403, 404, 410].includes(res.status)) throw new TileLoadError({ kind: 'missing' }, `${res.status}`);
+			if (!res.ok) throw new TileLoadError({ kind: 'retry' }, `${res.status}`);
+			const blob = await res.blob();
+			let bitmap: ImageBitmap;
+			try {
+				bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+			} catch {
+				throw new TileLoadError({ kind: 'missing' }, 'undecodable');
+			}
+			const texture = new Texture(bitmap);
+			texture.flipY = false;
+			texture.colorSpace = SRGBColorSpace;
+			texture.anisotropy = anisotropy;
+			texture.minFilter = LinearMipmapLinearFilter;
+			texture.onUpdate = () => bitmap.close();
+			texture.needsUpdate = true;
+			return texture;
+		},
+		dispose(texture) {
+			texture.dispose();
+			(texture.image as ImageBitmap | null)?.close?.();
+		},
+	};
 }
 
-const DAY_MIN_SIN = Math.sin((-21 * Math.PI) / 180);
-const NIGHT_MAX_SIN = Math.sin((3 * Math.PI) / 180);
-const RADIUS_KM = 6371;
-
-/** Visible-detail tiles drawn over the base Earth with its shader, each from its own textures. */
+/** Visible surface detail (ADR 0022) drawn over the base Earth with its shader, one patch per area. */
 export class SurfaceTiles {
 	readonly group = new Group();
 	#manifest: PyramidManifest | null = null;
-	#presence: Presence | null = null;
-	#entries = new Map<string, Entry>();
-	#queue: { entry: Entry; layer: Layer; priority: number }[] = [];
-	#active = 0;
-	#frame = 0;
-	#loaded = 0;
-	#failed = 0;
-	#stats: SurfaceTilesStats = { wanted: 0, drawn: 0, textures: 0, pending: 0, loaded: 0, failed: 0, deepest: 0 };
+	#selector: TileSelector | null = null;
+	#loader: TileLoader<Texture> | null = null;
+	#state: SurfaceTilesStats['manifest'] = 'loading';
+	#meshes = new Map<string, Drawn>();
 	#black = new DataTexture(new Uint8Array(4), 1, 1);
 	#frustum = new Frustum();
 	#matrix = new Matrix4();
+	#lastHeight = Number.NaN;
+	#pruned = 0;
+	#retry: ReturnType<typeof setTimeout> | undefined;
 	#disposed = false;
+	#maxBytes: number;
+
+	#online = () => this.#loader?.retryNow();
 
 	constructor(private readonly earth: ShaderMaterial, private readonly options: SurfaceTilesOptions) {
 		this.#black.needsUpdate = true;
-		void fetch(`${options.root}/manifest.json`)
-			.then((res) => (res.ok ? res.json() : Promise.reject(new Error(`manifest ${res.status}`))))
-			.then((manifest: PyramidManifest) => {
-				this.#manifest = manifest;
-				this.#presence = new Presence(manifest);
-			})
-			.catch((error: unknown) => console.warn('surface tiles:', error));
+		this.#maxBytes = options.maxBytes;
+		this.#fetchManifest(0);
+		globalThis.addEventListener?.('online', this.#online);
 	}
 
-	get stats(): SurfaceTilesStats {
-		return this.#stats;
+	get stats(): SurfaceTilesStats | null {
+		return this.#loader ? { ...this.#loader.stats, manifest: this.#state, meshes: this.#meshes.size } : null;
+	}
+
+	set maxBytes(bytes: number) {
+		this.#maxBytes = bytes;
+		if (this.#loader) this.#loader.maxBytes = bytes;
+	}
+
+	#fetchManifest(attempt: number) {
+		const fetcher = this.options.fetch ?? fetch;
+		void fetcher(`${this.options.root}/manifest.json`)
+			.then((res) => (res.ok ? res.json() : Promise.reject(new Error(`manifest ${res.status}`))))
+			.then((manifest: PyramidManifest) => {
+				if (this.#disposed) return;
+				this.#init(manifest);
+			})
+			.catch((error: unknown) => {
+				if (this.#disposed) return;
+				this.#state = 'failed';
+				console.warn('surface tiles:', error);
+				this.#retry = setTimeout(() => this.#fetchManifest(attempt + 1), MANIFEST_RETRY_MS[Math.min(attempt, MANIFEST_RETRY_MS.length - 1)]);
+			});
+	}
+
+	#init(manifest: PyramidManifest) {
+		const presence = new Presence(manifest);
+		const loader = new TileLoader(textureSource(this.options.root, manifest, this.options.anisotropy, this.options.fetch), {
+			...DEFAULT_LOADER,
+			coarsest: Math.min(...Object.keys(manifest.levels).map(Number)),
+			finest: { day: finestLevel(manifest, 'day'), night: finestLevel(manifest, 'night') },
+			texelKm: (z) => texelKm(manifest, z),
+			baseTexelKm: this.options.baseTexelKm,
+			tileBytes: tileBytes(manifest),
+			maxBytes: this.#maxBytes,
+		});
+		this.#selector = new TileSelector(manifest, {
+			radius: this.options.radius,
+			baseTexelKm: this.options.baseTexelKm,
+			texelPixels: this.options.texelPixels,
+			has: (layer: Layer, key) => presence.has(layer, key) && !loader.isMissing(layer, key),
+		});
+		this.#manifest = manifest;
+		this.#loader = loader;
+		this.#state = 'ready';
 	}
 
 	update(camera: PerspectiveCamera, viewHeight: number, sun: Vector3): void {
 		const manifest = this.#manifest;
-		const presence = this.#presence;
-		if (!manifest || !presence || this.#disposed) return;
-		this.#frame++;
+		const selector = this.#selector;
+		const loader = this.#loader;
+		if (!manifest || !selector || !loader || this.#disposed) return;
 		this.#matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 		this.#frustum.setFromProjectionMatrix(this.#matrix);
-		const position = camera.position;
-		const distance = position.length();
-		const heightKm = (distance / this.options.radius - 1) * RADIUS_KM;
-		const camLat = (Math.asin(position.y / distance) * 180) / Math.PI;
-		const camLon = (Math.atan2(-position.z, position.x) * 180) / Math.PI;
-		const horizon = Math.acos(Math.min(1, this.options.radius / distance));
-		const cameraDir = position.clone().divideScalar(distance);
+		const heightKm = (camera.position.length() / this.options.radius - 1) * RADIUS_KM;
+		const hold = heightKm > this.#lastHeight * (1 + CLIMB);
+		this.#lastHeight = heightKm;
+		const scale = viewHeight / (2 * Math.tan((camera.fov * Math.PI) / 360));
+		const selection = this.#maxBytes > 0 ? selector.select({ position: camera.position, frustum: this.#frustum, sun, scale }) : { day: [], night: [] };
+		this.#draw(loader.update(selection, { hold, scale }), manifest);
+	}
 
-		const wanted: { key: TileKey; layers: Layer[]; distanceKm: number }[] = [];
-		const distanceTo = (lat: number, lon: number) =>
-			new Vector3(...latLonToVector(lat, lon)).multiplyScalar(this.options.radius).distanceTo(position) / this.options.radius * RADIUS_KM;
-		const firstLevel = Math.min(...Object.keys(manifest.levels).map(Number));
-
-		const visit = (key: TileKey) => {
-			const bounds = tileBounds(key, manifest);
-			const deg = manifest.levels[key.z].degrees;
-			const centre = new Vector3(...latLonToVector((bounds.north + bounds.south) / 2, (bounds.west + bounds.east) / 2));
-			const angularRadius = (deg * Math.SQRT1_2 * Math.PI) / 180;
-			if (Math.acos(Math.min(1, centre.dot(cameraDir))) > horizon + angularRadius) return;
-			const samples: Vector3[] = [];
-			for (const lat of [bounds.north, (bounds.north + bounds.south) / 2, bounds.south]) {
-				for (const lon of [bounds.west, (bounds.west + bounds.east) / 2, bounds.east]) {
-					samples.push(new Vector3(...latLonToVector(lat, lon)).multiplyScalar(this.options.radius));
-				}
-			}
-			const box = new Box3().setFromPoints(samples).expandByScalar(this.options.radius * (1 - Math.cos(angularRadius)));
-			if (!this.#frustum.intersectsBox(box)) return;
-			const [lat, lon] = nearestPoint(bounds, camLat, camLon);
-			const distanceKm = Math.max(distanceTo(lat, lon), heightKm);
-			const texelKm = (deg / manifest.tileTexels) * KM_PER_DEG;
-			const pixels = texelPixels(texelKm, distanceKm, camera.fov, viewHeight);
-			if (pixels > this.options.texelPixels && key.z < manifest.maxLevel && manifest.levels[key.z + 1]) {
-				for (const dy of [0, 1]) for (const dx of [0, 1]) visit({ z: key.z + 1, x: key.x * 2 + dx, y: key.y * 2 + dy });
-				return;
-			}
-			const sines = samples.map((p) => p.dot(sun) / this.options.radius);
-			const layers: Layer[] = [];
-			if (Math.max(...sines) > DAY_MIN_SIN && presence.has('day', key)) layers.push('day');
-			if (Math.min(...sines) < NIGHT_MAX_SIN && presence.has('night', this.#nightKey(key))) layers.push('night');
-			if (layers.length) wanted.push({ key, layers, distanceKm });
-		};
-
-		const base = manifest.levels[firstLevel];
-		for (let y = 0; y < base.rows; y++) {
-			for (let x = 0; x < base.columns; x++) {
-				const bounds = tileBounds({ z: firstLevel, x, y }, manifest);
-				const [lat, lon] = nearestPoint(bounds, camLat, camLon);
-				const pixels = texelPixels(this.options.baseTexelKm, Math.max(distanceTo(lat, lon), heightKm), camera.fov, viewHeight);
-				if (pixels > this.options.texelPixels) visit({ z: firstLevel, x, y });
-			}
-		}
-
-		const draw = new Set<Entry>();
-		let deepest = 0;
+	#draw(patches: Patch<Texture>[], manifest: PyramidManifest) {
 		const now = performance.now();
-		for (const { key, layers, distanceKm } of wanted) {
-			const entry = this.#entry(key);
-			if (entry.wanted !== this.#frame - 1) entry.since = now;
-			entry.wanted = this.#frame;
-			entry.used = this.#frame;
-			const nightKey = this.#nightKey(key);
-			entry.night = nightKey === key ? undefined : this.#entry(nightKey);
-			if (entry.night) {
-				if (entry.night.wanted !== this.#frame) entry.night.since = Math.min(entry.night.wanted === this.#frame - 1 ? entry.night.since : now, entry.since);
-				entry.night.wanted = this.#frame;
-				entry.night.used = this.#frame;
-			}
-			const source = (layer: Layer) => (layer === 'night' && entry.night ? entry.night : entry);
-			for (const layer of layers) {
-				const from = source(layer);
-				if (!from.textures[layer] && !from.loading[layer] && now - entry.since >= this.options.dwellMs) this.#enqueue(from, layer, key.z * 1e6 - distanceKm);
-			}
-			if (layers.every((layer) => source(layer).textures[layer])) {
-				draw.add(entry);
-				deepest = Math.max(deepest, key.z);
-				continue;
-			}
-			for (let z = key.z - 1; z >= firstLevel; z--) {
-				const shift = key.z - z;
-				const parent = this.#entries.get(keyOf({ z, x: key.x >> shift, y: key.y >> shift }));
-				if (parent && Object.keys(parent.textures).length) {
-					parent.used = this.#frame;
-					draw.add(parent);
-					break;
-				}
-			}
+		for (const drawn of this.#meshes.values()) drawn.mesh.visible = false;
+		for (const patch of patches) {
+			const drawn = this.#meshes.get(patch.id) ?? this.#create(patch, manifest);
+			const uniforms = drawn.material.uniforms;
+			uniforms.tileDay.value = patch.day?.resource ?? this.#black;
+			uniforms.tileNight.value = patch.night?.resource ?? this.#black;
+			(uniforms.dayRect.value as Vector3).set(...(patch.day ? rectIn(patch.key, patch.day.key) : WHOLE));
+			(uniforms.nightRect.value as Vector3).set(...(patch.night ? rectIn(patch.key, patch.night.key) : WHOLE));
+			(uniforms.tileLayers.value as Vector2).set(patch.day ? 1 : 0, patch.night ? 1 : 0);
+			drawn.mesh.visible = true;
+			drawn.shownAt = now;
 		}
-		for (const entry of this.#entries.values()) if (entry.mesh) entry.mesh.visible = draw.has(entry);
-		for (const entry of draw) this.#show(entry, manifest);
-		this.#pump();
-		this.#evict();
-		let textures = 0;
-		for (const entry of this.#entries.values()) textures += Object.keys(entry.textures).length;
-		this.#stats = { wanted: wanted.length, drawn: draw.size, textures, pending: this.#queue.length + this.#active, loaded: this.#loaded, failed: this.#failed, deepest };
-	}
-
-	#nightKey(key: TileKey): TileKey {
-		const shift = key.z - this.options.nightMaxLevel;
-		return shift > 0 ? { z: this.options.nightMaxLevel, x: key.x >> shift, y: key.y >> shift } : key;
-	}
-
-	#entry(key: TileKey): Entry {
-		const id = keyOf(key);
-		let entry = this.#entries.get(id);
-		if (!entry) {
-			entry = { key, id, textures: {}, loading: {}, used: this.#frame, wanted: -1, since: 0 };
-			this.#entries.set(id, entry);
-		}
-		return entry;
-	}
-
-	#enqueue(entry: Entry, layer: Layer, priority: number) {
-		if (this.#queue.some((q) => q.entry === entry && q.layer === layer)) return;
-		this.#queue.push({ entry, layer, priority });
-	}
-
-	#pump() {
-		for (const entry of this.#entries.values()) {
-			if (entry.wanted < this.#frame - 30) for (const controller of Object.values(entry.loading)) controller?.abort();
-		}
-		this.#queue = this.#queue.filter((q) => q.entry.wanted === this.#frame);
-		this.#queue.sort((a, b) => a.priority - b.priority);
-		while (this.#active < this.options.concurrency) {
-			const next = this.#queue.shift();
-			if (!next) break;
-			const { entry, layer } = next;
-			const controller = new AbortController();
-			entry.loading[layer] = controller;
-			this.#active++;
-			void this.#load(entry, layer, controller.signal).finally(() => {
-				this.#active--;
-				entry.loading[layer] = undefined;
-			});
+		if (this.#meshes.size <= MAX_MESHES && now - this.#pruned < MESH_KEEP_MS) return;
+		this.#pruned = now;
+		const stale = [...this.#meshes].filter(([, d]) => !d.mesh.visible).sort((a, b) => a[1].shownAt - b[1].shownAt);
+		let excess = this.#meshes.size - MAX_MESHES;
+		for (const [id, drawn] of stale) {
+			if (excess <= 0 && now - drawn.shownAt < MESH_KEEP_MS) break;
+			this.#remove(id, drawn);
+			excess--;
 		}
 	}
 
-	async #load(entry: Entry, layer: Layer, signal: AbortSignal) {
-		try {
-			const res = await fetch(`${this.options.root}/${layer}/${entry.key.z}/${entry.key.x}-${entry.key.y}.webp`, { signal });
-			if (!res.ok) throw new Error(`${res.status}`);
-			const bitmap = await createImageBitmap(await res.blob(), {
-				imageOrientation: 'flipY',
-				premultiplyAlpha: 'none',
-				colorSpaceConversion: 'none',
-			});
-			if (this.#disposed || !this.#entries.has(entry.id)) return bitmap.close();
-			const texture = new Texture(bitmap);
-			texture.flipY = false;
-			texture.colorSpace = SRGBColorSpace;
-			texture.anisotropy = this.options.anisotropy;
-			texture.minFilter = LinearMipmapLinearFilter;
-			texture.needsUpdate = true;
-			entry.textures[layer] = texture;
-			this.#loaded++;
-		} catch (error) {
-			if (!signal.aborted) {
-				this.#failed++;
-				console.warn('surface tile', entry.id, layer, error);
-			}
-		}
-	}
-
-	#show(entry: Entry, manifest: PyramidManifest) {
-		const mesh = entry.mesh ?? this.#create(entry, manifest);
-		const material = mesh.material as ShaderMaterial;
-		material.uniforms.tileDay.value = entry.textures.day ?? this.#black;
-		const night = (entry.night ?? entry).textures.night;
-		material.uniforms.tileNight.value = night ?? this.#black;
-		(material.uniforms.tileLayers.value as Vector2).set(entry.textures.day ? 1 : 0, night ? 1 : 0);
-		mesh.visible = true;
-	}
-
-	#create(entry: Entry, manifest: PyramidManifest): Mesh {
-		const bounds = tileBounds(entry.key, manifest);
-		const deg = manifest.levels[entry.key.z].degrees;
+	#create(patch: Patch<Texture>, manifest: PyramidManifest): Drawn {
+		const { key } = patch;
+		const bounds = tileBounds(key, manifest);
+		const deg = manifest.levels[key.z].degrees;
 		const rad = Math.PI / 180;
-		const segments = entry.key.z >= 4 ? 8 : 16;
+		const segments = key.z >= 4 ? 8 : 16;
 		const geometry = new SphereGeometry(this.options.radius, segments, segments, (bounds.west + 180) * rad, deg * rad, (90 - bounds.north) * rad, deg * rad);
 		const span = manifest.tileTexels + 2 * manifest.border;
 		const material = new ShaderMaterial({
@@ -301,62 +213,39 @@ export class SurfaceTiles {
 				tileLayers: { value: new Vector2() },
 				tileInset: { value: new Vector2(manifest.tileTexels / span, manifest.border / span) },
 				tileSize: { value: span },
-				nightRect: { value: this.#nightRect(entry.key) },
+				dayRect: { value: new Vector3(0, 0, 1) },
+				nightRect: { value: new Vector3(0, 0, 1) },
 			},
 			polygonOffset: true,
 			polygonOffsetFactor: -1,
-			polygonOffsetUnits: -4 * entry.key.z,
+			polygonOffsetUnits: -4 * key.z,
 		});
 		const mesh = new Mesh(geometry, material);
-		mesh.renderOrder = entry.key.z;
+		mesh.renderOrder = key.z;
 		this.group.add(mesh);
-		entry.mesh = mesh;
-		return mesh;
+		const drawn = { mesh, material, shownAt: 0 };
+		this.#meshes.set(patch.id, drawn);
+		return drawn;
 	}
 
-	/** Offset and scale of a tile inside its night ancestor, in texture coordinates (v up). */
-	#nightRect({ z, x, y }: TileKey): Vector3 {
-		const shift = Math.max(0, z - this.options.nightMaxLevel);
-		const n = 2 ** shift;
-		return new Vector3((x % n) / n, (n - 1 - (y % n)) / n, 1 / n);
+	#remove(id: string, { mesh, material }: Drawn) {
+		mesh.geometry.dispose();
+		material.dispose();
+		this.group.remove(mesh);
+		this.#meshes.delete(id);
 	}
 
-	#evict() {
-		let count = 0;
-		for (const entry of this.#entries.values()) count += Object.keys(entry.textures).length;
-		if (count <= this.options.maxTextures) {
-			for (const entry of this.#entries.values()) {
-				if (!Object.keys(entry.textures).length && !Object.values(entry.loading).some(Boolean) && entry.used !== this.#frame) this.#drop(entry);
-			}
-			return;
-		}
-		const old = [...this.#entries.values()].filter((e) => e.used !== this.#frame).sort((a, b) => a.used - b.used);
-		for (const entry of old) {
-			if (count <= this.options.maxTextures) break;
-			count -= Object.keys(entry.textures).length;
-			this.#drop(entry);
-		}
+	clear(): void {
+		this.#loader?.clear();
+		for (const [id, drawn] of [...this.#meshes]) this.#remove(id, drawn);
 	}
 
-	#drop(entry: Entry) {
-		for (const controller of Object.values(entry.loading)) controller?.abort();
-		for (const texture of Object.values(entry.textures)) texture?.dispose();
-		if (entry.mesh) {
-			entry.mesh.geometry.dispose();
-			(entry.mesh.material as ShaderMaterial).dispose();
-			this.group.remove(entry.mesh);
-		}
-		this.#entries.delete(entry.id);
-	}
-
-	clear() {
-		for (const entry of [...this.#entries.values()]) this.#drop(entry);
-		this.#queue = [];
-	}
-
-	dispose() {
+	dispose(): void {
 		this.#disposed = true;
-		this.clear();
+		globalThis.removeEventListener?.('online', this.#online);
+		clearTimeout(this.#retry);
+		this.#loader?.dispose();
+		for (const [id, drawn] of [...this.#meshes]) this.#remove(id, drawn);
 		this.#black.dispose();
 	}
 }

@@ -4,7 +4,7 @@ Two prototypes on the globe, switched with `?surface=base|tiles|vectors|both` or
 development and PR previews only:
 
 - `tiles`: raster pyramid from the 500 m Blue Marble and Black Marble releases, loaded by visible
-  level (`src/globe/detail/tiles.ts`); `?texel=<css px>` sets the refinement threshold (default 2).
+  level (`src/globe/detail/`, #252); `?texel=<css px>` sets the refinement threshold (default 2).
 - `vectors`: Natural Earth 10m coastlines, borders, lakes and main cities as thin lines over the
   current textures (`src/globe/detail/vectors.ts`).
 
@@ -23,3 +23,10 @@ node scripts/bench.mjs --refs ../docs/immersive/references.json --out bench/tile
 `serve.mjs` serves the build, the local textures, and proxies `/data/` to production with CORS
 open, so the benchmark measures the same bytes as the deployed site. Results are in
 [ADR 0022](../../../docs/adr/0022-surface-imagery.md).
+
+`stress.mjs` drives `tiles` through rapid flights, repeated dives, missing tiles, throttling and an
+offline spell on the same local build, and writes the cache figures of each step:
+
+```sh
+node spike/surface/stress.mjs --url http://localhost:4400 --profile desktop --out bench/stress
+```

@@ -25,7 +25,7 @@ import { clipPlanes } from './orbit';
 import { BLOOM, createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
-import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
+import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
 import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
@@ -103,7 +103,9 @@ export function createGlobeApp(
 	const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
 	const controls = createGlobeControls(camera, canvas, RADIUS);
 
-	let tier = renderParams?.quality ?? tierFromSearch(location.search) ?? guessTier(deviceHints(context));
+	const hints = deviceHints(context);
+	const phone = isPhone(hints);
+	let tier = renderParams?.quality ?? tierFromSearch(location.search) ?? guessTier(hints);
 	const preset = PRESETS[tier];
 	canvas.dataset.quality = tier;
 	const fps = new FpsMonitor();
@@ -121,6 +123,7 @@ export function createGlobeApp(
 				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
 				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
 				pixelRatio: () => renderer.getPixelRatio(),
+				maxBytes: surfaceBudgetMb(tier, phone) * 1e6,
 				...surfaceFromSearch(location.search),
 			})
 		: undefined;
@@ -208,6 +211,7 @@ export function createGlobeApp(
 		tier = next;
 		canvas.dataset.quality = tier;
 		if (!PRESETS[tier].cloudLight) clouds.setFlashLight(null);
+		if (surface) surface.tiles.maxBytes = surfaceBudgetMb(tier, phone) * 1e6;
 		if (!PRESETS[tier].postProcessing) {
 			post?.dispose();
 			post = undefined;

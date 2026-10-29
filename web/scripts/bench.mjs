@@ -1,7 +1,8 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--journey] [--headed] [--video]
+// --journey adds a pan at the `iss` pose (2° east) after it and a return to `globe` at the end.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -25,6 +26,7 @@ const { values } = parseArgs({
 		afterglow: { type: 'string' },
 		surface: { type: 'string' },
 		clouds: { type: 'boolean', default: true },
+		journey: { type: 'boolean', default: false },
 		headed: { type: 'boolean', default: false },
 		video: { type: 'boolean', default: false },
 	},
@@ -312,9 +314,14 @@ function activeFlashes() {
 	return { held: ring.size, active, flicker, displayMinutes: minutes, speed, sceneTime: new Date(now).toISOString() };
 }
 
-/** Pose templates from the reference file, centred on the storm. */
+/** Pose templates from the reference file, centred on the storm; with --journey, a pan and a return too. */
 function posesAt({ lat, lon }) {
-	return Object.fromEntries(Object.entries(refs.poses).map(([name, pose]) => [name, pose === 'framed' ? pose : { lat, lon, ...pose }]));
+	const poses = Object.entries(refs.poses).flatMap(([name, pose]) => {
+		const at = pose === 'framed' ? pose : { lat, lon, ...pose };
+		return values.journey && name === 'iss' ? [[name, at], ['pan', { ...at, lon: lon + 2 }]] : [[name, at]];
+	});
+	if (values.journey) poses.push(['return', { lat, lon, ...refs.poses.globe }]);
+	return Object.fromEntries(poses);
 }
 
 /** Mean luminance (0 to 255) and share of near white pixels of a screenshot. */
@@ -449,6 +456,7 @@ const report = {
 	profile: values.profile,
 	afterglow: values.afterglow ?? 'per storm',
 	surface: values.surface ?? null,
+	journey: values.journey,
 	speed: values.speed ?? 'opened at 60',
 	clouds: values.clouds,
 	gl: values.gl,

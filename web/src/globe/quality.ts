@@ -18,13 +18,15 @@ export interface QualityPreset {
 	cloudDetail: boolean;
 	/** Bloom and grading (#58). */
 	postProcessing: boolean;
+	/** GPU memory for surface detail tiles (ADR 0022), MB. */
+	surfaceMb: number;
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, cloudDetail: false, postProcessing: false },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: false },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: true },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0 },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96 },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96 },
 };
 
 export interface DeviceHints {
@@ -40,10 +42,21 @@ export interface DeviceHints {
 const WEAK_GPU = /mali|adreno \(tm\) [1-5]\d\d|powervr|intel\(r\) (hd|uhd) graphics|swiftshader|llvmpipe/i;
 const STRONG_GPU = /apple m\d|nvidia|geforce|rtx|radeon (rx|pro)|apple gpu/i;
 
+/** Phones have 256 MB for the whole scene instead of 384 (ADR 0020); the globe takes about 205. */
+export const PHONE_SURFACE_MB = 40;
+
+export function isPhone({ screenMin, coarsePointer }: DeviceHints): boolean {
+	return coarsePointer && screenMin < 600;
+}
+
+export function surfaceBudgetMb(tier: QualityTier, phone: boolean): number {
+	return Math.min(PRESETS[tier].surfaceMb, phone ? PHONE_SURFACE_MB : Infinity);
+}
+
 /** Initial tier from cheap hints: phones and weak GPUs start low, known strong GPUs high. */
 export function guessTier({ gpu = '', screenMin, coarsePointer, memoryGb }: DeviceHints): QualityTier {
 	if (WEAK_GPU.test(gpu) || (memoryGb !== undefined && memoryGb <= 2)) return 'low';
-	if (coarsePointer && screenMin < 600) return STRONG_GPU.test(gpu) ? 'medium' : 'low';
+	if (isPhone({ screenMin, coarsePointer })) return STRONG_GPU.test(gpu) ? 'medium' : 'low';
 	if (STRONG_GPU.test(gpu)) return 'high';
 	return 'medium';
 }
