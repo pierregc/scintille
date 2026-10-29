@@ -451,19 +451,20 @@ Findings:
 Measured 2026-10-29 on production (scintille.app, `main` 7ccf560) with `bench.mjs`, Chromium headed
 on the reference Mac, five storms, clouds on, afterglow 0. Cold is a fresh browser profile, warm
 opens the storm once before measuring (`--warm`), 4G throttles the phone run (`--network 4g`, 9 Mbit/s,
-150 ms). Raw results and captures in [`immersive/validation/`](immersive/validation/).
+150 ms). Raw results and captures in [`immersive/validation/`](immersive/validation/); the phone run
+after #332 and #333 (PR preview, same data) is `bench-mobile-cold-phone-budgets.json`.
 
 | Budget | Desktop | Mobile emulation | Verdict |
 |---|---|---|---|
 | Frame cost p95 ≤ 10 ms, tier kept | 7.4 to 9.6 ms, `high` | 4.6 to 9.1 ms, `medium` | met |
 | 3 s flights: no interval over 50 ms, p95 ≤ 17 ms | max 17.6 ms, p95 ≤ 10 ms | max 10.4 ms | met |
 | GPU textures and buffers | 332 MB (≤ 384) | 244 MB (≤ 256) | met |
-| First load, cold | 6.3 to 9.7 MB (≤ 10) | 6.7 to 8.4 MB (≤ 8): R1 8.36, R2 8.33 | over on phones, #332 |
+| First load, cold | 6.3 to 9.7 MB (≤ 10) | 6.7 to 8.4 MB (≤ 8): R1 8.36, R2 8.33; 5.5 to 6.2 MB since #332 | met since #332 |
 | First load, warm | 0.02 to 1.1 MB | 0.01 to 1.0 MB | met |
 | First load, 4G | | 5.7 to 6.4 MB settled in 9.6 to 14.5 s, globe ready 1.2 to 7.0 s | checked |
 | Time to globe, to storm framed | 0.38 to 0.62 s, 3.7 to 4.4 s; 1.2 to 3.5 s ready when the page itself is slow (TTFB 0.5 to 0.7 s) | 0.40 to 0.84 s, 3.6 to 5.2 s | met, network outliers |
 | Zoom `globe` to `iss` and back | 0.13 to 1.08 MB, back 0 | 0.03 to 0.31 MB, back 0 | met |
-| Near white pixels ≤ 2 % | at most 1.4 % (R1 `iss`) | 3.8 % R1 `iss`, 2.4 % R1 `window` and R3 `iss` | over on phones, #333 |
+| Near white pixels ≤ 2 % | at most 1.4 % (R1 `iss`), unchanged by #333 | 3.8 % R1 `iss`, 2.4 % R1 `window` and R3 `iss`; at most 1.6 % since #333 | met since #333 |
 
 Journeys (globe, Follow, Horizon, back to live), one capture every few seconds:
 `R1-journey.jpg` to `R5-journey.jpg` (desktop, night R1 and R3, day R2, R4 and R5),
@@ -477,7 +478,8 @@ Findings:
 2. **Reference storms show 8 km clouds at the floor.** Cloud detail is kept one day, so replays of
    2026-10-18 fall back to GMGSI: blurred blobs by day at Follow (R2, R5). Live storms show the
    composite detail (#331).
-3. **Night glows read large on phones** (R1, R3) and exceed the near white budget (#333).
+3. **Night glows read large on phones** (R1, R3) and exceed the near white budget (#333). Fixed:
+   phones now draw lightning at the desktop scale ([Lightning scale](#lightning-scale)).
 4. **HUD text fades over sunlit clouds** near the floor (#334).
 5. **Phone gestures over the HUD zoom the page.** The replay caption and the gaps between the storm
    buttons now let gestures through to the globe; the clock, layers and timeline blocks remain (#335).
