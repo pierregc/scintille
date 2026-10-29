@@ -198,6 +198,10 @@ describe('free replay', () => {
 			expect(data.covers(wall - 10 * MIN)).toBe(true);
 			clock.live();
 			expect(data.travelling).toBe(false);
+			await data.liveClient.idle();
+			clock.replay(data.coverageStart() ?? 0, 60);
+			data.update(clock.time());
+			expect(data.travelling).toBe(false);
 		} finally { data.dispose(); }
 	});
 });

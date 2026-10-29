@@ -6,7 +6,8 @@ import { fetchChunk, type DecodedChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { DayFeed, type FlashDays } from './days';
 
-/** Free replay reads the live feed this far back from the present, the archive before it. */
+/** Free replay leaves the archive for the live feed this far back from the present; it enters the
+ * archive only before what the live feed holds. */
 const LIVE_REACH_MS = 55 * 60_000;
 /** Margin against switching back and forth at that boundary. */
 const LIVE_HYSTERESIS_MS = 60_000;
@@ -181,7 +182,7 @@ export class SceneData {
 			this.#suspended = false;
 			return;
 		}
-		if (!this.#travel && time < reach - LIVE_HYSTERESIS_MS) {
+		if (!this.#travel && time < (this.#live.client.coverageStart() ?? reach) - LIVE_HYSTERESIS_MS) {
 			this.#suspended = true;
 			this.#live.stop();
 			this.ring.clear();
