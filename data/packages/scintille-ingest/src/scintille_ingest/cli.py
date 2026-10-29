@@ -24,6 +24,7 @@ from scintille_lake.locks import partition_locks
 from scintille_ingest.clouds import fci, gfs, gmgsi
 from scintille_ingest.clouds.collector import CloudCollector, CompositeCollector
 from scintille_ingest.clouds.publish import CloudPublisher
+from scintille_ingest.clouds.reindex import days_between, reindex_day
 from scintille_ingest.clouds.sources import GOES_BUCKETS, HIMAWARI_BUCKET, Sources
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
@@ -99,6 +100,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     clouds.add_argument(
         "--out", type=Path, help="with --slot: write the bucket layout here instead of R2"
     )
+    reindex = commands.add_parser(
+        "clouds-reindex", help="index archived cloud textures that no daily index lists"
+    )
+    reindex.add_argument("--first", type=date.fromisoformat, required=True, help="first day")
+    reindex.add_argument("--last", type=date.fromisoformat, required=True, help="last day")
+    reindex.add_argument("--dry-run", action="store_true", help="log, write nothing")
     calibrate = commands.add_parser(
         "calibrate", help="fit the intensity calibration on silver.flashes and write it"
     )
@@ -108,6 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "calibrate":
         return run_calibrate(args.start, args.end, args.out)
+    if args.command == "clouds-reindex":
+        return run_clouds_reindex(args.first, args.last, args.dry_run)
     if args.command == "live-probe":
         return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
     if args.command == "clouds":
@@ -291,6 +300,25 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
     _stop_on_signals(collector.stop)
     async with server:
         await collector.start()
+    return 0
+
+
+def run_clouds_reindex(first: date, last: date, dry_run: bool) -> int:
+    configure_json_logs()
+    bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+    if not bucket:
+        log.error("SCINTILLE_LIVE_BUCKET is not set")
+        return 2
+    store, noaa, forecasts = (
+        live_store(bucket),
+        public_store(gmgsi.BUCKET),
+        public_store(gfs.BUCKET),
+    )
+    now = datetime.now(UTC)
+    added = sum(
+        reindex_day(store, noaa, forecasts, day, now, dry_run) for day in days_between(first, last)
+    )
+    print(f"{added} frames indexed{' (dry run)' if dry_run else ''}")
     return 0
 
 

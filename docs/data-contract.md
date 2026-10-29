@@ -243,7 +243,8 @@ The canonical limits, tiers and texture-path rule are packaged in
 vectors exercise their accepted and rejected payloads without adding a generic runtime validator.
 `expires_at` is archive publication plus 30 days. The existing archive lifecycle can still remove
 referenced objects; indices do not promise permanent availability or exact cloud measurements at
-every scene instant. No existing unindexed archive is backfilled by this change.
+every scene instant. `scintille-ingest clouds-reindex --first DAY --last DAY` indexes textures
+archived before the indexes existed, without uploading them again ([ADR 0025](adr/0025-past-days-archive.md)).
 
 Interactive replay fetches at most three daily indices and keeps at most three frame textures close
 to the playhead, bounded by the existing 3-hour gap rule. Selection follows sub-hourly scrubs as well.
@@ -260,6 +261,40 @@ under `/_replay-fixtures/archive/clouds/` only in Preview builds. Their far-futu
 dates are synthetic so the real July imagery remains available for repeatable visual checks.
 Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
 does not include these fixtures. Dev uses the existing fixture server at the configured data root.
+
+## Flash archive
+
+Travel in time reads flashes before the live window from `archive/flashes/`
+([ADR 0025](adr/0025-past-days-archive.md)). The Dagster job `hourly_flash_archive` writes it from
+silver at :02 and :32, reading the two newest archived hours again for late rows, and rereads the
+previous day at 02:45. Limits and the chunk path rule are in `scintille_contract/flash_archive_rules.json`.
+
+```
+archive/flashes/index.json                     Cache-Control: public, max-age=60
+archive/flashes/manifests/2026-10-15.json      Cache-Control: public, max-age=60
+archive/flashes/chunks/<sha256>.bin.gz         Cache-Control: public, max-age=31536000, immutable
+```
+
+```json
+{
+  "schema_version": 1,
+  "day": "2026-10-15",
+  "generated_at": "2026-10-15T19:02:41Z",
+  "hours": [{
+    "start": "2026-10-15T18:00:00Z",
+    "flash_count": 203114,
+    "chunks": [{"path": "../chunks/3f1c...e9.bin.gz", "flash_count": 65536, "size_bytes": 604211,
+                "event_min": "2026-10-15T18:00:00.012Z", "event_max": "2026-10-15T18:19:07.441Z"}]
+  }]
+}
+```
+
+- Chunks use the live encoding with the hour as origin, at most 65,536 flashes each, in event time
+  order. An hour whose flashes changed gets new chunks; the replaced ones are deleted after the
+  day index is written, so a reader holding an old index refetches it on a missing chunk.
+- An hour without flashes in silver is absent: the reader shows missing data, never an empty sky.
+- `index.json` gives `first_day`, `last_hour` and `retention_days` (silver's, 21). Days before
+  `first_day` are deleted by the job; an R2 lifecycle rule removes anything older than 22 days.
 
 ## Chunk encoding
 
