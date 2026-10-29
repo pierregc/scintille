@@ -102,8 +102,8 @@ receiver. Kept as a showcase idea for later.
 ## Consequences
 
 - GLM plays 70 s behind instead of 120 s, with a short pause about once an hour per viewer. The
-  delay is one constant in `web/src/globe/live/delay.ts`, and the debug panel counts late flashes
-  per source to tune it. MTG LI flashes stop missing their slot (0.5 % today, 0.01 % after).
+  delay is one constant in `web/src/globe/live/delay.ts`, and `debug.late` on the globe app counts
+  late flashes per source to tune it. MTG LI flashes stop missing their slot (0.5 % today, 0.01 % after).
 - Writes: +88 k a month for the live feed, about 0.66 M in all with the R2 plan, 0.83 M if silver
   commits every 2 minutes for #257.
 - Reads: at most 1.3 M a month for the manifest through Smart Tiered Cache. Without it, up to
