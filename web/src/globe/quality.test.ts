@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FpsMonitor, guessTier, lowerTier, PRESETS, tierFromSearch } from './quality';
+import { FpsMonitor, guessTier, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 
 describe('guessTier', () => {
 	it('starts phones and weak GPUs low', () => {
@@ -54,5 +54,15 @@ describe('FpsMonitor', () => {
 		monitor.frame(0);
 		monitor.frame(16);
 		expect(monitor.frame(60_000)).toBe(false);
+	});
+});
+
+describe('surfaceBudgetMb', () => {
+	it('gives no tiles to the low tier and a few to phones', () => {
+		expect(surfaceBudgetMb('low', false)).toBe(0);
+		expect(surfaceBudgetMb('high', false)).toBe(96);
+		expect(surfaceBudgetMb('medium', false)).toBe(96);
+		expect(surfaceBudgetMb('medium', true)).toBe(5);
+		expect(surfaceBudgetMb('low', true)).toBe(0);
 	});
 });

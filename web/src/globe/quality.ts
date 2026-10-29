@@ -16,14 +16,14 @@ export interface QualityPreset {
 	cloudBicubic: boolean;
 	/** Bloom and grading (#58). */
 	postProcessing: boolean;
-	/** GPU memory for surface detail tiles (ADR 0022), MB; medium follows the mobile budget. */
+	/** GPU memory for surface detail tiles (ADR 0022), MB. */
 	surfaceMb: number;
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
 	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, postProcessing: false, surfaceMb: 0 },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: false, surfaceMb: 10 },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: false, surfaceMb: 96 },
 	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, postProcessing: true, surfaceMb: 96 },
 };
 
@@ -40,10 +40,21 @@ export interface DeviceHints {
 const WEAK_GPU = /mali|adreno \(tm\) [1-5]\d\d|powervr|intel\(r\) (hd|uhd) graphics|swiftshader|llvmpipe/i;
 const STRONG_GPU = /apple m\d|nvidia|geforce|rtx|radeon (rx|pro)|apple gpu/i;
 
+/** Phones keep 4 tiles: the globe already takes 250 of their 256 MB until its textures move to KTX2. */
+export const PHONE_SURFACE_MB = 5;
+
+export function isPhone({ screenMin, coarsePointer }: DeviceHints): boolean {
+	return coarsePointer && screenMin < 600;
+}
+
+export function surfaceBudgetMb(tier: QualityTier, phone: boolean): number {
+	return Math.min(PRESETS[tier].surfaceMb, phone ? PHONE_SURFACE_MB : Infinity);
+}
+
 /** Initial tier from cheap hints: phones and weak GPUs start low, known strong GPUs high. */
 export function guessTier({ gpu = '', screenMin, coarsePointer, memoryGb }: DeviceHints): QualityTier {
 	if (WEAK_GPU.test(gpu) || (memoryGb !== undefined && memoryGb <= 2)) return 'low';
-	if (coarsePointer && screenMin < 600) return STRONG_GPU.test(gpu) ? 'medium' : 'low';
+	if (isPhone({ screenMin, coarsePointer })) return STRONG_GPU.test(gpu) ? 'medium' : 'low';
 	if (STRONG_GPU.test(gpu)) return 'high';
 	return 'medium';
 }
