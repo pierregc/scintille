@@ -4,7 +4,7 @@ export const SLOTS = 60;
 export interface Frame {
 	width: number;
 	height: number;
-	/** Top of the y axis; shared by all sources so their charts compare. */
+	/** Top of the y axis. */
 	max: number;
 }
 
