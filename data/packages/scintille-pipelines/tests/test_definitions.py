@@ -77,6 +77,8 @@ def test_code_location_loads() -> None:
     assert {s.name for s in repo.schedule_defs} == {
         "daily_gold_schedule",
         "storm_catalog_schedule",
+        "flash_archive_schedule",
+        "flash_archive_repair_schedule",
         "silver_hourly_checks_schedule",
         "silver_daily_checks_schedule",
         "lake_weekly_maintenance_schedule",
