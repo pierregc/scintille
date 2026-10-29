@@ -253,7 +253,8 @@ export class ArchiveCloudFeed {
 	}
 
 	#loadNext(): void {
-		if (this.#loading || this.#time === undefined) return;
+		// Until every day within reach is read, the nearest frame may be in a missing one.
+		if (this.#loading || this.#time === undefined || this.#needed.some((day) => !this.#days.has(day))) return;
 		const job = this.#next();
 		if (!job) return;
 		const request = new AbortController();

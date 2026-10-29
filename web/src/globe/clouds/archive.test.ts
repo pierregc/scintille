@@ -85,6 +85,25 @@ describe('archive cloud playback', () => {
 		s.feed.stop(); s.clouds.dispose();
 	});
 
+	it('waits for every day within reach before loading, so a frame of the next day is not skipped', async () => {
+		const s = setup([3, 4, 5]);
+		let nextDay: (response: Response) => void = () => {};
+		s.fetchFn.mockImplementation(async (input: string | URL | Request) => {
+			const url = String(input);
+			if (url.endsWith('2026-07-16.json')) return new Promise<Response>((resolve) => { nextDay = resolve; });
+			return url.endsWith('2026-07-15.json') ? Response.json(manifest('2026-07-15', [3, 4, 5])) : new Response(null, { status: 404 });
+		});
+		const time = T0 + 5.75 * HOUR;
+		s.feed.setTime(time);
+		await vi.waitFor(() => expect(s.fetchFn).toHaveBeenCalledTimes(2));
+		s.feed.setTime(time);
+		expect(s.load).not.toHaveBeenCalled();
+		nextDay(Response.json(manifest('2026-07-16', [6])));
+		await s.feed.idle();
+		expect(s.load.mock.calls.map(([, at]) => (at - T0) / HOUR)).toEqual([6, 5, 4]);
+		s.feed.stop(); s.clouds.dispose();
+	});
+
 	it('disposes the prior window on backwards seeks and returns no wrong-era image', async () => {
 		const s = setup([0]);
 		s.feed.setTime(T0); await s.feed.idle(); s.clouds.setTime(T0);
