@@ -20,9 +20,13 @@ Measured on 29 October:
 | Cloud daily indexes | 17 October | 30 days |
 | Live flash chunks | last hour | 1 hour |
 
-15, 19 and 22 October are inside every retention: the data exists, nothing serves it. The live feed
-carries about 210,000 flashes and 2.0 MB per hour at 17:30 UTC (9.5 bytes per flash), so about
-40 to 50 MB per day in the same encoding. The R2 plan lands near 8 GB of the 10 GB free tier.
+15, 19 and 22 October are inside every retention: the data exists, nothing serves it. The live
+hour at 18:00 UTC held 196,000 flashes; re-encoded as one hourly set it weighs 1.8 MB (9.3 bytes per
+flash), so 40 to 50 MB per day. Storm replay chunks add about 35 MB and 7,000 writes per day; a replay
+downloads 3 to 160 KB.
+
+R2 holds 8.3 GB of the 10 GB free tier (29 October, 17:45 UTC), 1.6 GB of it the GLM cache that
+expires by 30 October.
 
 ## Options
 
@@ -32,10 +36,14 @@ carries about 210,000 flashes and 2.0 MB per hour at 17:30 UTC (9.5 bytes per fl
   costs R2 reads per viewer and weighs on phones.
 - **Hourly archive built from silver.** One more Dagster asset and a second copy of the flashes;
   deduplicated, complete, rebuilt from silver after any outage.
+- **One tiled archive for travel and storm replays.** Storm replays would point to archive tiles
+  instead of their own chunks, saving their 35 MB and 7,000 writes per day. Measured on the same
+  hour, the busiest tile weighs 420 KB per hour in 30° tiles and 230 KB in 10° tiles: a long storm
+  replay would download 2 to 4 MB instead of 160 KB.
 
 ## Decision
 
-Proposed: the third option.
+Proposed: the third option. Storm replays keep their chunks, which stay small.
 
 **Archive.** A `flash_archive` asset, partitioned by UTC hour, encodes silver flashes like storm
 replay chunks: SCNT gzip, at most 65,536 flashes per chunk, immutable content-addressed paths
@@ -65,10 +73,27 @@ digest in the texture name, reference recomputed from the upload time; no textur
 
 | Cost | Value |
 | --- | --- |
-| Storage | about 1 GB at 21 days (1.4 GB at 30), so about 9 GB of the 10 GB free tier |
+| Storage | about 0.95 GB at 21 days (0.65 GB at 14, 1.4 GB at 30) |
 | Writes | about 150 per day (chunks, index, day list), 4,500 per month of 1 M free |
 | Reads | tens of silver reads per hourly run; browsers read immutable chunks through the CDN |
 | VPS | one run of about a minute per hour |
+
+R2 at steady state, end of December, with this archive at 21 days:
+
+| Prefix | GB |
+| --- | --- |
+| Silver, 21 days | 3.4 |
+| Storm replay chunks, 60 days | 2.1 |
+| Flash archive, 21 days | 0.95 |
+| Cloud archive, 30 days, and detail, 1 day | 1.2 |
+| Storm pages and index, growing 8 MB per day | 0.6 |
+| Lake metadata, old snapshots and gold, once snapshots expire | 0.5 |
+| Surface textures and live files | 0.3 |
+| **Total** | **9.0** |
+
+This leaves about 1 GB. It holds only if old lake snapshots expire: lake metadata and gold take
+2.1 GB today, each table keeping 100 metadata files of 3 MB that grow with every snapshot. Without
+that expiry the total passes 10 GB before the end of the year, with or without this archive.
 
 - Clouds keep 30 days for storm replays; the calendar offers 21.
 - At 3600×, a day plays in 24 s and needs about 50 MB: a slow connection waits on the next hour, and
