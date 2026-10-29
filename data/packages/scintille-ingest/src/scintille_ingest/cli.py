@@ -26,6 +26,7 @@ from scintille_ingest.clouds.collector import CloudCollector, CompositeCollector
 from scintille_ingest.clouds.publish import CloudPublisher
 from scintille_ingest.clouds.reindex import days_between, reindex_day
 from scintille_ingest.clouds.sources import GOES_BUCKETS, HIMAWARI_BUCKET, Sources
+from scintille_ingest.clouds.storm_detail import StormTracks
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
@@ -231,6 +232,7 @@ async def run_clouds(port: int) -> int:
         CloudPublisher(
             ObjectLiveStore(store, prefix="live/clouds/"),
             ObjectLiveStore(store, prefix="archive/clouds/"),
+            storms=StormTracks(ObjectLiveStore(store, prefix="storms/")),
         ),
         metrics=metrics,
     )
@@ -254,6 +256,7 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
     configure_json_logs()
     live: LiveStore
     archive: LiveStore
+    storms = None
     if out is not None:
         live, archive = FileLiveStore(out, "live/clouds/"), FileLiveStore(out, "archive/clouds/")
     else:
@@ -264,6 +267,7 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         store = live_store(bucket)
         live = ObjectLiveStore(store, prefix="live/clouds/")
         archive = ObjectLiveStore(store, prefix="archive/clouds/")
+        storms = StormTracks(ObjectLiveStore(store, prefix="storms/"))
     key = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_KEY")
     secret = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_SECRET")
     mtg = (
@@ -283,7 +287,9 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         ),
         gfs.GfsSkin(public_store(gfs.BUCKET)),
         public_store(gmgsi.BUCKET),
-        CloudPublisher(live, archive, attribution=COMPOSITE_ATTRIBUTION.format(year=year)),
+        CloudPublisher(
+            live, archive, attribution=COMPOSITE_ATTRIBUTION.format(year=year), storms=storms
+        ),
         Path(os.environ.get("SCINTILLE_CLOUD_WORK_DIR", "/tmp/scintille-clouds")),
         workers=int(os.environ.get("SCINTILLE_CLOUD_WORKERS", "2")),
         metrics=metrics,
