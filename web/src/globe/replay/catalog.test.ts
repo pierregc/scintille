@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../../fixtures/storms/index/latest.json';
 import highlights from '../../../../fixtures/storms/highlights.json';
-import type { StormSummary } from '../../contract/types';
-import { CATALOG_LIMITS, chooseStorms, loadSuggestions, parseCatalogPage, parseHighlights, reason, stormFacts, stormWhen } from './catalog';
+import type { StormMetric, StormSummary } from '../../contract/types';
+import { CATALOG_LIMITS, chooseStorms, loadSuggestions, parseCatalogPage, parseHighlights, reason, stormDay, stormFigure } from './catalog';
 
 const missing = new Response('', { status: 404 });
 /** Serves index pages through `index`, with no highlights published yet. */
@@ -44,6 +44,9 @@ it('rejects malformed highlights and words every reason briefly', () => {
 		{ ...highlights, highlights: [{ ...item, kind: 'area', area: null }] }, { ...highlights, highlights: [{ ...item, area: 'europe' }] },
 		{ ...highlights, highlights: [{ ...item, storm: { ...item.storm, level: 99 } }] },
 		{ ...highlights, highlights: Array(13).fill(item) },
+		{ ...highlights, highlights: [{ ...item, metric: { name: 'beauty', value: 1, rank: 1 } }] },
+		{ ...highlights, highlights: [{ ...item, metric: { name: 'flashes', value: -1, rank: 1 } }] },
+		{ ...highlights, highlights: [{ ...item, metric: { name: 'flashes', value: 1, rank: 0 } }] },
 	]) expect(() => parseHighlights(value)).toThrow('invalid');
 	expect(reason({ kind: 'area', area: 'americas' })).toBe('Strongest in the Americas today');
 	expect(reason({ kind: 'largest', area: null })).toBe('Largest this week');
@@ -116,10 +119,17 @@ describe('bounded, validated discovery', () => {
 	});
 });
 
-it('words when a storm ran and what it did', () => {
-	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T22:10:00Z' }, 'en-US')).toMatch(/· 4 h 10$/);
-	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T20:00:00Z' }, 'en-US')).toMatch(/· 2 h$/);
-	expect(stormWhen({ t_start: '2026-07-15T18:00:00Z', t_end: '2026-07-15T18:45:00Z' }, 'en-US')).toMatch(/· 45 min$/);
-	expect(stormFacts({ flashes: 12345, distance_km: 230.4 }, 'en-US')).toBe('12,345 flashes · 230 km travelled');
-	expect(stormFacts({ flashes: 3, distance_km: null }, 'en-US')).toBe('3 flashes');
+it('words the day and the one figure that makes a storm notable', () => {
+	const storm = highlights.highlights[0].storm as StormSummary;
+	const card = (kind: 'day' | 'week' | 'area' | 'longest' | null, name: StormMetric['name'], value: number, rank = 1, area: 'europe' | null = null) =>
+		stormFigure({ storm, reason: null, kind: kind ?? undefined, area, metric: { name, value, rank } }, 'en-US');
+	expect(stormDay({ t_start: '2026-07-15T18:00:00Z' }, 'en-US')).toBe('Jul 15');
+	expect(card('week', 'flashes', 205272)).toBe('205,272 flashes, the most this week');
+	expect(card('day', 'countries', 4, 2)).toBe('Crossed 4 countries, 2nd most today');
+	expect(card('area', 'distance_km', 1045.2, 1, 'europe')).toBe('Travelled 1,045 km, the farthest in Europe today');
+	expect(card('day', 'hours', 15.9, 4)).toBe('Lasted 15 h 54');
+	expect(card('longest', 'hours', 2)).toBe('Lasted 2 h');
+	expect(card(null, 'peak_rate', 697)).toBe('697 flashes a minute at its peak');
+	expect(card(null, 'area_km2', 82372.9)).toBe('82,400 km² wide');
+	expect(stormFigure({ storm: { ...storm, flashes: 12345 }, reason: null }, 'en-US')).toBe('12,345 flashes');
 });

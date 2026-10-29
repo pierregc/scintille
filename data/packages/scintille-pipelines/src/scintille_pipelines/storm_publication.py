@@ -190,11 +190,15 @@ def storm_catalog(
             reject(storm.slug)
             continue
         valid.append(storm.storm_id)
-    steps = all_tracks.filter(pl.col("storm_id").is_in(valid)).sort("window_start")
+    steps = (
+        all_tracks.filter(pl.col("storm_id").is_in(valid))
+        .with_columns(scan_start=pl.min_horizontal("window_start", "t_start"))
+        .sort("scan_start")
+    )
     selected: dict[str, list[pl.DataFrame]] = defaultdict(list)
     # Bounded silver scans shared by every storm, long ones read piece by piece.
     for (start_window, end_window), rows in flash_windows(
-        list(zip(steps["window_start"], steps["window_end"], strict=True))
+        list(zip(steps["scan_start"], steps["window_end"], strict=True))
     ):
         flashes = _scan(flash_table, _between("event_time", start_window, end_window))
         for (storm_id,), part in steps[rows].partition_by("storm_id", as_dict=True).items():

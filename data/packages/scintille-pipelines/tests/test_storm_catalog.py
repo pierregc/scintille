@@ -379,6 +379,7 @@ def test_track_bounds_cross_antimeridian_without_double_counting() -> None:
     step = dict(
         window_start=NOW,
         window_end=NOW + timedelta(hours=1),
+        t_start=NOW,
         west=178.0,
         east=-178.0,
         south=-1.0,
@@ -386,6 +387,28 @@ def test_track_bounds_cross_antimeridian_without_double_counting() -> None:
     )
     selected = selected_flashes(flashes, pl.DataFrame([step, step]))
     assert set(selected["flash_id"]) == {"a", "b"}
+
+
+def test_track_bounds_start_at_the_first_flash_of_the_overlap() -> None:
+    minutes = [-40, -20, 10]
+    flashes = pl.DataFrame(
+        {
+            "flash_id": ["a", "b", "c"],
+            "event_time": [NOW + timedelta(minutes=m) for m in minutes],
+            "lat": [0.0] * 3,
+            "lon": [0.0] * 3,
+        }
+    )
+    step = dict(
+        window_start=NOW,
+        window_end=NOW + timedelta(hours=1),
+        t_start=NOW - timedelta(minutes=30),
+        west=-1.0,
+        east=1.0,
+        south=-1.0,
+        north=1.0,
+    )
+    assert selected_flashes(flashes, pl.DataFrame([step]))["flash_id"].to_list() == ["b", "c"]
 
 
 def test_chunks_preserve_event_time_and_partition_hours() -> None:

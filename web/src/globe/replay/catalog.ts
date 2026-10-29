@@ -1,4 +1,4 @@
-import type { StormHighlight, StormHighlights, StormIndexPage, StormSummary } from '../../contract/types';
+import type { StormHighlight, StormHighlights, StormIndexPage, StormMetric, StormSummary } from '../../contract/types';
 import { boundedBody } from '../clouds/response';
 import { CONTRACT_MAJOR } from '../live/decode';
 
@@ -30,6 +30,7 @@ function checkStorm(storm: unknown): asserts storm is StormSummary {
 }
 
 const KINDS = ['day', 'week', 'area', 'longest', 'intense', 'largest', 'stationary'];
+const METRICS = ['flashes', 'countries', 'distance_km', 'hours', 'peak_rate', 'area_km2'];
 const AREAS: Record<string, string> = { americas: 'the Americas', europe: 'Europe', africa: 'Africa', asia: 'Asia' };
 
 export function parseHighlights(value: unknown): StormHighlights {
@@ -41,6 +42,9 @@ export function parseHighlights(value: unknown): StormHighlights {
 		if (!record(item) || !KINDS.includes(String(item.kind)) || (item.kind === 'area') !== (typeof item.area === 'string' && item.area in AREAS)) {
 			throw new Error('invalid storm highlight');
 		}
+		const metric = item.metric;
+		if (metric != null && (!record(metric) || !METRICS.includes(String(metric.name)) || !Number.isFinite(metric.value) ||
+			Number(metric.value) < 0 || !Number.isSafeInteger(metric.rank) || Number(metric.rank) < 1)) throw new Error('invalid storm metric');
 		checkStorm(item.storm);
 	}
 	return value as unknown as StormHighlights;
@@ -59,22 +63,38 @@ export function reason(highlight: Pick<StormHighlight, 'kind' | 'area'>): string
 	}
 }
 
-/** Start time and duration, e.g. "Jul 15, 6:00 PM · 4 h 10". */
-export function stormWhen(storm: Pick<StormSummary, 't_start' | 't_end'>, locale?: string): string {
-	const minutes = Math.round((Date.parse(storm.t_end) - Date.parse(storm.t_start)) / 60_000);
-	const span = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${String(minutes % 60).padStart(2, '0')}` : ''}`;
-	return `${new Date(storm.t_start).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })} · ${span}`;
+/** Start day without year, e.g. "Jul 15". */
+export function stormDay(storm: Pick<StormSummary, 't_start'>, locale?: string): string {
+	return new Date(storm.t_start).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
-/** Total flashes and distance travelled. */
-export function stormFacts(storm: Pick<StormSummary, 'flashes' | 'distance_km'>, locale?: string): string {
-	const flashes = `${storm.flashes.toLocaleString(locale)} flashes`;
-	return storm.distance_km == null ? flashes : `${flashes} · ${Math.round(storm.distance_km).toLocaleString(locale)} km travelled`;
+const span = (minutes: number) => minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${String(minutes % 60).padStart(2, '0')}` : ''}`;
+const SUPERLATIVES: Record<StormMetric['name'], string> = { flashes: 'most', countries: 'most', distance_km: 'farthest', hours: 'longest', peak_rate: 'most', area_km2: 'largest' };
+const ORDINALS = ['the', '2nd', '3rd'];
+
+/** The one figure that makes a storm notable, and how it ranks when the title compared storms. */
+export function stormFigure(card: StormCard, locale?: string): string {
+	const metric = card.metric ?? { name: 'flashes', value: card.storm.flashes, rank: 0 };
+	const n = (value: number) => Math.round(value).toLocaleString(locale);
+	const figure = {
+		flashes: `${n(metric.value)} flashes`,
+		countries: `Crossed ${n(metric.value)} countries`,
+		distance_km: `Travelled ${n(metric.value)} km`,
+		hours: `Lasted ${span(Math.round(metric.value * 60))}`,
+		peak_rate: `${n(metric.value)} flashes a minute at its peak`,
+		area_km2: `${n(Math.round(metric.value / 100) * 100)} km² wide`,
+	}[metric.name];
+	const scope = card.kind === 'day' ? 'today' : card.kind === 'week' ? 'this week' : card.kind === 'area' ? `in ${AREAS[card.area ?? '']} today` : null;
+	const place = ORDINALS[metric.rank - 1];
+	return scope && place ? `${figure}, ${place} ${SUPERLATIVES[metric.name]} ${scope}` : figure;
 }
 
 export interface StormCard {
 	storm: StormSummary;
 	reason: string | null;
+	kind?: StormHighlight['kind'];
+	area?: StormHighlight['area'];
+	metric?: StormMetric | null;
 }
 
 export interface StormSuggestions {
@@ -116,7 +136,7 @@ export async function loadSuggestions(baseUrl: string, signal: AbortSignal, fetc
 	if (!response.ok) throw new Error(`highlights HTTP ${response.status}`);
 	const value = parseHighlights(JSON.parse(new TextDecoder().decode(await boundedBody(response, CATALOG_LIMITS.highlightBytes))));
 	signal.throwIfAborted();
-	const cards = value.highlights.map((item) => ({ storm: item.storm, reason: reason(item) }));
+	const cards = value.highlights.map((item) => ({ storm: item.storm, reason: reason(item), kind: item.kind, area: item.area, metric: item.metric }));
 	return cards.length ? { cards, publishedAt: Date.parse(value.published_at), partial: false } : loadRecent(root, signal, fetchFn);
 }
 
