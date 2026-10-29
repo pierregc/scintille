@@ -344,7 +344,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.7.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.8.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -352,7 +352,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.7.0`.
+Value: `2.8.0`.
 
 ### UtcTimestamp
 
@@ -808,7 +808,7 @@ One highlighted storm and the reason it was chosen.
 | `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
 | `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
 | `storm` | [StormSummary](#stormsummary) | yes |  |  |
-| `metric` | [StormMetric](#stormmetric) or null | no |  | Null in files older than 2.7.0. |
+| `metric` | [StormMetric](#stormmetric) or null | no |  | Null in files older than 2.8.0. |
 
 ### StormHighlights
 

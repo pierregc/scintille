@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.7.0"]
-SCHEMA_VERSION: Final = "2.7.0"
+SchemaVersion = Literal["2.8.0"]
+SCHEMA_VERSION: Final = "2.8.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -603,7 +603,7 @@ class StormHighlight(BaseModel):
     )
     storm: StormSummary
     metric: StormMetric | None | None = Field(
-        default=None, description="Null in files older than 2.7.0."
+        default=None, description="Null in files older than 2.8.0."
     )
 
 

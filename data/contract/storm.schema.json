@@ -441,7 +441,7 @@
               "type": "null"
             }
           ],
-          "description": "Null in files older than 2.7.0."
+          "description": "Null in files older than 2.8.0."
         }
       },
       "description": "One highlighted storm and the reason it was chosen."
