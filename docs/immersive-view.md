@@ -459,7 +459,7 @@ after #332 and #333 (PR preview, same data) is `bench-mobile-cold-phone-budgets.
 | Frame cost p95 ≤ 10 ms, tier kept | 7.4 to 9.6 ms, `high` | 4.6 to 9.1 ms, `medium` | met |
 | 3 s flights: no interval over 50 ms, p95 ≤ 17 ms | max 17.6 ms, p95 ≤ 10 ms | max 10.4 ms | met |
 | GPU textures and buffers | 332 MB (≤ 384) | 244 MB (≤ 256) | met |
-| First load, cold | 6.3 to 9.7 MB (≤ 10) | 6.7 to 8.4 MB (≤ 8): R1 8.36, R2 8.33; 5.5 to 6.2 MB since #332 | met since #332 |
+| First load, cold | 6.3 to 9.7 MB (≤ 10) | 6.7 to 8.4 MB (≤ 8): R1 8.36, R2 8.33; 5.3 to 6.2 MB since #332 | met since #332 |
 | First load, warm | 0.02 to 1.1 MB | 0.01 to 1.0 MB | met |
 | First load, 4G | | 5.7 to 6.4 MB settled in 9.6 to 14.5 s, globe ready 1.2 to 7.0 s | checked |
 | Time to globe, to storm framed | 0.38 to 0.62 s, 3.7 to 4.4 s; 1.2 to 3.5 s ready when the page itself is slow (TTFB 0.5 to 0.7 s) | 0.40 to 0.84 s, 3.6 to 5.2 s | met, network outliers |

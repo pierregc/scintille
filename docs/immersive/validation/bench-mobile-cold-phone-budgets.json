@@ -1,5 +1,5 @@
 {
-	"measuredAt": "2026-10-29T18:20:04.584Z",
+	"measuredAt": "2026-10-29T18:31:49.508Z",
 	"url": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/",
 	"profile": "mobile",
 	"afterglow": "per storm",
@@ -23,16 +23,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,20000.000,0.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3013,
+						"ms": 3001,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.7,
-						"workP95Ms": 0.9,
-						"workMaxMs": 1.1,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.7,
+						"workMaxMs": 0.9,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -40,8 +40,8 @@
 						}
 					},
 					"transferBytes": {
-						"total": 530,
-						"other": 530
+						"total": 527,
+						"other": 527
 					},
 					"paused": {
 						"frames": 120,
@@ -50,9 +50,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.9,
-						"workP95Ms": 7,
-						"workMaxMs": 7.2,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.6,
+						"workMaxMs": 6.1,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -60,15 +60,15 @@
 						}
 					},
 					"playing": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.6,
-						"workP95Ms": 0.7,
-						"workMaxMs": 0.9,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.7,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -82,9 +82,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 6.1,
-						"workP95Ms": 7.2,
-						"workMaxMs": 7.7,
+						"workP50Ms": 5.1,
+						"workP95Ms": 5.8,
+						"workMaxMs": 7.4,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -97,7 +97,7 @@
 						"flicker": 266,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.620Z"
+						"sceneTime": "2026-10-18T23:23:01.680Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -155,16 +155,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.55705,-44.53189,2511.387,20.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3017,
+						"ms": 3021,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 6,
+						"workP50Ms": 5.5,
 						"workP95Ms": 8.9,
-						"workMaxMs": 10.6,
+						"workMaxMs": 9.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -172,19 +172,19 @@
 						}
 					},
 					"transferBytes": {
-						"total": 1063,
-						"other": 1063
+						"total": 1070,
+						"other": 1070
 					},
 					"paused": {
-						"frames": 120,
+						"frames": 121,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.7,
-						"workP95Ms": 9.4,
-						"workMaxMs": 10.9,
+						"workP50Ms": 7.5,
+						"workP95Ms": 8.4,
+						"workMaxMs": 9.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -194,13 +194,13 @@
 					"playing": {
 						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 1.2,
-						"workP95Ms": 1.5,
-						"workMaxMs": 1.9,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -210,13 +210,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 8.2,
-						"workP95Ms": 9.8,
-						"workMaxMs": 11.4,
+						"workP50Ms": 7.9,
+						"workP95Ms": 10,
+						"workMaxMs": 10.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -287,16 +287,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,400.057,1.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3012,
+						"ms": 3010,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 7.1,
-						"workP95Ms": 8.7,
-						"workMaxMs": 11.5,
+						"workP50Ms": 6.2,
+						"workP95Ms": 8.3,
+						"workMaxMs": 11,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -304,9 +304,9 @@
 						}
 					},
 					"transferBytes": {
-						"total": 151759,
-						"other": 1069,
-						"earth": 150690
+						"total": 151712,
+						"other": 1058,
+						"earth": 150654
 					},
 					"paused": {
 						"frames": 120,
@@ -315,9 +315,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 6.4,
-						"workP95Ms": 7.5,
-						"workMaxMs": 7.8,
+						"workP50Ms": 5.7,
+						"workP95Ms": 6.1,
+						"workMaxMs": 7.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -325,15 +325,15 @@
 						}
 					},
 					"playing": {
-						"frames": 241,
+						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 1.3,
-						"workP95Ms": 1.5,
-						"workMaxMs": 2.1,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -347,9 +347,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 7.5,
-						"workP95Ms": 8.7,
-						"workMaxMs": 9.8,
+						"workP50Ms": 6.5,
+						"workP95Ms": 7.2,
+						"workMaxMs": 8.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -359,10 +359,10 @@
 					"flashes": {
 						"held": 77558,
 						"active": 362,
-						"flicker": 268,
+						"flicker": 266,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.500Z"
+						"sceneTime": "2026-10-18T23:23:01.620Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -402,10 +402,10 @@
 							"failed": 0,
 							"aborted": 0,
 							"evicted": 0,
-							"unused": 2,
+							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 16
+							"uploaded": 18
 						},
 						"vectors": false
 					},
@@ -420,16 +420,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-minas-gerais-7&time=2026-10-18T23:15:00Z&paused=1&view=-14.56000,-44.26000,740.000,60.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3011,
+						"ms": 3018,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 6.3,
-						"workP95Ms": 8.1,
-						"workMaxMs": 10,
+						"workP50Ms": 5.8,
+						"workP95Ms": 7,
+						"workMaxMs": 10.3,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -437,20 +437,20 @@
 						}
 					},
 					"transferBytes": {
-						"total": 124309,
-						"other": 1075,
-						"earth": 123234
+						"total": 124367,
+						"other": 1063,
+						"earth": 123304
 					},
 					"paused": {
-						"frames": 120,
+						"frames": 121,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.9,
-						"workP95Ms": 6.7,
-						"workMaxMs": 9.1,
+						"workP50Ms": 5.7,
+						"workP95Ms": 6.2,
+						"workMaxMs": 6.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -458,15 +458,15 @@
 						}
 					},
 					"playing": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 1.2,
-						"workP95Ms": 1.6,
-						"workMaxMs": 1.9,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -480,9 +480,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 6.9,
-						"workP95Ms": 8.9,
-						"workMaxMs": 10.3,
+						"workP50Ms": 6.6,
+						"workP95Ms": 7.5,
+						"workMaxMs": 9,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 77558,
@@ -492,10 +492,10 @@
 					"flashes": {
 						"held": 77558,
 						"active": 362,
-						"flicker": 265,
+						"flicker": 266,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.800Z"
+						"sceneTime": "2026-10-18T23:23:01.620Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -535,31 +535,31 @@
 							"failed": 0,
 							"aborted": 0,
 							"evicted": 0,
-							"unused": 4,
+							"unused": 2,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 20
+							"uploaded": 22
 						},
 						"vectors": false
 					},
 					"screenshot": "R1-window.png",
 					"exposure": {
-						"mean": 28,
+						"mean": 27,
 						"nearWhite": 0.011
 					}
 				}
 			},
 			"load": {
-				"readyMs": 1727,
-				"settledMs": 7811,
+				"readyMs": 3576,
+				"settledMs": 8364,
 				"bytes": {
-					"total": 5668807,
-					"other": 5345,
-					"code": 317756,
-					"metadata": 211223,
-					"earth": 1163596,
-					"flashes": 1053675,
-					"clouds": 2917212
+					"total": 6004024,
+					"other": 5383,
+					"code": 319007,
+					"earth": 1163828,
+					"metadata": 208468,
+					"flashes": 780125,
+					"clouds": 3527213
 				},
 				"quality": "medium",
 				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
@@ -576,16 +576,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,20000.000,0.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3013,
+						"ms": 3014,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.6,
-						"workP95Ms": 0.9,
-						"workMaxMs": 0.9,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.8,
+						"workMaxMs": 0.8,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -593,19 +593,19 @@
 						}
 					},
 					"transferBytes": {
-						"total": 535,
-						"other": 535
+						"total": 530,
+						"other": 530
 					},
 					"paused": {
 						"frames": 120,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5,
-						"workP95Ms": 5.5,
-						"workMaxMs": 6,
+						"workP50Ms": 5.3,
+						"workP95Ms": 6,
+						"workMaxMs": 6.9,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -613,15 +613,15 @@
 						}
 					},
 					"playing": {
-						"frames": 241,
+						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.6,
-						"workP95Ms": 0.7,
-						"workMaxMs": 1,
+						"workP50Ms": 0.5,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.8,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -635,9 +635,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.1,
-						"workP95Ms": 5.6,
-						"workMaxMs": 6.2,
+						"workP50Ms": 5.5,
+						"workP95Ms": 6.1,
+						"workMaxMs": 6.7,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -646,11 +646,11 @@
 					},
 					"flashes": {
 						"held": 60221,
-						"active": 200,
+						"active": 201,
 						"flicker": 147,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T19:23:01.380Z"
+						"sceneTime": "2026-10-18T19:23:01.800Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -708,16 +708,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-7.29681,-57.68428,3033.270,20.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3013,
+						"ms": 3014,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.1,
-						"workP95Ms": 6.1,
-						"workMaxMs": 9.2,
+						"workP50Ms": 5.5,
+						"workP95Ms": 7,
+						"workMaxMs": 8.2,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -725,8 +725,8 @@
 						}
 					},
 					"transferBytes": {
-						"total": 1059,
-						"other": 1059
+						"total": 1069,
+						"other": 1069
 					},
 					"paused": {
 						"frames": 120,
@@ -735,9 +735,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.2,
-						"workP95Ms": 5.8,
-						"workMaxMs": 6.6,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.6,
+						"workMaxMs": 6.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -745,15 +745,15 @@
 						}
 					},
 					"playing": {
-						"frames": 241,
+						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 1.1,
-						"workP95Ms": 1.4,
-						"workMaxMs": 1.7,
+						"workP50Ms": 1,
+						"workP95Ms": 1.3,
+						"workMaxMs": 1.5,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -763,13 +763,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.9,
-						"workP95Ms": 6.7,
-						"workMaxMs": 7.6,
+						"workP50Ms": 6,
+						"workP95Ms": 7.4,
+						"workMaxMs": 7.9,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -778,11 +778,11 @@
 					},
 					"flashes": {
 						"held": 60221,
-						"active": 200,
+						"active": 201,
 						"flicker": 147,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T19:23:01.500Z"
+						"sceneTime": "2026-10-18T19:23:01.800Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -840,16 +840,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,400.057,1.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3013,
+						"ms": 3014,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
 						"workP50Ms": 5.5,
-						"workP95Ms": 6.5,
-						"workMaxMs": 8.1,
+						"workP95Ms": 7.1,
+						"workMaxMs": 9.5,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -857,20 +857,20 @@
 						}
 					},
 					"transferBytes": {
-						"total": 168956,
-						"other": 1064,
-						"earth": 167892
+						"total": 201892,
+						"other": 1057,
+						"earth": 200835
 					},
 					"paused": {
 						"frames": 120,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.2,
-						"workP95Ms": 5.5,
-						"workMaxMs": 5.7,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.2,
+						"workMaxMs": 6.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -878,15 +878,15 @@
 						}
 					},
 					"playing": {
-						"frames": 240,
+						"frames": 239,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
+						"intervalMaxMs": 33.4,
 						"over33Ms": 0,
 						"over50Ms": 0,
 						"workP50Ms": 1,
-						"workP95Ms": 1.3,
-						"workMaxMs": 1.6,
+						"workP95Ms": 1.2,
+						"workMaxMs": 1.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -900,9 +900,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.4,
-						"workP95Ms": 6,
-						"workMaxMs": 6.5,
+						"workP50Ms": 5.9,
+						"workP95Ms": 6.8,
+						"workMaxMs": 7.5,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -915,7 +915,7 @@
 						"flicker": 147,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T19:23:01.260Z"
+						"sceneTime": "2026-10-18T19:23:01.440Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -944,21 +944,21 @@
 						"tiles": {
 							"wanted": 6,
 							"drawn": 6,
-							"textures": 20,
-							"bytes": 21785920,
+							"textures": 22,
+							"bytes": 23964512,
 							"queued": 0,
 							"loading": 0,
 							"missing": 0,
 							"deepest": 5,
 							"requested": 22,
-							"loaded": 20,
+							"loaded": 22,
 							"failed": 0,
-							"aborted": 2,
+							"aborted": 0,
 							"evicted": 0,
 							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 20
+							"uploaded": 22
 						},
 						"vectors": false
 					},
@@ -973,16 +973,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-mato-grosso-22&time=2026-10-18T19:15:00Z&paused=1&view=-6.77000,-59.48000,740.000,60.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3016,
+						"ms": 3019,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.1,
-						"workP95Ms": 6.2,
-						"workMaxMs": 7.7,
+						"workP50Ms": 5.5,
+						"workP95Ms": 6.6,
+						"workMaxMs": 8.3,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -990,21 +990,20 @@
 						}
 					},
 					"transferBytes": {
-						"total": 130507,
-						"other": 1066,
-						"earth": 129080,
-						"clouds": 361
+						"total": 97240,
+						"other": 1059,
+						"earth": 96181
 					},
 					"paused": {
 						"frames": 120,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.9,
-						"workP95Ms": 5.4,
-						"workMaxMs": 5.8,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.6,
+						"workMaxMs": 5.9,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -1014,13 +1013,13 @@
 					"playing": {
 						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 1,
+						"workP50Ms": 0.9,
 						"workP95Ms": 1.2,
-						"workMaxMs": 1.3,
+						"workMaxMs": 1.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -1030,13 +1029,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.3,
-						"workP95Ms": 6,
-						"workMaxMs": 7,
+						"workP50Ms": 5.4,
+						"workP95Ms": 6.4,
+						"workMaxMs": 7.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 60221,
@@ -1084,36 +1083,36 @@
 							"loading": 0,
 							"missing": 0,
 							"deepest": 5,
-							"requested": 30,
+							"requested": 28,
 							"loaded": 28,
 							"failed": 0,
-							"aborted": 2,
+							"aborted": 0,
 							"evicted": 0,
-							"unused": 1,
+							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 27
+							"uploaded": 28
 						},
 						"vectors": false
 					},
 					"screenshot": "R2-window.png",
 					"exposure": {
-						"mean": 165,
+						"mean": 166,
 						"nearWhite": 0.006
 					}
 				}
 			},
 			"load": {
-				"readyMs": 680,
-				"settledMs": 8294,
+				"readyMs": 8143,
+				"settledMs": 13295,
 				"bytes": {
-					"total": 6240088,
-					"other": 5350,
-					"code": 317778,
-					"metadata": 211443,
-					"earth": 1195124,
-					"flashes": 1526031,
-					"clouds": 2984362
+					"total": 6027390,
+					"other": 5374,
+					"code": 318783,
+					"metadata": 26831,
+					"earth": 1195309,
+					"flashes": 881042,
+					"clouds": 3600051
 				},
 				"quality": "medium",
 				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
@@ -1130,10 +1129,10 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,20000.000,0.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3001,
+						"ms": 3016,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
@@ -1147,18 +1146,18 @@
 						}
 					},
 					"transferBytes": {
-						"total": 528,
-						"other": 528
+						"total": 527,
+						"other": 527
 					},
 					"paused": {
-						"frames": 120,
+						"frames": 121,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.8,
-						"workP95Ms": 5.6,
+						"workP50Ms": 5.1,
+						"workP95Ms": 5.8,
 						"workMaxMs": 6,
 						"drawCallsP50": 11,
 						"maxInstances": {
@@ -1173,9 +1172,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.7,
-						"workMaxMs": 0.8,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 0.7,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1185,13 +1184,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.1,
-						"workP95Ms": 6,
-						"workMaxMs": 6.3,
+						"workP50Ms": 5.2,
+						"workP95Ms": 5.9,
+						"workMaxMs": 6.2,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1204,7 +1203,7 @@
 						"flicker": 65,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.200Z"
+						"sceneTime": "2026-10-18T23:23:01.440Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1233,21 +1232,21 @@
 						"tiles": {
 							"wanted": 0,
 							"drawn": 0,
-							"textures": 12,
-							"bytes": 13071552,
+							"textures": 13,
+							"bytes": 14160848,
 							"queued": 0,
 							"loading": 0,
 							"missing": 0,
 							"deepest": 0,
 							"requested": 13,
-							"loaded": 12,
+							"loaded": 13,
 							"failed": 0,
-							"aborted": 1,
+							"aborted": 0,
 							"evicted": 0,
 							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 12
+							"uploaded": 13
 						},
 						"vectors": false
 					},
@@ -1262,16 +1261,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.97637,-44.20043,1343.849,20.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3007,
+						"ms": 3011,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.1,
-						"workP95Ms": 7,
-						"workMaxMs": 8.1,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.5,
+						"workMaxMs": 7.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1279,20 +1278,19 @@
 						}
 					},
 					"transferBytes": {
-						"total": 2279,
-						"other": 1065,
-						"earth": 1214
+						"total": 1059,
+						"other": 1059
 					},
 					"paused": {
-						"frames": 120,
+						"frames": 121,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.3,
-						"workP95Ms": 6,
-						"workMaxMs": 7,
+						"workP50Ms": 4.8,
+						"workP95Ms": 6.1,
+						"workMaxMs": 6.2,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1302,11 +1300,11 @@
 					"playing": {
 						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.8,
+						"workP50Ms": 0.7,
 						"workP95Ms": 1,
 						"workMaxMs": 1.2,
 						"drawCallsP50": 13,
@@ -1318,13 +1316,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5.2,
-						"workP95Ms": 6.4,
-						"workMaxMs": 6.7,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.2,
+						"workMaxMs": 7.8,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1333,11 +1331,11 @@
 					},
 					"flashes": {
 						"held": 30474,
-						"active": 87,
-						"flicker": 65,
+						"active": 86,
+						"flicker": 64,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.500Z"
+						"sceneTime": "2026-10-18T23:23:01.680Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1372,10 +1370,10 @@
 							"loading": 0,
 							"missing": 0,
 							"deepest": 3,
-							"requested": 14,
+							"requested": 13,
 							"loaded": 13,
 							"failed": 0,
-							"aborted": 1,
+							"aborted": 0,
 							"evicted": 0,
 							"unused": 0,
 							"manifest": "ready",
@@ -1395,16 +1393,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,400.057,1.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3013,
+						"ms": 3012,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.7,
+						"workP50Ms": 4.6,
 						"workP95Ms": 6,
-						"workMaxMs": 6.9,
+						"workMaxMs": 8,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1418,13 +1416,13 @@
 					"paused": {
 						"frames": 120,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.8,
+						"workP50Ms": 4.7,
 						"workP95Ms": 5.7,
-						"workMaxMs": 6.7,
+						"workMaxMs": 6.3,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1438,9 +1436,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.8,
-						"workP95Ms": 1,
-						"workMaxMs": 1.2,
+						"workP50Ms": 0.7,
+						"workP95Ms": 0.9,
+						"workMaxMs": 1.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1448,15 +1446,15 @@
 						}
 					},
 					"playingCost": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 5,
-						"workP95Ms": 6,
-						"workMaxMs": 6.4,
+						"workP50Ms": 4.9,
+						"workP95Ms": 5.7,
+						"workMaxMs": 6.2,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1466,10 +1464,10 @@
 					"flashes": {
 						"held": 30474,
 						"active": 87,
-						"flicker": 65,
+						"flicker": 64,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.200Z"
+						"sceneTime": "2026-10-18T23:23:01.620Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1504,10 +1502,10 @@
 							"loading": 0,
 							"missing": 0,
 							"deepest": 3,
-							"requested": 14,
+							"requested": 13,
 							"loaded": 13,
 							"failed": 0,
-							"aborted": 1,
+							"aborted": 0,
 							"evicted": 0,
 							"unused": 0,
 							"manifest": "ready",
@@ -1527,16 +1525,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-north-atlantic-ocean-464&time=2026-10-18T23:15:00Z&paused=1&view=26.74000,-44.40000,740.000,60.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3011,
+						"ms": 3017,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.6,
-						"workP95Ms": 5.4,
-						"workMaxMs": 7.5,
+						"workP50Ms": 4.7,
+						"workP95Ms": 6.1,
+						"workMaxMs": 8.3,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1544,20 +1542,20 @@
 						}
 					},
 					"transferBytes": {
-						"total": 22051,
-						"other": 1065,
-						"earth": 20986
+						"total": 22082,
+						"other": 1071,
+						"earth": 21011
 					},
 					"paused": {
 						"frames": 120,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.5,
-						"workP95Ms": 5,
-						"workMaxMs": 6,
+						"workP50Ms": 4.7,
+						"workP95Ms": 5.5,
+						"workMaxMs": 6.3,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1571,8 +1569,8 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.8,
-						"workP95Ms": 1,
+						"workP50Ms": 0.7,
+						"workP95Ms": 0.9,
 						"workMaxMs": 1.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
@@ -1583,13 +1581,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
 						"workP50Ms": 4.8,
-						"workP95Ms": 5.3,
-						"workMaxMs": 6.7,
+						"workP95Ms": 5.8,
+						"workMaxMs": 7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 30474,
@@ -1598,11 +1596,11 @@
 					},
 					"flashes": {
 						"held": 30474,
-						"active": 87,
-						"flicker": 65,
+						"active": 86,
+						"flicker": 64,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T23:23:01.380Z"
+						"sceneTime": "2026-10-18T23:23:01.740Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1637,15 +1635,15 @@
 							"loading": 0,
 							"missing": 0,
 							"deepest": 3,
-							"requested": 19,
+							"requested": 18,
 							"loaded": 18,
 							"failed": 0,
-							"aborted": 1,
+							"aborted": 0,
 							"evicted": 0,
-							"unused": 3,
+							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 15
+							"uploaded": 18
 						},
 						"vectors": false
 					},
@@ -1657,16 +1655,16 @@
 				}
 			},
 			"load": {
-				"readyMs": 522,
-				"settledMs": 8002,
+				"readyMs": 578,
+				"settledMs": 5444,
 				"bytes": {
-					"total": 5796543,
-					"other": 5355,
-					"code": 317825,
-					"metadata": 211788,
-					"earth": 1027486,
-					"flashes": 1316878,
-					"clouds": 2917211
+					"total": 5738273,
+					"other": 5378,
+					"code": 318942,
+					"metadata": 209219,
+					"earth": 1028666,
+					"flashes": 648814,
+					"clouds": 3527254
 				},
 				"quality": "medium",
 				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
@@ -1683,16 +1681,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,20000.000,0.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3011,
+						"ms": 3012,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.8,
-						"workMaxMs": 0.9,
+						"workP50Ms": 0.4,
+						"workP95Ms": 0.6,
+						"workMaxMs": 1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1700,8 +1698,8 @@
 						}
 					},
 					"transferBytes": {
-						"total": 526,
-						"other": 526
+						"total": 531,
+						"other": 531
 					},
 					"paused": {
 						"frames": 120,
@@ -1710,9 +1708,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4.1,
-						"workMaxMs": 4.3,
+						"workP50Ms": 4,
+						"workP95Ms": 4.4,
+						"workMaxMs": 4.6,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1726,9 +1724,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.4,
-						"workP95Ms": 0.6,
-						"workMaxMs": 0.8,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.9,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1736,15 +1734,15 @@
 						}
 					},
 					"playingCost": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.6,
-						"workP95Ms": 4.4,
-						"workMaxMs": 5.2,
+						"workP50Ms": 4.5,
+						"workP95Ms": 6.6,
+						"workMaxMs": 8.1,
 						"drawCallsP50": 11,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1757,7 +1755,7 @@
 						"flicker": 6,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T12:23:01.140Z"
+						"sceneTime": "2026-10-18T12:23:02.280Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1815,16 +1813,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=6.93630,13.82670,432.499,20.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3011,
+						"ms": 3007,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.6,
-						"workP95Ms": 4.4,
-						"workMaxMs": 5.7,
+						"workP50Ms": 5.2,
+						"workP95Ms": 7,
+						"workMaxMs": 13.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1832,9 +1830,9 @@
 						}
 					},
 					"transferBytes": {
-						"total": 56441,
-						"other": 1065,
-						"earth": 55376
+						"total": 56570,
+						"other": 1069,
+						"earth": 55501
 					},
 					"paused": {
 						"frames": 120,
@@ -1843,9 +1841,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.3,
-						"workP95Ms": 3.9,
-						"workMaxMs": 4.2,
+						"workP50Ms": 5.1,
+						"workP95Ms": 6.7,
+						"workMaxMs": 7.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1853,15 +1851,15 @@
 						}
 					},
 					"playing": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.8,
-						"workMaxMs": 1.1,
+						"workP50Ms": 0.9,
+						"workP95Ms": 2.2,
+						"workMaxMs": 2.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1875,9 +1873,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4,
-						"workMaxMs": 5,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.9,
+						"workMaxMs": 8.1,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1887,10 +1885,10 @@
 					"flashes": {
 						"held": 1018,
 						"active": 7,
-						"flicker": 6,
+						"flicker": 5,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T12:23:02.040Z"
+						"sceneTime": "2026-10-18T12:23:02.880Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -1930,10 +1928,10 @@
 							"failed": 0,
 							"aborted": 0,
 							"evicted": 0,
-							"unused": 2,
+							"unused": 1,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 10
+							"uploaded": 11
 						},
 						"vectors": false
 					},
@@ -1948,25 +1946,25 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,400.057,1.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3010,
-						"frames": 181,
+						"ms": 3004,
+						"frames": 180,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.4,
-						"workP95Ms": 3.8,
-						"workMaxMs": 4.6,
+						"workP50Ms": 5.1,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
-							"elements4:6": 1280
+							"elements4:6": 1024
 						}
 					},
 					"transferBytes": {
-						"total": 1071,
-						"other": 1071
+						"total": 1062,
+						"other": 1062
 					},
 					"paused": {
 						"frames": 120,
@@ -1975,9 +1973,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4.1,
-						"workMaxMs": 4.4,
+						"workP50Ms": 4.9,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -1991,9 +1989,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.8,
-						"workMaxMs": 1,
+						"workP50Ms": 0.9,
+						"workP95Ms": 1.9,
+						"workMaxMs": 2.5,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2001,15 +1999,15 @@
 						}
 					},
 					"playingCost": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4,
-						"workMaxMs": 4.3,
+						"workP50Ms": 5.1,
+						"workP95Ms": 7.1,
+						"workMaxMs": 7.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2022,7 +2020,7 @@
 						"flicker": 6,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T12:23:01.440Z"
+						"sceneTime": "2026-10-18T12:23:02.220Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -2062,10 +2060,10 @@
 							"failed": 0,
 							"aborted": 0,
 							"evicted": 0,
-							"unused": 2,
+							"unused": 1,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 10
+							"uploaded": 11
 						},
 						"vectors": false
 					},
@@ -2080,16 +2078,16 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ngaoundere&time=2026-10-18T12:15:00Z&paused=1&view=7.06000,13.70000,740.000,60.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3009,
+						"ms": 3015,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4.2,
-						"workMaxMs": 6.8,
+						"workP50Ms": 5.1,
+						"workP95Ms": 7.4,
+						"workMaxMs": 9.7,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2097,10 +2095,9 @@
 						}
 					},
 					"transferBytes": {
-						"total": 175776,
-						"other": 1061,
-						"earth": 173636,
-						"clouds": 1079
+						"total": 174728,
+						"other": 1066,
+						"earth": 173662
 					},
 					"paused": {
 						"frames": 120,
@@ -2109,9 +2106,9 @@
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 3.7,
-						"workP95Ms": 4.1,
-						"workMaxMs": 4.3,
+						"workP50Ms": 4.3,
+						"workP95Ms": 6.4,
+						"workMaxMs": 7.4,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2119,15 +2116,15 @@
 						}
 					},
 					"playing": {
-						"frames": 240,
+						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
+						"intervalP95Ms": 16.8,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.7,
-						"workMaxMs": 1.1,
+						"workP50Ms": 0.8,
+						"workP95Ms": 1.7,
+						"workMaxMs": 2.6,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2137,13 +2134,13 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
 						"workP50Ms": 3.7,
-						"workP95Ms": 4.3,
-						"workMaxMs": 4.5,
+						"workP95Ms": 6.9,
+						"workMaxMs": 7.8,
 						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 1018,
@@ -2156,7 +2153,7 @@
 						"flicker": 6,
 						"displayMinutes": 0,
 						"speed": 60,
-						"sceneTime": "2026-10-18T12:23:01.320Z"
+						"sceneTime": "2026-10-18T12:23:01.620Z"
 					},
 					"quality": "medium",
 					"memory": {
@@ -2211,16 +2208,16 @@
 				}
 			},
 			"load": {
-				"readyMs": 5482,
-				"settledMs": 11048,
+				"readyMs": 6721,
+				"settledMs": 11834,
 				"bytes": {
-					"total": 5502969,
-					"other": 5357,
-					"code": 317786,
-					"metadata": 210320,
-					"earth": 1236064,
-					"flashes": 636484,
-					"clouds": 3096958
+					"total": 5330061,
+					"other": 5376,
+					"code": 318905,
+					"metadata": 21916,
+					"earth": 1235762,
+					"flashes": 11766,
+					"clouds": 3736336
 				},
 				"quality": "medium",
 				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
@@ -2237,10 +2234,178 @@
 					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,20000.000,0.000",
 					"flight": {
 						"arrived": true,
-						"ms": 3010,
+						"ms": 3015,
 						"frames": 181,
 						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 535,
+						"other": 535
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.4,
+						"workP95Ms": 4.9,
+						"workMaxMs": 5.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.3,
+						"workP95Ms": 0.5,
+						"workMaxMs": 0.6,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.7,
+						"workMaxMs": 5.1,
+						"drawCallsP50": 11,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.680Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 0,
+							"drawn": 0,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 0,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-globe.png",
+					"exposure": {
+						"mean": 66,
+						"nearWhite": 0
+					}
+				},
+				"regional": {
+					"view": "38.68965,2.07360,721.289,20.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.68965,2.07360,721.289,20.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3005,
+						"frames": 180,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.7,
+						"workMaxMs": 7.2,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 1062,
+						"other": 1062
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 3.7,
+						"workP95Ms": 4,
+						"workMaxMs": 4.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
@@ -2253,21 +2418,118 @@
 							"elements4:6": 11983
 						}
 					},
-					"transferBytes": {
-						"total": 540,
-						"other": 540
-					},
-					"paused": {
-						"frames": 120,
+					"playingCost": {
+						"frames": 240,
 						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.5,
+						"workMaxMs": 5.3,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.200Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 8,
+							"textures": 18,
+							"bytes": 19607328,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 4,
+							"requested": 18,
+							"loaded": 18,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 18
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-regional.png",
+					"exposure": {
+						"mean": 168,
+						"nearWhite": 0.002
+					}
+				},
+				"iss": {
+					"view": "38.57000,2.62000,400.057,1.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,400.057,1.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3009,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
 						"workP50Ms": 4,
-						"workP95Ms": 4.6,
-						"workMaxMs": 5.1,
-						"drawCallsP50": 11,
+						"workP95Ms": 4.9,
+						"workMaxMs": 7.6,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 87973,
+						"other": 1062,
+						"earth": 86911
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.4,
+						"workMaxMs": 4.8,
+						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 11983,
 							"elements4:6": 11983
@@ -2276,14 +2538,14 @@
 					"playing": {
 						"frames": 241,
 						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
+						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 0.5,
-						"workP95Ms": 0.7,
+						"workP50Ms": 0.6,
+						"workP95Ms": 0.8,
 						"workMaxMs": 0.9,
-						"drawCallsP50": 11,
+						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 11983,
 							"elements4:6": 11983
@@ -2292,14 +2554,147 @@
 					"playingCost": {
 						"frames": 240,
 						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4.1,
+						"workP95Ms": 4.5,
+						"workMaxMs": 4.8,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"flashes": {
+						"held": 11983,
+						"active": 41,
+						"flicker": 32,
+						"displayMinutes": 0,
+						"speed": 60,
+						"sceneTime": "2026-10-18T14:23:01.560Z"
+					},
+					"quality": "medium",
+					"memory": {
+						"textures": 226416156,
+						"textureCount": 17,
+						"largestTextures": [
+							44739244,
+							44739244,
+							44739244,
+							39214656,
+							19907328,
+							11184848,
+							11184848,
+							8388608
+						],
+						"buffers": 17351344,
+						"renderbuffers": 0,
+						"drawingBuffer": 23277280,
+						"drawingBufferSize": [
+							589,
+							988
+						]
+					},
+					"surface": {
+						"mode": "tiles",
+						"tiles": {
+							"wanted": 8,
+							"drawn": 8,
+							"textures": 26,
+							"bytes": 28321696,
+							"queued": 0,
+							"loading": 0,
+							"missing": 0,
+							"deepest": 5,
+							"requested": 26,
+							"loaded": 26,
+							"failed": 0,
+							"aborted": 0,
+							"evicted": 0,
+							"unused": 0,
+							"manifest": "ready",
+							"layers": 36,
+							"uploaded": 26
+						},
+						"vectors": false
+					},
+					"screenshot": "R5-iss.png",
+					"exposure": {
+						"mean": 186,
+						"nearWhite": 0.004
+					}
+				},
+				"window": {
+					"view": "38.57000,2.62000,740.000,60.000",
+					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,740.000,60.000",
+					"flight": {
+						"arrived": true,
+						"ms": 3010,
+						"frames": 181,
+						"intervalP50Ms": 16.7,
 						"intervalP95Ms": 16.7,
 						"intervalMaxMs": 16.8,
 						"over33Ms": 0,
 						"over50Ms": 0,
-						"workP50Ms": 4.3,
-						"workP95Ms": 4.7,
-						"workMaxMs": 6,
-						"drawCallsP50": 11,
+						"workP50Ms": 4,
+						"workP95Ms": 4.5,
+						"workMaxMs": 7.5,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"transferBytes": {
+						"total": 141517,
+						"other": 1067,
+						"earth": 140450
+					},
+					"paused": {
+						"frames": 120,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 3.9,
+						"workP95Ms": 4.3,
+						"workMaxMs": 4.4,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playing": {
+						"frames": 241,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.7,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 0.6,
+						"workP95Ms": 0.8,
+						"workMaxMs": 1.1,
+						"drawCallsP50": 13,
+						"maxInstances": {
+							"arrays0:1": 11983,
+							"elements4:6": 11983
+						}
+					},
+					"playingCost": {
+						"frames": 240,
+						"intervalP50Ms": 16.7,
+						"intervalP95Ms": 16.8,
+						"intervalMaxMs": 16.8,
+						"over33Ms": 0,
+						"over50Ms": 0,
+						"workP50Ms": 4,
+						"workP95Ms": 4.6,
+						"workMaxMs": 5,
+						"drawCallsP50": 13,
 						"maxInstances": {
 							"arrays0:1": 11983,
 							"elements4:6": 11983
@@ -2327,407 +2722,7 @@
 							11184848,
 							8388608
 						],
-						"buffers": 17352880,
-						"renderbuffers": 0,
-						"drawingBuffer": 23277280,
-						"drawingBufferSize": [
-							589,
-							988
-						]
-					},
-					"surface": {
-						"mode": "tiles",
-						"tiles": {
-							"wanted": 0,
-							"drawn": 0,
-							"textures": 17,
-							"bytes": 18518032,
-							"queued": 0,
-							"loading": 0,
-							"missing": 0,
-							"deepest": 0,
-							"requested": 17,
-							"loaded": 17,
-							"failed": 0,
-							"aborted": 0,
-							"evicted": 0,
-							"unused": 0,
-							"manifest": "ready",
-							"layers": 36,
-							"uploaded": 17
-						},
-						"vectors": false
-					},
-					"screenshot": "R5-globe.png",
-					"exposure": {
-						"mean": 66,
-						"nearWhite": 0
-					}
-				},
-				"regional": {
-					"view": "38.68965,2.07360,721.289,20.000",
-					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.68965,2.07360,721.289,20.000",
-					"flight": {
-						"arrived": true,
-						"ms": 3012,
-						"frames": 181,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 4,
-						"workP95Ms": 4.4,
-						"workMaxMs": 6,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"transferBytes": {
-						"total": 111612,
-						"other": 1057,
-						"earth": 110555
-					},
-					"paused": {
-						"frames": 120,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3.7,
-						"workP95Ms": 4.3,
-						"workMaxMs": 5.1,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playing": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 0.7,
-						"workP95Ms": 0.9,
-						"workMaxMs": 1.1,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playingCost": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 2.9,
-						"workP95Ms": 4.3,
-						"workMaxMs": 4.5,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"flashes": {
-						"held": 11983,
-						"active": 41,
-						"flicker": 32,
-						"displayMinutes": 0,
-						"speed": 60,
-						"sceneTime": "2026-10-18T14:23:01.200Z"
-					},
-					"quality": "medium",
-					"memory": {
-						"textures": 226416156,
-						"textureCount": 17,
-						"largestTextures": [
-							44739244,
-							44739244,
-							44739244,
-							39214656,
-							19907328,
-							11184848,
-							11184848,
-							8388608
-						],
-						"buffers": 17352880,
-						"renderbuffers": 0,
-						"drawingBuffer": 23277280,
-						"drawingBufferSize": [
-							589,
-							988
-						]
-					},
-					"surface": {
-						"mode": "tiles",
-						"tiles": {
-							"wanted": 8,
-							"drawn": 8,
-							"textures": 20,
-							"bytes": 21785920,
-							"queued": 0,
-							"loading": 0,
-							"missing": 0,
-							"deepest": 4,
-							"requested": 20,
-							"loaded": 20,
-							"failed": 0,
-							"aborted": 0,
-							"evicted": 0,
-							"unused": 3,
-							"manifest": "ready",
-							"layers": 36,
-							"uploaded": 17
-						},
-						"vectors": false
-					},
-					"screenshot": "R5-regional.png",
-					"exposure": {
-						"mean": 168,
-						"nearWhite": 0.002
-					}
-				},
-				"iss": {
-					"view": "38.57000,2.62000,400.057,1.000",
-					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,400.057,1.000",
-					"flight": {
-						"arrived": true,
-						"ms": 3016,
-						"frames": 181,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3,
-						"workP95Ms": 4.4,
-						"workMaxMs": 10,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"transferBytes": {
-						"total": 87993,
-						"other": 1068,
-						"earth": 86925
-					},
-					"paused": {
-						"frames": 121,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 2.7,
-						"workP95Ms": 4,
-						"workMaxMs": 4.4,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playing": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 0.7,
-						"workP95Ms": 0.9,
-						"workMaxMs": 1,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playingCost": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.7,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3.4,
-						"workP95Ms": 4.6,
-						"workMaxMs": 5.2,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"flashes": {
-						"held": 11983,
-						"active": 41,
-						"flicker": 32,
-						"displayMinutes": 0,
-						"speed": 60,
-						"sceneTime": "2026-10-18T14:23:01.200Z"
-					},
-					"quality": "medium",
-					"memory": {
-						"textures": 226416156,
-						"textureCount": 17,
-						"largestTextures": [
-							44739244,
-							44739244,
-							44739244,
-							39214656,
-							19907328,
-							11184848,
-							11184848,
-							8388608
-						],
-						"buffers": 17352880,
-						"renderbuffers": 0,
-						"drawingBuffer": 23277280,
-						"drawingBufferSize": [
-							589,
-							988
-						]
-					},
-					"surface": {
-						"mode": "tiles",
-						"tiles": {
-							"wanted": 8,
-							"drawn": 8,
-							"textures": 28,
-							"bytes": 30500288,
-							"queued": 0,
-							"loading": 0,
-							"missing": 0,
-							"deepest": 5,
-							"requested": 28,
-							"loaded": 28,
-							"failed": 0,
-							"aborted": 0,
-							"evicted": 0,
-							"unused": 4,
-							"manifest": "ready",
-							"layers": 36,
-							"uploaded": 24
-						},
-						"vectors": false
-					},
-					"screenshot": "R5-iss.png",
-					"exposure": {
-						"mean": 186,
-						"nearWhite": 0.004
-					}
-				},
-				"window": {
-					"view": "38.57000,2.62000,740.000,60.000",
-					"share": "https://pr-373-scintille.pierre-gunet-caplain.workers.dev/?storm=2026-10-18-ibiza&time=2026-10-18T14:15:00Z&paused=1&view=38.57000,2.62000,740.000,60.000",
-					"flight": {
-						"arrived": true,
-						"ms": 3017,
-						"frames": 181,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4.4,
-						"workMaxMs": 5.9,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"transferBytes": {
-						"total": 142544,
-						"other": 1071,
-						"earth": 140502,
-						"clouds": 971
-					},
-					"paused": {
-						"frames": 120,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3.5,
-						"workP95Ms": 4.1,
-						"workMaxMs": 4.7,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playing": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 0.6,
-						"workP95Ms": 0.8,
-						"workMaxMs": 0.9,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"playingCost": {
-						"frames": 240,
-						"intervalP50Ms": 16.7,
-						"intervalP95Ms": 16.8,
-						"intervalMaxMs": 16.8,
-						"over33Ms": 0,
-						"over50Ms": 0,
-						"workP50Ms": 3.9,
-						"workP95Ms": 4.5,
-						"workMaxMs": 4.8,
-						"drawCallsP50": 13,
-						"maxInstances": {
-							"arrays0:1": 11983,
-							"elements4:6": 11983
-						}
-					},
-					"flashes": {
-						"held": 11983,
-						"active": 41,
-						"flicker": 32,
-						"displayMinutes": 0,
-						"speed": 60,
-						"sceneTime": "2026-10-18T14:23:01.140Z"
-					},
-					"quality": "medium",
-					"memory": {
-						"textures": 226416156,
-						"textureCount": 17,
-						"largestTextures": [
-							44739244,
-							44739244,
-							44739244,
-							39214656,
-							19907328,
-							11184848,
-							11184848,
-							8388608
-						],
-						"buffers": 17352880,
+						"buffers": 17351344,
 						"renderbuffers": 0,
 						"drawingBuffer": 23277280,
 						"drawingBufferSize": [
@@ -2740,21 +2735,21 @@
 						"tiles": {
 							"wanted": 11,
 							"drawn": 11,
-							"textures": 31,
-							"bytes": 33768176,
+							"textures": 29,
+							"bytes": 31589584,
 							"queued": 0,
 							"loading": 0,
 							"missing": 0,
 							"deepest": 4,
-							"requested": 31,
-							"loaded": 31,
+							"requested": 29,
+							"loaded": 29,
 							"failed": 0,
 							"aborted": 0,
 							"evicted": 0,
-							"unused": 3,
+							"unused": 0,
 							"manifest": "ready",
 							"layers": 36,
-							"uploaded": 28
+							"uploaded": 29
 						},
 						"vectors": false
 					},
@@ -2766,16 +2761,16 @@
 				}
 			},
 			"load": {
-				"readyMs": 4780,
-				"settledMs": 10839,
+				"readyMs": 584,
+				"settledMs": 5733,
 				"bytes": {
-					"total": 6167659,
-					"other": 5358,
-					"code": 317791,
-					"metadata": 208032,
-					"earth": 1502064,
-					"flashes": 1075072,
-					"clouds": 3059342
+					"total": 6190758,
+					"other": 5385,
+					"code": 318891,
+					"metadata": 218697,
+					"earth": 1577047,
+					"flashes": 384159,
+					"clouds": 3686579
 				},
 				"quality": "medium",
 				"renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
