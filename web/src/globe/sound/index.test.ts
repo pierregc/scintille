@@ -122,3 +122,13 @@ it('relays ambient tracks in crossfades, never the same twice in a row', async (
 		}
 	} finally { sound.dispose(); }
 });
+
+it('keeps music and flash levels in [0, 1]', () => {
+	const { sound } = scene();
+	try {
+		sound.setLevels({ music: 2, flashes: -1 });
+		expect(sound.levels).toEqual({ music: 1, flashes: 0 });
+		sound.setLevels({ music: Number.NaN });
+		expect(sound.levels.music).toBe(1);
+	} finally { sound.dispose(); }
+});

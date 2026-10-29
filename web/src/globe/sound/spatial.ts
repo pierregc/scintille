@@ -36,7 +36,7 @@ const clamp = (v: number) => Math.min(1, Math.max(-1, v));
 /** How a flash of `intensity` (0-1), `km` away, at screen position (`ndcX`, `ndcY`) in [-1, 1] sounds. */
 export function voicing(intensity: number, km: number, ndcX: number, ndcY: number): Voicing {
 	const near = REFERENCE_KM / (REFERENCE_KM + Math.max(0, km));
-	const level = 0.3 + 0.7 * Math.min(1, Math.max(0, intensity));
+	const level = 0.15 + 0.85 * Math.min(1, Math.max(0, intensity)) ** 1.5;
 	const azimuth = clamp(ndcX) * MAX_AZIMUTH;
 	const elevation = clamp(ndcY) * MAX_ELEVATION;
 	const flat = Math.cos(elevation);

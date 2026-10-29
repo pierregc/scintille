@@ -3,10 +3,10 @@ import type { Vec3 } from '../sun';
 import { distanceKm, facesCamera, type Voicing, voicing } from './spatial';
 import { VoicePool } from './voices';
 
-export const MAX_VOICES = 8;
+export const MAX_VOICES = 16;
 /** Wall-clock seconds between two new crackles, plus up to JITTER_S at random, so a burst never ticks like a clock. */
-export const MIN_GAP_S = 0.14;
-export const JITTER_S = 0.2;
+export const MIN_GAP_S = 0.05;
+export const JITTER_S = 0.06;
 /** A playhead jump longer than this (scene ms) is a seek, not playback: it stays silent. */
 export const MAX_STEP_MS = 60_000;
 /** Flashes considered per frame, to bound the cost of fast replays. */
