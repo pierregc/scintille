@@ -296,7 +296,8 @@ export function createGlobeApp(
 		camera.updateMatrixWorld();
 		surface?.update(camera, renderParams?.height ?? window.innerHeight);
 		atmosphere.setTime(now);
-		if (!renderParams) cloudPlayback.update(clock.mode, now);
+		// Live clouds would load only to be dropped while a storm opens.
+		if (!renderParams && !(clock.mode === 'live' && replay.state.loading)) cloudPlayback.update(clock.mode, now);
 		clouds.setTime(now);
 		if (cloudDetail) {
 			camera.updateMatrixWorld();

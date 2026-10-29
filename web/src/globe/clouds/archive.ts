@@ -167,7 +167,8 @@ export class ArchiveCloudFeed {
 	}
 
 	#loadNext(): void {
-		if (this.#loading || this.#time === undefined) return;
+		// Until every day is known, the nearest frames may still be in a missing day.
+		if (this.#loading || this.#time === undefined || !this.#days.every((day) => this.#manifests.has(day))) return;
 		const source = this.#sources.find((s) => !this.#loaded.has(s.url) &&
 			(this.#failed.get(s.url) ?? 0) <= this.#now());
 		if (!source) return;
