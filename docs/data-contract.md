@@ -196,7 +196,8 @@ that ignore it keep the global textures:
   cubic filter needs no other tile.
 - Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
   1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
-  significant bit first.
+  significant bit first. A pack that keeps only some tiles of levels 3 and 4 lists them in
+  `coarse`: base64 of one bit per tile of those levels, in index order, least significant bit first.
 - All tiles of a frame are one object (`.tiles`, immutable): an index of `index_bytes`, one pair of
   little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
   order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
@@ -204,8 +205,11 @@ that ignore it keep the global textures:
 - The object is written once, before the manifests, under `archive/clouds/detail/`; the live
   manifest and the daily archive index both point there, each with a path relative to itself
   (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
-- Detail is kept one day: the publisher then deletes the object and removes the `detail` block
-  from its archive index, so older replays keep the `2k` and `4k` textures only.
+- Detail is kept one day. The publisher then writes the level 4 and 5 tiles under the ten strongest
+  storms of each UTC day (flashes × peak rate, track positions within an hour of the frame) to a
+  `-storms.tiles` object with `coarse`, points the archive index to it, and deletes the full
+  object; frames without such a storm lose their `detail` block. Everything under
+  `archive/clouds/` goes after 30 days.
 
 ## Historical cloud discovery
 
