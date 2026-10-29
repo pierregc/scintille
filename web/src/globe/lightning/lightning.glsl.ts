@@ -1,7 +1,9 @@
+import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
 
 export const lightningVertexShader = /* glsl */ `
@@ -27,6 +29,10 @@ ${intensityGlsl}
 ${zoomGlsl}
 ${channelGlsl}
 ${cloudDriftGlsl}
+${veilGlsl}
+#ifdef CLOUDS
+${cloudOpacityGlsl}
+#endif
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
@@ -52,6 +58,10 @@ void main() {
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float channel = channelReveal(flashShape.y, kmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
 	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
+#ifdef CLOUDS
+	// Only as much as the cloud lets a ground channel show; in-cloud ones still carry their light, veiled.
+	if (ground && vDip > 0.0 && cloudShown > 0.5) vDip *= cloudTransmission(cloudOpacityAt(normal), 1.0);
+#endif
 	vec2 drift = cloudDrift(age, end, flashShape.y, seed, ground) * kmToWorld * flicker;
 	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);

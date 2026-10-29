@@ -1,7 +1,9 @@
+import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { CHANNEL, channelGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
 
 /** One channel segment per instance, from the skeletons of `ChannelPool`, drawn as a screen-space ribbon. */
@@ -33,6 +35,10 @@ ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
 ${channelGlsl}
+${veilGlsl}
+#ifdef CLOUDS
+${cloudOpacityGlsl}
+#endif
 
 void cull() {
 	gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
@@ -73,12 +79,31 @@ void main() {
 	float light = brightness * fade * lit * segB.w * channelReveal(flashShape.y, kmPerPx) * step(0.001, grown);
 	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	light *= mix(1.0, ${f(CHANNEL.dayLevel)}, smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection))));
+	if (light < 0.002) {
+		cull();
+		return;
+	}
+	vec3 east = abs(normal.y) > 0.999 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), normal));
+	vec3 north = cross(normal, east);
+	mat3 frame = mat3(east, north, normal) * kmToWorld;
 	float width = segA.w;
-	// Inside the cloud a channel is seen through it: wider, softer and dimmer.
+	vec3 mid = 0.5 * (segA.xyz + segB.xyz);
+	// The cloud where the line of sight leaves it veils a channel inside it and hides one below it.
+	float opacity = inCloud ? ${f(VEIL.fallback)} : 0.0;
+	float slant = 1.0;
+#ifdef CLOUDS
+	if (cloudShown > 0.5) {
+		vec3 crossing = cloudCrossing(base + frame * mid, cameraPosition);
+		slant = dot(normalize(crossing), normalize(cameraPosition - crossing));
+		opacity = cloudOpacityAt(crossing);
+	}
+#endif
 	if (inCloud) {
-		float veiled = max(width, ${f(CHANNEL.veilKm)} / kmPerPx);
-		light *= ${f(CHANNEL.veilLevel)} * sqrt(width / veiled);
-		width = veiled;
+		vec2 veiled = cloudVeil(opacity, mid.z, kmPerPx, width);
+		width = veiled.x;
+		light *= veiled.y;
+	} else {
+		light *= cloudTransmission(opacity, slant);
 	}
 	// Hairlines draw a pixel wide and give up light instead, so they never break into dashes.
 	if (width < 0.75) {
@@ -89,9 +114,6 @@ void main() {
 		cull();
 		return;
 	}
-	vec3 east = abs(normal.y) > 0.999 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), normal));
-	vec3 north = cross(normal, east);
-	mat3 frame = mat3(east, north, normal) * kmToWorld;
 	vec3 a = segA.xyz;
 	vec3 b = mix(a, segB.xyz, grown);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);

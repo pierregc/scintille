@@ -106,9 +106,21 @@ ground flashes, 120 ms in-cloud); later pulses light the main channels again, as
 an established path. The channel fades over 150 ms after the flicker, leaving the round glow. A channel
 appears as it gets readable: its opacity rises while its half length grows from 6 to 18 CSS px.
 
-**In the cloud and in daylight.** Segments above the 7 km cloud base are seen through the cloud: they
-widen to at least 0.6 km and keep 45 % of their light, scaled down as they widen, with no halo. Over
-sunlit clouds, which outshine a thin channel seen from orbit, channels keep 30 % of their light.
+**Through the cloud.** The observed cloud layer decides what of a channel shows (`veil.ts`). For each
+segment, the renderer follows the line of sight from its middle up to the camera and reads the cloud
+opacity where it leaves the 10 km cloud shell: seen at a slant, a channel under the edge of a storm can
+show beside it.
+
+- *In the cloud* (segments above the 7 km base): light scatters around the channel. It spreads over
+  0.5 km just under the 11.5 km top to 4 km at the base, times the opacity, keeps the same light over
+  that width and loses up to half of it, with no halo. In clear air it stays crisp.
+- *Below the cloud*: the cloud hides it. `(1 - opacity)^2` of its light comes through from straight
+  above, less at a slant, as the cloud layer thickens towards the limb: a thick storm (opacity 0.92)
+  lets through less than 1 %, a thin veil (0.3) about half.
+
+While the cloud layer is hidden or has no frame for the scene, channels in the cloud are veiled as if
+by an opacity of 0.6 and those below it stay crisp. Over sunlit clouds, which outshine a thin channel
+seen from orbit, channels keep 30 % of their light.
 
 **One flash, two instruments.** Where GLM and MTG LI detections fall within 400 ms and 0.15 degree of
 each other, they are one flash: both keep their glow, only the newest gets a channel.
@@ -116,7 +128,8 @@ each other, they are one flash: both keep their glow, only the newest gets a cha
 **Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud; their segments
 overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
-scaled by the channel opacity. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
+scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
+channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
 channel carry the flash.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
