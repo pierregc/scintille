@@ -168,6 +168,19 @@ def hour_cells(
     Cells entirely inside the overlap belong to the previous window. With a `rule`, flashes
     of fixed hot spots seen up to the end of the hour are left out.
     """
+    cells, _ = labelled_hour(flashes, hour, overlap, params, rule, hotspots)
+    return cells.drop("label")
+
+
+def labelled_hour(
+    flashes: pl.DataFrame,
+    hour: datetime,
+    overlap: timedelta,
+    params: Params,
+    rule: HotspotRule | None = None,
+    hotspots: pl.DataFrame | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """`hour_cells` with a `label` per cell, and the window's flashes with theirs (-1 noise)."""
     end = hour + timedelta(hours=1)
     window = flashes.filter(pl.col("event_time").is_between(hour - overlap, end, closed="left"))
     if rule is not None:
@@ -181,9 +194,12 @@ def hour_cells(
     minutes = minute_counts(
         window.filter(pl.Series(counted)), pl.Series(labels[counted]), cells.height
     )
-    return cells.with_columns(
-        hour_flash_count=pl.Series(own, dtype=pl.Int64), minute_counts=minutes
+    cells = cells.with_columns(
+        hour_flash_count=pl.Series(own, dtype=pl.Int64),
+        minute_counts=minutes,
+        label=pl.int_range(cells.height, dtype=pl.Int64),
     ).filter(pl.col("t_end") >= hour)
+    return cells, window.with_columns(label=pl.Series(labels, dtype=pl.Int64))
 
 
 def range_cells(

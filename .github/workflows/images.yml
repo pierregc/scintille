@@ -56,7 +56,7 @@ jobs:
           df -h /
       - name: Local stack from the VPS compose file
         run: |
-          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer clouds lakekeeper
+          docker compose -f infra/compose/compose.local.yaml up -d --build --wait dagster-webserver dagster-daemon ingest lake-writer clouds active-storms lakekeeper
           docker compose -f infra/compose/compose.local.yaml run --rm lake-init
       - name: Webserver answers, daemon is alive, images run as non-root
         run: |
