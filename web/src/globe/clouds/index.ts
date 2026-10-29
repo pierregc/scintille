@@ -66,6 +66,10 @@ export interface Clouds {
 	setFlashLight(light: { map: Texture; window: Vector4 } | null): void;
 	/** Detail tiles of the two frames being blended, while the layer shows. */
 	detailFrames(): readonly [DetailSource | null, DetailSource | null];
+	/** Cloud-top height tiles of the two frames being blended (ADR 0028). */
+	heightFrames(): readonly [DetailSource | null, DetailSource | null];
+	/** Share of the flat layer drawn, 0 to 1, as the volume takes over near the ground. */
+	setFlatShown(share: number): void;
 	/**
 	 * What another material needs to read the cloud opacity: share these uniforms and defines and
 	 * include `cloudOpacityGlsl`. They follow the layer: frames, blend, detail and visibility.
@@ -127,6 +131,7 @@ export function createClouds(
 			flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
+			flatShown: { value: 1 },
 		},
 		defines: opacity.defines,
 		side: FrontSide,
@@ -164,6 +169,12 @@ export function createClouds(
 		material.uniforms.cloudMap.value = frames[a].texture;
 		material.uniforms.cloudMapNext.value = frames[b].texture;
 		material.uniforms.cloudMix.value = mix;
+	};
+
+	const detailFrames = (): readonly [DetailSource | null, DetailSource | null] => {
+		if (!mesh.visible || frames.length === 0) return [null, null];
+		const { a, b } = blendPair(position, frames.length);
+		return [frames[a].detail ?? null, frames[b].detail ?? null];
 	};
 
 	return {
@@ -227,10 +238,14 @@ export function createClouds(
 				: target();
 			show();
 		},
-		detailFrames() {
-			if (!mesh.visible || frames.length === 0) return [null, null];
-			const { a, b } = blendPair(position, frames.length);
-			return [frames[a].detail ?? null, frames[b].detail ?? null];
+		detailFrames,
+		heightFrames() {
+			const [a, b] = detailFrames();
+			return [a?.heights ?? null, b?.heights ?? null];
+		},
+		setFlatShown(share) {
+			material.uniforms.flatShown.value = share;
+			material.visible = share > 0.001;
 		},
 		setFlashLight(light) {
 			material.uniforms.flashLight.value = light?.map ?? null;

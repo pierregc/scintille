@@ -154,6 +154,7 @@ uniform float limbThickening;
 ${flashLightGlsl}
 uniform vec3 flashColor;
 uniform float flashGain;
+uniform float flatShown;
 
 varying vec2 vUv;
 varying vec3 vLocalNormal;
@@ -192,7 +193,7 @@ void main() {
 	float mu = max(dot(n, view), 0.05);
 	float alpha = 1.0 - pow(1.0 - opacity, 1.0 / mix(1.0, mu, limbThickening));
 
-	gl_FragColor = vec4(color, alpha);
+	gl_FragColor = vec4(color, alpha * flatShown);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

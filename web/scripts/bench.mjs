@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--journey] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--relief flat|columns|volume] [--journey] [--headed] [--video]
 //   [--warm] [--network 4g|slow4g]
 // --warm opens the storm once before measuring, so the load is from the browser cache.
 // --network throttles every request of the measured page (Chrome DevTools presets).
@@ -28,6 +28,7 @@ const { values } = parseArgs({
 		storm: { type: 'string' },
 		afterglow: { type: 'string' },
 		surface: { type: 'string' },
+		relief: { type: 'string' },
 		clouds: { type: 'boolean', default: true },
 		journey: { type: 'boolean', default: false },
 		headed: { type: 'boolean', default: false },
@@ -374,6 +375,7 @@ async function benchStorm(browser, storm, outDir) {
 	first.searchParams.set('time', storm.time);
 	first.searchParams.set('paused', '1');
 	if (values.surface) first.searchParams.set('surface', values.surface);
+	if (values.relief) first.searchParams.set('clouds', values.relief);
 	if (values.warm) {
 		const warmup = await context.newPage();
 		await warmup.goto(first.href);
@@ -479,6 +481,7 @@ const report = {
 	profile: values.profile,
 	afterglow: values.afterglow ?? 'per storm',
 	surface: values.surface ?? null,
+	relief: values.relief ?? null,
 	journey: values.journey,
 	warm: values.warm,
 	network: values.network ?? null,
