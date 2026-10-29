@@ -14,11 +14,22 @@ concurrency:
     granularity: run
     default_limit: 1
 
-# A run whose worker died with the daemon (a deploy) stays STARTED: it is failed past its limit.
+# Run monitoring fails a run whose worker died, a deploy included (ADR 0024); run retries relaunch
+# it. Step failures are not retried here: assets retry their own steps.
+run_launcher:
+  module: scintille_pipelines.run_launcher
+  class: MonitoredRunLauncher
+
 run_monitoring:
   enabled: true
   start_timeout_seconds: 600
   max_runtime_seconds: 21600
+  poll_interval_seconds: 60
+
+run_retries:
+  enabled: true
+  max_retries: 2
+  retry_on_asset_or_op_failure: false
 
 telemetry:
   enabled: false

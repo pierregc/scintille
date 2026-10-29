@@ -104,6 +104,6 @@ docker compose start ingest    # both checks come back up at the next ping
 - **Runs stuck in `NOT_STARTED`.** A run whose submission failed (#271) is never launched. Run
   monitoring marks it failed after 10 minutes. Fix the cause, let the next schedule and sensor ticks
   submit fresh runs, and backfill the missed `daily_gold` partitions from the UI.
-- **Run orphaned by a deploy.** A deploy restarts the daemon and its run workers: the run stays
-  `STARTED` until run monitoring fails it, after 1 hour for the storm catalog and 6 hours for the
-  other jobs. The catalog schedule then catches up the hours it missed.
+- **Run killed by a deploy.** A deploy restarts the daemon and its run workers. Run monitoring fails
+  the run within about two minutes and run retries relaunch it ([ADR 0024](adr/0024-deploys-during-runs.md));
+  nothing to do by hand. A run still `STARTED` long after a deploy points to a broken health check.
