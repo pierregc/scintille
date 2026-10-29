@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.6.0"]
-SCHEMA_VERSION: Final = "2.6.0"
+SchemaVersion = Literal["2.6.1"]
+SCHEMA_VERSION: Final = "2.6.1"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -495,7 +495,9 @@ class StormSummary(BaseModel):
 
 
 class StormIndexPage(BaseModel):
-    """storms/index/<page>.json: zero-based pages, recent first, read one page per request."""
+    """storms/index/<page>.json: zero-based pages counted from the oldest storm, each listed recent
+    first; storms/index/latest.json repeats the last page and holds the current totals.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -11,6 +11,8 @@ alerts by email to the maintainer.
 | Container healthcheck (`ingest`, `GET :8080/healthz`) | A source or disk loop died | `docker compose ps` shows `unhealthy`; a deploy rolls back |
 | Heartbeat `ingest-live` | Collector stopped, crashed, VPS down, a loop stopped | Healthchecks.io, within 5 min |
 | Heartbeat `live-manifest` | Public manifest older than 3 min, unreadable or invalid | Healthchecks.io, within 1 min |
+| Heartbeat `active-storms` | `storms/active.json` not rewritten for 15 min | Healthchecks.io, within 15 min |
+| Heartbeat `storm-catalog` | Catalog's last tracked hour over 3 h old (`authoritative_until`) | Healthchecks.io, at the next update |
 | Uptime of https://scintille.app | Site down or erroring | External monitor |
 | Dagster sensor `alert_on_failure` | A pipeline run failed | `SCINTILLE_ALERT_WEBHOOK` ([pipelines](pipelines.md)) |
 
@@ -42,6 +44,18 @@ uv run scintille-ingest live-probe --once   # exit code 1 if not fresh, never pi
 
 `--url` (or `SCINTILLE_LIVE_MANIFEST_URL`) and `--max-age` override the defaults.
 
+### Active storms
+
+The `active-storms` service ([ADR 0021](adr/0021-active-storm-cells.md)) pings
+`SCINTILLE_HEALTHCHECK_ACTIVE_URL` after each snapshot it writes, every 5 minutes. A failed update
+keeps the previous object; once the last write is over 15 minutes old it pings `<url>/fail` with the
+error. It pings `SCINTILLE_HEALTHCHECK_CATALOG_URL` after each update, `/fail` when the catalog's
+last tracked hour ended over 3 hours ago: the feed keeps working, but its ids stay provisional.
+
+`GET :8082/metrics` reports each update: `active_storms_processing_seconds` (start to written),
+`active_storms_age_seconds{source}` (`published_at - observed_until`), `active_storms_catalog_lag_seconds`,
+`active_storms_final_id_share{scope}` once the catalog tracks an hour, snapshot size and files read.
+
 ## Setup (by hand, once)
 
 1. **Healthchecks.io.** Create an account and a project, add the maintainer's email as an
@@ -51,6 +65,8 @@ uv run scintille-ingest live-probe --once   # exit code 1 if not fresh, never pi
    |---|---|---|---|
    | `ingest-live` | Simple, period 1 minute | 2 minutes | `SCINTILLE_HEALTHCHECK_URL` |
    | `live-manifest` | Simple, period 1 minute | 2 minutes | `SCINTILLE_HEALTHCHECK_LIVE_URL` |
+   | `active-storms` | Simple, period 5 minutes | 10 minutes | `SCINTILLE_HEALTHCHECK_ACTIVE_URL` |
+   | `storm-catalog` | Simple, period 5 minutes | 10 minutes | `SCINTILLE_HEALTHCHECK_CATALOG_URL` |
 
    With a 1-minute period and 2 minutes of grace, a stopped collector is reported 3 to 4 minutes
    after its last ping. A `/fail` ping alerts at once. Ping URLs hold a secret UUID: keep them in
@@ -58,7 +74,7 @@ uv run scintille-ingest live-probe --once   # exit code 1 if not fresh, never pi
 2. **Uptime.** In an external uptime monitor (for example UptimeRobot, free plan), add an HTTPS
    monitor on https://scintille.app every 5 minutes, alerting the same email.
 3. **Deploy.** Restart the services so they read the new variables:
-   `docker compose up -d ingest live-probe` in the current release.
+   `docker compose up -d ingest live-probe active-storms` in the current release.
 
 ## Test
 
@@ -79,6 +95,10 @@ docker compose start ingest    # both checks come back up at the next ping
 - **`live-manifest` down while `ingest-live` is up.** The collector runs but the feed is not
   published: look for live feed errors in the `ingest` logs (R2 credentials, R2 outage), then fetch
   the manifest by hand and compare its `generated_at` with the time.
+- **`active-storms` down.** The logs of `active-storms` name the failed step (silver, catalog,
+  contract check, R2 write); the public object keeps its last snapshot and visitors see its age.
+- **`storm-catalog` down.** `hourly_storm_catalog` stopped tracking hours: see the runs in the
+  Dagster UI and catch up as in [pipelines](pipelines.md).
 - **Site down.** Check the Cloudflare status page and the last `web` deploy ([deploy](deploy.md)).
 - **Pipeline run failed.** Open the run in the Dagster UI ([deploy](deploy.md#data-services)).
 - **Runs stuck in `NOT_STARTED`.** A run whose submission failed (#271) is never launched. Run

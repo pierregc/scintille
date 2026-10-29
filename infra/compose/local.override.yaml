@@ -19,6 +19,13 @@ services:
       SCINTILLE_R2_ENDPOINT: http://localhost:9000
       SCINTILLE_R2_ACCESS_KEY_ID: scintille-local
       SCINTILLE_R2_SECRET_ACCESS_KEY: scintille-local-secret
+  active-storms:
+    network_mode: service:lake-s3
+    environment:
+      SCINTILLE_LIVE_BUCKET: scintille-lake
+      SCINTILLE_R2_ENDPOINT: http://localhost:9000
+      SCINTILLE_R2_ACCESS_KEY_ID: scintille-local
+      SCINTILLE_R2_SECRET_ACCESS_KEY: scintille-local-secret
   # Probes the production manifest: off locally, opt in with --profile live-probe.
   live-probe:
     profiles: [live-probe]

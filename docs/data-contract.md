@@ -143,10 +143,10 @@ live/clouds/4k/20261010T000000Z-1a2b3c4d.webp
 archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 ```
 
-- A **frame** is one hourly GMGSI mosaic turned into cloud opacity
-  ([ADR 0007](adr/0007-cloud-source.md)): an equirectangular grayscale WebP (west edge at 180° W,
-  top row at 90° N; 0 clear, 255 opaque; 0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and
-  `4k` (4096 × 2048).
+- A **frame** is one hourly observation turned into cloud opacity, from the GMGSI mosaic
+  ([ADR 0007](adr/0007-cloud-source.md)) or the composite ([ADR 0023](adr/0023-composite-clouds.md)):
+  an equirectangular grayscale WebP (west edge at 180° W, top row at 90° N; 0 clear, 255 opaque;
+  0 beyond ±72.7°), one per tier: `2k` (2048 × 1024) and `4k` (4096 × 2048).
 - The **manifest** lists the frames of the last 6 hours, oldest first. Paths are relative to the
   manifest and opaque; a revised upstream file gets a new path. Clients poll it (a new frame
   appears about once an hour) and show `time`, the observation time, next to the lightning time.
@@ -174,11 +174,40 @@ archive/clouds/2k/2026/10/10/20261010T000000Z-1a2b3c4d.webp
 The model is `CloudManifest` in `scintille_ingest.clouds.publish`; it is not part of the versioned
 flash contract yet.
 
-The globe polls the manifest every minute, loads the newest 3 frames of its quality tier (`2k` on
-the low preset, `4k` above) and cross-fades them on the scene clock. It hides the layer when the
-scene time is more than 3 hours from every loaded frame (stale manifest, or none), and never falls
-back to a sample image. The HUD shows the observation time of the frame on screen; the about sheet
-carries the attribution.
+### Cloud detail tiles
+
+Composite frames add an optional `detail` block ([ADR 0023](adr/0023-composite-clouds.md)); clients
+that ignore it keep the global textures:
+
+```json
+"detail": {
+  "path": "../../archive/clouds/detail/2026/10/18/20261018T140000Z-f41ef6e0.tiles",
+  "tile_size": 640,
+  "border": 2,
+  "levels": [3, 4, 5],
+  "max_latitude": 72.7,
+  "fine": "AAAA…",
+  "size_bytes": 31612666,
+  "index_bytes": 21504
+}
+```
+
+- Tile `x`, `y` of level `z` covers `180 / 2^z` degrees square from 180° W and 90° N, with
+  `2^(z+1)` columns and `2^z` rows: texels of about 3.9, 2.0 and 0.98 km. Each tile is a grayscale
+  WebP of `tile_size + 2 × border` texels square; the border repeats the neighbouring texels so a
+  cubic filter needs no other tile.
+- Levels 3 and 4 have every tile that reaches ±`max_latitude`; level 5 only where a source of about
+  1 km exists, listed in `fine`: base64 of one bit per tile, row-major from the north-west, least
+  significant bit first.
+- All tiles of a frame are one object (`.tiles`, immutable): an index of `index_bytes`, one pair of
+  little-endian uint32 (offset from the start of the object, length) per possible tile, levels in
+  order then rows then columns (length 0 where absent), followed by the tiles. Clients read the
+  index, then each tile, with HTTP range requests.
+- The object is written once, before the manifests, under `archive/clouds/detail/`; the live
+  manifest and the daily archive index both point there, each with a path relative to itself
+  (`detail_path_pattern` in `cloud_archive_rules.json` for the archive).
+- Detail is kept one day: the publisher then deletes the object and removes the `detail` block
+  from its archive index, so older replays keep the `2k` and `4k` textures only.
 
 ## Historical cloud discovery
 
@@ -318,7 +347,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.6.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.6.1**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -326,7 +355,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.6.0`.
+Value: `2.6.1`.
 
 ### UtcTimestamp
 
@@ -717,7 +746,7 @@ Storm metrics and persisted classification.
 
 Defined in `data/contract/storm.schema.json`.
 
-storms/index/<page>.json: zero-based pages, recent first, read one page per request.
+storms/index/<page>.json: zero-based pages counted from the oldest storm, each listed recent first; storms/index/latest.json repeats the last page and holds the current totals.
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
@@ -882,11 +911,16 @@ its schema version is in the binary header, and publication/observation timestam
 its enclosing detail document. This clarifies #74's singular extract filename and its requirement
 for timestamps on every file without changing the live encoding. The replay selection provenance
 is mandatory: `track-bounds` may include nearby unrelated flashes, so its count is separate from
-the storm's classified count. No cloud archive discovery is implied by this contract.
+the storm's classified count. No cloud archive discovery is implied by this contract. Chunks are
+deleted 60 days after they are written, so a replay is kept at least 60 days after the storm starts;
+the detail document stays and readers report an older replay as expired.
 
-`storms/index/<page>.json` uses zero-based pages of 50 summaries ordered by start descending, then
-storm id descending. Page zero exists for an empty catalog. The total page count is authoritative;
-old pages can remain after a catalog shrinks and must not be exposed beyond that count. Sitemap
+`storms/index/<page>.json` uses zero-based pages of 50 summaries counted from the oldest storm by
+start, then storm id; each page lists its storms recent first. A new storm only changes the last
+pages, so older pages are written once. `storms/index/latest.json` repeats the last page on every
+run: read it first, then step back by page number. Its totals are authoritative; an older page keeps
+the totals of its own publication. Page zero exists for an empty catalog. Old pages can remain after
+a catalog shrinks and must not be exposed beyond the total page count. Sitemap
 files include schema and freshness metadata in XML comments, preserve the sitemap protocol, and
 stay below its 50,000 URL / 50 MiB limits. Region entries require an existing #75 detail file.
 
@@ -908,9 +942,10 @@ has not tracked yet, recomputed from silver with the catalog's own clustering an
 - `ended` keeps every storm that left `cells` in the last two hours, with the reason (`expired`,
   `merged`, `replaced`, `source-gap`) and, for merges and replacements, the storm to follow.
   A split starts a new storm with `split_from`; the main branch keeps the id.
-- `level` follows ADR 0009 on the data so far and only rises. Storms under `min_level` are left
-  out. `path` holds the centroid of each 10 minute slice of observed flashes, at the slice's mean
-  event time, over at most the last two hours; earlier positions are in the catalog track.
+- `level` follows ADR 0009 on the data so far and only rises. A storm that a merged or replaced
+  storm continues into takes at least its level. Storms under `min_level` are left out. `path`
+  holds the centroid of each 10 minute slice of observed flashes, at the slice's mean event time,
+  over at most the last two hours; earlier positions are in the catalog track.
 
 Clients poll at their own pace and judge staleness from `published_at`. A storm is shown at the
 earlier of the scene time and its sources' `observed_until`, never extrapolated beyond its last

@@ -33,6 +33,7 @@ from scintille_pipelines.definitions import defs
 from scintille_pipelines.storm_catalog import (
     DETAIL_MAX_BYTES,
     HIGHLIGHTS_PATH,
+    LATEST_INDEX_PATH,
     PUBLISHED_PATH,
     PURGE_PATH,
     XMLNS,
@@ -89,7 +90,7 @@ def chunks(document: StormDetail) -> dict[str, bytes]:
     return {ref.path: (ROOT / "fixtures" / ref.path).read_bytes() for ref in document.replay.chunks}
 
 
-@pytest.mark.parametrize("after", range(12))
+@pytest.mark.parametrize("after", range(14))
 def test_interruption_keeps_references_valid(after: int) -> None:
     store, document = Store(after), detail()
     with suppress(OSError):
@@ -304,15 +305,57 @@ def test_hourly_job_materializes_classification_before_publication() -> None:
     assert AssetKey(["feeds", "storm_catalog"]) in job.asset_layer.executable_asset_keys
 
 
-def test_recent_first_stable_pages() -> None:
+def numbered(count: int, start: int = 0) -> list[StormSummary]:
     base = detail().storm
-    storms = [
-        base.model_copy(update={"storm_id": f"{n:03}", "slug": f"storm-{n}"}) for n in range(101)
+    return [
+        base.model_copy(
+            update={
+                "storm_id": f"{n:03}",
+                "slug": f"storm-{n}",
+                "t_start": base.t_start + timedelta(minutes=n),
+            }
+        )
+        for n in range(start, start + count)
     ]
-    pages = index_pages(storms, NOW)
+
+
+def test_pages_count_from_the_oldest_storm_and_list_recent_first() -> None:
+    pages = index_pages(numbered(101), NOW)
     assert [len(page.storms) for page in pages] == [50, 50, 1]
-    assert pages[0].storms[0].storm_id == "100"
+    assert [page.storms[0].storm_id for page in pages] == ["049", "099", "100"]
     assert len({s.slug for p in pages for s in p.storms}) == 101
+
+
+def test_only_changed_index_pages_are_rewritten() -> None:
+    store, document = Store(), detail()
+    storms = numbered(120)
+    store.files[PUBLISHED_PATH] = json.dumps([s.slug for s in storms]).encode()
+    first = publish_catalog(store, [], {}, storms, NOW, lambda _: True)
+    assert first["index_pages_written"] == 3
+    newer = numbered(1, start=200)
+    store.files[f"storms/{newer[0].slug}.json"] = document.model_dump_json().encode()
+    page_zero = store.files["storms/index/0.json"]
+    second = publish_catalog(store, [], {}, storms + newer, NOW, lambda _: True)
+    assert second["index_pages_written"] == 1
+    assert store.files["storms/index/0.json"] == page_zero
+    latest = json.loads(store.files[LATEST_INDEX_PATH])
+    assert latest["page"] == 2 and latest["total_pages"] == 3
+    assert latest["storms"][0]["slug"] == newer[0].slug
+    older = numbered(1, start=-200)
+    store.files[f"storms/{older[0].slug}.json"] = document.model_dump_json().encode()
+    third = publish_catalog(store, [], {}, storms + newer + older, NOW, lambda _: True)
+    assert third["index_pages_written"] == 3
+
+
+def test_published_replay_chunks_are_not_sent_again() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, lambda _: True)
+    store.files = {k: v for k, v in store.files.items() if not k.startswith("storms/chunks/")}
+    changed = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"flashes": 4})}
+    )
+    publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, lambda _: True)
+    assert not any(path.startswith("storms/chunks/") for path in store.files)
 
 
 def test_sitemap_splits_and_metadata(monkeypatch: pytest.MonkeyPatch) -> None:

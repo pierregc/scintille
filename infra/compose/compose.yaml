@@ -107,6 +107,27 @@ services:
     image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
     command: ["scintille-ingest", "live-probe"]
 
+  # storms/active.json every 5 minutes (ADR 0021); reads lake-writer's spool until silver is fast enough.
+  active-storms:
+    <<: *pipelines
+    command: ["scintille-active-storms", "--spool", "/var/lib/scintille/spool", "--port", "8082"]
+    environment:
+      # Hand freed memory back, so the steady state stays well under the limit.
+      ARROW_DEFAULT_MEMORY_POOL: system
+      MALLOC_ARENA_MAX: "2"
+      MALLOC_MMAP_THRESHOLD_: "131072"
+      MALLOC_TRIM_THRESHOLD_: "131072"
+      _RJEM_MALLOC_CONF: background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0
+    volumes:
+      - spool:/var/lib/scintille/spool:ro
+    cpus: 1
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)"]
+      interval: 15s
+      start_period: 30s
+      retries: 4
+
   # Cloud textures (ADR 0007). Off until COMPOSE_PROFILES includes "clouds" in .env.
   clouds:
     <<: *service

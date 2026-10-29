@@ -1,11 +1,13 @@
-import { Color, FrontSide, Mesh, ShaderMaterial, SphereGeometry, type Texture, Vector2, Vector3, Vector4 } from 'three';
+import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, type Texture, Vector2, Vector3, Vector4 } from 'three';
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
+import type { CloudDetail, DetailSource } from './detail';
 import type { CloudFrame } from './frame';
 import { browserStorage, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 import { blendPair, easePosition, framePosition, MAX_CLOUD_FRAMES } from './timeline';
 
+export { cloudOpacityGlsl } from './clouds.glsl';
 export { type CloudFrame, loadCloudFrame } from './frame';
 
 const EARTH_RADIUS_KM = 6371;
@@ -38,6 +40,8 @@ export interface CloudsOptions {
 	storage?: PreferenceStorage | null;
 	/** Frames kept on the GPU. */
 	maxFrames?: number;
+	/** Finer tiles near the camera, when the frames have them. */
+	detail?: CloudDetail;
 }
 
 export interface Clouds {
@@ -58,6 +62,13 @@ export interface Clouds {
 	setTime(utcMs: number): void;
 	/** Flash glow map over a window of the globe that lights the clouds from inside; null turns it off. */
 	setFlashLight(light: { map: Texture; window: Vector4 } | null): void;
+	/** Detail tiles of the two frames being blended, while the layer shows. */
+	detailFrames(): readonly [DetailSource | null, DetailSource | null];
+	/**
+	 * What another material needs to read the cloud opacity: share these uniforms and defines and
+	 * include `cloudOpacityGlsl`. They follow the layer: frames, blend, detail and visibility.
+	 */
+	readonly opacity: { uniforms: Record<string, IUniform>; defines: Record<string, string> };
 	dispose(): void;
 }
 
@@ -77,18 +88,29 @@ export function createClouds(
 		bicubic = true,
 		storage = browserStorage(),
 		maxFrames = MAX_CLOUD_FRAMES,
+		detail,
 	}: CloudsOptions = {},
 ): Clouds {
 	const geometry = new SphereGeometry(cloudShellRadius(radius, altitudeKm), widthSegments, heightSegments);
 	const twilight = twilightUniforms();
+	const opacity = {
+		uniforms: {
+			cloudMap: { value: null as Texture | null },
+			cloudMapNext: { value: null as Texture | null },
+			cloudMix: { value: 0 },
+			cloudMapSize: { value: new Vector2(1, 1) },
+			cloudMaxOpacity: { value: 0.92 },
+			cloudFadeLatitudes: { value: new Vector2(...CLOUD_FADE_LATITUDES.map((lat) => Math.sin(lat * DEG))) },
+			cloudShown: { value: 0 },
+			...detail?.uniforms,
+		},
+		defines: { ...(bicubic ? { BICUBIC: '' } : {}), ...(detail ? { DETAIL: '' } : {}) },
+	};
 	const material = new ShaderMaterial({
 		vertexShader: cloudsVertexShader,
 		fragmentShader: cloudsFragmentShader,
 		uniforms: {
-			cloudMap: { value: null },
-			cloudMapNext: { value: null },
-			cloudMix: { value: 0 },
-			cloudMapSize: { value: new Vector2(1, 1) },
+			...opacity.uniforms,
 			sunDirection: { value: new Vector3(1, 0, 0) },
 			twilightEdges: { value: new Vector4(...twilight.edges) },
 			twilightWeights: { value: new Vector4(...twilight.weights) },
@@ -99,15 +121,13 @@ export function createClouds(
 			nightColor: { value: new Color(0.006, 0.007, 0.01) },
 			warmTint: { value: new Color(1.6, 0.8, 0.45) },
 			terminatorTint: { value: 0.8 },
-			maxOpacity: { value: 0.92 },
 			limbThickening: { value: 0.6 },
-			fadeLatitudes: { value: new Vector2(...CLOUD_FADE_LATITUDES.map((lat) => Math.sin(lat * DEG))) },
 			flashLight: { value: null },
 			flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
 		},
-		defines: bicubic ? { BICUBIC: '' } : {},
+		defines: opacity.defines,
 		side: FrontSide,
 		transparent: true,
 		depthWrite: false,
@@ -125,6 +145,7 @@ export function createClouds(
 		(!Number.isFinite(sceneTime) || frames.some((f) => Math.abs(f.time - sceneTime) <= CLOUD_MAX_GAP_MS));
 	const syncVisibility = () => {
 		mesh.visible = visible && covered();
+		opacity.uniforms.cloudShown.value = mesh.visible ? 1 : 0;
 	};
 	syncVisibility();
 
@@ -148,6 +169,7 @@ export function createClouds(
 
 	return {
 		mesh,
+		opacity,
 		get visible() {
 			return visible;
 		},
@@ -201,6 +223,11 @@ export function createClouds(
 				? easePosition(position, target(), Math.abs(utcMs - previous) / 1000)
 				: target();
 			show();
+		},
+		detailFrames() {
+			if (!mesh.visible || frames.length === 0) return [null, null];
+			const { a, b } = blendPair(position, frames.length);
+			return [frames[a].detail ?? null, frames[b].detail ?? null];
 		},
 		setFlashLight(light) {
 			material.uniforms.flashLight.value = light?.map ?? null;

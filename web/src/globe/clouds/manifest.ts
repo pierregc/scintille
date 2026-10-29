@@ -1,3 +1,5 @@
+import { type CloudDetailRef, type DetailSource, detailSource } from './detail';
+
 /** Texture tiers published under `live/clouds/<tier>/` (docs/data-contract.md). */
 export type CloudTier = '2k' | '4k';
 
@@ -14,6 +16,7 @@ export interface CloudFrameRef {
 	product: string;
 	reference: string;
 	textures: Partial<Record<CloudTier, CloudTexture>>;
+	detail?: CloudDetailRef | null;
 }
 
 export interface CloudManifest {
@@ -24,10 +27,11 @@ export interface CloudManifest {
 	frames: CloudFrameRef[];
 }
 
-/** A frame to load: its observation time (UTC ms) and texture URL for one tier. */
+/** A frame to load: its observation time (UTC ms), texture URL for one tier and detail tiles. */
 export interface CloudFrameSource {
 	time: number;
 	url: string;
+	detail: DetailSource | null;
 }
 
 export class CloudManifestError extends Error {}
@@ -57,7 +61,11 @@ export function frameSources(
 ): CloudFrameSource[] {
 	const sources = manifest.frames
 		.filter((f) => typeof f.textures[tier]?.path === 'string')
-		.map((f) => ({ time: Date.parse(f.time), url: new URL(f.textures[tier]?.path ?? '', manifestUrl).href }))
+		.map((f) => ({
+			time: Date.parse(f.time),
+			url: new URL(f.textures[tier]?.path ?? '', manifestUrl).href,
+			detail: detailSource(f.detail, manifestUrl),
+		}))
 		.sort((a, b) => a.time - b.time);
 	return sources.slice(Math.max(0, sources.length - count));
 }

@@ -17,7 +17,8 @@ Ownership:
 
 Choices:
 
-- Only `scintille-live` is public, through `data.scintille.app`. CORS allows `GET`/`HEAD` from
+- Only `scintille-live` is public, through `data.scintille.app`. Its `archive/clouds/` objects are
+  deleted after 30 days and `storms/chunks/` replays after 60 days. CORS allows `GET`/`HEAD` from
   `https://scintille.app` and `https://*.<workers_subdomain>.workers.dev` (our Preview URLs), never
   all of `workers.dev`.
 - `scintille-live-preview` stays private, with no domain and no CORS. Previews read it server side
