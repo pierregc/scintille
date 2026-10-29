@@ -1,5 +1,6 @@
 """Geostationary scan geometry: from latitude, longitude and height to scan angles and back."""
 
+import math
 from dataclasses import dataclass
 from typing import Literal
 
@@ -56,14 +57,39 @@ class Grid:
         )
 
 
+@dataclass(frozen=True)
+class Points:
+    """Trigonometry of ground points, computed once and shared by every satellite and height."""
+
+    sin_phi: Array
+    cos_phi: Array
+    sin_lon: Array
+    cos_lon: Array
+    normal: Array
+    """Radius of curvature in the prime vertical, metres."""
+
+    @classmethod
+    def of(cls, lat: Array, lon: Array) -> "Points":
+        phi, lam = np.radians(lat), np.radians(lon)
+        sin_phi = np.sin(phi)
+        normal = A / np.sqrt(1 - E2 * sin_phi * sin_phi)
+        return cls(sin_phi, np.cos(phi), np.sin(lam), np.cos(lam), normal)
+
+
 def ecef(lat: Array, lon: Array, height: Array | float, view: View) -> tuple[Array, Array, Array]:
     """Earth-centred coordinates in metres, x towards the satellite's longitude."""
-    phi = np.radians(lat)
-    lam = np.radians(lon - view.lon)
-    sin_phi = np.sin(phi)
-    n = A / np.sqrt(1 - E2 * sin_phi * sin_phi)
-    horizontal = (n + height) * np.cos(phi)
-    return horizontal * np.cos(lam), horizontal * np.sin(lam), (n * (1 - E2) + height) * sin_phi
+    return _ecef(Points.of(lat, lon), height, view)[:3]
+
+
+def _ecef(
+    points: Points, height: Array | float, view: View
+) -> tuple[Array, Array, Array, Array, Array]:
+    cos_view, sin_view = math.cos(math.radians(view.lon)), math.sin(math.radians(view.lon))
+    cos_lam = points.cos_lon * cos_view + points.sin_lon * sin_view
+    sin_lam = points.sin_lon * cos_view - points.cos_lon * sin_view
+    horizontal = (points.normal + height) * points.cos_phi
+    z = (points.normal * (1 - E2) + height) * points.sin_phi
+    return horizontal * cos_lam, horizontal * sin_lam, z, cos_lam, sin_lam
 
 
 def scan_angles(
@@ -71,7 +97,11 @@ def scan_angles(
 ) -> tuple[Array, Array, Array]:
     """Scan angles (x east, y north, radians) and the cosine of the view zenith angle, which is
     negative where the point faces away from the satellite."""
-    px, py, pz = ecef(lat, lon, height, view)
+    return scan_angles_at(Points.of(lat, lon), height, view)
+
+
+def scan_angles_at(points: Points, height: Array | float, view: View) -> tuple[Array, Array, Array]:
+    px, py, pz, cos_lam, sin_lam = _ecef(points, height, view)
     tx = view.radius - px
     if view.sweep == "x":
         x = np.arctan(py / np.hypot(pz, tx))
@@ -79,11 +109,9 @@ def scan_angles(
     else:
         x = np.arctan(py / tx)
         y = np.arctan(pz / np.hypot(py, tx))
-    phi = np.radians(lat)
-    lam = np.radians(lon - view.lon)
-    up = (np.cos(phi) * np.cos(lam), np.cos(phi) * np.sin(lam), np.sin(phi))
     distance = np.sqrt(tx * tx + py * py + pz * pz)
-    cos_vza = (up[0] * tx - up[1] * py - up[2] * pz) / distance
+    up_x, up_y = points.cos_phi * cos_lam, points.cos_phi * sin_lam
+    cos_vza = (up_x * tx - up_y * py - points.sin_phi * pz) / distance
     return x, y, cos_vza
 
 

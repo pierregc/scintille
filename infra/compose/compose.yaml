@@ -128,12 +128,19 @@ services:
       start_period: 30s
       retries: 4
 
-  # Cloud textures (ADR 0007). Off until COMPOSE_PROFILES includes "clouds" in .env.
+  # Cloud frames: the composite of ADR 0023, with GMGSI (ADR 0007) where no disk sees well.
+  # Off until COMPOSE_PROFILES includes "clouds" in .env.
   clouds:
     <<: *service
     image: ghcr.io/pierregc/scintille-ingest:${SCINTILLE_TAG:-main}
     profiles: ["clouds"]
     command: ["scintille-ingest", "clouds", "--port", "8081"]
+    environment:
+      SCINTILLE_CLOUD_SOURCE: composite
+      SCINTILLE_CLOUD_WORKERS: "2"
+    # Two cores and the memory-mapped disks of one frame, so Dagster and the hot path keep theirs.
+    cpus: 2
+    mem_limit: 3g
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/healthz', timeout=5)"]
       interval: 15s

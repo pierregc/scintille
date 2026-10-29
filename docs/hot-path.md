@@ -82,8 +82,9 @@ Rows carry the `intensity` and `calibration_version` of the calibration they wer
 
 ## `clouds` (`scintille-ingest clouds`)
 
-Cloud textures from NOAA GMGSI longwave IR ([ADR 0007](adr/0007-cloud-source.md)), in its own
-container so the CPU work never delays the live feed (compose profile `clouds`).
+Cloud textures from NOAA GMGSI longwave IR ([ADR 0007](adr/0007-cloud-source.md)), or in production
+from the composite described below ([ADR 0023](adr/0023-composite-clouds.md)), in its own container
+so the CPU work never delays the live feed (compose profile `clouds`).
 
 Every minute it lists the last 7 hour prefixes of `noaa-gmgsi-pds` (`GMGSI_LW/`; a new hourly
 mosaic lands about 40 minutes after its nominal time) and, oldest first, takes every mosaic of the
