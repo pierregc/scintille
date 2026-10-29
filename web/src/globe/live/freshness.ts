@@ -9,6 +9,13 @@ export const SOURCE_LABELS: Record<Source, string> = {
 	'mtg-li': 'MTG LI',
 };
 
+/** What each source covers, for visitors. */
+export const SOURCE_REGIONS: Record<Source, string> = {
+	'glm-east': 'Americas',
+	'glm-west': 'Pacific',
+	'mtg-li': 'Europe & Africa',
+};
+
 export interface SourceFreshness {
 	source: Source;
 	label: string;
@@ -50,14 +57,21 @@ export function feedStatus(
 }
 
 /** HUD wording for a feed status: the state next to the pulse, and the banner (empty when fresh). */
-export function feedLabel(status: FeedStatus): { state: string; banner: string } {
+export function feedLabel(status: FeedStatus): { state: string; banner: string; loading?: boolean } {
 	if (!status.stale) return { state: 'Live', banner: '' };
 	if (status.ageMs === null) {
 		return status.failing
 			? { state: 'Offline', banner: 'Live data is unavailable' }
-			: { state: 'Connecting', banner: 'Waiting for live data' };
+			: { state: 'Connecting', banner: 'Acquiring satellite data', loading: true };
 	}
 	return { state: 'Delayed', banner: `Live data is late · last update ${formatAge(status.ageMs)} ago` };
+}
+
+/** A playful line under late sources; empty while they are all live. */
+export function sourcesNote(sources: Pick<SourceFreshness, 'state'>[]): string {
+	if (sources.some((s) => s.state === 'offline')) return 'Hyperwave relay silent · standing by';
+	if (sources.some((s) => s.state === 'delayed')) return 'Hyperwave relay running late';
+	return '';
 }
 
 /** `48 s`, `12 min`, `3 h`, `2 d`. */

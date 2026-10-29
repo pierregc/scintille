@@ -64,6 +64,10 @@ class StateDelays:
         )
 
 
+PRODUCT_CADENCE: dict[str, timedelta] = {"mtg-li": timedelta(minutes=10)}
+"""Time between two product files of a source, added to its state delays."""
+
+
 def _seconds(value: str | None, default: timedelta) -> timedelta:
     return timedelta(seconds=float(value)) if value else default
 
@@ -368,7 +372,12 @@ class LiveFeed:
             sources=[
                 SourceStatus(
                     source=source,
-                    state=source_state(self._sources[source].last_ingest, now, self.delays),
+                    state=source_state(
+                        self._sources[source].last_ingest,
+                        now,
+                        self.delays,
+                        PRODUCT_CADENCE.get(source, timedelta(0)),
+                    ),
                     last_event_time=self._sources[source].last_event,
                     last_ingest_time=self._sources[source].last_ingest,
                 )
@@ -437,12 +446,18 @@ def quality_mask(flags: list[str]) -> int:
 
 
 def source_state(
-    last_ingest: datetime | None, now: datetime, delays: StateDelays | None = None
+    last_ingest: datetime | None,
+    now: datetime,
+    delays: StateDelays | None = None,
+    cadence: timedelta = timedelta(0),
 ) -> SourceState:
     delays = delays or StateDelays()
-    if last_ingest is None or now - last_ingest > delays.offline_after:
+    if last_ingest is None:
         return "offline"
-    return "live" if now - last_ingest <= delays.delayed_after else "delayed"
+    age = now - last_ingest - cadence
+    if age > delays.offline_after:
+        return "offline"
+    return "live" if age <= delays.delayed_after else "delayed"
 
 
 def columns(flashes: pl.DataFrame | None, start: datetime) -> dict[str, np.ndarray]:

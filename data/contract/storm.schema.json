@@ -357,6 +357,39 @@
       },
       "description": "storms/index/<page>.json: zero-based pages counted from the oldest storm, each listed recent first; storms/index/latest.json repeats the last page and holds the current totals."
     },
+    "StormMetric": {
+      "description": "The one figure that makes a highlighted storm notable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "rank"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "flashes",
+            "countries",
+            "distance_km",
+            "hours",
+            "peak_rate",
+            "area_km2"
+          ],
+          "description": "Total flashes, countries crossed by the centroid, distance travelled, duration, peak flashes per minute, or largest cell area."
+        },
+        "value": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Rank among the storms the highlight was chosen from, 1 for the most."
+        }
+      }
+    },
     "StormHighlight": {
       "type": "object",
       "additionalProperties": false,
@@ -398,6 +431,17 @@
         },
         "storm": {
           "$ref": "#/$defs/StormSummary"
+        },
+        "metric": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StormMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null in files older than 2.8.0."
         }
       },
       "description": "One highlighted storm and the reason it was chosen."

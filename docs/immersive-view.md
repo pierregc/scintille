@@ -324,8 +324,7 @@ between them, and says how far they are from the scene when it matters
   Samples come once per hourly window: up to 90 min old the position is shown with its age, then
   as "No position since". Nothing is shown before the first sample.
 - **Clouds.** Frames within 90 min of each other crossfade; across a wider gap (missing frames) the
-  nearest frame is shown alone. Its age appears from 15 min, earlier or later than the scene; beyond
-  3 h the layer hides ("No cloud data").
+  nearest frame is shown alone; beyond 3 h the layer hides.
 - **Live and replay.** Leaving a storm returns to the wall clock at 1×, the live clouds and no
   selection; browser history reopens the storm at its time, speed and pause state. Layer switches
   are kept.
@@ -379,7 +378,8 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
    one frame, a decay of tens of milliseconds. Replay speed only compresses the gaps between
    flashes.
 12. **No false precision.** Flash positions are not interpolated or snapped. Surface and clouds
-   show source detail only; magnification uses smooth filtering, never sharpening or added noise.
+   keep their sources' values at the sources' scale; below it they may carry styled detail within
+   the bounds of [ADR 0030](adr/0030-bounded-aesthetic-license.md). Magnification never sharpens.
 
 ## Budgets
 

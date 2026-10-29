@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LiveManifest } from '../../contract/types';
-import { feedLabel, feedStatus, formatAge, STALE_AFTER_MS } from './freshness';
+import { feedLabel, feedStatus, formatAge, sourcesNote, STALE_AFTER_MS } from './freshness';
 
 const T = Date.UTC(2026, 6, 15, 19);
 
@@ -54,11 +54,23 @@ describe('feedLabel', () => {
 	});
 
 	it('tells waiting apart from an unreachable feed', () => {
-		expect(feedLabel(feedStatus(null, null, T)).state).toBe('Connecting');
+		expect(feedLabel(feedStatus(null, null, T))).toEqual({
+			state: 'Connecting',
+			banner: 'Acquiring satellite data',
+			loading: true,
+		});
 		expect(feedLabel(feedStatus(null, null, T, true))).toEqual({
 			state: 'Offline',
 			banner: 'Live data is unavailable',
 		});
+	});
+});
+
+describe('sourcesNote', () => {
+	it('speaks only when a source is late', () => {
+		expect(sourcesNote([{ state: 'live' }])).toBe('');
+		expect(sourcesNote([{ state: 'live' }, { state: 'delayed' }])).toBe('Hyperwave relay running late');
+		expect(sourcesNote([{ state: 'delayed' }, { state: 'offline' }])).toBe('Hyperwave relay silent · standing by');
 	});
 });
 

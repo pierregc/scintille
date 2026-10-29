@@ -108,7 +108,8 @@ live/chunks/20260715T183030Z.bin.gz
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
 - A source's **state** comes from the time since its last product file: `live` up to
   `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
-  `offline`. Both delays are configurable ([hot path](hot-path.md#live-feed)).
+  `offline`. Both count from the next expected file, so MTG LI, which delivers every 10 minutes,
+  turns `delayed` after 12 minutes. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
@@ -242,7 +243,8 @@ The canonical limits, tiers and texture-path rule are packaged in
 vectors exercise their accepted and rejected payloads without adding a generic runtime validator.
 `expires_at` is archive publication plus 30 days. The existing archive lifecycle can still remove
 referenced objects; indices do not promise permanent availability or exact cloud measurements at
-every scene instant. No existing unindexed archive is backfilled by this change.
+every scene instant. `scintille-ingest clouds-reindex --first DAY --last DAY` indexes textures
+archived before the indexes existed, without uploading them again ([ADR 0025](adr/0025-past-days-archive.md)).
 
 Interactive replay fetches at most three daily indices and keeps at most three frame textures close
 to the playhead, bounded by the existing 3-hour gap rule. Selection follows sub-hourly scrubs as well.
@@ -259,6 +261,40 @@ under `/_replay-fixtures/archive/clouds/` only in Preview builds. Their far-futu
 dates are synthetic so the real July imagery remains available for repeatable visual checks.
 Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
 does not include these fixtures. Dev uses the existing fixture server at the configured data root.
+
+## Flash archive
+
+Travel in time reads flashes before the live window from `archive/flashes/`
+([ADR 0025](adr/0025-past-days-archive.md)). The Dagster job `hourly_flash_archive` writes it from
+silver at :02 and :32, reading the two newest archived hours again for late rows, and rereads the
+previous day at 02:45. Limits and the chunk path rule are in `scintille_contract/flash_archive_rules.json`.
+
+```
+archive/flashes/index.json                     Cache-Control: public, max-age=60
+archive/flashes/manifests/2026-10-15.json      Cache-Control: public, max-age=60
+archive/flashes/chunks/<sha256>.bin.gz         Cache-Control: public, max-age=31536000, immutable
+```
+
+```json
+{
+  "schema_version": 1,
+  "day": "2026-10-15",
+  "generated_at": "2026-10-15T19:02:41Z",
+  "hours": [{
+    "start": "2026-10-15T18:00:00Z",
+    "flash_count": 203114,
+    "chunks": [{"path": "../chunks/3f1c...e9.bin.gz", "flash_count": 65536, "size_bytes": 604211,
+                "event_min": "2026-10-15T18:00:00.012Z", "event_max": "2026-10-15T18:19:07.441Z"}]
+  }]
+}
+```
+
+- Chunks use the live encoding with the hour as origin, at most 65,536 flashes each, in event time
+  order. An hour whose flashes changed gets new chunks; the replaced ones are deleted after the
+  day index is written, so a reader holding an old index refetches it on a missing chunk.
+- An hour without flashes in silver is absent: the reader shows missing data, never an empty sky.
+- `index.json` gives `first_day`, `last_hour` and `retention_days` (silver's, 21). Days before
+  `first_day` are deleted by the job; an R2 lifecycle rule removes anything older than 22 days.
 
 ## Chunk encoding
 
@@ -344,7 +380,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.7.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.8.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -352,7 +388,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.7.0`.
+Value: `2.8.0`.
 
 ### UtcTimestamp
 
@@ -785,6 +821,18 @@ storms/index/<page>.json: zero-based pages counted from the oldest storm, each l
 | `total_pages` | integer | yes | minimum `1` |  |
 | `storms` | array of [StormSummary](#stormsummary) | yes |  |  |
 
+### StormMetric
+
+Defined in `data/contract/storm.schema.json`.
+
+The one figure that makes a highlighted storm notable.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  | Total flashes, countries crossed by the centroid, distance travelled, duration, peak flashes per minute, or largest cell area. |
+| `value` | number | yes | minimum `0` |  |
+| `rank` | integer | yes | minimum `1` | Rank among the storms the highlight was chosen from, 1 for the most. |
+
 ### StormHighlight
 
 Defined in `data/contract/storm.schema.json`.
@@ -796,6 +844,7 @@ One highlighted storm and the reason it was chosen.
 | `kind` | string | yes |  | Why it was picked: best of the last 24 h or 7 days, best of a broad area over 24 h, a 7 day record, or the most active storm that stayed over one spot for hours. |
 | `area` | string or null | yes |  | Broad area from the storm centroid, set when kind is area. |
 | `storm` | [StormSummary](#stormsummary) | yes |  |  |
+| `metric` | [StormMetric](#stormmetric) or null | no |  | Null in files older than 2.8.0. |
 
 ### StormHighlights
 
