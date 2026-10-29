@@ -24,17 +24,17 @@ import StormSuggestions from './StormSuggestions.astro';
 	<StormSuggestions />
 
 	<section class="clock" aria-label="Time">
-		<p class="t"><time data-time>--:--:--</time><small data-zone></small></p>
-		<p class="d" data-date></p>
+		<p class="t"><time data-time>--:--:--</time><span class="side"><small data-zone></small><span class="d" data-date></span></span></p>
 		<div class="state">
 			<span class="pulse" aria-hidden="true"></span>
 			<span class="cap" data-state role="status">Live</span>
 			<button class="golive" type="button" data-live>Back to live</button>
 		</div>
 		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
+		<p class="note" data-sources-note hidden></p>
 	</section>
 
-	<p class="stale cap" role="status" data-stale hidden></p>
+	<p class="stale cap" role="status" data-stale hidden><span data-stale-text></span><span class="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>
 	<div class="storm" data-storm-panel>
 		<p class="replay-status" role="status" data-replay-status hidden></p>
 		<div class="tools" data-storm-tools hidden>
@@ -48,7 +48,6 @@ import StormSuggestions from './StormSuggestions.astro';
 	<div class="layers" data-layers hidden>
 		<div class="group" role="group" aria-label="Layers">
 			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
-			<p class="cloud-time" data-cloud-time hidden></p>
 			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
 		</div>
 		<div class="afterglow" data-afterglow>
@@ -189,22 +188,29 @@ import StormSuggestions from './StormSuggestions.astro';
 		text-align: right;
 	}
 	.clock .t {
+		display: flex;
+		gap: 12px;
+		justify-content: flex-end;
 		font: 200 40px/1 var(--mono);
 		font-variant-numeric: tabular-nums;
 		letter-spacing: 0.04em;
 	}
+	.clock .side {
+		display: grid;
+		align-content: space-between;
+		padding: 5px 0 4px;
+		text-align: left;
+	}
 	.clock .t small {
-		margin-left: 8px;
 		color: var(--dim);
 		font: 300 10px/1 var(--mono);
 		letter-spacing: 0.24em;
-		vertical-align: 22px;
 	}
 	.clock .d {
-		margin-top: 8px;
 		color: var(--soft);
 		font: 300 11px/1 var(--mono);
 		letter-spacing: 0.14em;
+		white-space: nowrap;
 	}
 	.state {
 		display: inline-flex;
@@ -258,8 +264,14 @@ import StormSuggestions from './StormSuggestions.astro';
 		color: var(--soft);
 	}
 	.sources :global(li[data-state='live']),
-	.hud[data-late] .sources {
+	.hud[data-late] :is(.sources, .note) {
 		display: none;
+	}
+	.note {
+		margin-top: 8px;
+		color: var(--dim);
+		font: 300 11px/1.4 var(--sans);
+		font-style: italic;
 	}
 	.stale {
 		position: fixed;
@@ -269,6 +281,31 @@ import StormSuggestions from './StormSuggestions.astro';
 		color: var(--soft);
 		text-align: center;
 		transform: translateX(-50%);
+	}
+	.stale .dots {
+		display: none;
+	}
+	.stale[data-loading] .dots {
+		display: inline;
+	}
+	.dots i {
+		font-style: normal;
+		animation: dot 1.8s ease-in-out infinite;
+	}
+	.dots i:nth-child(2) {
+		animation-delay: 0.3s;
+	}
+	.dots i:nth-child(3) {
+		animation-delay: 0.6s;
+	}
+	@keyframes dot {
+		0%,
+		100% {
+			opacity: 0.2;
+		}
+		40% {
+			opacity: 1;
+		}
 	}
 	.golive {
 		margin-left: 6px;
@@ -316,14 +353,6 @@ import StormSuggestions from './StormSuggestions.astro';
 	}
 	.sw:hover {
 		color: var(--soft);
-	}
-	.cloud-time {
-		margin: -8px 0 0;
-		color: var(--dim);
-		font: 300 9.5px/1 var(--mono);
-		font-variant-numeric: tabular-nums;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
 	}
 	.group {
 		display: grid;
@@ -432,15 +461,20 @@ import StormSuggestions from './StormSuggestions.astro';
 			display: none;
 		}
 		.clock .t {
-			font-size: 26px;
+			font-size: 24px;
+		}
+		.clock .t {
+			gap: 6px;
+		}
+		.clock .side {
+			padding: 2px 0 1px;
 		}
 		.clock .t small {
-			margin-left: 5px;
 			font-size: 8px;
-			vertical-align: 14px;
 		}
 		.clock .d {
-			font-size: 10px;
+			font-size: 9px;
+			letter-spacing: 0.1em;
 		}
 		.layers {
 			top: calc(var(--gut) + 112px);
@@ -461,8 +495,20 @@ import StormSuggestions from './StormSuggestions.astro';
 			bottom: calc(var(--gut) + 96px);
 		}
 	}
+	@media (max-width: 359px) {
+		.clock .t {
+			flex-direction: column;
+			align-items: flex-end;
+		}
+		.clock .side {
+			display: flex;
+			gap: 8px;
+			padding: 0;
+		}
+	}
 	@media (prefers-reduced-motion: reduce) {
-		.pulse {
+		.pulse,
+		.dots i {
 			animation: none;
 		}
 		a,
@@ -475,12 +521,12 @@ import StormSuggestions from './StormSuggestions.astro';
 
 <script>
 	import type { GlobeApp } from '../globe/app';
-	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
+	import { GLOBE_FALLBACK, GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { DISPLAY_MINUTES } from '../globe/lightning/display';
 	import { trackCaption } from '../globe/replay/track';
-	import { feedLabel, formatAge } from '../globe/live/freshness';
+	import { feedLabel, formatAge, SOURCE_REGIONS, sourcesNote } from '../globe/live/freshness';
 	import { trackObservation } from '../globe/scene-time';
-	import { cloudCaption, endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
+	import { endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
 
 	const root = document.querySelector<HTMLElement>('[data-hud]');
 	if (root) {
@@ -493,8 +539,9 @@ import StormSuggestions from './StormSuggestions.astro';
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
 		const sound = $<HTMLButtonElement>('[data-sound]');
 		const sources = $('[data-sources]');
-		const cloudTime = $('[data-cloud-time]');
+		const sourcesNoteLine = $('[data-sources-note]');
 		const staleBanner = $('[data-stale]');
+		const staleText = $('[data-stale-text]');
 		const replayStatus = $('[data-replay-status]');
 		const stormTools = $('[data-storm-tools]');
 		const horizon = $<HTMLButtonElement>('[data-horizon]');
@@ -504,27 +551,39 @@ import StormSuggestions from './StormSuggestions.astro';
 		const display = $('[data-display]');
 		const afterglow = $('[data-afterglow]');
 		let app: GlobeApp | undefined;
+		let fallback = false;
 		let trackTimes: { detail: unknown; times: number[] } = { detail: null, times: [] };
 
 		const showFreshness = (live: boolean, replayLabel: string) => {
 			const status = live && app ? app.feedStatus() : undefined;
-			const label = status ? feedLabel(status) : { state: live ? 'Live' : replayLabel, banner: '' };
+			const starting = live && !app && !fallback;
+			const label = status
+				? feedLabel(status)
+				: starting
+					? { state: 'Connecting', banner: 'Acquiring satellite data', loading: true }
+					: { state: live ? 'Live' : replayLabel, banner: '' };
 			root.toggleAttribute('data-late', Boolean(status?.stale));
 			if (state && state.textContent !== label.state) state.textContent = label.state;
 			if (staleBanner) {
 				staleBanner.hidden = !label.banner;
-				if (staleBanner.textContent !== label.banner) staleBanner.textContent = label.banner;
+				staleBanner.toggleAttribute('data-loading', Boolean(label.loading));
+				if (staleText && staleText.textContent !== label.banner) staleText.textContent = label.banner;
 			}
 			if (sources) {
 				const lines = (status?.sources ?? []).map((s) => ({
 					state: s.state,
-					text: [s.label, s.state === 'live' ? null : s.state, s.ageMs === null ? null : formatAge(s.ageMs)]
+					text: [SOURCE_REGIONS[s.source] ?? s.label, s.state === 'live' ? null : s.state, s.ageMs === null ? null : formatAge(s.ageMs)]
 						.filter(Boolean)
 						.join(' · '),
 				}));
 				sources.hidden = lines.length === 0;
 				const html = lines.map((l) => `<li data-state="${l.state}">${l.text}</li>`).join('');
 				if (sources.innerHTML !== html) sources.innerHTML = html;
+			}
+			if (sourcesNoteLine) {
+				const note = sourcesNote(status?.sources ?? []);
+				sourcesNoteLine.hidden = !note;
+				if (sourcesNoteLine.textContent !== note) sourcesNoteLine.textContent = note;
 			}
 		};
 
@@ -568,13 +627,6 @@ import StormSuggestions from './StormSuggestions.astro';
 			if (root.dataset.mode !== mode) root.dataset.mode = mode;
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
-			if (cloudTime) {
-				const caption = app
-					? cloudCaption(app.clouds.visible, app.clouds.frameTime, app.cloudStatus().settled, app.observedTime())
-					: '';
-				cloudTime.hidden = !caption;
-				if (cloudTime.textContent !== caption) cloudTime.textContent = caption;
-			}
 			sound?.setAttribute('aria-pressed', String(app?.thunder.enabled ?? false));
 			const stormView = app?.lightning.stormView ?? false;
 			if (afterglow) afterglow.title = stormView ? 'Storm views show each flash alone' : '';
@@ -625,6 +677,9 @@ import StormSuggestions from './StormSuggestions.astro';
 		window.addEventListener(GLOBE_GONE, () => {
 			app = undefined;
 			if (layers) layers.hidden = true;
+		});
+		window.addEventListener(GLOBE_FALLBACK, () => {
+			fallback = true;
 		});
 		$('[data-live]')?.addEventListener('click', () => {
 			void app?.replay.live();
