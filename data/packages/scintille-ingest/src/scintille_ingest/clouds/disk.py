@@ -77,8 +77,12 @@ def bilinear(
     c0 = np.minimum(c.astype(np.int64), n_cols - 2)
     fr = (r - r0).astype(np.float32)
     fc = (c - c0).astype(np.float32)
-    top = grid[r0, c0] * (1 - fc) + grid[r0, c0 + 1] * fc
-    bottom = grid[r0 + 1, c0] * (1 - fc) + grid[r0 + 1, c0 + 1] * fc
+    # Flat gathers are about twice as fast as two-dimensional fancy indexing.
+    flat = grid.reshape(-1)
+    i = r0 * n_cols + c0
+    top = np.take(flat, i) * (1 - fc) + np.take(flat, i + 1) * fc
+    i += n_cols
+    bottom = np.take(flat, i) * (1 - fc) + np.take(flat, i + 1) * fc
     value: NDArray[np.float32] = (top * (1 - fr) + bottom * fr).astype(np.float32)
     value[~inside] = np.nan
     return value

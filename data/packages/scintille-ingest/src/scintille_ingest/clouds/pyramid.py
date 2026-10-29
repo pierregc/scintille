@@ -35,20 +35,23 @@ class Inputs:
 
     @cached_property
     def _skin_wrapped(self) -> Array:
-        return np.concatenate([self.skin, self.skin[:, :1]], axis=1)
+        return np.ascontiguousarray(np.concatenate([self.skin, self.skin[:, :1]], axis=1))
 
     @cached_property
     def _fallback_wrapped(self) -> Array | None:
         if self.fallback is None:
             return None
-        return np.concatenate([self.fallback.bt, self.fallback.bt[:, :1]], axis=1)
+        bt = self.fallback.bt
+        return np.ascontiguousarray(np.concatenate([bt, bt[:, :1]], axis=1))
 
     def skin_at(self, lat: NDArray[np.float64], lon: NDArray[np.float64]) -> Array:
         rows = np.clip((90 - lat) / 0.25, 0, self.skin.shape[0] - 1)
         cols = np.mod(lon, 360) / 0.25
         return bilinear(self._skin_wrapped, rows, cols)
 
-    def fallback_at(self, lat: NDArray[np.float64], lon: NDArray[np.float64]) -> Array | None:
+    def fallback_at(
+        self, lat: NDArray[np.float64], lon: NDArray[np.float64], skin: Array | None = None
+    ) -> Array | None:
         mosaic, wrapped = self.fallback, self._fallback_wrapped
         if mosaic is None or wrapped is None:
             return None
@@ -57,7 +60,8 @@ class Inputs:
         cols = np.mod((lon - mosaic.lon[0]) / step, mosaic.lon.size)
         bt = bilinear(wrapped, rows, cols)
         bt[(lat > mosaic.lat.max()) | (lat < mosaic.lat.min())] = np.nan
-        return np.nan_to_num(smoothstep(*OPACITY_KELVIN, self.skin_at(lat, lon) - bt), nan=0.0)
+        surface = self.skin_at(lat, lon) if skin is None else skin
+        return np.nan_to_num(smoothstep(*OPACITY_KELVIN, surface - bt), nan=0.0)
 
 
 def area(
@@ -76,9 +80,10 @@ def area(
         la, lo = np.meshgrid(lat[start : start + step], lon, indexing="ij")
         fields = composite.blend(la, lo, satellites)
         cos_sun = cos_zenith(la, lo, inputs.subsolar)
-        value, share = composite.opacity(
-            fields, inputs.skin_at(la, lo), cos_sun, inputs.fallback_at(la, lo)
-        )
+        skin = inputs.skin_at(la, lo)
+        # Most of the globe is seen well by some disk: the fallback is only sampled where needed.
+        fallback = inputs.fallback_at(la, lo, skin) if np.any(fields.coverage < 1) else None
+        value, share = composite.opacity(fields, skin, cos_sun, fallback)
         if not visible:
             daylight = smoothstep(*composite.DAY, cos_sun) * fields.coverage
             share = np.maximum(share, daylight)
