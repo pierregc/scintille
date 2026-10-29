@@ -28,16 +28,46 @@ export function dayLength(start: number, timeZone?: string): number {
 	return dayStart(start + 1.5 * DAY_MS, timeZone) - start;
 }
 
-/** Position of a time within its local day, 0 to 1. */
-export function dayFraction(ms: number, timeZone?: string): number {
-	const start = dayStart(ms, timeZone);
-	return (ms - start) / dayLength(start, timeZone);
+export interface ScaleWindow {
+	start: number;
+	end: number;
+	recent: boolean;
 }
 
-/** Time at a fraction of the day starting at `start`, kept inside that day. */
-export function timeAtFraction(start: number, fraction: number, timeZone?: string): number {
-	const length = dayLength(start, timeZone);
-	return start + Math.round(Math.min(Math.max(fraction, 0), 1 - 1 / length) * length);
+/** The span the bar shows: the last 24 h up to now, or the older local day of `t`. */
+export function scaleWindow(t: number, now: number, timeZone?: string): ScaleWindow {
+	if (t >= now - DAY_MS) return { start: now - DAY_MS, end: now, recent: true };
+	const start = dayStart(t, timeZone);
+	return { start, end: Math.min(start + dayLength(start, timeZone), now), recent: false };
+}
+
+/** Position of a time in the window, 0 to 1. */
+export function windowFraction(w: ScaleWindow, t: number): number {
+	return Math.min(Math.max((t - w.start) / (w.end - w.start), 0), 1);
+}
+
+/** Time at a fraction of the window; an older day stops just before the next midnight. */
+export function timeAtFraction(w: ScaleWindow, fraction: number): number {
+	const t = w.start + Math.round(Math.min(Math.max(fraction, 0), 1) * (w.end - w.start));
+	return w.recent ? t : Math.min(t, w.end - 1);
+}
+
+const QUARTER_MS = 900_000;
+
+/** Half-hour ticks and labels every six local hours, as fractions of the window. */
+export function scaleMarks(w: ScaleWindow, timeZone?: string): { ticks: number[]; labels: { at: number; text: string }[] } {
+	const ticks: number[] = [];
+	const labels: { at: number; text: string }[] = [];
+	for (let t = Math.ceil(w.start / QUARTER_MS) * QUARTER_MS; t <= w.end; t += QUARTER_MS) {
+		const { hour, minute } = wallTime(t, timeZone);
+		if (minute % 30) continue;
+		const at = windowFraction(w, t);
+		ticks.push(at);
+		if (minute || hour % 6 || (w.recent && at > 0.95)) continue;
+		labels.push({ at, text: !w.recent && t === w.end ? '24' : String(hour).padStart(2, '0') });
+	}
+	if (w.recent) labels.push({ at: 1, text: 'now' });
+	return { ticks, labels };
 }
 
 /** Keyboard step on the timeline: 5 minutes, or one hour with Shift. */

@@ -108,8 +108,7 @@ live/chunks/20260715T183030Z.bin.gz
   and ingest times. It is small and short-lived; chunks are immutable and cached for a year.
 - A source's **state** comes from the time since its last product file: `live` up to
   `delayed_after` (2 minutes by default), `delayed` up to `offline_after` (10 minutes), then
-  `offline`, which is the "down" of the coverage overlay: the globe greys out that source's footprint
-  where no other live source sees. Both delays are configurable ([hot path](hot-path.md#live-feed)).
+  `offline`. Both delays are configurable ([hot path](hot-path.md#live-feed)).
 - Clients rely only on the manifest's chunk list: they never compute chunk names or durations, and
   never assume how often a new chunk appears. A client polls the manifest at a pace of its choosing
   and downloads only the chunks it does not have yet. A first visit downloads the whole hour.
@@ -125,13 +124,11 @@ source gets its footprint without other changes, and published by `ingest-live` 
 
 - one `footprint` feature per satellite, in mask order: its usable field of view, the points within
   `coverage_deg` of the sub-satellite point;
-- one `no-coverage` feature: the area no footprint covers (today the poles beyond about 67°, Asia,
-  Oceania, Europe and Africa until MTG LI joins the mask in #34).
+- one `no-coverage` feature: the area no footprint covers (today the poles, Asia and Oceania).
 
 Geometries are MultiPolygons split at the antimeridian, outer rings counterclockwise and holes
 clockwise; together the features tile the globe. `mask_version` follows `ownership.geojson`. The
-globe combines this file with the manifest: the no coverage area is always marked, and the footprint
-of an `offline` source is marked too, minus what the live footprints still cover. A copy is committed
+globe greys out the no coverage area only; source outages show in the HUD. A copy is committed
 in `data/contract/coverage.geojson` and in the fixtures.
 
 ## Cloud frames on R2

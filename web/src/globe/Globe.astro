@@ -1,9 +1,5 @@
 <canvas class="globe-canvas" data-globe-canvas aria-hidden="true"></canvas>
-<a class="coverage-label" href="/methodology" data-coverage-label hidden>
-	<span class="title">No satellite lightning coverage</span>
-	<span class="detail" data-coverage-detail></span>
-	<span class="more">Methodology</span>
-</a>
+<div class="coverage-label" role="tooltip" data-coverage-label hidden>No satellite lightning coverage</div>
 <figure class="globe-fallback" data-globe-fallback hidden>
 	<img src="/globe-fallback.svg" alt="Illustration of the Earth" width="240" height="240" loading="lazy" decoding="async" />
 	<figcaption>The 3D globe needs WebGL 2, which is not available in this browser.</figcaption>
@@ -28,31 +24,15 @@
 		top: 0;
 		left: 0;
 		z-index: 2;
-		display: grid;
-		gap: 4px;
 		max-width: min(280px, calc(100vw - 16px));
 		padding: 10px 12px;
 		color: rgb(238 242 247 / 0.9);
 		font: 300 13px/1.4 'IBM Plex Sans', system-ui, sans-serif;
-		text-decoration: none;
+		pointer-events: none;
 		background: rgb(8 10 14 / 0.72);
 		border: 1px solid rgb(238 242 247 / 0.14);
 		-webkit-backdrop-filter: blur(6px);
 		backdrop-filter: blur(6px);
-	}
-	.coverage-label .detail {
-		color: rgb(238 242 247 / 0.62);
-		font-size: 12px;
-	}
-	.coverage-label .more {
-		color: rgb(238 242 247 / 0.4);
-		font: 300 10px/1.6 'IBM Plex Mono', ui-monospace, monospace;
-		letter-spacing: 0.24em;
-		text-transform: uppercase;
-	}
-	.coverage-label:hover .more,
-	.coverage-label:focus-visible .more {
-		color: rgb(238 242 247 / 0.9);
 	}
 	.globe-fallback {
 		margin: 2rem 0;

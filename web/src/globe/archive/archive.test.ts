@@ -28,7 +28,7 @@ async function setup(capacity = 8) {
 		client.start();
 		return { ring, client, stop: () => client.stop() };
 	};
-	const clock = new SceneClock(() => 200_000);
+	const clock = new SceneClock(() => 1_000_000);
 	const data = new SceneData(clock, startLive(new FlashRing(capacity)), startLive);
 	await data.liveClient.idle();
 	return { data, clock, feed, visibility, starts: () => starts };

@@ -50,13 +50,18 @@ export class SceneClock {
 		switch (this.#mode) {
 			case 'live':
 				return this.#now();
-			case 'replay':
-				return this.#playing
-					? this.#anchorScene + (this.#now() - this.#anchorWall) * this.#speed
-					: this.#anchorScene;
+			case 'replay': {
+				const now = this.#now();
+				return Math.min(this.#playing ? this.#anchorScene + (now - this.#anchorWall) * this.#speed : this.#anchorScene, now);
+			}
 			case 'render':
 				return this.#anchorScene + this.#frame * this.#step;
 		}
+	}
+
+	/** True once a replay has caught up with the present, where it holds. */
+	atPresent(): boolean {
+		return this.#mode === 'replay' && this.time() >= this.#now();
 	}
 
 	live(): void {
@@ -65,12 +70,12 @@ export class SceneClock {
 		this.#setMode('live');
 	}
 
-	/** Replays from `start`, playing at `speed` times real time. */
+	/** Replays from `start`, playing at `speed` times real time, never past the present. */
 	replay(start: number, speed = 1): void {
 		assertSpeed(speed);
 		this.#speed = speed;
 		this.#playing = true;
-		this.#anchor(start);
+		this.#anchor(Math.min(start, this.#now()));
 		this.#setMode('replay');
 	}
 
@@ -115,6 +120,7 @@ export class SceneClock {
 
 	seek(time: number): void {
 		if (this.#mode === 'live') throw new Error('seek is not available in live mode');
+		if (this.#mode === 'replay') time = Math.min(time, this.#now());
 		this.#anchor(time);
 		this.#emit('seek', time);
 	}

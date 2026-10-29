@@ -117,8 +117,6 @@
 		};
 		root.addEventListener('toggle', () => {
 			if (!root.open) return;
-			const info = document.querySelector<HTMLDetailsElement>('[data-info]');
-			if (info) info.open = false;
 			if (!loaded) void load();
 		});
 		root.addEventListener('keydown', (event) => {

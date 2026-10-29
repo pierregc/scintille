@@ -1,8 +1,6 @@
 import { CanvasTexture, LinearFilter, NoColorSpace } from 'three';
-import type { CoverageMap, LiveManifest, Source } from '../../contract/types';
-import { downSources, drawGaps, type Gap, gapAt, parseCoverage } from './map';
-
-export { type Gap, gapAt } from './map';
+import type { CoverageMap } from '../../contract/types';
+import { drawGaps, gapAt, parseCoverage } from './map';
 
 export interface CoverageOptions {
 	/** Live feed root; the map is at `<baseUrl>/live/coverage.geojson`. Must be absolute. */
@@ -15,14 +13,14 @@ export interface CoverageOptions {
 	canvas?: HTMLCanvasElement;
 }
 
-/** Areas without lightning data: the static no coverage area and the footprints of down sources. */
+/** The area no satellite sees. */
 export interface Coverage {
 	/** Equirectangular mask, red 1 in a gap; empty until the map is loaded. */
 	readonly texture: CanvasTexture;
-	/** Takes the source states of a new manifest; also retries loading the map if it failed. */
-	setManifest(manifest: Pick<LiveManifest, 'sources'>): void;
-	/** The gap at a point, or null where flashes can show (or the map is not loaded). */
-	at(lat: number, lon: number): Gap | null;
+	/** Loads the map again if the last attempt failed. */
+	retry(): void;
+	/** Whether no satellite sees the point; false until the map is loaded. */
+	at(lat: number, lon: number): boolean;
 	/** Resolves once the current load attempt is over. */
 	ready(): Promise<void>;
 	/** Whether the first load attempt is over, loaded or failed. */
@@ -47,14 +45,13 @@ export function createCoverage({
 	texture.generateMipmaps = false;
 
 	let map: CoverageMap | null = null;
-	let down = new Set<Source>();
 	let loading: Promise<void> | undefined;
 	let disposed = false;
 	let settled = false;
 
 	const redraw = () => {
 		if (!map || !ctx || disposed) return;
-		drawGaps(ctx, map, down, canvas.width, canvas.height);
+		drawGaps(ctx, map, canvas.width, canvas.height);
 		texture.needsUpdate = true;
 	};
 
@@ -78,14 +75,10 @@ export function createCoverage({
 
 	return {
 		texture,
-		setManifest(manifest) {
-			const next = downSources(manifest);
-			const changed = next.size !== down.size || [...next].some((s) => !down.has(s));
-			down = next;
+		retry() {
 			if (!map) void load();
-			else if (changed) redraw();
 		},
-		at: (lat, lon) => (map ? gapAt(map, down, lat, lon) : null),
+		at: (lat, lon) => (map ? gapAt(map, lat, lon) : false),
 		ready: () => loading ?? Promise.resolve(),
 		get settled() {
 			return settled;
