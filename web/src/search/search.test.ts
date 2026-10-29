@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import type { SearchError, StormsNearby, StormSummary } from '../contract/types';
-import { GRIDS, tileOf } from './geo';
-import { CANDIDATES, handleNearby, MAX_CANDIDATES, queryKeys, type SearchDatabase, type SearchStatement, searchNearby, SUMMARIES } from './search';
+import { pathDistanceKm, queryTiles } from './geo';
+import { rankNearby } from './nearby';
+import { CANDIDATES, EXACT, handleNearby, MAX_CANDIDATES, queryKeys, type SearchDatabase, type SearchStatement, searchNearby } from './search';
 
 const SCHEMA = readFileSync(new URL('../../../data/packages/scintille-pipelines/src/scintille_pipelines/sql/storm_search_schema.sql', import.meta.url), 'utf8');
 const NOW = Date.parse('2026-10-29T18:00:00Z') / 1000;
@@ -33,20 +34,30 @@ class FakeD1 implements SearchDatabase {
 	meta(values: Record<string, string>) {
 		for (const [key, value] of Object.entries(values)) this.db.prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)').run(key, value);
 	}
-	add(slug: string, path: [number, number][], hours: [number, number], changes: Partial<StormSummary> = {}, score = 100) {
+	add(slug: string, path: [number, number][], hours: [number, number], changes: Partial<StormSummary> = {}, score = 100, radius = 10) {
 		const [start, end] = hours.map((h) => NOW + h * H);
 		const summary: StormSummary = {
 			storm_id: slug, slug, name: slug, label: slug, country_code: null, t_start: new Date(start * 1000).toISOString(),
 			t_end: new Date(end * 1000).toISOString(), closed: true, flashes: 500, peak_rate: 20, level: 4, level_name: 'Intense',
 			level_rule: 'levels score=flashes_x_peak count=best_source thresholds=8,25,120,450', sources: ['mtg-li'], distance_km: 0, ...changes,
 		};
-		this.db.prepare('INSERT INTO storms VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(slug, start, end, 4, score, JSON.stringify(summary), JSON.stringify(path), 10, 'd');
+		const [cLat, cLon, spread] = centroid(path);
+		this.db.prepare('INSERT INTO storms VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(slug, start, end, 4, score, JSON.stringify(summary), JSON.stringify(path), radius, cLat, cLon, spread, 'd');
+		// A superset of the pipeline's tiles: the boxes of the disc that holds the whole storm.
+		const tiles = [...queryTiles(cLat, cLon, spread + radius + 10), ...queryTiles(cLat, cLon, 501 + spread + radius)];
 		for (let day = Math.floor(start / 86400); day <= Math.floor(end / 86400); day++) {
-			for (const [lat, lon] of path) {
-				for (const grid of [GRIDS.fine, GRIDS.coarse]) this.db.prepare('INSERT OR IGNORE INTO storm_tiles VALUES (?, ?, ?)').run(day, tileOf(lat, lon, grid), slug);
-			}
+			for (const tile of tiles) this.db.prepare('INSERT OR IGNORE INTO storm_tiles VALUES (?, ?, ?)').run(day, tile, slug);
 		}
 	}
+}
+
+/** Like the pipeline: spherical mean of the path and the farthest point's distance from it. */
+function centroid(path: [number, number][]): [number, number, number] {
+	const v = path.map(([lat, lon]) => [lat, lon].map((d) => (d * Math.PI) / 180)).map(([p, l]) => [Math.cos(p) * Math.cos(l), Math.cos(p) * Math.sin(l), Math.sin(p)]);
+	const [x, y, z] = [0, 1, 2].map((i) => v.reduce((sum, u) => sum + u[i], 0));
+	const lat = Math.round(((Math.atan2(z, Math.hypot(x, y)) * 180) / Math.PI) * 1000) / 1000;
+	const lon = Math.round(((Math.atan2(y, x) * 180) / Math.PI) * 1000) / 1000;
+	return [lat, lon, Math.ceil(Math.max(...path.map((p) => pathDistanceKm(lat, lon, [p]))) * 10) / 10];
 }
 
 function catalog(): FakeD1 {
@@ -145,9 +156,59 @@ describe('nearby search', () => {
 	it('seeks the primary keys instead of scanning tables', () => {
 		const db = new FakeD1().db;
 		const plan = (sql: string, ...values: unknown[]) => db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(values as never[])).map((row) => String((row as { detail: string }).detail));
-		expect(plan(CANDIDATES, '[[1,2]]', 0, 0, 10)).toEqual(expect.arrayContaining(['SEARCH t USING PRIMARY KEY (day=? AND tile=?)', 'SEARCH s USING PRIMARY KEY (slug=?)']));
-		expect(plan(SUMMARIES, '[]')).toContain('SEARCH storms USING PRIMARY KEY (slug=?)');
-		expect([...plan(CANDIDATES, '[]', 0, 0, 1), ...plan(SUMMARIES, '[]')].some((step) => /^SCAN (t|s|storms|storm_tiles)\b/.test(step))).toBe(false);
+		const candidates = plan(CANDIDATES, '[[1,2]]', 0, 0, 10, 45, 5, 200);
+		expect(candidates).toEqual(expect.arrayContaining(['SEARCH t USING PRIMARY KEY (day=? AND tile=?)', 'SEARCH s USING PRIMARY KEY (slug=?)']));
+		expect(plan(EXACT, '[]')).toContain('SEARCH storms USING PRIMARY KEY (slug=?)');
+		expect([...candidates, ...plan(EXACT, '[]')].some((step) => /^SCAN (t|s|storms|storm_tiles)\b/.test(step))).toBe(false);
+	});
+
+	it('reads paths only for storms near the edge or that may rank, and still counts the others', async () => {
+		const d1 = catalog();
+		const cluster = Array.from({ length: 300 }, (_, i) => ({
+			slug: `cluster-${i}`, t_start: NOW - 30 * H, t_end: NOW - 29 * H, score: 30 + i, radius_km: 10,
+			path: [[0.5 + (i % 10) * 0.02, 10.5 + Math.floor(i / 10) * 0.02]] as [number, number][],
+		}));
+		for (const storm of cluster) d1.add(storm.slug, storm.path, [-30, -29], {}, storm.score);
+		let read = 0;
+		const prepare = d1.prepare.bind(d1);
+		d1.prepare = (sql: string, values: unknown[] = []) => {
+			const statement = prepare(sql, values);
+			return sql === EXACT && values.length ? { ...statement, all: async <T,>() => {
+				const out = await statement.all<T>();
+				read += out.results.length;
+				return out;
+			} } : statement;
+		};
+		const { body } = await nearby(d1, 'lat=0.5&lon=10.5&km=200&limit=4');
+		expect(body.total).toBe(300);
+		const expected = rankNearby(cluster, { lat: 0.5, lon: 10.5, hours: 72, km: 200, limit: 4 }, NOW).slice(0, 4);
+		expect(body.storms.map((s) => s.storm.slug)).toEqual(expected.map((m) => m.candidate.slug));
+		expect(read).toBeLessThan(30);
+	});
+
+	it('ranks exactly like reading every path', async () => {
+		let seed = 288;
+		const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+		const d1 = new FakeD1();
+		d1.meta({ published_at: '2026-10-29T17:24:00Z', last_observation_time: '2026-10-29T17:00:00Z', pending: '0' });
+		const all: { slug: string; t_start: number; t_end: number; score: number; radius_km: number; path: [number, number][] }[] = [];
+		for (let i = 0; i < 400; i++) {
+			let [lat, lon] = [44 + random() * 4, 3 + random() * 6];
+			const path: [number, number][] = [[lat, lon]];
+			for (let k = Math.floor(random() * 6); k > 0; k--) path.push([(lat += (random() - 0.5) * 1.2), (lon += (random() - 0.5) * 1.6)]);
+			const end = -Math.floor(random() * 70);
+			const score = 25 + Math.floor(random() * 500);
+			const radius = Math.round(random() * 400) / 10;
+			d1.add(`s-${i}`, path, [end - 2, end], {}, score, radius);
+			all.push({ slug: `s-${i}`, t_start: NOW + (end - 2) * H, t_end: NOW + end * H, score, radius_km: radius, path });
+		}
+		for (const [km, limit] of [[50, 4], [120, 8], [200, 1], [400, 4]]) {
+			const q = { lat: 45.8, lon: 4.8, hours: 72, km, limit };
+			const expected = rankNearby(all, q, NOW);
+			const body = (await (await searchNearby(d1, q, NOW)).json()) as StormsNearby;
+			expect(body.storms.map((s) => s.storm.slug)).toEqual(expected.slice(0, limit).map((m) => m.candidate.slug));
+			expect(body.total).toBe(expected.length);
+		}
 	});
 
 	it('answers from the bounded index without reading the whole catalog', async () => {

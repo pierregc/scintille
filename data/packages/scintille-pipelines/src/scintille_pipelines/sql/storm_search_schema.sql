@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS storms (
     summary TEXT NOT NULL,
     path TEXT NOT NULL,
     radius_km REAL NOT NULL,
+    c_lat REAL NOT NULL,
+    c_lon REAL NOT NULL,
+    spread_km REAL NOT NULL,
     digest TEXT NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS storm_tiles (

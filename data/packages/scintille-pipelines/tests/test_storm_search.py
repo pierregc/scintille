@@ -20,6 +20,7 @@ from scintille_pipelines.storm_search import (
     D1Rest,
     Result,
     State,
+    centroid,
     days,
     path_tiles,
     published_sample,
@@ -358,3 +359,11 @@ def test_a_published_sample_loads_like_the_catalog_run(monkeypatch: pytest.Monke
     now = datetime(2026, 7, 16, tzinfo=UTC)
     assert sync_search(store, d1, summaries, tracks, now)["search_upserted"] == 1
     assert published_sample("https://data.test", datetime(2026, 7, 16, tzinfo=UTC))[0] == []
+
+
+def test_the_centroid_bounds_every_point_across_the_date_line() -> None:
+    path = [(-17.8, 179.5), (-17.6, -179.6), (-17.2, -178.9)]
+    c_lat, c_lon, spread = centroid(path)
+    assert abs(abs(c_lon) - 180) < 1 and -18 < c_lat < -17
+    assert all(brute_distance(c_lat, c_lon, [p], 0) <= spread for p in path)
+    assert centroid([(45.8, 4.8)]) == (45.8, 4.8, 0.0)

@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import os
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -20,7 +21,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
-from scintille_contract.models import StormDetail, StormIndexPage, StormSummary
+from scintille_contract.models import SCHEMA_VERSION, StormDetail, StormIndexPage, StormSummary
 
 EARTH_KM = 6371.0
 KM_PER_DEG = math.pi * EARTH_KM / 180
@@ -32,7 +33,7 @@ DAY = 86400
 SCHEMA = 1
 STATE_PATH = "_pipeline/storms/search-state.json.gz"
 #: Free D1 accepts 100,000 written rows a day; the rest is left for manual work.
-DAILY_ROWS = 60_000
+DAILY_ROWS = 50_000
 BATCH_ROWS = 1_500
 DATABASE = "scintille-search"
 log = logging.getLogger(__name__)
@@ -115,6 +116,37 @@ def days(t_start: datetime, t_end: datetime) -> range:
     return range(int(t_start.timestamp()) // DAY, int(t_end.timestamp()) // DAY + 1)
 
 
+def _unit(lat: float, lon: float) -> tuple[float, float, float]:
+    phi, lam = math.radians(lat), math.radians(lon)
+    return (math.cos(phi) * math.cos(lam), math.cos(phi) * math.sin(lam), math.sin(phi))
+
+
+def _km(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    cross = math.dist(
+        (0.0, 0.0, 0.0),
+        (
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ),
+    )
+    return math.atan2(cross, dot) * EARTH_KM
+
+
+def centroid(path: Sequence[tuple[float, float]]) -> tuple[float, float, float]:
+    """Spherical mean of the path and the farthest point's distance from it, rounded up to 0.1 km.
+    The whole path lies within that distance, so the Worker can bound distances in SQL."""
+    points = [_unit(lat, lon) for lat, lon in path]
+    x, y, z = (sum(axis) for axis in zip(*points, strict=True))
+    lat = math.degrees(math.atan2(z, math.hypot(x, y)))
+    lon = math.degrees(math.atan2(y, x)) if math.hypot(x, y) > 1e-12 else 0.0
+    c_lat, c_lon = round(lat, 3), round(lon, 3)
+    center = _unit(c_lat, c_lon)
+    spread = max(_km(center, point) for point in points)
+    return c_lat, c_lon, math.ceil(round(spread * 10, 6)) / 10
+
+
 def score(storm: StormSummary) -> float:
     """ADR 0009 score: square root of flashes times peak rate."""
     return math.sqrt(storm.flashes * storm.peak_rate)
@@ -130,6 +162,9 @@ class SearchRow:
     summary: str
     path: str
     radius_km: float
+    c_lat: float
+    c_lon: float
+    spread_km: float
     tiles: frozenset[tuple[int, int]]
     digest: str
 
@@ -143,6 +178,9 @@ class SearchRow:
             "summary": self.summary,
             "path": self.path,
             "radius_km": self.radius_km,
+            "c_lat": self.c_lat,
+            "c_lon": self.c_lon,
+            "spread_km": self.spread_km,
             "digest": self.digest,
         }
 
@@ -160,10 +198,19 @@ def search_row(storm: StormSummary, track: Sequence[Mapping[str, Any]]) -> Searc
         for grid in (FINE, COARSE)
         for tile in path_tiles(path, radius, grid)
     )
+    c_lat, c_lon, spread = centroid(path)
     summary = storm.model_dump_json()
     path_json = json.dumps(path, separators=(",", ":"))
     digest = hashlib.sha256(
-        "\n".join([summary, path_json, str(radius), json.dumps(sorted(tiles))]).encode()
+        "\n".join(
+            [
+                summary,
+                path_json,
+                str(radius),
+                str((c_lat, c_lon, spread)),
+                json.dumps(sorted(tiles)),
+            ]
+        ).encode()
     ).hexdigest()[:16]
     return SearchRow(
         slug=storm.slug,
@@ -174,6 +221,9 @@ def search_row(storm: StormSummary, track: Sequence[Mapping[str, Any]]) -> Searc
         summary=summary,
         path=path_json,
         radius_km=radius,
+        c_lat=c_lat,
+        c_lon=c_lon,
+        spread_km=spread,
         tiles=tiles,
         digest=digest,
     )
@@ -268,7 +318,20 @@ SCHEMA_SQL = tuple(
     .split(";")
     if statement.strip()
 )
-COLUMNS = ("slug", "t_start", "t_end", "level", "score", "summary", "path", "radius_km", "digest")
+COLUMNS = (
+    "slug",
+    "t_start",
+    "t_end",
+    "level",
+    "score",
+    "summary",
+    "path",
+    "radius_km",
+    "c_lat",
+    "c_lon",
+    "spread_km",
+    "digest",
+)
 UPSERT_STORMS = (
     f"INSERT INTO storms ({', '.join(COLUMNS)}) SELECT "
     + ", ".join(f"json_extract(value, '$.{c}')" for c in COLUMNS)
@@ -494,31 +557,44 @@ class FileStore:
         return target.read_bytes() if target.exists() else None
 
 
-def _fetch(url: str) -> bytes:
+def _fetch(url: str, attempts: int = 6) -> bytes:
+    """Public data, waiting out the zone's per-IP rate limit (300 requests per 10 s)."""
     request = Request(
         url, headers={"User-Agent": "scintille-storm-search", "Accept-Encoding": "gzip"}
     )
-    with urlopen(request, timeout=30) as response:
-        body: bytes = response.read()
-        return gzip.decompress(body) if response.headers.get("Content-Encoding") == "gzip" else body
+    for attempt in range(attempts):
+        try:
+            with urlopen(request, timeout=30) as response:
+                body: bytes = response.read()
+                encoding = response.headers.get("Content-Encoding")
+                return gzip.decompress(body) if encoding == "gzip" else body
+        except HTTPError as error:
+            if error.code != 429 or attempt == attempts - 1:
+                raise
+            time.sleep(11)
+    raise AssertionError("unreachable")
+
+
+def _current[M: (StormIndexPage, StormDetail)](model: type[M], body: bytes) -> M:
+    """A published document of any minor version of the current major, read as the current one."""
+    value = json.loads(body)
+    if str(value.get("schema_version", "")).split(".")[0] != SCHEMA_VERSION.split(".")[0]:
+        raise ValueError(f"unsupported version: {value.get('schema_version')}")
+    return model.model_validate(value | {"schema_version": SCHEMA_VERSION})
 
 
 def published_sample(base: str, since: datetime) -> tuple[list[StormSummary], dict[str, list[Any]]]:
     """Published storms that started after `since`, with their tracks, read from the public data."""
-    latest = StormIndexPage.model_validate_json(_fetch(f"{base}/storms/index/latest.json"))
+    latest = _current(StormIndexPage, _fetch(f"{base}/storms/index/latest.json"))
     summaries: list[StormSummary] = []
     for page in range(latest.total_pages - 1, -1, -1):
-        storms = StormIndexPage.model_validate_json(
-            _fetch(f"{base}/storms/index/{page}.json")
-        ).storms
+        storms = _current(StormIndexPage, _fetch(f"{base}/storms/index/{page}.json")).storms
         summaries += [storm for storm in storms if storm.t_start >= since]
         if all(storm.t_start < since for storm in storms):
             break
-    with ThreadPoolExecutor(16) as pool:
+    with ThreadPoolExecutor(4) as pool:
         details = pool.map(
-            lambda storm: StormDetail.model_validate_json(
-                _fetch(f"{base}/storms/{storm.slug}.json")
-            ),
+            lambda storm: _current(StormDetail, _fetch(f"{base}/storms/{storm.slug}.json")),
             summaries,
         )
         tracks = {d.storm.storm_id: [p.model_dump() for p in d.track] for d in details}

@@ -90,7 +90,7 @@ breaking change creates new tables and refills them.
 
 | Table | Content |
 |---|---|
-| `storms` | `slug` key, `t_start`, `t_end`, `level`, `score` (ADR 0009: square root of flashes × peak rate), `summary` (the published `StormSummary` JSON, verbatim), `path` (hourly centroids), `radius_km` (disc of the largest hourly area), `digest`. `WITHOUT ROWID`, no other index. |
+| `storms` | `slug` key, `t_start`, `t_end`, `level`, `score` (ADR 0009: square root of flashes × peak rate), `summary` (the published `StormSummary` JSON, verbatim), `path` (hourly centroids), `radius_km` (disc of the largest hourly area), `c_lat`, `c_lon` and `spread_km` (spherical mean of the path and the distance to its farthest point, which bound distances in SQL), `digest`. `WITHOUT ROWID`, no other index. |
 | `storm_tiles` | Key `(day, tile, slug)`, `WITHOUT ROWID`: one row per UTC day from `t_start` to `t_end` and per 2° and 10° tile met by the path, each segment's box widened by `radius_km` and 10 km for the arc's bulge. |
 | `meta` | Schema version, `last_observation_time` of the synced catalog, `published_at` of the sync, storms still `pending`, retention. |
 
@@ -102,8 +102,9 @@ digest with `_pipeline/storms/search-state.json.gz` on R2, which also keeps each
 deleted through the D1 REST API, in transactional batches that pass rows as one JSON parameter
 (`json_each`). The state records only committed batches: an interrupted sync resumes at the next
 run, and upserts are idempotent. A D1 failure is logged in the run metadata and never fails the
-publication. Writes are capped at 60,000 rows a UTC day, counted from the responses, most recent
-storms first; the initial load spreads over two or three days. Rows leave when `t_start` is 58 days
+publication. Writes are capped at 50,000 rows a UTC day (the D1 cap is per account), counted from the responses, most recent
+storms first; the initial load (about 150,000 rows for the 32,000 storms published so far) spreads
+over three days. Rows leave when `t_start` is 58 days
 old (replays live 60 days). Without a state file, the run rebuilds it from D1: deleting the file is
 the recovery after a D1 restore.
 
@@ -120,7 +121,10 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
   The response echoes the rounded point, window and radius, states the catalog (`min_level` 3,
   retention, `published_at`, `last_observation_time`, `stale` past 3 hours, `complete` once nothing
   waits to be indexed), the number of matches and the ranked storms, each with its published summary,
-  `distance_km` and score. More than 4,000 candidates is a 422 `too-broad`; D1 errors and exhausted
+  `distance_km` and score. SQL keeps the storms whose centroid bound can reach the disc and returns
+  them without paths; the Worker reads the paths of the storms near the edge and of those that may
+  rank, and counts the others as certainly in. More than 4,000 candidates or 400 paths is a 422
+  `too-broad`; D1 errors and exhausted
   caps are a 503 `unavailable`. An empty list means no matching published storm, never no
   lightning. The response depends on the URL only: `public, max-age=60`, and `caches.default` keeps
   it 5 minutes keyed by the normalized query and the deployed version (ADR 0005). The interface may
@@ -150,8 +154,8 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
 | Free limit | Expected use |
 |---|---|
 | Workers, 100,000 requests a day | 1 location and 1 to 3 nearby requests per panel use |
-| D1, 100,000 rows written a day | about 18,000 (6,300 storms, 5,200 tiles, retention deletes), capped at 60,000 |
-| D1, 5 million rows read a day | about 100 per default query; at most about 1,100 keys and 4,000 candidates for the widest |
+| D1, 100,000 rows written a day | about 22,000 (4.8 rows per storm measured, updates and retention), capped at 50,000 |
+| D1, 5 million rows read a day | measured on 3 days of real storms: 24 to 550 rows for 200 km and 72 h, up to 1,700 for 500 km and 7 days, 400 to 7,200 for 3,000 km and 7 days (about twice with a full week) |
 | D1, 500 MB per database | about 100 MB at 60 days (0.9 KB per storm with its tiles) |
 | R2 class A, 1 million a month | +720 (sync state) |
 | Static assets | 436 place files, 1.1 MB gzip in all, 40 KB for the largest |
@@ -169,8 +173,11 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
 - #282 adds a search route on the same tables. Country or period filters add indexes, each about
   6,300 more rows written a day. Storms older than their replay would need longer retention; 500 MB
   holds roughly 7 to 10 months of storms.
-- The implementation measures rows read and written, latency from several regions, response and
-  place file sizes, and a day of sync writes, and records a production sample.
+- Measurements: `docs/analysis/search/measure.py` and its results. Loading 3 days (5,400 storms)
+  wrote 25,700 rows. The candidate query takes 130 to 270 ms through the REST API from Europe,
+  network included. Parsing and ranking 2,000 light candidates takes under 3 ms of CPU on a laptop.
+  Wide queries cost the most reads: about 700 uncached ones a day would exhaust the read cap, so
+  they are meant as an explicit second step where nothing is near.
 
 ## Sources
 
