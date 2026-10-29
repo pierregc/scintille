@@ -1,6 +1,7 @@
 // Drives the surface tiles through rapid navigation, missing tiles, throttling and an offline spell
 // on a build served by serve.mjs, and checks that the globe stays whole and the cache bounded.
 // Usage: node spike/surface/stress.mjs [--url http://localhost:4400] [--profile desktop|mobile] [--out <dir>]
+//   [--storm <slug> --time <iso>]: replay paused on a storm, so the sun stays put (R2 by default).
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -15,6 +16,8 @@ const { values } = parseArgs({
 		url: { type: 'string', default: 'http://localhost:4400' },
 		profile: { type: 'string', default: 'desktop' },
 		out: { type: 'string', default: 'bench/stress' },
+		storm: { type: 'string', default: '2026-10-18-mato-grosso-22' },
+		time: { type: 'string', default: '2026-10-18T19:15:00Z' },
 	},
 });
 const PROFILES = {
@@ -46,11 +49,15 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(String(error)));
 
 const hits = new Map();
+const notFound = new Map();
 let mode = 'pass';
 await context.route('**/textures/surface/**/*.webp', async (route) => {
 	const path = new URL(route.request().url()).pathname;
 	hits.set(path, (hits.get(path) ?? 0) + 1);
-	if (mode === 'missing' && /\/day\/5\//.test(path)) return route.fulfill({ status: 404, body: '' });
+	if (mode === 'missing' && /\/day\/5\//.test(path)) {
+		notFound.set(path, (notFound.get(path) ?? 0) + 1);
+		return route.fulfill({ status: 404, body: '' });
+	}
 	if (mode === 'throttled') return route.fulfill({ status: 429, headers: { 'retry-after': '3' }, body: '' });
 	return route.continue();
 });
@@ -58,7 +65,7 @@ const requests = () => [...hits.values()].reduce((a, b) => a + b, 0);
 
 const stats = () => page.evaluate(() => window.__app.surface.stats().tiles);
 const heap = () => page.evaluate(() => performance.memory?.usedJSHeapSize ?? null);
-const fly = (place, altitude, duration, tilt = 0) => page.evaluate(([p, a, d, t]) => window.__app.flyTo({ ...p, altitude: a, duration: d, tilt: t }), [place, altitude, duration, tilt]);
+const fly = (place, altitude, duration, tilt = 1) => page.evaluate(([p, a, d, t]) => window.__app.flyTo({ ...p, altitude: a, duration: d, tilt: t }), [place, altitude, duration, tilt]);
 const settle = async (ms = 1500, timeoutMs = 60_000) => {
 	const deadline = Date.now() + timeoutMs;
 	let quiet = 0;
@@ -79,9 +86,8 @@ const whole = async (name) => {
 	return { visible, mean: Math.round(mean) };
 };
 
-await page.goto(`${values.url}/?surface=tiles`);
-await page.waitForFunction(() => window.__app?.surface?.stats().tiles);
-await page.evaluate(() => window.__app.clock.pause());
+await page.goto(`${values.url}/?storm=${values.storm}&time=${values.time}&paused=1&surface=tiles`);
+await page.waitForFunction(() => window.__app?.surface?.stats().tiles && !window.__app.replay.state.loading);
 const report = { url: values.url, profile: values.profile, steps: {} };
 const step = async (name, extra = {}) => {
 	const s = await stats();
@@ -96,7 +102,7 @@ await step('dive');
 let before = requests();
 for (let i = 0; i < 40; i++) {
 	const place = PLACES[(i * 3) % PLACES.length];
-	void fly({ lat: place.lat + (i % 5), lon: place.lon - (i % 7) }, 400 + (i % 4) * 300, 250 + (i % 3) * 150, (i % 3) * 30);
+	void fly({ lat: place.lat + (i % 5), lon: place.lon - (i % 7) }, 400 + (i % 4) * 300, 250 + (i % 3) * 150, 1 + (i % 3) * 30);
 	await delay(120 + (i % 4) * 60);
 }
 await fly(PLACES[1], 400, 1500);
@@ -118,13 +124,13 @@ for (let round = 0; round < 3; round++) {
 	await step(`round${round + 1}`);
 }
 report.heaps = heaps;
+process.stdout.write(`heap after each round: ${heaps.map((h) => (h / 1e6).toFixed(1)).join(', ')} MB\n`);
 
 mode = 'missing';
-before = requests();
-await fly({ lat: 45.8, lon: 6.9 }, 400, 3000);
+await fly({ lat: -12.5, lon: -55.5 }, 400, 3000);
 await settle();
 await delay(5000);
-await step('missing', { requests: requests() - before, repeated: [...hits].filter(([path, n]) => /\/day\/5\//.test(path) && n > 1).length });
+await step('missing', { notFound: notFound.size, notFoundTwice: [...notFound.values()].filter((n) => n > 1).length });
 mode = 'pass';
 
 mode = 'throttled';
