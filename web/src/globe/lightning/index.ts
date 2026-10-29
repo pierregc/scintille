@@ -40,6 +40,7 @@ import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 import { FlashPlayback } from './playback';
 import { MAX_LIFE } from './profile';
+import { PHONE, viewScale, ZOOM } from './zoom';
 
 export { DISPLAY_MINUTES } from './display';
 export { FlashInstances } from './instances';
@@ -57,6 +58,8 @@ export interface LightningOptions {
 	lightMapWidth?: number;
 	/** Opacity of the cloud layer (`Clouds.opacity`), which hides or veils channels; without it they are veiled as if in a cloud. */
 	clouds?: Clouds['opacity'];
+	/** Phone screen: sizes as on a 1080 CSS px tall view and dimmer glows near the floor (`PHONE`). */
+	phone?: boolean;
 }
 
 /** Glow of recent flashes over an equirectangular window: centre longitude and latitude, half extents, radians. */
@@ -117,7 +120,7 @@ function blendFlashes(material: ShaderMaterial, mode: 'add' | 'max' | 'screen'):
 /** All flashes of the ring in one instanced draw call, aged on the GPU. */
 export function createLightning(
 	ring: FlashRing,
-	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024, clouds }: LightningOptions = {},
+	{ radius = 1, capacity = ring.capacity, storage = browserStorage(), lightMapWidth = 1024, clouds, phone = false }: LightningOptions = {},
 ): Lightning {
 	let displayMinutes = readDisplayMinutes(storage);
 	let stormView = false;
@@ -150,6 +153,8 @@ export function createLightning(
 	const pivotSpeed = new NumberUniform();
 	const budgetFrom = new NumberUniform();
 	const budgetFade = new NumberUniform();
+	const scale = new NumberUniform();
+	scale.value = 1;
 	const cloudDefines = clouds ? { ...clouds.defines, CLOUDS: '' } : {};
 	const material = new ShaderMaterial({
 		vertexShader: lightningVertexShader,
@@ -166,6 +171,8 @@ export function createLightning(
 			lift: { value: CLOUD_TOP_KM / EARTH_RADIUS_KM },
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
 			viewportHeight: { value: 1 },
+			viewScale: scale,
+			nearGlowLevel: { value: ZOOM.nearGlowLevel * (phone ? PHONE.nearLevel : 1) },
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
 			sunDirection: { value: new Vector3(1, 0, 0) },
@@ -217,7 +224,8 @@ export function createLightning(
 	const channelMesh = new Mesh(channelGeometry, channelMaterial);
 	channelMesh.frustumCulled = false;
 	channelMesh.onBeforeRender = (renderer) => {
-		renderer.getSize(viewport).multiplyScalar(0.5);
+		renderer.getSize(viewport);
+		viewport.multiplyScalar(0.5 / viewScale(viewport.y, phone));
 	};
 	const haloMesh = new Mesh(channelGeometry, haloMaterial);
 	haloMesh.frustumCulled = false;
@@ -225,7 +233,9 @@ export function createLightning(
 	channelMesh.renderOrder = 3;
 	haloMesh.onBeforeRender = channelMesh.onBeforeRender;
 
-	const lightMap = lightMapWidth > 0 ? createLightMap(geometry, material, lightMapWidth, radius) : null;
+	const lightMap = lightMapWidth > 0
+		? createLightMap(geometry, material, lightMapWidth, radius, LIGHT_WINDOW.nearLevel * (phone ? PHONE.nearLevel : 1))
+		: null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
 	const applyMotion = () => {
@@ -242,7 +252,9 @@ export function createLightning(
 	channelMesh.layers = mesh.layers;
 	const size = new Vector2();
 	mesh.onBeforeRender = (renderer) => {
-		material.uniforms.viewportHeight.value = renderer.getSize(size).y;
+		const height = renderer.getSize(size).y;
+		material.uniforms.viewportHeight.value = height;
+		scale.value = viewScale(height, phone);
 	};
 
 	const applyDisplay = () => {
@@ -269,7 +281,7 @@ export function createLightning(
 			const from = stormView ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
 			budgetFrom.value = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;
-			channels.sync(utcMs, playback, delays, viewKmPerPx < CHANNEL_VIEW_KM_PER_PX);
+			channels.sync(utcMs, playback, delays, viewKmPerPx * scale.value < CHANNEL_VIEW_KM_PER_PX);
 			channelGeometry.instanceCount = channels.count;
 			poolShift.value = Number.isFinite(channels.origin) ? (channels.origin - instances.origin) / 1000 : 0;
 			const now = performance.now();
@@ -356,7 +368,7 @@ export function lightWindow(target: { lat: number; lon: number }, heightKm: numb
 
 
 /** Renders the flashes into an equirectangular glow map around what the camera looks at, wrapped at the antimeridian. */
-function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number, radius: number) {
+function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number, radius: number, nearLevel: number) {
 	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, format: RedFormat, depthBuffer: false });
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
@@ -427,7 +439,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, bounds);
 			const whole = bounds.w / (Math.PI / 2);
 			splat.value = LIGHT_WINDOW.nearSplat + (LIGHT_WINDOW.farSplat - LIGHT_WINDOW.nearSplat) * whole;
-			level.value = LIGHT_WINDOW.nearLevel + (1 - LIGHT_WINDOW.nearLevel) * whole;
+			level.value = nearLevel + (1 - nearLevel) * whole;
 			spread.value = LIGHT_WINDOW.farSpreadKm * whole * whole;
 			minSplat.value = (4 * bounds.w * EARTH_RADIUS_KM) / (width / 2);
 			const previous = renderer.getRenderTarget();

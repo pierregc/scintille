@@ -180,6 +180,10 @@ radius and `i` the intensity:
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
   (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
   at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
+- **Phones** draw these sizes as a 1080 CSS px tall view would, shrunk to their height (`k` and
+  channel widths times `h / 1080`), so a phone shows the middle of the desktop picture; the point
+  floor stays in CSS px. Their glow and cloud light near the floor drop to 0.6 of the desktop level
+  (#333).
 
 1 world unit is 6,371 km: a world length is `km / 6371`, a CSS px is `k` km. Representative values
 at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 5, 10.5 and 18.6 km):

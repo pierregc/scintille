@@ -219,6 +219,7 @@ export function createGlobeApp(
 		capacity: preset.maxFlashes ?? live.ring.capacity,
 		lightMapWidth: preset.cloudLight ? 1024 : 0,
 		clouds: clouds.opacity,
+		phone,
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
