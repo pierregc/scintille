@@ -83,6 +83,16 @@ def bitmap(keys: Iterable[Key], z: int) -> str:
     return base64.b64encode(np.packbits(bits, bitorder="little").tobytes()).decode()
 
 
+def coarse_bitmap(keys: Iterable[Key]) -> str:
+    """Base64 of a bit per tile of the levels above the finest, in pack index order, least
+    significant bit first."""
+    bits = np.zeros(COARSE_SLOTS, np.uint8)
+    for key in keys:
+        if key.z != FINE_LEVEL:
+            bits[index_slot(key)] = 1
+    return base64.b64encode(np.packbits(bits, bitorder="little").tobytes()).decode()
+
+
 def from_bitmap(encoded: str, z: int) -> set[Key]:
     bits = np.unpackbits(np.frombuffer(base64.b64decode(encoded), np.uint8), bitorder="little")
     return {Key(z, int(i) // columns(z), int(i) % columns(z)) for i in np.flatnonzero(bits)}
@@ -95,6 +105,7 @@ def index_slot(key: Key) -> int:
 
 
 INDEX_SLOTS = sum(rows(z) * columns(z) for z in LEVELS)
+COARSE_SLOTS = INDEX_SLOTS - rows(FINE_LEVEL) * columns(FINE_LEVEL)
 
 
 def pack(tiles: Mapping[Key, bytes]) -> bytes:

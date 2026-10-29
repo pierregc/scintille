@@ -95,6 +95,7 @@ is published about 35 minutes after its hour, close to GMGSI (about 40 minutes).
 |---|---|---|
 | Ingress | 45 to 55 GB | |
 | R2 storage, detail | about 0.8 GB | one day: about 0.8 GB |
+| R2 storage, detail under the top 10 storms (#331) | 6 to 15 MB | 30 days: 0.2 to 0.45 GB |
 | R2 storage, `2k` and `4k` | about 31 MB | 30 days: about 0.9 GB |
 | R2 writes (class A) | about 200 | about 6,000 a month |
 
@@ -138,7 +139,9 @@ Side by side with GMGSI at the four poses: [`immersive/composite/`](../immersive
 - Each close view reads the frame's index (21 kB) and its tiles by range; Cloudflare caches the
   object at the edge after the first read.
 - Detail lives one day: replays of older storms show the `4k` frame, about 10 km. A longer
-  retention costs about 0.8 GB of R2 storage a day kept.
+  retention costs about 0.8 GB of R2 storage a day kept. Since #331, the 2 and 1 km tiles under
+  the ten strongest storms of each UTC day stay 30 days, like the other archived clouds (measured
+  on 26 to 28 October 2026).
 - Offline rendering (`/render`) keeps the global frames; it does not load detail yet.
 - The texture array with page tables is generic: the ground detail of
   [ADR 0022](0022-surface-imagery.md) (#252, #253) can reuse it to draw in one pass.
