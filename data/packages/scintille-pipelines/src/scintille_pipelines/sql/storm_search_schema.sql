@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS storms (
+    slug TEXT PRIMARY KEY,
+    t_start INTEGER NOT NULL,
+    t_end INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    score REAL NOT NULL,
+    summary TEXT NOT NULL,
+    path TEXT NOT NULL,
+    radius_km REAL NOT NULL,
+    digest TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS storm_tiles (
+    day INTEGER NOT NULL,
+    tile INTEGER NOT NULL,
+    slug TEXT NOT NULL,
+    PRIMARY KEY (day, tile, slug)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;

@@ -17,6 +17,9 @@ What is published today (`data.scintille.app`, read on 2026-10-29):
 - Index pages and `storms/highlights.json` carry summaries without any position. Only
   `storms/<slug>.json` has the track: hourly centroids with their area, 3 points median.
 - Replay chunks are deleted 60 days after upload (R2 lifecycle); details stay.
+- Storms are scarce in some places and seasons: over the 7 days to 2026-10-29, Europe had 67
+  published storms, 54 of them in Turkey, 2 in Italy and none in mainland France. A 200 or 500 km
+  radius would often answer nothing, so the service must also reach the nearest storms far away.
 
 #283 answered queries from R2 posting lists but rewrote a full generation every hour (14,236 objects,
 295 MB at 100,000 storms), matched exact words only and added a lot of custom code. It was closed.
@@ -56,10 +59,11 @@ Platform facts (official documentation, 2026-10-29, see Sources):
 
 ### Spatial key in D1
 
-Without R*Tree, a key table `(UTC day, 2° tile, slug)` lets SQLite seek exactly the days and tiles a
+Without R*Tree, a key table `(UTC day, tile, slug)` lets SQLite seek exactly the days and tiles a
 query covers. Filtering storm centroids by latitude and longitude ranges misses long tracks and
-reads the whole period. 1° tiles quadruple the keys a query probes; 5° tiles read many unrelated
-storms in the tropics.
+reads the whole period. For radii up to 500 km, 2° tiles: 1° tiles quadruple the keys a query
+probes, 5° tiles read many unrelated storms in the tropics. Beyond, up to 3,000 km, 2° tiles would
+mean thousands of keys, so the same table also holds 10° tiles.
 
 ### Place lookup
 
@@ -80,44 +84,47 @@ routes instead of adding a backend.
 
 ### Database
 
-`scintille-search` (Previews: `scintille-search-preview`, seeded from fixtures), location hint
-Western Europe. The writer owns the schema (`CREATE ... IF NOT EXISTS`, version in `meta`); a
+`scintille-search` (Previews: `scintille-search-preview`, loaded by hand with a production sample),
+location hint Western Europe. The writer owns the schema (`CREATE ... IF NOT EXISTS`, version in `meta`); a
 breaking change creates new tables and refills them.
 
 | Table | Content |
 |---|---|
 | `storms` | `slug` key, `t_start`, `t_end`, `level`, `score` (ADR 0009: square root of flashes × peak rate), `summary` (the published `StormSummary` JSON, verbatim), `path` (hourly centroids), `radius_km` (disc of the largest hourly area), `digest`. `WITHOUT ROWID`, no other index. |
-| `storm_tiles` | Key `(day, tile, slug)`, `WITHOUT ROWID`: one row per UTC day from `t_start` to `t_end` and per 2° tile met by the path, each segment's box widened by `radius_km`. |
-| `meta` | Schema version, `last_observation_time` of the synced catalog, `published_at` of the sync. |
+| `storm_tiles` | Key `(day, tile, slug)`, `WITHOUT ROWID`: one row per UTC day from `t_start` to `t_end` and per 2° and 10° tile met by the path, each segment's box widened by `radius_km` and 10 km for the arc's bulge. |
+| `meta` | Schema version, `last_observation_time` of the synced catalog, `published_at` of the sync, storms still `pending`, retention. |
 
 ### Sync
 
 `storm_catalog` syncs after `publish_catalog`, from exactly the summaries it published and the gold
 tracks it already loaded, so search never names a storm whose detail is missing. Rows are compared by
-digest with `_pipeline/storms/search-state.json` on R2; changed rows are upserted and expired ones
+digest with `_pipeline/storms/search-state.json.gz` on R2, which also keeps each storm's tiles; changed rows are upserted and expired ones
 deleted through the D1 REST API, in transactional batches that pass rows as one JSON parameter
 (`json_each`). The state records only committed batches: an interrupted sync resumes at the next
 run, and upserts are idempotent. A D1 failure is logged in the run metadata and never fails the
-publication. Writes are capped at 60,000 rows a UTC day, counted from the responses; the initial load
-spreads over a day or two. Rows leave when `t_start` is 58 days old (replays live 60 days). After a
-D1 restore, a `reconcile` command rebuilds the state from D1.
+publication. Writes are capped at 60,000 rows a UTC day, counted from the responses, most recent
+storms first; the initial load spreads over two or three days. Rows leave when `t_start` is 58 days
+old (replays live 60 days). Without a state file, the run rebuilds it from D1: deleting the file is
+the recovery after a D1 restore.
 
 ### Routes
 
 Contract `search` v1: JSON schema in `data/contract/`, generated types, version in every response.
 
-- `GET /api/location`: `{status: "approximate", source: "ip", lat, lon, city, region, country_code}`
-  with coordinates rounded to 0.1°, only when city and coordinates are known; otherwise
-  `{status: "unavailable"}`. A country alone is not a location. No time zone, postal code or IP.
+- `GET /api/location` (`VisitorLocation`): `status` `approximate` with `lat`, `lon` rounded to 0.1°,
+  `city`, `region`, `country_code`, only when the city and its coordinates are known; otherwise
+  `unavailable` with nulls. A country alone is not a location. No time zone, postal code or IP.
   `Cache-Control: private, no-store`, never stored by the Worker.
-- `GET /api/storms/nearby?lat&lon&hours&km&limit`: point rounded to 0.1°, `hours` 1 to 168 (72),
-  `km` 10 to 500 (200), `limit` 1 to 8 (4). Out of range is a 400, never clamped. The response echoes
-  the rounded point, window and radius, states the catalog (`min_level` 3, `last_observation_time`,
-  `published_at`, retention), `status` `ok` or `stale` (last observation older than 3 h), the number
-  of matches and the ranked storms, each with its published summary, `distance_km` and score. D1
-  errors and exhausted caps return 503 `unavailable`. An empty list means no matching published
-  storm, never no lightning. The response depends on the URL only: `public, max-age=60`, and
-  `caches.default` keeps it 5 minutes keyed by URL and deployed version (ADR 0005).
+- `GET /api/storms/nearby?lat&lon&hours&km&limit` (`StormsNearby`): point rounded to 0.1°, `hours`
+  1 to 168 (72), `km` 10 to 3,000 (200), `limit` 1 to 8 (4). Out of range is a 400, never clamped.
+  The response echoes the rounded point, window and radius, states the catalog (`min_level` 3,
+  retention, `published_at`, `last_observation_time`, `stale` past 3 hours, `complete` once nothing
+  waits to be indexed), the number of matches and the ranked storms, each with its published summary,
+  `distance_km` and score. More than 4,000 candidates is a 422 `too-broad`; D1 errors and exhausted
+  caps are a 503 `unavailable`. An empty list means no matching published storm, never no
+  lightning. The response depends on the URL only: `public, max-age=60`, and `caches.default` keeps
+  it 5 minutes keyed by the normalized query and the deployed version (ADR 0005). The interface may
+  ask a second, explicitly wider query when the first is empty; the service never widens by itself.
 - `/places/v1/<xx>.json`: static files keyed by the first two letters of each word of the place name,
   lowercased and without accents; entries `[name, region, country, lat, lon, population]`. The
   client keeps names whose words start with the typed text, most populous first, 8 at most. Built
@@ -143,11 +150,11 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
 | Free limit | Expected use |
 |---|---|
 | Workers, 100,000 requests a day | 1 location and 1 to 3 nearby requests per panel use |
-| D1, 100,000 rows written a day | about 15,000 (6,300 storms, 3,200 tiles, retention deletes), capped at 60,000 |
-| D1, 5 million rows read a day | about 100 per default query, about 1,500 for 7 days and 500 km at 60° N |
+| D1, 100,000 rows written a day | about 18,000 (6,300 storms, 5,200 tiles, retention deletes), capped at 60,000 |
+| D1, 5 million rows read a day | about 100 per default query; at most about 1,100 keys and 4,000 candidates for the widest |
 | D1, 500 MB per database | about 100 MB at 60 days (0.9 KB per storm with its tiles) |
 | R2 class A, 1 million a month | +720 (sync state) |
-| Static assets | about 600 place files, free |
+| Static assets | 436 place files, 1.1 MB gzip in all, 40 KB for the largest |
 
 - These are the first on-demand routes. The adapter's Worker already answers requests that match no
   static file (404s); static assets stay free and unmetered.
@@ -157,8 +164,8 @@ Contract `search` v1: JSON schema in `data/contract/`, generated types, version 
   measurements ask for it.
 - Privacy page: approximate city of the connection asked to Cloudflare when the panel opens, rounded
   to about 10 km, used for that answer only, never stored, logged or sent to analytics.
-- Human steps: Terraform for both databases, a D1 token for the pipeline on the VPS, D1 permission
-  for the deploy token.
+- Human steps: D1 permission for the Terraform and deploy tokens, Terraform for both databases, a
+  D1 token for the pipeline on the VPS.
 - #282 adds a search route on the same tables. Country or period filters add indexes, each about
   6,300 more rows written a day. Storms older than their replay would need longer retention; 500 MB
   holds roughly 7 to 10 months of storms.

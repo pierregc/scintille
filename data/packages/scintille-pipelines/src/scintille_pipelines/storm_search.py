@@ -1,6 +1,7 @@
 """Storm search in D1 (ADR 0027): published storms with their path, radius and tiles, synced by
 digest from the hourly catalog run."""
 
+import argparse
 import gzip
 import hashlib
 import json
@@ -8,15 +9,18 @@ import logging
 import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from importlib.resources import files
 from itertools import pairwise
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
-from scintille_contract.models import StormSummary
+from scintille_contract.models import StormDetail, StormIndexPage, StormSummary
 
 EARTH_KM = 6371.0
 KM_PER_DEG = math.pi * EARTH_KM / 180
@@ -206,8 +210,9 @@ class D1Rest:
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "D1Rest | None":
         token = env.get("SCINTILLE_D1_TOKEN")
-        account = env.get("SCINTILLE_CF_ACCOUNT_ID") or (
-            (urlparse(env.get("SCINTILLE_R2_ENDPOINT", "")).hostname or "").split(".")[0]
+        account = (
+            env.get("SCINTILLE_CF_ACCOUNT_ID")
+            or ((urlparse(env.get("SCINTILLE_R2_ENDPOINT", "")).hostname or "").split(".")[0])
         )
         if not token or not account:
             return None
@@ -254,13 +259,14 @@ def _call(url: str, token: str, body: object | None = None) -> list[Any]:
     return result if isinstance(result, list) else []
 
 
-SCHEMA_SQL = (
-    "CREATE TABLE IF NOT EXISTS storms (slug TEXT PRIMARY KEY, t_start INTEGER NOT NULL, "
-    "t_end INTEGER NOT NULL, level INTEGER NOT NULL, score REAL NOT NULL, summary TEXT NOT NULL, "
-    "path TEXT NOT NULL, radius_km REAL NOT NULL, digest TEXT NOT NULL) WITHOUT ROWID",
-    "CREATE TABLE IF NOT EXISTS storm_tiles (day INTEGER NOT NULL, tile INTEGER NOT NULL, "
-    "slug TEXT NOT NULL, PRIMARY KEY (day, tile, slug)) WITHOUT ROWID",
-    "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID",
+#: Shared with the Worker's tests, which build the same tables.
+SCHEMA_SQL = tuple(
+    statement.strip()
+    for statement in files(__package__)
+    .joinpath("sql", "storm_search_schema.sql")
+    .read_text()
+    .split(";")
+    if statement.strip()
 )
 COLUMNS = ("slug", "t_start", "t_end", "level", "score", "summary", "path", "radius_km", "digest")
 UPSERT_STORMS = (
@@ -470,3 +476,71 @@ def sync_search(
     metrics["search_rows_written_today"] = state.written
     metrics["search_storms"] = len(state.storms)
     return metrics
+
+
+class FileStore:
+    """State kept in a local directory, for loads run by hand."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+
+    def put(self, path: str, data: bytes, headers: dict[str, str]) -> None:
+        target = self.root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    def get(self, path: str) -> bytes | None:
+        target = self.root / path
+        return target.read_bytes() if target.exists() else None
+
+
+def _fetch(url: str) -> bytes:
+    request = Request(
+        url, headers={"User-Agent": "scintille-storm-search", "Accept-Encoding": "gzip"}
+    )
+    with urlopen(request, timeout=30) as response:
+        body: bytes = response.read()
+        return gzip.decompress(body) if response.headers.get("Content-Encoding") == "gzip" else body
+
+
+def published_sample(base: str, since: datetime) -> tuple[list[StormSummary], dict[str, list[Any]]]:
+    """Published storms that started after `since`, with their tracks, read from the public data."""
+    latest = StormIndexPage.model_validate_json(_fetch(f"{base}/storms/index/latest.json"))
+    summaries: list[StormSummary] = []
+    for page in range(latest.total_pages - 1, -1, -1):
+        storms = StormIndexPage.model_validate_json(
+            _fetch(f"{base}/storms/index/{page}.json")
+        ).storms
+        summaries += [storm for storm in storms if storm.t_start >= since]
+        if all(storm.t_start < since for storm in storms):
+            break
+    with ThreadPoolExecutor(16) as pool:
+        details = pool.map(
+            lambda storm: StormDetail.model_validate_json(
+                _fetch(f"{base}/storms/{storm.slug}.json")
+            ),
+            summaries,
+        )
+        tracks = {d.storm.storm_id: [p.model_dump() for p in d.track] for d in details}
+    return [s for s in summaries if s.storm_id in tracks], tracks
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="scintille-storm-search",
+        description="Load published storms into a D1 search database (Previews, measurements).",
+    )
+    parser.add_argument("--database", default=f"{DATABASE}-preview")
+    parser.add_argument("--days", type=float, default=7.0)
+    parser.add_argument("--base", default="https://data.scintille.app")
+    parser.add_argument("--state", type=Path, default=Path(".search-state"))
+    args = parser.parse_args(argv)
+    env = dict(os.environ) | {"SCINTILLE_D1_DATABASE": args.database}
+    database = D1Rest.from_env(env)
+    if database is None:
+        parser.error("set SCINTILLE_D1_TOKEN and SCINTILLE_CF_ACCOUNT_ID")
+    now = datetime.now(UTC)
+    summaries, tracks = published_sample(args.base, now - timedelta(days=args.days))
+    metrics = sync_search(FileStore(args.state / args.database), database, summaries, tracks, now)
+    print(json.dumps(metrics | {"storms": len(summaries)}))
+    return 0

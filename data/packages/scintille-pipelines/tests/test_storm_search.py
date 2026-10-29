@@ -22,6 +22,7 @@ from scintille_pipelines.storm_search import (
     State,
     days,
     path_tiles,
+    published_sample,
     query_tiles,
     reconcile,
     retained,
@@ -200,14 +201,17 @@ def cases() -> dict[str, object]:
             q_lon = round((path[0][1] + rng.uniform(-2 * spread, 2 * spread) + 540) % 360 - 180, 1)
             queries.append([q_lat, q_lon, round(brute_distance(q_lat, q_lon, path, radius), 3)])
         tiles = path_tiles(path, radius, FINE) | path_tiles(path, radius, COARSE)
-        paths.append({"path": path, "radius_km": radius, "tiles": sorted(tiles), "queries": queries})
-    grid = [
-        (lat, lon) for lat in (-89.95, -45.8, 0.0, 45.8, 69.5, 88.0) for lon in (-180, -0.1, 4.8, 179.9)
-    ]
+        paths.append(
+            {"path": path, "radius_km": radius, "tiles": sorted(tiles), "queries": queries}
+        )
+    lats = (-89.95, -45.8, 0.0, 45.8, 69.5, 88.0)
+    grid = [(lat, lon) for lat in lats for lon in (-180, -0.1, 4.8, 179.9)]
     return {
         "tile_of": [[lat, lon, FINE.tile(lat, lon), COARSE.tile(lat, lon)] for lat, lon in grid],
         "query_tiles": [
-            [lat, lon, km, query_tiles(lat, lon, km)] for lat, lon in grid for km in (10, 200, 500, 3000)
+            [lat, lon, km, query_tiles(lat, lon, km)]
+            for lat, lon in grid
+            for km in (10, 200, 500, 3000)
         ],
         "paths": paths,
     }
@@ -266,7 +270,8 @@ def test_sync_upserts_published_storms_within_retention() -> None:
         ("2026-10-28-fiji",),
         ("2026-10-28-lyon",),
     ]
-    summary = json.loads(d1.table("SELECT summary FROM storms WHERE slug = '2026-10-28-lyon'")[0][0])
+    (summary_json,) = d1.table("SELECT summary FROM storms WHERE slug = '2026-10-28-lyon'")[0]
+    summary = json.loads(summary_json)
     assert summary == json.loads(storms[0].model_dump_json())
     tiles = d1.table("SELECT DISTINCT tile FROM storm_tiles WHERE slug = '2026-10-28-fiji'")
     assert {t % 180 for (t,) in tiles if t < 20_000} == {179, 0}
@@ -339,3 +344,17 @@ def test_storms_without_tracks_are_counted_not_indexed() -> None:
 def test_d1_rest_needs_a_token_and_an_account() -> None:
     assert D1Rest.from_env({}) is None
     assert D1Rest.from_env({"SCINTILLE_D1_TOKEN": "x"}) is None
+
+
+def test_a_published_sample_loads_like_the_catalog_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    root = Path(__file__).parents[4] / "fixtures"
+    monkeypatch.setattr(
+        "scintille_pipelines.storm_search._fetch",
+        lambda url: (root / url.removeprefix("https://data.test/")).read_bytes(),
+    )
+    summaries, tracks = published_sample("https://data.test", datetime(2026, 7, 15, tzinfo=UTC))
+    assert [s.slug for s in summaries] == ["2026-07-15-orlando"]
+    d1, store = FakeD1(), Store()
+    now = datetime(2026, 7, 16, tzinfo=UTC)
+    assert sync_search(store, d1, summaries, tracks, now)["search_upserted"] == 1
+    assert published_sample("https://data.test", datetime(2026, 7, 16, tzinfo=UTC))[0] == []
