@@ -6,6 +6,7 @@ import {
 	type DetailSource,
 	detailSource,
 	hasTile,
+	heightSource,
 	indexSlot,
 	levelFor,
 	tileAt,
@@ -85,6 +86,39 @@ describe('detailSource', () => {
 		expect(detailSource(ref({ index_bytes: 8 }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ fine: btoa('short') }), MANIFEST)).toBeNull();
 		expect(detailSource(ref({ fine: '%%%' }), MANIFEST)).toBeNull();
+	});
+});
+
+describe('heightSource', () => {
+	const height = { levels: [3, 4], max_km: 20, index_offset: SLOTS * 8, index_bytes: (128 + 512) * 8 };
+
+	it('reads the height index after the opacity index of the same pack', () => {
+		const s = detailSource(ref({ height }), MANIFEST);
+		const h = s?.heights;
+		expect(h?.url).toBe(s?.url);
+		expect(h?.levels).toEqual([3, 4]);
+		expect(h?.indexOffset).toBe(SLOTS * 8);
+		expect(h?.indexBytes).toBe(5120);
+		expect(h && hasTile(h, { z: 4, x: 31, y: 1 })).toBe(true);
+		expect(h && hasTile(h, { z: 5, x: 32, y: 9 })).toBe(false);
+	});
+
+	it('ignores heights that do not match the contract', () => {
+		expect(source().heights).toBeNull();
+		expect(detailSource(ref({ height: { ...height, index_offset: 8 } }), MANIFEST)?.heights).toBeNull();
+		expect(detailSource(ref({ height: { ...height, max_km: 16 } }), MANIFEST)?.heights).toBeNull();
+		expect(detailSource(ref({ height: { ...height, levels: [4] } }), MANIFEST)?.heights).toBeNull();
+	});
+
+	it('keeps only the level 4 heights a storm pack kept', () => {
+		const bits = new Uint8Array((128 + 512) / 8);
+		const slot = 128 + 7 * columns(4) + 17;
+		bits[slot >> 3] |= 1 << (slot & 7);
+		const s = detailSource(ref({ coarse: btoa(String.fromCharCode(...bits)), height }), MANIFEST);
+		const h = s && heightSource(height, s);
+		expect(h && hasTile(h, { z: 4, x: 17, y: 7 })).toBe(true);
+		expect(h && hasTile(h, { z: 4, x: 18, y: 7 })).toBe(false);
+		expect(h && hasTile(h, { z: 3, x: 8, y: 3 })).toBe(false);
 	});
 });
 
@@ -231,6 +265,37 @@ describe('createCloudDetail', () => {
 		expect(renderer.copyTextureToTexture).not.toHaveBeenCalled();
 		other.dispose();
 		detail.dispose();
+	});
+
+	it('reads a height cache from its own index and names its uniforms by prefix', async () => {
+		const heightSlots = 128 + 512;
+		const keys = [4, 3].flatMap((z) => [{ z, x: 32 >> (5 - z), y: 16 >> (5 - z) }, { z, x: 31 >> (5 - z), y: 15 >> (5 - z) }]);
+		const opacity = pack([]);
+		const index = new Uint32Array(heightSlots * 2);
+		const start = opacity.length + heightSlots * 8;
+		keys.forEach((key, i) => {
+			const slot = indexSlot([3, 4], key);
+			index[2 * slot] = start + 3 * i;
+			index[2 * slot + 1] = 3;
+		});
+		const served = new Uint8Array(start + 3 * keys.length);
+		served.set(opacity);
+		served.set(new Uint8Array(index.buffer), opacity.length);
+		const renderer = { copyTextureToTexture: vi.fn(), initTexture: vi.fn() };
+		const fetchTile = rangeFetch(served);
+		const decode = vi.fn(async (_: Blob, size: number) => new Uint8Array(size * size));
+		const heights = createCloudDetail(renderer, { levels: [3, 4], prefix: 'height', slots: 8, fetch: fetchTile, decode, fadeMs: 0 });
+		const s = detailSource(ref({ height: { levels: [3, 4], max_km: 20, index_offset: SLOTS * 8, index_bytes: heightSlots * 8 } }), MANIFEST)?.heights ?? null;
+		for (let i = 0; i < 3; i++) {
+			heights.update(view([s, s]));
+			await heights.idle();
+		}
+		const ranges = fetchTile.mock.calls.map(([, init]) => new Headers(init?.headers).get('Range'));
+		expect(ranges[0]).toBe(`bytes=${SLOTS * 8}-${SLOTS * 8 + heightSlots * 8 - 1}`);
+		expect(renderer.copyTextureToTexture).toHaveBeenCalled();
+		expect(heights.uniforms.heightOn.value).toBe(1);
+		expect(heights.uniforms.detailOn).toBeUndefined();
+		heights.dispose();
 	});
 
 	it('shows nothing for frames without detail', () => {

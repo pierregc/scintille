@@ -234,6 +234,7 @@ uniform vec3 eyeKm;
 uniform vec2 marchSize;
 uniform vec2 phase;
 uniform float frameSeed;
+uniform float pixelAngle;
 uniform highp sampler3D noise;
 uniform float detail;
 uniform float driftKm;
@@ -314,14 +315,14 @@ void main() {
 	float jitter = fract(52.9829189 * fract(dot(px + frameSeed * 5.588238, vec2(0.06711056, 0.00583715))));
 	float T = 1.0;
 	vec3 L = vec3(0.0);
-	float t = t0 + jitter * clamp(0.7 / max(sinH, 0.12), 0.4, 16.0);
+	float t = t0 + jitter * clamp(max(0.7, 1.5 * t0 * pixelAngle) / max(sinH, 0.12), 0.4, 16.0);
 	int samples = 0;
 	for (int i = 0; i < 96; i++) {
 		if (samples >= maxSamples || t >= t1 || T < 0.02) break;
 		vec3 pm = ro + rd * t;
 		vec3 w = volumeWindowAt(volumeLatLon(pm));
-		float texel = w.z < 0.5 ? 1.0 : w.z < 1.5 ? 2.0 : w.z < 2.5 ? 4.0 : 8.0;
-		float ds = min(clamp(0.7 * texel / max(sinH, 0.12), 0.4, 16.0), t1 - t);
+		// Steps grow with the ground a pixel covers, so they do not jump at the window edges.
+		float ds = min(clamp(max(0.7, 1.5 * t * pixelAngle) / max(sinH, 0.12), 0.4, 16.0), t1 - t);
 		if (w.z < 0.0) {
 			t += ds;
 			continue;
@@ -366,7 +367,7 @@ void main() {
 				float scatter = phaseSun * sun + 0.5 * mix(hg(c, 0.3), 1.0, 0.5) * sqrt(sun) + 0.25 * sqrt(sqrt(sun));
 				float powder = 1.0 - exp(-2.0 * sigma * lightGain);
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.11, 0.14, 0.2) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
-				vec3 S = sunColor * scatter * mix(0.55, 1.0, powder) * 0.75 + sky * mix(0.4, 1.0, hn);
+				vec3 S = sunColor * scatter * mix(0.55, 1.0, powder) * 1.05 + sky * mix(0.4, 1.0, hn);
 				vec2 geo = vec2(atan(-nrm.z, nrm.x) / 6.283185307 + 0.5, asin(clamp(nrm.y, -1.0, 1.0)) / 3.141592654 + 0.5);
 				float glow = flashLightAt(geo) * exp(-pow((h - 8.5) / 3.5, 2.0));
 				S += flashColor * (1.0 - exp(-flashGain * glow)) * 2.5;

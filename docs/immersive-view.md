@@ -305,11 +305,52 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated | `SKELETON` |
-| Cloud top 12 km, cloud shell 10 km | Assumed | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
+| Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the observed top where the clouds are in relief | `SKELETON`, `ribbon.glsl.ts` |
+| Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
+| Cloud-top height | Observed IR matched to the GFS temperature profile (ADR 0028); 2 km, about 1 km median difference with GOES ACHA on opaque tops, thin cirrus placed too low | Height tiles, `volumeField` |
+| Cloud base and thickness | Assumed: 0.7 to 1 km for low tops, 1.5 km for thin high clouds, 2.5 km for anvil edges, down to 1.5 km above sea level inside storms | `volumeColumn` |
+| Cloud texture, translucency, glow of flashes inside | Styled (ADR 0030): opacity over 4 km blocks within 0.05 of the observed on average and 0.1 per block, tops within 1 km | `density` in `volume.glsl.ts` |
+| Sunlight, shadows on the clouds and on the ground | Procedural, on the assumed columns | `sunFragmentShader`, `cloudShadowAt` |
 | Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight, assumed scattering | `veil.ts` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
+
+## Clouds in relief
+
+Below a camera height of 1,800 km the flat cloud layer gives way to a volume (#312,
+[ADR 0028](adr/0028-cloud-relief.md), [ADR 0030](adr/0030-bounded-aesthetic-license.md)); the two
+crossfade up to 2,800 km.
+
+- **Data**: each composite frame carries cloud-top heights for levels 3 and 4 in its tile pack
+  ([data contract](data-contract.md#cloud-detail-tiles)), loaded by a second tile cache (16 layers).
+- **Bake**: four nested windows of 512² texels (1, 2, 4 and 8 km) around the point looked at hold
+  the blended opacity, the top, a convective core flag and the sunlight at 0, 4, 8 and 12 km;
+  one window is baked every other frame.
+- **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected from
+  the previous frames; at most 64 samples, steps growing with the ground a pixel covers. A tiling
+  Perlin-Worley noise erodes thick clouds into cells and wisps and bends their tops; thin clouds
+  stay veils. Flashes light the cloud around them from the flash light map.
+- **Ground**: the Earth shader darkens sunlight by the baked transmittance at the ground.
+- **Tiers**: `high` (half the CSS size) and `medium` (0.4); `low` and phones keep the flat layer
+  until a real phone is measured. In development and PR previews, `?clouds=flat|columns` and
+  Shift+C compare with the flat layer and with the columns without styling.
+
+Measured 2026-10-29 on a local build with the reference hours rendered again with heights,
+desktop profile, Chromium headless on the reference Mac (60 Hz, noisier than the headed runs of
+the budgets):
+
+| | Flat layer | Volume |
+|---|---|---|
+| Frame cost p95, `regional`, `iss`, `window`, five storms, best of two interleaved runs | 10.5 to 15.7 ms | 10.9 to 15.8 ms (median difference +0.3 ms, from −1.4 to +1.7) |
+| GPU textures and buffers | 340 MB | 366 MB |
+| Transfer at `regional` | 3 to 113 kB | 135 to 247 kB (height tiles) |
+| Near white pixels | at most 1.4 % | at most 1.7 % (R1 `iss`) |
+| Nadir opacity with the styling, 3.8 km blocks, five storms at `iss` | | bias +0.009 to +0.018, mean difference 0.026 to 0.031 |
+
+Captures in [`immersive/relief/`](immersive/relief/): `R5-window.jpg` (day, low sun),
+`R2-iss.jpg` (day, from above: flashes seen through the anvil), `R1-window.jpg` (night: flashes
+light the clouds from inside) and `views.jpg` (horizon view, `window` over the Amazon), the flat
+layer on the left. `prototype.jpg` is the prototype the ADR was decided on.
 
 ## Scene time
 

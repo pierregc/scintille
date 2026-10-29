@@ -2,6 +2,7 @@ import {
 	BufferGeometry,
 	Color,
 	type Camera,
+	DataUtils,
 	Float32BufferAttribute,
 	HalfFloatType,
 	type IUniform,
@@ -126,6 +127,8 @@ export interface CloudVolume {
 	detail: boolean;
 	/** Bakes and marches for this frame; call before rendering the scene. */
 	render(renderer: WebGLRenderer, view: VolumeView): void;
+	/** Share of each reduced pixel the clouds cover, for development checks. */
+	coverage(renderer: WebGLRenderer): { width: number; height: number; values: Float32Array };
 	dispose(): void;
 }
 
@@ -190,6 +193,7 @@ export function createCloudVolume({
 		marchSize,
 		phase,
 		frameSeed: { value: 0 },
+		pixelAngle: { value: 0.001 },
 		noise: { value: noise.texture },
 		detail: { value: detail ? 1 : 0 },
 		driftKm: { value: 0 },
@@ -318,6 +322,8 @@ export function createCloudVolume({
 				lastViewProjection = null;
 			}
 			marchSize.value.set(width, height);
+			const fov = (camera as Camera & { fov?: number }).fov ?? 35;
+			marchUniforms.pixelAngle.value = (2 * Math.tan((fov * DEG) / 2)) / height;
 			resolveUniforms.freshSize.value.set(fresh.width, fresh.height);
 			phase.value.set(...marchPhase(frame));
 			marchUniforms.frameSeed.value = frame % 64;
@@ -342,6 +348,14 @@ export function createCloudVolume({
 			frame++;
 			renderer.setRenderTarget(target);
 			renderer.autoClear = autoClear;
+		},
+		coverage(renderer) {
+			const target = history[current];
+			const half = new Uint16Array(target.width * target.height * 4);
+			renderer.readRenderTargetPixels(target, 0, 0, target.width, target.height, half);
+			const values = new Float32Array(target.width * target.height);
+			for (let i = 0; i < values.length; i++) values[i] = 1 - DataUtils.fromHalfFloat(half[i * 4 + 3]);
+			return { width: target.width, height: target.height, values };
 		},
 		dispose() {
 			for (const t of [field, sun, noise, fresh, ...history]) t.dispose();

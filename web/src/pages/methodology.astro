@@ -49,7 +49,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 		<ul>
 			<li>NOAA GOES-East and GOES-West lightning mappers (GLM): the Americas. Listed every 10 s on AWS open data.</li>
 			<li>EUMETSAT MTG Lightning Imager (LI): Europe, Africa, the Atlantic. Checked every 30 s on the EUMETSAT Data Store.</li>
-			<li>Clouds: hourly composite of GOES, Himawari and MTG full disks, gaps filled by NOAA GMGSI.</li>
+			<li>Clouds: hourly composite of GOES, Himawari and MTG full disks, gaps filled by NOAA GMGSI. Cloud-top heights come from the infrared and the GFS temperature profile.</li>
 		</ul>
 		<p>Where two satellites overlap, the one with the better view draws the flash.</p>
 
@@ -113,6 +113,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 			<li>Brightness ranks each flash within its satellite: GLM and LI measure light differently.</li>
 			<li>A faulty detector pixel can flash in place.</li>
 			<li>Clouds are hourly and lag the lightning.</li>
+			<li>Close up, cloud thickness, texture and transparency are styled: satellites only see where clouds are and how high their tops reach.</li>
 			<li>The ground is a composite: 2004 by day, 2016 city lights by night.</li>
 			<li>Thunder timing is stylized: it only says near or far.</li>
 		</ul>

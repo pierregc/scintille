@@ -81,6 +81,8 @@ export interface GlobeApp {
 	readonly render?: RenderHandle;
 	/** Surface detail prototypes (#125), in development and PR previews only. */
 	readonly surface?: SurfaceDetail;
+	/** Clouds in relief (ADR 0028), in development and PR previews only. */
+	readonly cloudVolume?: { detail: boolean; coverage(): { width: number; height: number; values: Float32Array } };
 	dispose(): void;
 }
 
@@ -372,6 +374,7 @@ export function createGlobeApp(
 			clouds.setFlatShown(1 - volume.fade);
 		} else if (volume) {
 			volume.mesh.visible = false;
+			volume.uniforms.volumeOn.value = 0;
 			clouds.setFlatShown(1);
 		}
 		if (post) {
@@ -439,6 +442,13 @@ export function createGlobeApp(
 		},
 		render,
 		surface,
+		cloudVolume: volume && compareClouds
+			? {
+					get detail() { return volume.detail; },
+					set detail(on: boolean) { volume.detail = on; },
+					coverage: () => volume.coverage(renderer),
+				}
+			: undefined,
 		dispose() {
 			window.removeEventListener('keydown', cycleSurface);
 			window.removeEventListener('keydown', cycleClouds);
