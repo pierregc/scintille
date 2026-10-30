@@ -1,4 +1,5 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
+import { volumeFieldGlsl } from '../clouds/field.glsl';
 import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
@@ -35,6 +36,9 @@ ${veilGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
 #endif
+#ifdef VOLUME
+${volumeFieldGlsl}
+#endif
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
@@ -63,7 +67,14 @@ void main() {
 	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
 #ifdef CLOUDS
 	// Only as much as the cloud lets a ground channel show; in-cloud ones still carry their light, veiled.
-	if (ground && vDip > 0.0 && cloudShown > 0.5) vDip *= cloudTransmission(cloudOpacityAt(normal), 1.0);
+	if (ground && vDip > 0.0 && cloudShown > 0.5) {
+		float opacity = cloudOpacityAt(normal);
+#ifdef VOLUME
+		float known = cloudKnownAt(normal);
+		if (known > 0.0) opacity = mix(opacity, capOpacity(volumeSample(volumeField, volumeLatLon(normal)).r), known);
+#endif
+		vDip *= cloudTransmission(opacity, 1.0);
+	}
 #endif
 	vec2 drift = cloudDrift(age, end, flashShape.y, seed, ground) * kmToWorld * flicker;
 	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);

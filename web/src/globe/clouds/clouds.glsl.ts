@@ -1,4 +1,5 @@
 import { flashLightGlsl } from '../lightning/light-map.glsl';
+import { volumeFieldGlsl } from './field.glsl';
 
 export const cloudsVertexShader = /* glsl */ `
 uniform vec3 sunDirection;
@@ -163,6 +164,9 @@ varying vec3 vSun;
 varying vec3 vWorldPosition;
 
 ${cloudOpacityGlsl}
+#ifdef VOLUME
+${volumeFieldGlsl}
+#endif
 
 // Mirrors twilight() in the Earth shader.
 float twilight(float sinElevation) {
@@ -171,6 +175,20 @@ float twilight(float sinElevation) {
 }
 
 void main() {
+	// Derivatives taken first, in uniform control flow; they serve every tap below. The geographic
+	// position comes from the normal, exact on the faceted shell, unlike the vertex UVs.
+	vec2 uvDx = dFdx(vUv);
+	vec2 uvDy = dFdy(vUv);
+	vec2 geo = cloudGeo(normalize(vLocalNormal));
+	float shown = flatShown;
+#ifdef VOLUME
+	// The volume draws the clouds where their heights are known; this layer keeps the rest.
+	if (volumeOn > 0.0) {
+		vec2 latLon = vec2((0.5 - geo.y) * 3.141592654, (geo.x - 0.5) * 6.283185307);
+		shown *= 1.0 - smoothstep(0.3, 0.7, volumeSample(volumeField, latLon).a) * volumeOn;
+		if (shown <= 0.001) discard;
+	}
+#endif
 	vec3 n = normalize(vNormal);
 	vec3 sun = normalize(vSun);
 	vec3 view = normalize(cameraPosition - vWorldPosition);
@@ -187,13 +205,16 @@ void main() {
 	// Flashes light the cloud from inside, barely visible on sunlit tops; clear sky has no alpha, so it never glows.
 	color += flashColor * (1.0 - exp(-flashGain * flashLightAt(vUv))) * max(1.0 - color, 0.0);
 
-	// Derivatives taken here, in uniform control flow, serve every tap; the geographic position
-	// comes from the normal, exact on the faceted shell, unlike the vertex UVs.
-	float opacity = cloudOpacity(vUv, cloudGeo(normalize(vLocalNormal)), dFdx(vUv), dFdy(vUv));
+	float opacity = cloudOpacity(vUv, geo, uvDx, uvDy);
+#ifdef VOLUME
+	// Near the ground, the flat layer eases dense clouds like the volume, so a storm is as see-through
+	// whether or not its heights are known.
+	opacity = mix(opacity, capOpacity(opacity / max(cloudMaxOpacity, 1e-3)), volumeOn);
+#endif
 	float mu = max(dot(n, view), 0.05);
 	float alpha = 1.0 - pow(1.0 - opacity, 1.0 / mix(1.0, mu, limbThickening));
 
-	gl_FragColor = vec4(color, alpha * flatShown);
+	gl_FragColor = vec4(color, alpha * shown);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

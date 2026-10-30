@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marchPhase, volumeFade, VOLUME_FADE_KM, WINDOW_TEXEL_KM, windowAround } from './volume';
+import { halton, marchPhase, volumeFade, VOLUME_FADE_KM, WINDOW_TEXEL_KM, windowAround } from './volume';
 
 const DEG = Math.PI / 180;
 const KM_PER_DEGREE = (6371 * Math.PI) / 180;
@@ -43,5 +43,14 @@ describe('volumeFade', () => {
 		expect(volumeFade(20000)).toBe(0);
 		const mid = volumeFade((VOLUME_FADE_KM[0] + VOLUME_FADE_KM[1]) / 2);
 		expect(mid).toBeCloseTo(0.5, 6);
+	});
+});
+
+describe('halton', () => {
+	it('spreads offsets evenly over 0 to 1', () => {
+		expect([1, 2, 3, 4].map((i) => halton(i, 2))).toEqual([0.5, 0.25, 0.75, 0.125]);
+		expect([1, 2, 3].map((i) => halton(i, 3))).toEqual([1 / 3, 2 / 3, 1 / 9]);
+		const sixteen = Array.from({ length: 16 }, (_, i) => halton(i + 1, 2));
+		for (let bin = 0; bin < 4; bin++) expect(sixteen.filter((v) => v >= bin / 4 && v < (bin + 1) / 4)).toHaveLength(4);
 	});
 });

@@ -33,6 +33,15 @@ uniform vec3 ozoneAbsorption;
 uniform float ozoneCenter;
 uniform float ozoneWidth;
 uniform float sunIntensity;
+#ifdef CLOUD_HAZE
+uniform sampler2D cloudResolved;
+uniform sampler2D cloudDepth;
+uniform vec2 cloudMarchSize;
+uniform vec2 cloudFreshSize;
+uniform vec2 cloudPhase;
+uniform float cloudFade;
+uniform vec2 cloudViewport;
+#endif
 
 varying vec3 vWorldPosition;
 varying vec3 vCenter;
@@ -101,6 +110,21 @@ void main() {
 	vec3 transmittance = exp(-extinction(viewDepth));
 
 	// Written as display values: blending sRGB-encoded light would wash out the disc.
-	gl_FragColor = vec4(1.0 - exp(-radiance), dot(transmittance, vec3(1.0 / 3.0)));
+	vec3 haze = 1.0 - exp(-radiance);
+	float through = dot(transmittance, vec3(1.0 / 3.0));
+#ifdef CLOUD_HAZE
+	// Over the clouds the volume draws, only the air above their tops hazes and dims them: about
+	// exp(-height / 8 km) of the column, so high tops stay white.
+	vec2 screen = gl_FragCoord.xy / cloudViewport;
+	float cover = (1.0 - texture2D(cloudResolved, screen).a) * cloudFade;
+	vec2 q = ((screen * cloudMarchSize - cloudPhase - 0.5) / 2.0 + 0.5) / cloudFreshSize;
+	float above = exp(-texture2D(cloudDepth, q).b / 8.0);
+	// Toward the limb the line of sight runs long through the air above the clouds: keep its haze.
+	float steep = ground.x > 0.0 ? smoothstep(0.15, 0.4, -dot(dir, normalize(origin + dir * ground.x))) : 0.0;
+	cover *= steep;
+	haze *= 1.0 - cover * (1.0 - above);
+	through = mix(through, pow(through, above), cover);
+#endif
+	gl_FragColor = vec4(haze, through);
 }
 `;

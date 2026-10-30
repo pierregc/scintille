@@ -107,6 +107,11 @@ void main() {
 		vec3 crossing = cloudCrossing(base + frame * mid, cameraPosition);
 		slant = dot(normalize(crossing), normalize(cameraPosition - crossing));
 		opacity = cloudOpacityAt(crossing);
+#ifdef VOLUME
+		// Where the volume draws the clouds, its eased opacity veils the channel (ADR 0031).
+		float known = cloudKnownAt(crossing);
+		if (known > 0.0) opacity = mix(opacity, capOpacity(volumeSample(volumeField, volumeLatLon(crossing)).r), known);
+#endif
 	}
 #endif
 	if (inCloud) {

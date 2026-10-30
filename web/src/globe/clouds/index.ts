@@ -70,6 +70,8 @@ export interface Clouds {
 	heightFrames(): readonly [DetailSource | null, DetailSource | null];
 	/** Share of the flat layer drawn, 0 to 1, as the volume takes over near the ground. */
 	setFlatShown(share: number): void;
+	/** Hands the clouds over to the volume (ADR 0031) wherever its field knows their heights. */
+	useVolume(uniforms: Record<string, IUniform>): void;
 	/**
 	 * What another material needs to read the cloud opacity: share these uniforms and defines and
 	 * include `cloudOpacityGlsl`. They follow the layer: frames, blend, detail and visibility.
@@ -246,6 +248,10 @@ export function createClouds(
 		setFlatShown(share) {
 			material.uniforms.flatShown.value = share;
 			material.visible = share > 0.001;
+		},
+		useVolume(uniforms) {
+			Object.assign(material.uniforms, uniforms);
+			material.needsUpdate = true;
 		},
 		setFlashLight(light) {
 			material.uniforms.flashLight.value = light?.map ?? null;
