@@ -22,13 +22,15 @@ export interface QualityPreset {
 	surfaceMb: number;
 	/** Clouds in relief near the ground (ADR 0028): march resolution as a share of the CSS size, 0 for the flat layer. */
 	cloudVolume: number;
+	/** Most cloud crossings a ray integrates (ADR 0031). */
+	cloudSamples: number;
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0 },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4 },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5 },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0 },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40 },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48 },
 };
 
 export interface DeviceHints {

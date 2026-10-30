@@ -84,4 +84,11 @@ float flashLightAt(vec2 uv) {
 	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
 	return texture2D(flashLight, local * 0.5 + 0.5).r * edge.x * edge.y;
 }
+// The same, without implicit gradients, for use inside loops.
+float flashLightAtLod(vec2 uv) {
+	vec2 angle = vec2((uv.x - 0.5) * 6.28318531, (uv.y - 0.5) * 3.14159265);
+	vec2 local = vec2(mod(angle.x - flashWindow.x + 3.14159265, 6.28318531) - 3.14159265, angle.y - flashWindow.y) / flashWindow.zw;
+	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
+	return textureLod(flashLight, local * 0.5 + 0.5, 0.0).r * edge.x * edge.y;
+}
 `;

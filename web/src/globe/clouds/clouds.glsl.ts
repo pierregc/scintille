@@ -1,4 +1,5 @@
 import { flashLightGlsl } from '../lightning/light-map.glsl';
+import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
 export const cloudsVertexShader = /* glsl */ `
 uniform vec3 sunDirection;
@@ -163,6 +164,12 @@ varying vec3 vSun;
 varying vec3 vWorldPosition;
 
 ${cloudOpacityGlsl}
+#ifdef VOLUME
+${volumeFieldGlsl}
+${reliefFieldGlsl}
+uniform float reliefKmPerUnit;
+uniform float reliefSky;
+#endif
 
 // Mirrors twilight() in the Earth shader.
 float twilight(float sinElevation) {
@@ -171,6 +178,22 @@ float twilight(float sinElevation) {
 }
 
 void main() {
+	// Derivatives taken first, in uniform control flow; they serve every tap below. The geographic
+	// position comes from the normal, exact on the faceted shell, unlike the vertex UVs.
+	vec2 uvDx = dFdx(vUv);
+	vec2 uvDy = dFdy(vUv);
+	vec2 geo = cloudGeo(normalize(vLocalNormal));
+	float shown = flatShown;
+	// Share the volume draws here: where heights are known, as it fades in.
+	float drawn = 0.0;
+#ifdef VOLUME
+	vec2 latLon = vec2((0.5 - geo.y) * 3.141592654, (geo.x - 0.5) * 6.283185307);
+	// The volume draws the clouds where their heights are known; this layer keeps the rest.
+	if (volumeOn > 0.0) {
+		drawn = smoothstep(0.3, 0.7, volumeSample(volumeField, latLon).a) * volumeOn;
+		if (drawn >= 0.999) discard;
+	}
+#endif
 	vec3 n = normalize(vNormal);
 	vec3 sun = normalize(vSun);
 	vec3 view = normalize(cameraPosition - vWorldPosition);
@@ -180,20 +203,39 @@ void main() {
 	float level = twilight(s);
 	float direct = sqrt(max(s, 0.0)) * smoothstep(-0.02, 0.12, s);
 
+	float opacity = cloudOpacity(vUv, geo, uvDx, uvDy);
+#ifdef VOLUME
+	float relief = 1.0;
+	// Seen from afar, where heights are known: the shadows of taller clouds and the far relief light.
+	if (shadeOn > 0.0) {
+		float pxKm = distance(cameraPosition, vWorldPosition) * reliefKmPerUnit / max(dot(n, view), 0.3);
+		vec3 far = farRelief(latLon, pxKm);
+		direct *= mix(1.0, mix(reliefSky, 1.0, far.b), shadeOn);
+		relief = mix(1.0, far.g, reliefWeight(pxKm, opacity / max(cloudMaxOpacity, 1e-3)));
+	}
+#endif
+
 	vec3 color = mix(twilightColor * level, dayColor, direct);
 	float edge = exp(-(s - 0.03) * (s - 0.03) / 0.004);
 	color *= mix(vec3(1.0), warmTint, terminatorTint * edge);
 	color += nightColor * (1.0 - level);
+#ifdef VOLUME
+	color = reliefTone(color, relief);
+#endif
 	// Flashes light the cloud from inside, barely visible on sunlit tops; clear sky has no alpha, so it never glows.
 	color += flashColor * (1.0 - exp(-flashGain * flashLightAt(vUv))) * max(1.0 - color, 0.0);
 
-	// Derivatives taken here, in uniform control flow, serve every tap; the geographic position
-	// comes from the normal, exact on the faceted shell, unlike the vertex UVs.
-	float opacity = cloudOpacity(vUv, cloudGeo(normalize(vLocalNormal)), dFdx(vUv), dFdy(vUv));
+#ifdef VOLUME
+	// Near the ground, the flat layer eases dense clouds like the volume, so a storm looks as dense
+	// whether or not its heights are known.
+	opacity = mix(opacity, capOpacity(opacity / max(cloudMaxOpacity, 1e-3)), volumeOn);
+#endif
 	float mu = max(dot(n, view), 0.05);
 	float alpha = 1.0 - pow(1.0 - opacity, 1.0 / mix(1.0, mu, limbThickening));
+	// Over the volume's share, so a deck keeps its cover while one renderer hands over to the other.
+	alpha *= (1.0 - drawn) / max(1.0 - drawn * alpha, 1e-3);
 
-	gl_FragColor = vec4(color, alpha * flatShown);
+	gl_FragColor = vec4(color, alpha * shown);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

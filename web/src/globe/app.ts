@@ -1,4 +1,4 @@
-import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
+import { Matrix4, PerspectiveCamera, Scene, type ShaderMaterial, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { FlashDays } from './archive/days';
@@ -7,6 +7,7 @@ import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
 import { ArchiveCloudFeed } from './clouds/archive';
 import { createCloudDetail } from './clouds/detail';
+import type { StyleBounds } from './clouds/bounds';
 import { createCloudVolume, type CloudVolume } from './clouds/volume';
 import { attachDevClouds } from './clouds/dev';
 import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
@@ -85,7 +86,7 @@ export interface GlobeApp {
 	/** Surface detail prototypes (#125), in development and PR previews only. */
 	readonly surface?: SurfaceDetail;
 	/** Clouds in relief (ADR 0028), in development and PR previews only. */
-	readonly cloudVolume?: { detail: boolean; coverage(): { width: number; height: number; values: Float32Array } };
+	readonly cloudVolume?: { detail: boolean; coverage(): { width: number; height: number; values: Float32Array }; styleCheck(): StyleBounds };
 	dispose(): void;
 }
 
@@ -166,15 +167,20 @@ export function createGlobeApp(
 	const cloudMode = compareClouds ? new URLSearchParams(location.search).get('clouds') : null;
 	const volumeScale = renderParams || phone || cloudMode === 'flat' ? 0 : preset.cloudVolume;
 	const heightDetail = volumeScale > 0 && cloudDetail
-		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 16 })
+		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 24, finerFallback: true })
 		: undefined;
 	const volume: CloudVolume | undefined = heightDetail
-		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, detail: cloudMode !== 'columns' })
+		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, maxSamples: preset.cloudSamples, detail: cloudMode !== 'columns' })
 		: undefined;
 	if (volume) {
 		scene.add(volume.mesh);
 		Object.assign(clouds.opacity.uniforms, volume.uniforms);
 		clouds.opacity.defines.VOLUME = '';
+		clouds.useVolume(volume.uniforms);
+		const air = atmosphere.mesh.material as ShaderMaterial;
+		Object.assign(air.uniforms, volume.hazeUniforms);
+		air.defines = { ...air.defines, CLOUD_HAZE: '' };
+		air.needsUpdate = true;
 		Object.assign(earth.material.uniforms, volume.uniforms);
 		earth.material.defines.CLOUD_SHADOW = '';
 		earth.material.needsUpdate = true;
@@ -275,6 +281,7 @@ export function createGlobeApp(
 		canvas.dataset.quality = tier;
 		if (!PRESETS[tier].cloudLight) clouds.setFlashLight(null);
 		if (surface) surface.tiles.maxBytes = surfaceBudgetMb(tier, phone) * 1e6;
+		if (PRESETS[tier].cloudVolume > 0) volume?.setQuality({ scale: PRESETS[tier].cloudVolume, maxSamples: PRESETS[tier].cloudSamples });
 		if (!PRESETS[tier].postProcessing) {
 			post?.dispose();
 			post = undefined;
@@ -380,10 +387,13 @@ export function createGlobeApp(
 				height: canvas.clientHeight || window.innerHeight,
 				light: PRESETS[tier].cloudLight ? lightning.light : null,
 			});
-			clouds.setFlatShown(1 - volume.fade);
+			// The flat layer steps aside pixel by pixel, where the volume knows the heights.
+			clouds.setFlatShown(1);
 		} else if (volume) {
 			volume.mesh.visible = false;
 			volume.uniforms.volumeOn.value = 0;
+			volume.uniforms.reliefOn.value = 0;
+			volume.uniforms.shadeOn.value = 0;
 			clouds.setFlatShown(1);
 		}
 		if (post) {
@@ -458,6 +468,7 @@ export function createGlobeApp(
 					get detail() { return volume.detail; },
 					set detail(on: boolean) { volume.detail = on; },
 					coverage: () => volume.coverage(renderer),
+					styleCheck: () => volume.styleCheck(renderer),
 				}
 			: undefined,
 		dispose() {

@@ -353,35 +353,62 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the observed top where the clouds are in relief | `SKELETON`, `ribbon.glsl.ts` |
+| Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
 | Cloud-top height | Observed IR matched to the GFS temperature profile (ADR 0028); 2 km, about 1 km median difference with GOES ACHA on opaque tops, thin cirrus placed too low | Height tiles, `volumeField` |
 | Cloud base and thickness | Assumed: 0.7 to 1 km for low tops, 1.5 km for thin high clouds, 2.5 km for anvil edges, down to 1.5 km above sea level inside storms | `volumeColumn` |
-| Cloud texture, translucency, glow of flashes inside | Styled (ADR 0030): opacity over 4 km blocks within 0.05 of the observed on average and 0.1 per block, tops within 1 km | `density` in `volume.glsl.ts` |
-| Sunlight, shadows on the clouds and on the ground | Procedural, on the assumed columns | `sunFragmentShader`, `cloudShadowAt` |
-| Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight, assumed scattering | `veil.ts` |
+| Tops of semi-transparent edges of high systems | Assumed (ADR 0031): lifted toward the nearest opaque plateau inward, as infrared places them too low | `styleFragmentShader` |
+| Cloud detail: swell, billows on rising or rough tops, streaks on thin and fraying edges, visible dips as depressions | Styled (ADR 0031), chosen from the observed neighbourhood: cover over 4 km blocks within 0.05 of the observed on average and 0.1 per block, saturated tops within 1 km | `styleFragmentShader`, checked by `cloudVolume.styleCheck()` |
+| Translucency, glow of flashes inside | Styled (ADR 0031): drawn as observed up to 0.5, eased to 0.95 at full cover; flashes under them veiled as if eased to 0.8, so they show through; brightness follows the real depth, sunlit tops kept below white by a highlight shoulder; the glow rises and fades in real time, outside the history | `capOpacity`, `veilOpacity`, `scatterGain`, `compositeFragmentShader` |
+| Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; under a high sun, large dense decks lit by the sun lowered to 40° with their observed 6 km shape drawn 6× steeper (styled); seen from afar, dense clouds shaded by their observed broad shape at the scale of the screen, slopes up to 6 to 12× steeper (styled), and by the shadows of taller clouds; the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `deckFragmentShader`, `marchFragmentShader`, `reliefFieldGlsl`, `cloudShadowAt`, `atmosphere.glsl.ts` |
+| Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering | `veil.ts` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Clouds in relief
 
 Below a camera height of 1,800 km the flat cloud layer gives way to a volume (#312,
-[ADR 0028](adr/0028-cloud-relief.md), [ADR 0030](adr/0030-bounded-aesthetic-license.md)); the two
-crossfade up to 2,800 km.
+[ADR 0028](adr/0028-cloud-relief.md), [ADR 0030](adr/0030-bounded-aesthetic-license.md),
+[ADR 0031](adr/0031-cloud-look.md)); the two crossfade up to 2,800 km, the flat layer keeping the
+cover the volume hands over. Up to about 6,500 km (fading out by 7,700 km on a 1,000-pixel-tall
+view, before the height tiles stop loading), the flat layer is shaded from the same baked windows:
+the far relief light of the broad shapes and the shadows of taller clouds. Where no height is observed, the volume draws
+nothing and the flat layer stays, unshaded, pixel by pixel. Diagnosis, before and after captures
+and the comparison with ISS photographs are in [cloud look](cloud-look.md).
 
 - **Data**: each composite frame carries cloud-top heights for levels 3 and 4 in its tile pack
-  ([data contract](data-contract.md#cloud-detail-tiles)), loaded by a second tile cache (16 layers).
-- **Bake**: four nested windows of 512² texels (1, 2, 4 and 8 km) around the point looked at hold
-  the blended opacity, the top, a convective core flag and the sunlight at 0, 4, 8 and 12 km;
-  one window is baked every other frame.
-- **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected from
-  the previous frames; at most 64 samples, steps growing with the ground a pixel covers. A tiling
-  Perlin-Worley noise erodes thick clouds into cells and wisps and bends their tops; thin clouds
-  stay veils. Flashes light the cloud around them from the flash light map.
+  ([data contract](data-contract.md#cloud-detail-tiles)), loaded by a second tile cache (24 layers);
+  storm packs keep level 4 only, which is loaded from afar in place of level 3.
+- **Bake**: five nested windows of 512² texels (1, 2, 4, 8 and 16 km), in half floats: the 1 and
+  2 km windows around the ground below the screen centre (40 % of the half-height, at most 400 km
+  from it), the others around the screen centre; the march reads the first four. Three passes: the
+  observations (blended opacity, top, convective core, heights known; texel means from 4 km up),
+  their styling from the neighbourhood (hashed noise, never finer than 2.5 texels), and the sunlight
+  through the other columns at the ground and at each column's own top, with the sky each dense top
+  sees in the two finest windows. The 4, 8 and 16 km windows add the light of the broad shape,
+  from their dense tops spread over 1.5 and 4 texels: the decks' light under a high sun (4 and
+  8 km), the far relief light and the sunlit share of each top. A window is baked again when its
+  place, frames, tiles or sun change (at most one every other frame); windows fade into each other
+  near their edges. Above the march only the coarse windows are baked, one at a time, and a window
+  moves only once the view has gone 32 of its texels.
+- **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected at
+  the depth the march returns; at most 48 crossings per ray (`high`) or 40 (`medium`). Each column
+  crossing is integrated in one piece, sunlight falling with depth below the top in closed form,
+  so the picture does not depend on where steps fall. Steps and rays get low-discrepancy offsets
+  that a history averages; it shortens where cover changes or the camera moves. Flashes light the
+  cloud around them from the flash light map, added in the composite so the glow is never
+  delayed. Under a high sun the exposure comes down, dense tops show their slopes and creases and
+  dense decks their broad shape in a lowered light; a highlight shoulder keeps sunlit tops below
+  white. Where a pixel covers more than about a kilometre, the composite draws the far relief light
+  at full resolution after the shoulder, and the march hands its deck light over. The atmosphere
+  hazes the clouds by the air above their tops only.
 - **Ground**: the Earth shader darkens sunlight by the baked transmittance at the ground.
-- **Tiers**: `high` (half the CSS size) and `medium` (0.4); `low` and phones keep the flat layer
+- **Tiers**: `high` (half the CSS size) and `medium` (0.4); `low` and phones keep the unshaded flat layer
   until a real phone is measured. In development and PR previews, `?clouds=flat|columns` and
-  Shift+C compare with the flat layer and with the columns without styling.
+  Shift+C compare with the flat layer and with the columns without styling, and
+  `cloudVolume.styleCheck()` measures the styling against the observations.
+
+The first measurements below are those of ADR 0028's volume; ADR 0031 records the new ones.
 
 Measured 2026-10-29 on a local build with the reference hours rendered again with heights,
 desktop profile, Chromium headless on the reference Mac (60 Hz, noisier than the headed runs of

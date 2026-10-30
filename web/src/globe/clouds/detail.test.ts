@@ -186,6 +186,19 @@ describe('wantedTiles', () => {
 		expect(wantedTiles(source([]), [{ lat: 38.5, lon: 2.6, kmPerPx: 0.23, offCentre: 0 }]).map((k) => k.z))
 			.toEqual([3, 4]);
 	});
+
+	it('takes the finer heights a storm pack kept from afar, only when asked', () => {
+		const height = { levels: [3, 4], max_km: 20, index_offset: SLOTS * 8, index_bytes: (128 + 512) * 8 };
+		const bits = new Uint8Array((128 + 512) / 8);
+		const slot = 128 + 7 * columns(4) + 17;
+		bits[slot >> 3] |= 1 << (slot & 7);
+		const storm = detailSource(ref({ coarse: btoa(String.fromCharCode(...bits)), height }), MANIFEST)?.heights;
+		if (!storm) throw new Error('invalid test heights');
+		const far = { lat: 5.6, lon: 15, kmPerPx: 3.5, offCentre: 0 };
+		expect(wantedTiles(storm, [far])).toEqual([]);
+		expect(wantedTiles(storm, [far], true)).toEqual([{ z: 4, x: 17, y: 7 }]);
+		expect(wantedTiles(source(), [{ lat: 38.5, lon: 2.6, kmPerPx: 3.5, offCentre: 0 }], true)).toEqual([{ z: 3, x: 8, y: 2 }]);
+	});
 });
 
 describe('viewPoints', () => {
