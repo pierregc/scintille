@@ -5,7 +5,9 @@
 		"globe": { "altitude": 20000, "tilt": 0 },
 		"regional": "framed",
 		"iss": { "altitude": 400, "tilt": 1 },
-		"window": { "altitude": 740, "tilt": 60 }
+		"window": { "altitude": 740, "tilt": 60 },
+		"grazing": { "altitude": 400, "tilt": 80 },
+		"limb": { "altitude": 400, "tilt": 90 }
 	},
 	"storms": [
 		{

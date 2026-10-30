@@ -2,6 +2,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { latLonToVector } from './sun';
 
 const EARTH_RADIUS_KM = 6371;
+const RIGHT = new Vector3(1, 0, 0);
 
 /** Lowest camera height above the ground in every mode, the ISS altitude (ADR 0020). */
 export const CAMERA_FLOOR_KM = 400;
@@ -11,7 +12,7 @@ export interface FlyToOptions {
 	lon: number;
 	/** Camera height above the target point, km. Defaults to the current height. */
 	altitude?: number;
-	/** Angle from looking straight down, degrees; 0 keeps the whole globe framed. */
+	/** Angle from looking straight down, degrees; 0 keeps the whole globe framed. Above `FLIGHT.maxTiltDeg` the gaze rises over the target. */
 	tilt?: number;
 	/** Direction the camera faces, degrees clockwise from north. */
 	heading?: number;
@@ -29,7 +30,10 @@ export const FLIGHT = {
 	durationPerRadianMs: 1600,
 	/** Extra height at mid-flight, as a fraction of the radius per radian travelled. */
 	arcPerRadian: 0.45,
+	/** Largest tilt of the camera orbiting its target. */
 	maxTiltDeg: 80,
+	/** How far the gaze rises above the target at the largest tilt (ADR 0032). */
+	maxGazeDeg: 10,
 };
 
 /** Where the camera is and what it looks at. */
@@ -37,13 +41,20 @@ export interface CameraPose {
 	position: Vector3;
 	target: Vector3;
 	quaternion: Quaternion;
+	/** Radians the gaze is raised above the target, 0 when left out. */
+	gaze?: number;
 }
 
-/** Pose above (lat, lon): `altitude` world units above the surface point, `tilt` degrees from nadir, facing `headingDeg` from north. */
+/**
+ * Pose above (lat, lon): `altitude` world units above the surface point, `tilt` degrees from nadir,
+ * facing `headingDeg` from north. A tilt past `FLIGHT.maxTiltDeg` keeps that orbit and raises the gaze.
+ */
 export function poseAt(lat: number, lon: number, altitude: number, tiltDeg: number, radius: number, headingDeg = 0): CameraPose {
 	const normal = new Vector3(...latLonToVector(lat, lon));
 	const north = headingTangent(normal, headingDeg);
-	const tilt = (Math.min(Math.max(tiltDeg, 0), FLIGHT.maxTiltDeg) * Math.PI) / 180;
+	const total = Math.min(Math.max(tiltDeg, 0), FLIGHT.maxTiltDeg + FLIGHT.maxGazeDeg);
+	const tilt = (Math.min(total, FLIGHT.maxTiltDeg) * Math.PI) / 180;
+	const gaze = (total * Math.PI) / 180 - tilt;
 	const surface = normal.clone().multiplyScalar(radius);
 	const offset = normal
 		.clone()
@@ -52,7 +63,12 @@ export function poseAt(lat: number, lon: number, altitude: number, tiltDeg: numb
 	const target = tilt > 0 ? surface : new Vector3();
 	const position = surface.clone().addScaledVector(offset, altitude);
 	const up = north.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(normal, Math.sin(tilt));
-	return { position, target, quaternion: lookRotation(position, target, up) };
+	return { position, target, quaternion: raiseGaze(lookRotation(position, target, up), gaze), gaze };
+}
+
+/** Turns a camera orientation in place about its own horizontal axis: positive looks up. */
+export function raiseGaze(quaternion: Quaternion, angle: number): Quaternion {
+	return angle === 0 ? quaternion : quaternion.multiply(new Quaternion().setFromAxisAngle(RIGHT, angle));
 }
 
 /** Unit tangent pointing north; falls back to a fixed axis at the poles. */
@@ -98,7 +114,7 @@ export function flightDuration(angle: number): number {
 /**
  * A flight between two poses along the great circle. The start orientation is carried along the
  * circle and the remaining roll and tilt are slerped in, so the camera never flips near a pole;
- * the range rises in an arc.
+ * the range rises in an arc. A raised gaze is eased on top of the look at the target.
  */
 export class Flight {
 	readonly duration: number;
@@ -113,11 +129,17 @@ export class Flight {
 	readonly #axis: Vector3;
 	readonly #residual: Quaternion;
 	readonly #floor: number;
+	readonly #fromLook: Quaternion;
+	readonly #fromGaze: number;
+	readonly #toGaze: number;
 
 	constructor(from: CameraPose, to: CameraPose, radius: number, duration?: number) {
 		this.#floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
 		this.#from = from;
 		this.#to = to;
+		this.#fromGaze = from.gaze ?? 0;
+		this.#toGaze = to.gaze ?? 0;
+		this.#fromLook = raiseGaze(from.quaternion.clone(), -this.#fromGaze);
 		this.#fromDir = (from.target.lengthSq() > 0 ? from.target : from.position).clone().normalize();
 		this.#toDir = (to.target.lengthSq() > 0 ? to.target : to.position).clone().normalize();
 		this.#angle = this.#fromDir.angleTo(this.#toDir);
@@ -127,25 +149,26 @@ export class Flight {
 		this.duration = duration ?? flightDuration(this.#angle);
 		const axis = this.#fromDir.clone().cross(this.#toDir);
 		this.#axis = axis.lengthSq() > 1e-12 ? axis.normalize() : northTangent(this.#fromDir).cross(this.#fromDir).normalize();
-		this.#residual = this.#carried(1).invert().multiply(to.quaternion);
+		this.#residual = this.#carried(1).invert().multiply(raiseGaze(to.quaternion.clone(), -this.#toGaze));
 	}
 
 	/** Start orientation rotated along the great circle by a fraction `e` of the trip. */
 	#carried(e: number): Quaternion {
-		return new Quaternion().setFromAxisAngle(this.#axis, this.#angle * e).multiply(this.#from.quaternion);
+		return new Quaternion().setFromAxisAngle(this.#axis, this.#angle * e).multiply(this.#fromLook);
 	}
 
 	/** Pose at `elapsed` milliseconds into the flight. */
 	at(elapsed: number): CameraPose {
 		const t = this.duration > 0 ? Math.min(Math.max(elapsed / this.duration, 0), 1) : 1;
 		const e = easeInOut(t);
-		const quaternion = this.#carried(e).multiply(new Quaternion().slerp(this.#residual, e));
+		const look = this.#carried(e).multiply(new Quaternion().slerp(this.#residual, e));
 		const anchor = slerpDirection(this.#fromDir, this.#toDir, this.#angle, e).multiplyScalar(
 			lerp(this.#from.target.length(), this.#to.target.length(), e),
 		);
-		const back = new Vector3(0, 0, 1).applyQuaternion(quaternion);
+		const back = new Vector3(0, 0, 1).applyQuaternion(look);
 		const range = Math.max(lerp(this.#fromRange, this.#toRange, e) + this.#arc * Math.sin(Math.PI * t), rangeToHeight(anchor, back, this.#floor));
-		return { position: anchor.clone().addScaledVector(back, range), target: anchor, quaternion };
+		const gaze = lerp(this.#fromGaze, this.#toGaze, e);
+		return { position: anchor.clone().addScaledVector(back, range), target: anchor, quaternion: raiseGaze(look, gaze), gaze };
 	}
 }
 

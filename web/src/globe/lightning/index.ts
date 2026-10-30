@@ -29,6 +29,7 @@ import {
 import { type Clouds, cloudShellRadius } from '../clouds';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import { sunDirection } from '../sun';
+import { lookedAt } from '../surface';
 import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { CHANNEL } from './channel';
@@ -417,6 +418,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	const clearColor = new Color();
 	const eye = new Vector3();
 	const forward = new Vector3();
+	const point = new Vector3();
 	const aim = { lat: 0, lon: 0 };
 	return {
 		target,
@@ -428,12 +430,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 			view.getWorldPosition(eye);
 			view.getWorldDirection(forward);
 			const height = Math.max(0, eye.length() - radius);
-			// The point looked at, or the one below the camera when looking past the globe.
-			const b = eye.dot(forward);
-			const c = eye.lengthSq() - radius * radius;
-			const hit = b * b - c;
-			const point = hit > 0 && b < 0 ? forward.multiplyScalar(-b - Math.sqrt(hit)).add(eye) : forward.copy(eye);
-			point.normalize();
+			lookedAt(eye, forward, radius, point);
 			aim.lat = Math.asin(Math.min(1, Math.max(-1, point.y)));
 			aim.lon = Math.atan2(-point.z, point.x);
 			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, bounds);

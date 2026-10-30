@@ -11,6 +11,14 @@ it('round trips a heading and leaves north out of the link', () => {
 	expect(parseReplayLocation(new URL('https://scintille.app/?storm=a&view=1,2,740,60,-90'))?.view?.heading).toBe(270);
 });
 
+it('round trips a raised gaze up to 90 degrees and keeps tilts up to 80 unchanged', () => {
+	for (const tilt of [12, 80, 85.5, 90]) {
+		const view = { lat: 28.5, lon: -81.3, altitude: 400, tilt };
+		const url = replayUrl(new URL('https://scintille.app/'), { slug: 'storm-one', speed: 60, paused: false, view });
+		expect(parseReplayLocation(url)?.view).toEqual(view);
+	}
+});
+
 it('round trips time, speed, paused state and supported camera values while retaining unrelated parameters', () => {
 	const state = { slug: 'storm-one', time: Date.parse('2026-07-15T18:01:02.123Z'), speed: 30, paused: true,
 		view: { lat: 28.5, lon: -81.3, altitude: 2000, tilt: 12 } };
@@ -30,7 +38,7 @@ describe('URL validation', () => {
 	});
 	it('defaults malformed optional values and bounds altitude/tilt', () => {
 		const state = parseReplayLocation(new URL('https://scintille.app/?storm=one&speed=Infinity&time=2026-02-30T00:00:00Z&view=0,180,-50,900'));
-		expect(state).toMatchObject({ speed: 60, time: undefined, view: { altitude: 20, tilt: 80 } });
+		expect(state).toMatchObject({ speed: 60, time: undefined, view: { altitude: 20, tilt: 90 } });
 		for (const view of ['NaN,0,20,0', '0,0', '91,0,20,0', '0,,20,0']) {
 			const url = new URL('https://scintille.app/?storm=one'); url.searchParams.set('view', view);
 			expect(parseReplayLocation(url)?.view).toBeUndefined();
