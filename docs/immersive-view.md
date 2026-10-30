@@ -45,7 +45,8 @@ about 8,400 km for the 4k Earth, 4,200 km for the 8k Earth and 3,400 km for GMGS
 
 `view` in a share URL is `lat,lon,altitude,tilt[,heading]`: with tilt 0 the altitude is the camera
 height above the ground; with a tilt it is the range from the target point to the camera. Heading is
-degrees clockwise from north, left out when north.
+degrees clockwise from north, left out when north. A tilt above 80° is the 80° view with the gaze
+raised by the difference ([free tilt](#free-tilt)).
 
 | Pose | View | Camera height | View width at target (16:9) | Purpose |
 |---|---|---|---|---|
@@ -53,9 +54,12 @@ degrees clockwise from north, left out when north.
 | `regional` | M3 storm framing (`frameStorm`, tilt 20°, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
 | `iss` | storm centre, range 400 km, tilt 1° | 400 km | 450 km | The floor, looking down |
 | `window` | storm centre, range 740 km, tilt 60° | 400 km | 830 km, horizon in view | The floor, looking toward the horizon |
+| `grazing` | storm centre, tilt 80° (range 1,439 km) | 400 km | 1,610 km, horizon at 44 % from the top | The most grazing orbit |
+| `limb` | storm centre, tilt 90°: the `grazing` camera, gaze raised 10° | 400 km | 1,610 km at the storm, horizon at 71 % from the top | The horizon and the limb |
 
 Heading is north. The storm centre is the track point of the reference hour. `iss` uses a 1° tilt
-because the orbit camera stops at 1,274 km; the surface camera takes over with any tilt.
+because the orbit camera stops at 1,274 km; the surface camera takes over with any tilt. `grazing`
+and `limb` are given at 400 km: the camera slides back to the floor range of its tilt.
 
 ### Horizon view
 
@@ -67,12 +71,56 @@ horizon sits in the upper third, the storm below the centre and the limb glows a
 of the bottom. Captures in [`immersive/horizon/`](immersive/horizon/): `R1-tilt-60-66-72-78.jpg`
 (no lead), `R1-tilt-lead.jpg` (68° and 100 km, 70° and 150 km, 72° and 200 km, 72° and 100 km),
 then the chosen view on the reference storms. Pressing it again
-returns to the storm frame; any camera input leaves it. Above the cloud tops only: below them the
+returns to the storm frame; any camera input leaves it, and a drag tilts on past it to the limb. Above the cloud tops only: below them the
 scene is not observed.
 
 Cost, `bench.mjs` desktop headless, 60×, afterglow 0, R1, R2, R5: frame cost p95 9.2 to 11.8 ms at the
 horizon view against 11.8 to 14.6 ms at `window` in the same run, no frame interval over 16.8 ms at p95.
 Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
+
+### Free tilt
+
+A vertical drag tilts the surface camera from straight down to 90° in one gesture (#394,
+[ADR 0032](adr/0032-free-camera-tilt.md)): right drag or Ctrl + drag with a mouse, two fingers on a
+touch screen, 0.005 rad per pixel, so about 310 px from straight down to 90°.
+
+- **0 to 80°: orbit.** The camera turns around the point at the screen centre. Where the range the
+  visitor chose would take it under the floor, it slides back along the floor instead of stopping:
+  from `iss`, `window` and the horizon view the drag no longer blocks.
+- **80 to 90°: raised gaze.** The camera stays where it is and looks up by up to 10°. At the floor
+  the horizon moves from 44 % to about 71 % of the screen height, the orbited point to about 78 %.
+- **Back.** Dragging down lowers the gaze first, then the tilt, and ends on the view the drag
+  started from: only zoom, pinch, flights and `Follow` change the chosen range. Zooming in at the
+  floor changes nothing; zooming out starts from where the camera is, and hands over to the globe
+  view once the camera, not the range, passes 1,274 km.
+- **Horizon and Follow.** Their compositions are unchanged. A drag from the horizon view tilts on
+  past it; a drag while following stops `Follow`, as any input.
+- **Point looked at.** The cloud relief windows and the flash cloud light follow the screen centre
+  on the ground up to 80° and stay at that point beyond (1,342 km ahead at the floor), instead of
+  jumping under the camera when the centre passes the horizon.
+
+Measured with `bench.mjs` on the five storms and the `grazing` and `limb` poses against production
+data, on the dev server, flights and frame cost on a local production build
+([`measurements.json`](immersive/free-tilt/measurements.json)):
+
+| | Desktop | Mobile (emulated) |
+|---|---|---|
+| GPU textures and buffers at `grazing` and `limb` | 366 MB, as at every pose | 244 MB, as at every pose |
+| Transfer, `window` to `grazing` to `limb` | at most 0.47 MB | at most 0.18 MB |
+| Near white pixels at `grazing` and `limb` | at most 0.1 % | at most 0.4 % |
+| Quality tier | `high` kept | `medium` kept |
+| 3 s flight into each pose | interval p95 16.8 ms, none over 50 ms | same |
+
+Frame cost, three interleaved rounds of `window`, `grazing` and `limb` per storm, two runs, median
+p95: `grazing` 8.1 to 11.3 ms and `limb` 7.5 to 12.1 ms, against 9.1 to 14.6 ms at `window` in the
+same runs; at p50 `limb` costs less than `window` in all ten storm runs and `grazing` in nine.
+Another session's GPU measurements shared the Mac, so `window` itself read over the 9.6 ms of the
+[final validation](#final-validation): the grazing views cost no more than `window`, which holds the
+budget on a quiet machine, but their own 10 ms is not shown alone. Five rounds on R5 with less load:
+`window` 9.8, `grazing` 9.1, `limb` 8.9 ms. The far view draws more sky and less ground, so `limb`
+is the cheapest storm pose. Captures in [`immersive/free-tilt/`](immersive/free-tilt/) (clock in
+Paris time): `R2-drag.jpg` and `R5-drag.jpg` (one right drag from `iss`: 1°, 35°, 70°, 89.8°; the drag
+back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
 
 ### Storm follow
 
