@@ -1,0 +1,410 @@
+{
+ "measured": "2026-10-30, local production build of feat/394-free-camera against production data, bench.mjs, headless Chromium on Metal (M4 Max), afterglow 0; another session's GPU measurements shared the Mac during most runs",
+ "full": {
+  "desktop": {
+   "note": "dev server, one pass per pose; frame costs not kept (shared GPU)",
+   "storms": [
+    {
+     "id": "R1",
+     "gpuMB": 366,
+     "transferMB": {
+      "windowToGrazing": 0.09,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.006,
+      "grazing": 0.001,
+      "limb": 0.001
+     },
+     "tier": {
+      "window": "high",
+      "grazing": "high",
+      "limb": "high"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R2",
+     "gpuMB": 366,
+     "transferMB": {
+      "windowToGrazing": 0.38,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.005,
+      "grazing": 0.001,
+      "limb": 0.001
+     },
+     "tier": {
+      "window": "high",
+      "grazing": "high",
+      "limb": "high"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 33.4,
+      "limb": 33.4
+     }
+    },
+    {
+     "id": "R3",
+     "gpuMB": 366,
+     "transferMB": {
+      "windowToGrazing": 0.01,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.003,
+      "grazing": 0.001,
+      "limb": 0.001
+     },
+     "tier": {
+      "window": "high",
+      "grazing": "high",
+      "limb": "high"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 33.2,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R4",
+     "gpuMB": 366,
+     "transferMB": {
+      "windowToGrazing": 0.47,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.006,
+      "grazing": 0,
+      "limb": 0
+     },
+     "tier": {
+      "window": "high",
+      "grazing": "high",
+      "limb": "high"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R5",
+     "gpuMB": 366,
+     "transferMB": {
+      "windowToGrazing": 0.37,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.002,
+      "grazing": 0,
+      "limb": 0
+     },
+     "tier": {
+      "window": "high",
+      "grazing": "high",
+      "limb": "high"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    }
+   ]
+  },
+  "mobile": {
+   "note": "dev server, one pass per pose; frame costs not kept (shared GPU)",
+   "storms": [
+    {
+     "id": "R1",
+     "gpuMB": 244,
+     "transferMB": {
+      "windowToGrazing": 0.04,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.011,
+      "grazing": 0.004,
+      "limb": 0.002
+     },
+     "tier": {
+      "window": "medium",
+      "grazing": "medium",
+      "limb": "medium"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R2",
+     "gpuMB": 244,
+     "transferMB": {
+      "windowToGrazing": 0.12,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.006,
+      "grazing": 0.002,
+      "limb": 0.002
+     },
+     "tier": {
+      "window": "medium",
+      "grazing": "medium",
+      "limb": "medium"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R3",
+     "gpuMB": 244,
+     "transferMB": {
+      "windowToGrazing": 0.0,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.005,
+      "grazing": 0.002,
+      "limb": 0.002
+     },
+     "tier": {
+      "window": "medium",
+      "grazing": "medium",
+      "limb": "medium"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R4",
+     "gpuMB": 244,
+     "transferMB": {
+      "windowToGrazing": 0.11,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.001,
+      "grazing": 0,
+      "limb": 0
+     },
+     "tier": {
+      "window": "medium",
+      "grazing": "medium",
+      "limb": "medium"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    },
+    {
+     "id": "R5",
+     "gpuMB": 244,
+     "transferMB": {
+      "windowToGrazing": 0.08,
+      "grazingToLimb": 0.0
+     },
+     "nearWhite": {
+      "window": 0.002,
+      "grazing": 0.001,
+      "limb": 0
+     },
+     "tier": {
+      "window": "medium",
+      "grazing": "medium",
+      "limb": "medium"
+     },
+     "flightIntervalMaxMs": {
+      "grazing": 16.8,
+      "limb": 16.8
+     }
+    }
+   ]
+  }
+ },
+ "interleaved": [
+  {
+   "run": 1,
+   "rounds": 3,
+   "frameCostMs": {
+    "R1": {
+     "window": {
+      "p50": 9.8,
+      "p95": 11
+     },
+     "grazing": {
+      "p50": 8,
+      "p95": 10.7
+     },
+     "limb": {
+      "p50": 7.3,
+      "p95": 9.9
+     }
+    },
+    "R2": {
+     "window": {
+      "p50": 8.8,
+      "p95": 11.8
+     },
+     "grazing": {
+      "p50": 7.6,
+      "p95": 8.1
+     },
+     "limb": {
+      "p50": 6.6,
+      "p95": 8.5
+     }
+    },
+    "R3": {
+     "window": {
+      "p50": 8.6,
+      "p95": 9.1
+     },
+     "grazing": {
+      "p50": 7.5,
+      "p95": 8.4
+     },
+     "limb": {
+      "p50": 6.1,
+      "p95": 7.6
+     }
+    },
+    "R4": {
+     "window": {
+      "p50": 9.2,
+      "p95": 10.4
+     },
+     "grazing": {
+      "p50": 8.5,
+      "p95": 9.2
+     },
+     "limb": {
+      "p50": 8.4,
+      "p95": 9.8
+     }
+    },
+    "R5": {
+     "window": {
+      "p50": 9,
+      "p95": 10.3
+     },
+     "grazing": {
+      "p50": 9.3,
+      "p95": 11.3
+     },
+     "limb": {
+      "p50": 7,
+      "p95": 12.1
+     }
+    }
+   }
+  },
+  {
+   "run": 2,
+   "rounds": 3,
+   "frameCostMs": {
+    "R1": {
+     "window": {
+      "p50": 9.4,
+      "p95": 11.4
+     },
+     "grazing": {
+      "p50": 8.2,
+      "p95": 9.9
+     },
+     "limb": {
+      "p50": 7.3,
+      "p95": 9.5
+     }
+    },
+    "R2": {
+     "window": {
+      "p50": 9.5,
+      "p95": 10.6
+     },
+     "grazing": {
+      "p50": 7.8,
+      "p95": 8.9
+     },
+     "limb": {
+      "p50": 6.5,
+      "p95": 7.7
+     }
+    },
+    "R3": {
+     "window": {
+      "p50": 9.4,
+      "p95": 10
+     },
+     "grazing": {
+      "p50": 7.5,
+      "p95": 8.6
+     },
+     "limb": {
+      "p50": 7,
+      "p95": 9.8
+     }
+    },
+    "R4": {
+     "window": {
+      "p50": 9.6,
+      "p95": 14.6
+     },
+     "grazing": {
+      "p50": 9.5,
+      "p95": 11.1
+     },
+     "limb": {
+      "p50": 5.5,
+      "p95": 7.5
+     }
+    },
+    "R5": {
+     "window": {
+      "p50": 9.2,
+      "p95": 12.1
+     },
+     "grazing": {
+      "p50": 7.9,
+      "p95": 9.1
+     },
+     "limb": {
+      "p50": 8,
+      "p95": 9.7
+     }
+    }
+   }
+  },
+  {
+   "run": 3,
+   "rounds": 5,
+   "note": "R5 alone, quieter Mac",
+   "frameCostMs": {
+    "R5": {
+     "window": {
+      "p50": 8.6,
+      "p95": 9.8
+     },
+     "grazing": {
+      "p50": 8.4,
+      "p95": 9.1
+     },
+     "limb": {
+      "p50": 6.1,
+      "p95": 8.9
+     }
+    }
+   }
+  }
+ ]
+}

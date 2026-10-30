@@ -1,6 +1,6 @@
 import { type PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { type CameraPose, type CameraView, easeInOut, Flight, type FlyToOptions, headingOf, kmToWorld, lookRotation, poseAt } from './flight';
+import { type CameraPose, type CameraView, easeInOut, Flight, FLIGHT, type FlyToOptions, headingOf, kmToWorld, lookRotation, poseAt } from './flight';
 import { IdleRotation } from './idle';
 import { rescaleDistance, rotateSpeedFor, type ZoomLimits, zoomLimits } from './orbit';
 import { latLonToVector } from './sun';
@@ -72,10 +72,12 @@ export function createGlobeControls(
 	const inputListeners = new Set<() => void>();
 	const userInput = () => { for (const listener of inputListeners) listener(); };
 	let flight: { path: Flight; start: number; done: (arrived: boolean) => void } | undefined;
-	// Roll left over from a flight, eased out on top of the orbit controls' world-up view.
+	// Roll left over from a flight or a hand-over, eased out on top of the orbit controls' or the surface view's pose.
 	let roll: { offset: Quaternion; start: number } | undefined;
 	// Set while the camera orbits a point on the ground instead of the globe centre.
 	let surface: SurfaceView | undefined;
+	// Radians the camera looks above its target, as last placed.
+	let gaze = 0;
 	let limits: ZoomLimits | undefined;
 	let previousTime: number | undefined;
 	let held = false;
@@ -89,19 +91,36 @@ export function createGlobeControls(
 		}
 		camera.quaternion.multiply(new Quaternion().slerp(roll.offset, 1 - easeInOut(t)));
 	};
-	const applyPose = ({ position, quaternion, target }: CameraPose) => {
-		camera.position.copy(position);
-		camera.quaternion.copy(quaternion);
-		controls.target.copy(target);
+	const applyPose = (pose: CameraPose) => {
+		camera.position.copy(pose.position);
+		camera.quaternion.copy(pose.quaternion);
+		controls.target.copy(pose.target);
+		gaze = pose.gaze ?? 0;
 	};
+	const currentPose = (): CameraPose => ({
+		position: camera.position.clone(),
+		target: controls.target.clone(),
+		quaternion: camera.quaternion.clone(),
+		gaze,
+	});
 	const setSurface = (view: SurfaceView) => {
 		surface = view;
 		controls.enabled = false;
 		applyPose(surfacePose(view, radius));
+		applyRoll();
+	};
+	/** Hands the current pose to a surface view, easing out the turn between them. */
+	const toSurface = (view: SurfaceView) => {
+		const shown = camera.quaternion.clone();
+		roll = undefined;
+		setSurface(view);
+		roll = { offset: camera.quaternion.clone().invert().multiply(shown), start: now() };
+		applyRoll();
 	};
 	/** Hands the current pose to the orbit controls, easing out the roll their world-up view adds. */
 	const toGlobe = () => {
 		surface = undefined;
+		gaze = 0;
 		controls.enabled = true;
 		controls.target.set(0, 0, 0);
 		const pose = camera.quaternion.clone();
@@ -117,7 +136,9 @@ export function createGlobeControls(
 		const { done } = flight;
 		flight = undefined;
 		if (controls.target.lengthSq() > 0) {
-			setSurface(surfaceFromPose(camera.position, camera.quaternion, controls.target.clone().setLength(radius)));
+			const pose = currentPose();
+			pose.target.setLength(radius);
+			toSurface(surfaceFromPose(pose));
 		} else {
 			toGlobe();
 		}
@@ -126,7 +147,7 @@ export function createGlobeControls(
 	};
 	const startFlight = (to: CameraPose, duration?: number) => {
 		endFlight(false);
-		const from = { position: camera.position.clone(), target: controls.target.clone(), quaternion: camera.quaternion.clone() };
+		const from = currentPose();
 		idle.start(now());
 		controls.enableDamping = false;
 		return new Promise<boolean>((resolve) => {
@@ -167,8 +188,9 @@ export function createGlobeControls(
 	const enterSurface = () => {
 		if (surface) return;
 		endFlight(false);
-		const target = camera.position.clone().setLength(radius);
-		setSurface(surfaceFromPose(camera.position, camera.quaternion, target));
+		const pose = currentPose();
+		pose.target.copy(camera.position).setLength(radius);
+		toSurface(surfaceFromPose(pose));
 	};
 
 	const onPointerDown = (event: PointerEvent) => {
@@ -223,7 +245,7 @@ export function createGlobeControls(
 			return;
 		}
 		if (!surface || gesture === 'globe') return;
-		if (gesture === 'tilt') setSurface(tiltSurface(surface, dx, dy, radius));
+		if (gesture === 'tilt') setSurface(tiltSurface(surface, dx, dy));
 		else if (gesture === 'pan') setSurface(panSurface(surface, dx, dy, radius, camera.fov, element.clientHeight || 1));
 		else if (gesture === 'pinch') zoom(-(spread() - spreadBefore) * 2);
 	};
@@ -239,13 +261,14 @@ export function createGlobeControls(
 		if (!active) return;
 		onEnd();
 		// Back at nadir from far enough: hand straight back to the globe view.
-		if (surface && surface.tilt === 0 && surface.range >= exitRange()) toGlobe();
+		if (surface && surface.tilt === 0 && surface.gaze === 0 && surface.range >= exitRange()) toGlobe();
 	};
 
 	const zoom = (pixels: number) => {
 		if (!surface) return;
 		const view = zoomSurface(surface, pixels, radius);
-		if (pixels > 0 && view.range > exitRange()) leaveSurface(view);
+		// The camera height, not the range: a grazing view slid back along the floor is still close.
+		if (pixels > 0 && surfacePose(view, radius).position.length() - radius > exitRange()) leaveSurface(view);
 		else setSurface(view);
 	};
 
@@ -281,7 +304,7 @@ export function createGlobeControls(
 		const orbitMin = limits?.min ?? controls.minDistance;
 		const onSurface = tilt > 0 || (preserveRange && requested + radius < orbitMin);
 		const base = onSurface ? 0 : radius;
-		const lowest = onSurface ? floorRange((tilt * Math.PI) / 180, radius) : orbitMin;
+		const lowest = onSurface ? floorRange((Math.min(tilt, FLIGHT.maxTiltDeg) * Math.PI) / 180, radius) : orbitMin;
 		const range = Math.min(Math.max(requested + base, lowest), limits?.max ?? controls.maxDistance);
 		const pose = poseAt(lat, lon, range - base, onSurface ? tilt : 0, radius, onSurface ? heading : 0);
 		if (onSurface && tilt === 0) pose.target.copy(pose.position).setLength(radius);
@@ -295,8 +318,10 @@ export function createGlobeControls(
 		place(options) {
 			if (flight) return;
 			const pose = destination(options);
-			if (pose.target.lengthSq() > 0) setSurface(surfaceFromPose(pose.position, pose.quaternion, pose.target));
-			else {
+			if (pose.target.lengthSq() > 0) {
+				roll = undefined;
+				setSurface(surfaceFromPose(pose));
+			} else {
 				if (surface) toGlobe();
 				applyPose(pose);
 			}
@@ -317,7 +342,7 @@ export function createGlobeControls(
 				lat: Math.asin(Math.max(-1, Math.min(1, direction.y))) * 180 / Math.PI,
 				lon: -Math.atan2(direction.z, direction.x) * 180 / Math.PI,
 				altitude: (surface ? surface.range : camera.position.length() - radius) / radius * 6371,
-				tilt: surface ? surface.tilt * 180 / Math.PI : 0,
+				tilt: surface ? (surface.tilt + surface.gaze) * 180 / Math.PI : 0,
 				heading: surface ? headingOf(surface.normal, surface.heading) : 0,
 			};
 		},
@@ -340,7 +365,10 @@ export function createGlobeControls(
 			}
 			const delta = previousTime === undefined ? 0 : Math.min((time - previousTime) / 1000, 0.1);
 			previousTime = time;
-			if (surface) return;
+			if (surface) {
+				if (roll) setSurface(surface);
+				return;
+			}
 			controls.autoRotate = !held && !reducedMotion.matches && idle.rotating(now());
 			if (limits) controls.rotateSpeed = rotateSpeedFor(camera.position.length(), radius, limits.fit);
 			controls.update(delta);

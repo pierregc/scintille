@@ -38,6 +38,7 @@ import {
 	styleFragmentShader,
 	sunFragmentShader,
 } from './volume.glsl';
+import { lookedAt } from '../surface';
 
 export { volumeFieldGlsl } from './field.glsl';
 
@@ -539,17 +540,14 @@ export function createCloudVolume({
 			const heightKm = (eye.length() - 1) * EARTH_RADIUS_KM;
 			const fov = (camera as Camera & { fov?: number }).fov ?? 35;
 			const cssAngle = (2 * Math.tan((fov * DEG) / 2)) / Math.max(1, view.height);
-			// The points looked at: the ground at a screen height, else under the camera. The coarse windows
-			// centre on the screen centre; the fine ones lower down, where the nearer ground is magnified.
-			// `slant` keeps the distance (km) to the last point found, or to the horizon.
+			// The points looked at: the ground at a screen height, never further than the point seen at the
+			// steepest tilt (`lookedAt`). The coarse windows centre on the screen centre; the fine ones lower
+			// down, where the nearer ground is magnified. `slant` keeps the distance (km) to the last one.
 			let slant = 0;
 			const groundAt = (ndcY: number): [number, number] => {
 				dir.set(0, ndcY, 0.5).unproject(camera as Camera & { projectionMatrixInverse: Matrix4 }).applyMatrix4(earthInverse).sub(eye).normalize();
-				const b = eye.dot(dir);
-				const disc = b * b - (eye.lengthSq() - 1);
-				const hit = disc > 0 && -b - Math.sqrt(disc) > 0;
-				slant = (hit ? -b - Math.sqrt(disc) : Math.sqrt(Math.max(eye.lengthSq() - 1, 0))) * EARTH_RADIUS_KM;
-				look.copy(hit ? dir.multiplyScalar(-b - Math.sqrt(disc)).add(eye) : eye).normalize();
+				lookedAt(eye, dir, 1, look);
+				slant = look.distanceTo(eye) * EARTH_RADIUS_KM;
 				return [Math.asin(look.y) / DEG, Math.atan2(-look.z, look.x) / DEG];
 			};
 			const centre = groundAt(0);
