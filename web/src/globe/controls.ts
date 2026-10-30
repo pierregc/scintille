@@ -72,7 +72,7 @@ export function createGlobeControls(
 	const inputListeners = new Set<() => void>();
 	const userInput = () => { for (const listener of inputListeners) listener(); };
 	let flight: { path: Flight; start: number; done: (arrived: boolean) => void } | undefined;
-	// Roll left over from a flight, eased out on top of the orbit controls' world-up view.
+	// Roll left over from a flight or a hand-over, eased out on top of the orbit controls' or the surface view's pose.
 	let roll: { offset: Quaternion; start: number } | undefined;
 	// Set while the camera orbits a point on the ground instead of the globe centre.
 	let surface: SurfaceView | undefined;
@@ -107,6 +107,15 @@ export function createGlobeControls(
 		surface = view;
 		controls.enabled = false;
 		applyPose(surfacePose(view, radius));
+		applyRoll();
+	};
+	/** Hands the current pose to a surface view, easing out the turn between them. */
+	const toSurface = (view: SurfaceView) => {
+		const shown = camera.quaternion.clone();
+		roll = undefined;
+		setSurface(view);
+		roll = { offset: camera.quaternion.clone().invert().multiply(shown), start: now() };
+		applyRoll();
 	};
 	/** Hands the current pose to the orbit controls, easing out the roll their world-up view adds. */
 	const toGlobe = () => {
@@ -129,7 +138,7 @@ export function createGlobeControls(
 		if (controls.target.lengthSq() > 0) {
 			const pose = currentPose();
 			pose.target.setLength(radius);
-			setSurface(surfaceFromPose(pose));
+			toSurface(surfaceFromPose(pose));
 		} else {
 			toGlobe();
 		}
@@ -181,7 +190,7 @@ export function createGlobeControls(
 		endFlight(false);
 		const pose = currentPose();
 		pose.target.copy(camera.position).setLength(radius);
-		setSurface(surfaceFromPose(pose));
+		toSurface(surfaceFromPose(pose));
 	};
 
 	const onPointerDown = (event: PointerEvent) => {
@@ -309,8 +318,10 @@ export function createGlobeControls(
 		place(options) {
 			if (flight) return;
 			const pose = destination(options);
-			if (pose.target.lengthSq() > 0) setSurface(surfaceFromPose(pose));
-			else {
+			if (pose.target.lengthSq() > 0) {
+				roll = undefined;
+				setSurface(surfaceFromPose(pose));
+			} else {
 				if (surface) toGlobe();
 				applyPose(pose);
 			}
@@ -354,7 +365,10 @@ export function createGlobeControls(
 			}
 			const delta = previousTime === undefined ? 0 : Math.min((time - previousTime) / 1000, 0.1);
 			previousTime = time;
-			if (surface) return;
+			if (surface) {
+				if (roll) setSurface(surface);
+				return;
+			}
 			controls.autoRotate = !held && !reducedMotion.matches && idle.rotating(now());
 			if (limits) controls.rotateSpeed = rotateSpeedFor(camera.position.length(), radius, limits.fit);
 			controls.update(delta);
