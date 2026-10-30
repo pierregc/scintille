@@ -108,9 +108,9 @@ void main() {
 		slant = dot(normalize(crossing), normalize(cameraPosition - crossing));
 		opacity = cloudOpacityAt(crossing);
 #ifdef VOLUME
-		// Where the volume draws the clouds, its eased opacity veils the channel (ADR 0031).
+		// Where the volume draws the clouds, its lighter veil dims the channel (ADR 0031).
 		float known = cloudKnownAt(crossing);
-		if (known > 0.0) opacity = mix(opacity, capOpacity(volumeSample(volumeField, volumeLatLon(crossing)).r), known);
+		if (known > 0.0) opacity = mix(opacity, veilOpacity(volumeSample(volumeField, volumeLatLon(crossing)).r), known);
 #endif
 	}
 #endif

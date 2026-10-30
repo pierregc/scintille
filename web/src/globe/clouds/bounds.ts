@@ -17,11 +17,13 @@ export interface StyleBounds {
 	maxLiftKm: number;
 }
 
-/** Opacity of the densest column seen straight down, low enough for flashes and the ground to show through, and the cover up to which a column is drawn as observed (ADR 0031). */
-export const VOLUME_MAX_OPACITY = 0.8;
+/** Opacity of the densest column seen straight down, and the cover up to which a column is drawn as observed (ADR 0031). */
+export const VOLUME_MAX_OPACITY = 0.95;
 export const VOLUME_KNEE = 0.5;
+/** Opacity of the densest cloud over a flash, lower so flashes show through (ADR 0031). */
+export const VEIL_MAX_OPACITY = 0.8;
 
-/** Opacity drawn straight down for a cover: as observed up to the knee, then eased to the cap (twin of `capOpacity`). */
+/** Opacity for a cover: as observed up to the knee, then eased to the cap (twin of the shaders' `easeOpacity`). */
 export function capOpacity(cover: number, cap = VOLUME_MAX_OPACITY, knee = VOLUME_KNEE): number {
 	const a = Math.min(1, Math.max(0, cover));
 	return a <= knee ? a : knee + ((a - knee) * (cap - knee)) / (1 - knee);
@@ -31,10 +33,10 @@ const OPAQUE = 0.98;
 const CLEAR = 0.02;
 
 /**
- * Compares two RGBA8 windows of `size`² texels laid out as the field bake writes them (cover, top / 20 km,
- * core, heights known): the observations and their styling, over blocks of `blockKm`.
+ * Compares two windows of `size`² texels laid out as the field bake writes them (cover, top / 20 km, core,
+ * heights known, each 0 to 1): the observations and their styling, over blocks of `blockKm`.
  */
-export function styleBounds(observed: Uint8Array, styled: Uint8Array, size: number, texelKm: number, blockKm = 4): StyleBounds {
+export function styleBounds(observed: Float32Array, styled: Float32Array, size: number, texelKm: number, blockKm = 4): StyleBounds {
 	const block = Math.max(1, Math.round(blockKm / texelKm));
 	const diffs: number[] = [];
 	const drawn: number[] = [];
@@ -51,13 +53,13 @@ export function styleBounds(observed: Uint8Array, styled: Uint8Array, size: numb
 			for (let y = by; y < by + block; y++) {
 				for (let x = bx; x < bx + block; x++) {
 					const i = (y * size + x) * 4;
-					if (observed[i + 3] < 128 || styled[i + 3] < 128) continue;
+					if (observed[i + 3] < 0.5 || styled[i + 3] < 0.5) continue;
 					known++;
-					const a = observed[i] / 255;
+					const a = observed[i];
 					seen += a;
-					made += styled[i] / 255;
-					shown += capOpacity(styled[i] / 255);
-					const change = ((styled[i + 1] - observed[i + 1]) / 255) * 20;
+					made += styled[i];
+					shown += capOpacity(styled[i]);
+					const change = (styled[i + 1] - observed[i + 1]) * 20;
 					if (a >= OPAQUE) maxTopKm = Math.max(maxTopKm, Math.abs(change));
 					else if (a > CLEAR) {
 						semi++;

@@ -152,9 +152,10 @@ float streaks(vec3 p, vec3 along, float width, float len) {
 	return clamp(sum * 0.45, -1.0, 1.0);
 }
 
-// Rounded domes: inverted ridges, zero on average (the mean of 1 - |gnoise| is 0.707).
+// Rounded domes between soft creases about half their size wide, zero on average (mean 0.5115).
 float billows(vec3 p, float size) {
-	return (0.707 - abs(gnoise(p / size + vec3(5.0, 41.0, 13.0)))) * 2.2 * band(size);
+	float n = gnoise(p / size + vec3(5.0, 41.0, 13.0));
+	return (sqrt(n * n + 0.15) - 0.5115) * 2.2 * band(size);
 }
 
 // Crisp strokes from soft noise: keeps the sign, sharpens the shoulders.
@@ -237,7 +238,8 @@ void main() {
 	// are mostly the shadows of domes, cast away from the sun. Keep part of the cover, at most what
 	// the visible ratio (never under 0.5) can have taken away, sink the shadow a little and raise
 	// the dome found on its sunward side.
-	float sunlit = smoothstep(-0.05, 0.05, dot(n, sunDir));
+	// Under a high sun shadows are too short for that: dips stay as observed, crevices or thinner spots.
+	float sunlit = smoothstep(-0.05, 0.05, dot(n, sunDir)) * (1.0 - smoothstep(0.5, 0.8, dot(n, sunDir)));
 	float inside = smoothstep(0.8, 0.95, aSum / 8.0) * (1.0 - edge) * smoothstep(6.0, 8.0, top) * sunlit;
 	float dip = (1.0 - a) * inside;
 	a = max(a, min(a + 0.35 * dip, min(1.0, 2.0 * a)));
@@ -272,7 +274,7 @@ void main() {
 	float lumpy = max(rise, 0.6 * activity) * (1.0 - lift);
 	float cells = opaque * (1.0 - high) * smoothstep(1.5, 3.0, top) * smoothstep(0.2, 0.6, max(roughness, observedTop - hMean));
 	float swell = gnoise(p / 14.0 + vec3(3.0, 7.0, 11.0)) * band(14.0);
-	float relief = lumpy * 0.75 * billows(p, 4.0) + 0.5 * cells * billows(p, 3.5)
+	float relief = lumpy * (0.6 * billows(p, 4.0) + 0.45 * billows(p, 8.0)) + 0.5 * cells * billows(p, 3.5)
 		+ (0.15 * high * opaque + 0.3 * mid * opaque + 0.1 * low) * (1.0 - max(lumpy, cells)) * swell
 		+ 0.8 * dome - 0.25 * dip;
 	// Styling moves a top at most 0.95 km from its observation; lifted edges move from their lifted top.
@@ -282,13 +284,14 @@ void main() {
 }
 `;
 
-/** Bakes one window of sunlight through the other columns: at the ground and at each column's own top. */
+/** Bakes one window of sunlight through the other columns, at the ground and at each column's own top, and the sky each top sees. */
 export const sunFragmentShader = /* glsl */ `
 precision highp float;
 varying vec2 vUv;
 uniform vec4 bakeWindow;
 uniform vec3 sunDir;
 uniform float lightGain;
+uniform float skyViewOn;
 ${volumeFieldGlsl}
 ${overlapGlsl}
 ${windowGlsl}
@@ -305,7 +308,7 @@ float towardSun(vec3 n, float height) {
 		vec4 f = volumeSample(volumeField, volumeLatLon(p + q));
 		if (f.a > 0.5) {
 			vec3 c = volumeColumn(f);
-			tau += c.z * overlap(h0, h1, c.x, c.y, ds);
+			tau += lightSigma(f, c) * overlap(h0, h1, c.x, c.y, ds);
 		}
 		p = q;
 		ds *= 1.22;
@@ -313,17 +316,40 @@ float towardSun(vec3 n, float height) {
 	return exp(-tau * lightGain);
 }
 
+// Share of the sky a cloud top sees past its neighbours' tops, searched 1.5 to 12 km away in
+// eight directions: low in the creases between turrets, 1 on a top above its surroundings.
+float skyView(vec3 n, vec2 latLon, float top) {
+	vec3 east = vec3(-sin(latLon.y), 0.0, -cos(latLon.y));
+	vec3 north = vec3(-sin(latLon.x) * cos(latLon.y), cos(latLon.x), sin(latLon.x) * sin(latLon.y));
+	float view = 0.0;
+	for (int i = 0; i < 8; i++) {
+		float angle = (float(i) + 0.5) * 0.785398163;
+		vec3 dir = cos(angle) * east + sin(angle) * north;
+		float sinH = 0.0;
+		for (int j = 0; j < 4; j++) {
+			float km = 1.5 * exp2(float(j));
+			vec4 s = volumeSample(volumeField, volumeLatLon(n * 6371.0 + dir * km));
+			float dz = (s.a > 0.5 ? s.g * 20.0 * smoothstep(0.3, 0.8, s.r) : 0.0) - top;
+			sinH = max(sinH, dz * inversesqrt(dz * dz + km * km));
+		}
+		view += 1.0 - sinH * sinH;
+	}
+	return view / 8.0;
+}
+
 void main() {
 	vec2 latLon = bakeLatLon(vUv);
 	vec3 n = bakeDirection(latLon);
 	// Night side: nothing reads sunlight here (the ground's direct light and the tops' day factor are 0).
 	if (dot(n, sunDir) < -0.05) {
-		gl_FragColor = vec4(1.0, 1.0, 0.0, 1.0);
+		gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 		return;
 	}
 	vec4 f = volumeSample(volumeField, latLon);
+	// Only dense tops in the fine windows read it: in coarser ones the search is finer than a texel.
+	bool dense = skyViewOn > 0.5 && f.a > 0.5 && f.r > 0.5;
 	float top = f.a > 0.5 ? f.g * 20.0 : 10.5;
-	gl_FragColor = vec4(towardSun(n, 0.05), towardSun(n, top + 0.05), 0.0, 1.0);
+	gl_FragColor = vec4(towardSun(n, 0.05), towardSun(n, top + 0.05), dense ? skyView(n, latLon, top) : 1.0, 1.0);
 }
 `;
 
@@ -343,6 +369,8 @@ uniform float pixelAngle;
 uniform vec3 sunDir;
 uniform float lightGain;
 uniform float scatterGain;
+uniform float noonExposure;
+uniform float noonRelief;
 uniform float relief;
 uniform float frameJitter;
 uniform int maxSamples;
@@ -367,7 +395,11 @@ vec2 sphere(vec3 ro, vec3 rd, float r) {
 
 float hg(float c, float g) { return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5); }
 
-float topAt(vec2 latLon) { return volumeSample(volumeField, latLon).g * 20.0; }
+// Styled top (km) at a point, or a stand-in where heights are unknown.
+float topAt(vec2 latLon, float unknown) {
+	vec4 f = volumeSample(volumeField, latLon);
+	return f.a > 0.5 ? f.g * 20.0 : unknown;
+}
 
 // Light scattered toward the eye over a crossing of len km of a column of extinction sigma, by
 // light that fades as exp(-rate * depth below the top); depth is d0 at the entry and grows by
@@ -379,12 +411,12 @@ float crossing(float sigma, float rate, float d0, float descent, float len) {
 	return fade * sigma / k * (1.0 - exp(-k * len));
 }
 
-// Normal of the styled top surface at a point, from its slopes over about one pixel of ground.
-vec3 surfaceNormal(vec2 latLon, vec3 up, float spanKm) {
+// Normal of the styled top surface at a point, from its slopes over spanKm; unknown tops count as level.
+vec3 surfaceNormal(vec2 latLon, vec3 up, float spanKm, float top) {
 	float dLat = spanKm / R;
 	float dLon = spanKm / (R * max(cos(latLon.x), 0.2));
-	float sx = (topAt(latLon + vec2(0.0, dLon)) - topAt(latLon - vec2(0.0, dLon))) / (2.0 * spanKm);
-	float sy = (topAt(latLon + vec2(dLat, 0.0)) - topAt(latLon - vec2(dLat, 0.0))) / (2.0 * spanKm);
+	float sx = (topAt(latLon + vec2(0.0, dLon), top) - topAt(latLon - vec2(0.0, dLon), top)) / (2.0 * spanKm);
+	float sy = (topAt(latLon + vec2(dLat, 0.0), top) - topAt(latLon - vec2(dLat, 0.0), top)) / (2.0 * spanKm);
 	vec3 east = vec3(-sin(latLon.y), 0.0, -cos(latLon.y));
 	vec3 north = vec3(-sin(latLon.x) * cos(latLon.y), cos(latLon.x), sin(latLon.x) * sin(latLon.y));
 	return normalize(up - (east * sx + north * sy) * relief);
@@ -481,19 +513,24 @@ void main() {
 				if (day > 0.0) {
 					float d0 = max(col.y - (length(ro + rd * ta) - R), 0.0);
 					// A wall facing the sun, with lower cloud or clear air on its sunward side, takes the sun
-					// directly instead of through the column above it.
+					// directly at its own incidence: grey under a high sun, as bright as the tops under a low one.
 					vec3 sunSide = sunDir - nrm * s;
+					float wall = 1.0;
 					if (s > 0.05 && d0 > 0.3 && length(sunSide) > 1e-3) {
-						float sideTop = topAt(volumeLatLon(ps + normalize(sunSide) * 1.5));
-						d0 = mix(d0, 0.0, smoothstep(-0.5, 1.5, h - sideTop));
+						float sideTop = topAt(volumeLatLon(ps + normalize(sunSide) * 1.5), 0.0);
+						float exposed = smoothstep(-0.5, 1.5, h - sideTop);
+						d0 = mix(d0, 0.0, exposed);
+						wall = mix(1.0, min((length(sunSide) + 0.35) / (s + 0.35), 1.0), exposed);
 					}
 					float descent = -rise;
-					float k = sigma * lightGain / max(s, 0.25);
-					float sunTop = volumeSample(volumeSun, ll).g * day;
+					float k = lightSigma(f, col) * lightGain / max(s, 0.25);
+					vec4 sunBake = volumeSample(volumeSun, ll);
+					float sunTop = sunBake.g * day;
+					float view = sunBake.b;
 					// Relief: the top surface lit by its own slope, fading within about a kilometre; only read
 					// where it shows (near the top, on a crossing that is not nearly clear).
 					vec3 normal = nrm;
-					if (d0 < 2.5 && alpha > 0.02) normal = surfaceNormal(ll, nrm, max(foot, 2.0));
+					if (d0 < 2.5 && alpha > 0.02) normal = surfaceNormal(ll, nrm, max(foot, 2.0), col.y);
 					float tilt = clamp(dot(normal, sunDir) / max(s, 0.05), 0.0, 1.8);
 					// Relief shows most under a low sun, and only on dense cloud.
 					float m = mix(0.5, 0.9, 1.0 - smoothstep(0.2, 0.6, s)) * (tilt - 1.0) * smoothstep(0.5, 0.9, f.r);
@@ -501,16 +538,28 @@ void main() {
 					float soft = sqrt(sunTop) * (crossing(sigma, 0.5 * k, d0, descent, len) + 0.5 * m * crossing(sigma, 0.5 * k + 1.2, d0, descent, len));
 					float deep = sqrt(sqrt(sunTop)) * crossing(sigma, 0.25 * k, d0, descent, len);
 					open = mix(0.55, 1.0, clamp(dot(normal, nrm), 0.0, 1.0));
+					// Under a high sun, dense tops show their shape by the incidence of their 3 km slopes, drawn
+					// steeper (hidden when looking along the sun), and by creases that trap some sunlight.
+					float dense = smoothstep(0.5, 0.9, f.r);
+					float high = smoothstep(0.25, 0.6, s);
+					float noon = high * dense * exp(-d0) * (1.0 - smoothstep(0.75, 0.95, -c));
+					vec3 broad = noon > 0.02 ? surfaceNormal(ll, nrm, max(foot, 3.0), col.y) : nrm;
+					vec3 steep = normalize(broad + (broad - nrm * dot(broad, nrm)) * (noonRelief - 1.0));
+					float incidence = (max(dot(steep, sunDir), 0.0) + 0.25) / (max(s, 0.0) + 0.25);
+					float surface = mix(1.0, incidence, noon) * wall * mix(1.0, view, 0.35 * dense * high);
 					// The sun reddens through the air below it: high tops stay white at a low sun, low cloud
 					// turns peach, and only near sunset do anvils go ivory and pink.
 					float air = exp(-h / 8.0) / max(s + 0.04, 0.03);
-					vec3 sunColor = vec3(1.0, 0.97, 0.93) * exp(-max(air - 1.0, 0.0) * vec3(0.03, 0.075, 0.17));
-					float powder = 1.0 - exp(-2.0 * sigma * lightGain);
+					vec3 sunColor = mix(vec3(1.0, 0.97, 0.93), vec3(1.0), smoothstep(0.3, 0.8, s)) * exp(-max(air - 1.0, 0.0) * vec3(0.03, 0.075, 0.17));
+					// Thin columns send back less light than thick ones, whatever their height.
+					float powder = 1.0 - exp(2.0 * lightGain * log(1.0 - veilOpacity(f.r)));
 					// A low sun lights tops at a grazing angle; the eye (and the flat layer, by sqrt) keeps them bright.
 					float grazing = clamp(0.95 * pow(max(s, 0.05), -0.6), 1.0, 2.2);
+					// Under a high sun the exposure comes down, so sunlit tops stay below white with their relief.
+					grazing *= mix(1.0, noonExposure, smoothstep(0.3, 0.8, s));
 					// Thick clouds send back most of the sunlight they get through many scatterings: their
 					// brightness follows their real depth, not the transparency kept for the flashes.
-					lit = sunColor * (phaseSun * direct + phaseSoft * soft + 0.25 * deep) * mix(0.6, 1.0, powder) * scatterGain * grazing;
+					lit = sunColor * (phaseSun * direct + phaseSoft * soft + 0.25 * deep) * mix(0.6, 1.0, powder) * scatterGain * grazing * surface;
 				}
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
@@ -613,13 +662,24 @@ uniform vec2 freshSize;
 uniform vec2 phase;
 uniform vec3 flashColor;
 uniform float fade;
+
+// Bright whites ease toward 1 instead of clipping, so sunlit tops keep their shading; the
+// brightest channel sets the curve, so peach and ivory keep their hue.
+vec3 shoulder(vec3 x) {
+	const float k = 0.6;
+	float m = max(max(x.r, x.g), x.b);
+	if (m <= k) return x;
+	return x * (k + (1.0 - k) * (1.0 - exp(-(m - k) / (1.0 - k)))) / m;
+}
+
 void main() {
 	vec4 c = texture2D(resolved, vUv);
 	// The flashes' glow comes straight from this frame's quarter, never from the history.
 	vec2 q = ((vUv * marchSize - phase - 0.5) / 2.0 + 0.5) / freshSize;
 	float glow = texture2D(freshDepth, q).g;
 	float coverage = (1.0 - c.a) * fade;
-	gl_FragColor = vec4((c.rgb + flashColor * glow) / max(1.0 - c.a, 1e-3), coverage);
+	float shown = max(1.0 - c.a, 1e-3);
+	gl_FragColor = vec4(shoulder(c.rgb / shown) + flashColor * glow / shown, coverage);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

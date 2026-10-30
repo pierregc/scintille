@@ -207,7 +207,7 @@ void main() {
 
 	float opacity = cloudOpacity(vUv, geo, uvDx, uvDy);
 #ifdef VOLUME
-	// Near the ground, the flat layer eases dense clouds like the volume, so a storm is as see-through
+	// Near the ground, the flat layer eases dense clouds like the volume, so a storm looks as dense
 	// whether or not its heights are known.
 	opacity = mix(opacity, capOpacity(opacity / max(cloudMaxOpacity, 1e-3)), volumeOn);
 #endif

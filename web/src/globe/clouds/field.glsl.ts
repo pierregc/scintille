@@ -9,6 +9,7 @@ uniform vec4 volumeWindows[4];
 uniform float volumeOn;
 uniform float volumeMaxOpacity;
 uniform float volumeKnee;
+uniform float volumeVeilOpacity;
 
 // Latitude and longitude (radians) of a direction in the Earth's frame.
 vec2 volumeLatLon(vec3 n) {
@@ -44,17 +45,21 @@ vec4 volumeSample(highp sampler2DArray map, vec2 latLon) {
 		if (k == 3) return vec4(fine.rgb, fine.a * (1.0 - edge));
 		if (edge <= 0.0) return fine;
 		vec3 c = volumeWindowUv(latLon, k + 1);
+		if (c.z >= 0.98) return fine;
 		return mix(fine, textureLod(map, vec3(c.xy, float(k + 1)), 0.0), edge);
 	}
 	return vec4(0.0);
 }
 
-// Opacity drawn straight down for a cover: as observed up to the knee, then eased to the cap at
-// full cover, so the densest clouds let flashes and the ground show through (ADR 0031).
-float capOpacity(float cover) {
+// Opacity for a cover: as observed up to the knee, then eased to a cap at full cover (ADR 0031).
+float easeOpacity(float cover, float cap) {
 	float a = clamp(cover, 0.0, 1.0);
-	return a <= volumeKnee ? a : volumeKnee + (a - volumeKnee) * (volumeMaxOpacity - volumeKnee) / (1.0 - volumeKnee);
+	return a <= volumeKnee ? a : volumeKnee + (a - volumeKnee) * (cap - volumeKnee) / (1.0 - volumeKnee);
 }
+// Opacity of the clouds drawn straight down.
+float capOpacity(float cover) { return easeOpacity(cover, volumeMaxOpacity); }
+// Opacity of the clouds over a flash, lower so the densest clouds let flashes show through.
+float veilOpacity(float cover) { return easeOpacity(cover, volumeVeilOpacity); }
 
 // Base and top (km above sea level) and extinction (per km) of the column over a field texel:
 // observed top and cover, assumed thickness, opacity straight down eased by capOpacity.
@@ -68,6 +73,10 @@ vec3 volumeColumn(vec4 f) {
 	float base = max(0.0, min(max(0.3, top - thick), top - 0.3));
 	return vec3(base, top, -log(1.0 - a) / max(top - base, 0.05));
 }
+
+// Extinction (per km) sunlight meets in a column, from the lighter veil: it sets how deep light and
+// shadows reach, whatever the opacity the cloud is drawn with.
+float lightSigma(vec4 f, vec3 col) { return -log(1.0 - veilOpacity(f.r)) / max(col.y - col.x, 0.05); }
 
 // Share of a direction (Earth's frame) where the volume draws the clouds: heights known there.
 float cloudKnownAt(vec3 direction) {

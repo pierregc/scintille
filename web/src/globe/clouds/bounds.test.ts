@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { capOpacity, styleBounds, VOLUME_KNEE, VOLUME_MAX_OPACITY } from './bounds';
+import { capOpacity, styleBounds, VEIL_MAX_OPACITY, VOLUME_KNEE, VOLUME_MAX_OPACITY } from './bounds';
 
 const SIZE = 16;
 
-function field(texel: (x: number, y: number) => [number, number, number, number]): Uint8Array {
-	const data = new Uint8Array(SIZE * SIZE * 4);
+// Texels given in steps of 1/255, as an 8-bit bake would hold them.
+function field(texel: (x: number, y: number) => [number, number, number, number]): Float32Array {
+	const data = new Float32Array(SIZE * SIZE * 4);
 	for (let y = 0; y < SIZE; y++) {
-		for (let x = 0; x < SIZE; x++) data.set(texel(x, y), (y * SIZE + x) * 4);
+		for (let x = 0; x < SIZE; x++) data.set(texel(x, y).map((v) => v / 255), (y * SIZE + x) * 4);
 	}
 	return data;
 }
@@ -21,8 +22,8 @@ describe('styleBounds', () => {
 		const observed = field(() => [128, 100, 0, 255]);
 		const styled = field((x, y) => [(x + y) % 2 === 0 ? 168 : 88, 100, 0, 255]);
 		const bounds = styleBounds(observed, styled, SIZE, 1);
-		expect(bounds.meanAbs).toBeLessThan(1e-9);
-		expect(bounds.maxAbs).toBeLessThan(1e-9);
+		expect(bounds.meanAbs).toBeLessThan(1e-6);
+		expect(bounds.maxAbs).toBeLessThan(1e-6);
 	});
 
 	it('reports a uniform brightening as a bias', () => {
@@ -60,6 +61,12 @@ describe('capOpacity', () => {
 		expect(capOpacity(1)).toBeCloseTo(VOLUME_MAX_OPACITY, 9);
 		expect(capOpacity(0.75)).toBeCloseTo((VOLUME_KNEE + VOLUME_MAX_OPACITY) / 2, 9);
 		expect(capOpacity(2)).toBeCloseTo(VOLUME_MAX_OPACITY, 9);
+	});
+
+	it('veils flashes with the same knee eased to a lower cap', () => {
+		expect(VEIL_MAX_OPACITY).toBeLessThan(VOLUME_MAX_OPACITY);
+		expect(capOpacity(0.3, VEIL_MAX_OPACITY)).toBeCloseTo(0.3, 9);
+		expect(capOpacity(1, VEIL_MAX_OPACITY)).toBeCloseTo(VEIL_MAX_OPACITY, 9);
 	});
 });
 

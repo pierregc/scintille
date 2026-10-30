@@ -70,19 +70,60 @@ The maintainer's brief describes ten genera seen from space and the light of a l
 | A dome rises above the anvil and casts a small shadow | Domes on tops above their 8 km ring, computed shadows | Yes |
 | A low sun reveals every bump with stretched shadows | Stronger relief at a grazing sun, long cast shadows | Yes |
 | Ivory, peach or pink, blue-grey hollows | Sun reddened by the air under each height, blue-grey sky ambient | Yes |
-| A high sun flattens shadows, surfaces look almost flat | Relief softened at noon, plain whites | Yes |
+| A high sun flattens shadows, surfaces look almost flat | Short shadows; relief on towers, overshooting tops, walls and creases; broad anvils smooth; whites kept below white | Yes |
 | Cirrus: filaments, wisps, nearly invisible | Thin veil on semi-transparent edges, fibres along iso-lines | Partly |
 | Cumulus: islands of relief, shadow beside them | Relief and ground shadow where the infrared sees them | Partly |
 | Stratocumulus: closed and open cells | No invented cells: too warm for the infrared | No |
 | Repeating, mechanical motif (what to avoid) | No periodic texture anywhere | Avoided |
 
+## Midday
+
+The first version of the PR looked right at dawn and dusk but flat at noon, and softer than the flat
+layer. Measured on replays of 2026-10-29 at local noon (sun 64 to 85°), with three independent
+analyses (code, captures, research on astronaut photographs at a high sun):
+
+| Cause | Effect | Change |
+|---|---|---|
+| Sunlit colour above 1 on every cloud pixel, no tone curve | Clipped to plain white: no shading could show | Highlight shoulder from 0.6, hue kept; exposure 0.86 under a high sun |
+| Opacity eased to 0.8 | 20 % of the sea through every deck: grey, see-through clouds, observed texture squashed | Clouds eased to 0.95; flashes still veiled as if 0.8 |
+| Slope term halved under a high sun, read over 4 km | Under 1 % of shading from relief | Incidence of 3 km slopes on dense tops, 1.5× steeper, faded when looking along the sun; grey sun-facing walls; creases from the sky each top sees |
+| 1 km window on the screen centre | Magnified foreground drawn from 2 km texels, blocky holes at dusk | Fine windows centred lower on screen, kept nested |
+| Tops stored in 8 bits (78 m steps) | Contour stripes inside towers | Field kept in half floats |
+| Billows `0.707 − \|n\|` | Sharp ridges, tops raised 0.9 km on average where they apply | Rounded domes, zero on average, at 4 and 8 km on active tops |
+
+Old (first version of the PR) on the left, now on the right.
+
+Towers at noon, seen from above: the contour stripes are gone, the tops whiter.
+![Towers at noon](immersive/cloud-look/noon-towers.jpg)
+
+Storm follow at noon: white decks instead of grey, shaded towers.
+![Follow at noon](immersive/cloud-look/noon-follow.jpg)
+
+Nadir at noon: as white and smooth as photographs at a high sun.
+![Nadir at noon](immersive/cloud-look/noon-nadir.jpg)
+
+Dusk keeps its warm light and long shadows.
+![Dusk](immersive/cloud-look/dusk-after-noon.jpg)
+
+**Tried and rejected.** Drawing slopes 4× steeper under a high sun, a larger swell and lumps on
+every sheet gave relief everywhere, but as grey marbling seen from above and a dimpled deck at dusk
+(left: rejected, right: kept):
+![Rejected](immersive/cloud-look/noon-rejected.jpg)
+
+Astronaut photographs at a high sun (ISS029-E-7925, ISS015-E-27689, ISS006-E-23043,
+ISS017-E-14836, ISS024-E-5396) show relief as bright rounded lumps on overshooting tops, grey walls
+in oblique views and short shadows, while broad anvils stay smooth and nearly white. The kept
+version follows that: noon relief is where the clouds have shape, not painted on every deck.
+
+Still softer than the flat layer: the march draws half the screen resolution, so small cumulus and
+edges lose some sharpness (about 0.7 of the flat layer's finest detail in oblique views).
+
 ## Bounds and cost
 
-Style bounds (ADR 0030 rule 2) hold at five places, read back from the shader with
-`cloudVolume.styleCheck()`: mean cover difference at most 0.0013 (bound 0.05), worst 4 km block
-0.064 (bound 0.1), saturated tops within 0.94 km (bound 1 km). Frame cost on the reference Mac stays
-at the old renderer's level (−2.3 to +1.1 ms by pose). Tables in
-[ADR 0031](adr/0031-cloud-look.md#measurements).
+Style bounds (ADR 0030 rule 2) hold at five places, read back from the shader in full precision
+with `cloudVolume.styleCheck()`: mean cover difference at most 0.0013 (bound 0.05), worst 4 km block
+0.073 (bound 0.1), saturated tops within 0.95 km (bound 1 km). Frame cost on the reference Mac stays
+at the first version's level. Tables in [ADR 0031](adr/0031-cloud-look.md#measurements).
 
 No new R2 object or byte: the renderer uses the tiles already published.
 

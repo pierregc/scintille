@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { halton, marchPhase, volumeFade, VOLUME_FADE_KM, WINDOW_TEXEL_KM, windowAround } from './volume';
+import { halton, marchPhase, NEAR_MAX_KM, volumeFade, VOLUME_FADE_KM, WINDOW_TEXEL_KM, windowAround, within } from './volume';
 
 const DEG = Math.PI / 180;
 const KM_PER_DEGREE = (6371 * Math.PI) / 180;
@@ -24,6 +24,38 @@ describe('windowAround', () => {
 	it('nests the windows', () => {
 		const spans = WINDOW_TEXEL_KM.map((_, k) => windowAround(-14.56, -44.26, k, 512).halfLat);
 		for (let k = 1; k < spans.length; k++) expect(spans[k]).toBeCloseTo(2 * spans[k - 1], 9);
+	});
+});
+
+describe('within', () => {
+	const km = (a: [number, number], b: [number, number]) => {
+		const c = Math.sin(a[0] * DEG) * Math.sin(b[0] * DEG) + Math.cos(a[0] * DEG) * Math.cos(b[0] * DEG) * Math.cos((a[1] - b[1]) * DEG);
+		return Math.acos(Math.min(1, c)) * 6371;
+	};
+
+	it('keeps a point that is close enough and pulls a far one back along the great circle', () => {
+		expect(within([10, 20], [11, 20], 400)).toEqual([11, 20]);
+		const pulled = within([10, 20], [10, 40], 400);
+		expect(km([10, 20], pulled)).toBeCloseTo(400, 3);
+		expect(km(pulled, [10, 40]) + 400).toBeCloseTo(km([10, 20], [10, 40]), 3);
+	});
+
+	it('keeps the 2 km window inside the 4 km one wherever the fine centre is pulled to', () => {
+		let seed = 7;
+		const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+		for (let n = 0; n < 2000; n++) {
+			const centre: [number, number] = [(random() - 0.5) * 140, (random() - 0.5) * 360];
+			const far: [number, number] = [Math.max(-80, Math.min(80, centre[0] + (random() - 0.5) * 30)), centre[1] + (random() - 0.5) * 30];
+			const near = within(centre, far, NEAR_MAX_KM);
+			const fine = windowAround(near[0], near[1], 1, 512);
+			const coarse = windowAround(centre[0], centre[1], 2, 512);
+			for (const [u, v] of [[-0.96, -0.96], [0.96, -0.96], [-0.96, 0.96], [0.96, 0.96]]) {
+				const lat = fine.lat + v * fine.halfLat;
+				const lon = fine.lon + u * fine.halfLon;
+				const dLon = ((((lon - coarse.lon + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+				expect(Math.max(Math.abs(dLon / coarse.halfLon), Math.abs((lat - coarse.lat) / coarse.halfLat))).toBeLessThan(0.98);
+			}
+		}
 	});
 });
 

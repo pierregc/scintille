@@ -71,7 +71,7 @@ void main() {
 		float opacity = cloudOpacityAt(normal);
 #ifdef VOLUME
 		float known = cloudKnownAt(normal);
-		if (known > 0.0) opacity = mix(opacity, capOpacity(volumeSample(volumeField, volumeLatLon(normal)).r), known);
+		if (known > 0.0) opacity = mix(opacity, veilOpacity(volumeSample(volumeField, volumeLatLon(normal)).r), known);
 #endif
 		vDip *= cloudTransmission(opacity, 1.0);
 	}
