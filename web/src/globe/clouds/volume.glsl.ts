@@ -354,6 +354,96 @@ void main() {
 `;
 
 /**
+ * Spreads the dense tops of a coarse window (4 or 8 km texels) along one axis, before the decks'
+ * stylised light: Gaussian sums of weight x top and of weights, about 6 and 16 km wide.
+ */
+export const spreadFragmentShader = /* glsl */ `
+precision highp float;
+precision highp sampler2DArray;
+varying vec2 vUv;
+uniform highp sampler2DArray volumeField;
+uniform sampler2D spreadSource;
+uniform float spreadLayer;
+uniform vec2 spreadStep;
+uniform vec2 spreadWidth;
+
+vec4 tops(vec2 uv) {
+	if (spreadLayer >= 0.0) {
+		vec4 f = textureLod(volumeField, vec3(uv, spreadLayer), 0.0);
+		float w = f.a > 0.5 ? smoothstep(0.4, 0.8, f.r) : 0.0;
+		float h = f.g * 20.0;
+		return vec4(w * h, w, w * h, w);
+	}
+	return textureLod(spreadSource, uv, 0.0);
+}
+
+void main() {
+	vec4 sum = vec4(0.0);
+	vec2 norm = vec2(0.0);
+	for (int i = -12; i <= 12; i++) {
+		float x = float(i);
+		vec2 g = exp(-0.5 * x * x / (spreadWidth * spreadWidth));
+		vec4 t = tops(vUv + spreadStep * x);
+		sum += vec4(t.xy * g.x, t.zw * g.y);
+		norm += g;
+	}
+	gl_FragColor = vec4(sum.xy / norm.x, sum.zw / norm.y);
+}
+`;
+
+/**
+ * Stylised light of a high sun on large dense decks (ADR 0031), over one coarse window: the shape
+ * of their tops about 6 km across, slopes drawn deckRelief times steeper and lit by the sun lowered
+ * to 40°, hollows below their 16 km surroundings dimmed. Under a low sun the real light shows relief.
+ */
+export const deckFragmentShader = /* glsl */ `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D spread;
+uniform vec4 bakeWindow;
+uniform float bakeTexels;
+uniform vec3 sunDir;
+uniform float deckRelief;
+${windowGlsl}
+
+// Mean dense top (km) over both widths and the shares of dense cloud they hold, at a texel.
+vec4 broad(vec2 uv, vec4 fallback) {
+	vec4 b = textureLod(spread, uv, 0.0);
+	return b.y > 0.02 ? vec4(b.x / b.y, b.z / max(b.w, 1e-4), b.y, b.w) : fallback;
+}
+
+void main() {
+	vec2 latLon = bakeLatLon(vUv);
+	vec3 n = bakeDirection(latLon);
+	float s = dot(n, sunDir);
+	vec4 c = broad(vUv, vec4(0.0));
+	if (deckRelief <= 0.0 || s < 0.2 || c.z < 0.05 || c.w < 0.4) {
+		gl_FragColor = vec4(1.0);
+		return;
+	}
+	vec3 east = vec3(-sin(latLon.y), 0.0, -cos(latLon.y));
+	vec3 north = vec3(-sin(latLon.x) * cos(latLon.y), cos(latLon.x), sin(latLon.x) * sin(latLon.y));
+	vec2 km = 2.0 * 6371.0 * bakeWindow.wz * vec2(cos(latLon.x), 1.0) / bakeTexels;
+	vec2 d = 1.0 / vec2(bakeTexels);
+	vec2 slope = vec2(
+		broad(vUv + vec2(d.x, 0.0), c).x - broad(vUv - vec2(d.x, 0.0), c).x,
+		broad(vUv + vec2(0.0, d.y), c).x - broad(vUv - vec2(0.0, d.y), c).x
+	) / (2.0 * km);
+	slope *= deckRelief;
+	slope /= max(1.0, length(slope));
+	vec3 side = sunDir - n * s;
+	float lift = min(s, 0.64);
+	vec3 light = length(side) > 1e-4 ? normalize(side) * sqrt(1.0 - lift * lift) + n * lift : n;
+	vec3 shaped = normalize(n - east * slope.x - north * slope.y);
+	float hill = mix(1.0, (max(dot(shaped, light), 0.0) + 0.3) / (lift + 0.3), smoothstep(0.03, 0.15, length(side)));
+	float hollow = 1.0 - 0.18 * smoothstep(0.0, 1.5, (c.y - c.x) * deckRelief);
+	// Large decks only: isolated towers keep the relief of their own slopes.
+	float on = smoothstep(0.35, 0.75, s) * smoothstep(0.1, 0.4, c.z) * smoothstep(0.45, 0.8, c.w);
+	gl_FragColor = vec4(mix(1.0, hill * hollow, on), 0.0, 0.0, 1.0);
+}
+`;
+
+/**
  * Marches a quarter of the reduced pixels through the columns. Each step integrates the column it
  * crosses exactly and lights it once, at about half a mean free path inside: no random sampling,
  * so a still or gliding view stays clean. Output: light and transmittance, then the mean depth.
@@ -376,6 +466,7 @@ uniform float frameJitter;
 uniform int maxSamples;
 uniform vec3 flashColor;
 uniform float flashGain;
+uniform highp sampler2DArray volumeDeck;
 ${volumeFieldGlsl}
 ${flashLightGlsl}
 ${overlapGlsl}
@@ -394,6 +485,15 @@ vec2 sphere(vec3 ro, vec3 rd, float r) {
 }
 
 float hg(float c, float g) { return (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5); }
+
+// Stylised light of a high sun on the dense decks at a point (deck pass): the 4 km window, then the 8 km one.
+float deckAt(vec2 latLon) {
+	vec3 a = volumeWindowUv(latLon, 2);
+	vec3 b = volumeWindowUv(latLon, 3);
+	float coarse = b.z < 0.98 ? mix(textureLod(volumeDeck, vec3(b.xy, 1.0), 0.0).r, 1.0, smoothstep(0.82, 0.96, b.z)) : 1.0;
+	if (a.z >= 0.98) return coarse;
+	return mix(textureLod(volumeDeck, vec3(a.xy, 0.0), 0.0).r, coarse, smoothstep(0.82, 0.96, a.z));
+}
 
 // Styled top (km) at a point, or a stand-in where heights are unknown.
 float topAt(vec2 latLon, float unknown) {
@@ -539,13 +639,15 @@ void main() {
 					float deep = sqrt(sqrt(sunTop)) * crossing(sigma, 0.25 * k, d0, descent, len);
 					open = mix(0.55, 1.0, clamp(dot(normal, nrm), 0.0, 1.0));
 					// Under a high sun, dense tops show their shape by the incidence of their 3 km slopes, drawn
-					// steeper (hidden when looking along the sun), and by creases that trap some sunlight.
+					// steeper (hidden when looking along the sun), by creases that trap some sunlight, and decks by
+					// the stylised light of their broad shape.
 					float dense = smoothstep(0.5, 0.9, f.r);
 					float high = smoothstep(0.25, 0.6, s);
 					float noon = high * dense * exp(-d0) * (1.0 - smoothstep(0.75, 0.95, -c));
 					vec3 broad = noon > 0.02 ? surfaceNormal(ll, nrm, max(foot, 3.0), col.y) : nrm;
 					vec3 steep = normalize(broad + (broad - nrm * dot(broad, nrm)) * (noonRelief - 1.0));
 					float incidence = (max(dot(steep, sunDir), 0.0) + 0.25) / (max(s, 0.0) + 0.25);
+					float deck = mix(1.0, deckAt(ll), exp(-d0));
 					float surface = mix(1.0, incidence, noon) * wall * mix(1.0, view, 0.35 * dense * high);
 					// The sun reddens through the air below it: high tops stay white at a low sun, low cloud
 					// turns peach, and only near sunset do anvils go ivory and pink.
@@ -560,6 +662,8 @@ void main() {
 					// Thick clouds send back most of the sunlight they get through many scatterings: their
 					// brightness follows their real depth, not the transparency kept for the flashes.
 					lit = sunColor * (phaseSun * direct + phaseSoft * soft + 0.25 * deep) * mix(0.6, 1.0, powder) * scatterGain * grazing * surface;
+					// A deck's shaded side turns a little bluer, lit by the sky, rather than grey or the ground's colour.
+					lit *= deck * mix(vec3(1.0), vec3(0.85, 0.95, 1.15), clamp(1.0 - deck, 0.0, 1.0));
 				}
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));

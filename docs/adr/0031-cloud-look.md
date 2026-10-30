@@ -26,7 +26,8 @@ lightning visible inside them.
 A first version of this record looked right at dawn and dusk but flat at noon, and softer than the
 flat layer: sunlit tops came out brighter than white and clipped, a 0.8 cap let the sea show through
 the densest decks, a slope barely changes the light of a high sun, and the 1 km window sat on the
-screen centre rather than on the magnified foreground.
+screen centre rather than on the magnified foreground. A second review found broad decks still flat
+at noon and asked for more relief there, even if more stylised.
 
 What the data gives the client:
 
@@ -58,9 +59,13 @@ Constraints: no new R2 object or byte (storage is near the free tier), the budge
 clouds and to 0.8 for the flashes under them.
 
 **Relief under a high sun**: slopes drawn 4× steeper in that light, a larger swell, billows on every
-sheet (all tried: crack lines, grey marbling and dimpled decks, the look the brief rejects);
-**light that shows the shape where there is one** (chosen): towers, overshooting tops, walls and
-creases, while broad anvils stay smooth, as astronaut photographs at a high sun show them.
+sheet (all tried: crack lines, grey marbling and dimpled decks, the look the brief rejects); light
+that shows the shape only where there is one: towers, overshooting tops, walls and creases, broad
+anvils smooth as astronaut photographs at a high sun show them (shipped first, too flat on broad
+decks for the maintainer); **that light, plus a stylised light on dense decks** (chosen): their
+observed shape about 6 km across, smoothed so that no crease, texel or noise shows, lit by a lower
+sun. Sampling that shape on rings instead of smoothing it drew polygons and ghosts; the same light on
+every cloud stained small ones over land khaki.
 
 **Without heights**: invented slab (ADR 0028's); **the flat layer, pixel by pixel** (chosen).
 
@@ -94,6 +99,13 @@ window texels are dropped, so nothing aliases.
 3. **Sun**: transmittance through the other columns at the ground and at each column's own top,
    and, in the 1 and 2 km windows, the share of sky each dense top sees past its neighbours
    (8 directions, 1.5 to 12 km); skipped on the night side.
+4. **Deck light**, in the 4 and 8 km windows: dense tops (cover 0.4 to 0.8 and above) spread by
+   Gaussians 6 and 16 km wide in two separable passes; the 6 km shape drawn 6× steeper (tilt at most
+   45°) and lit by the sun lowered to 40° of elevation (fading out within 9° of the zenith, where the
+   sun has no direction), hollows below their 16 km surroundings up to 18 % darker. Only on large
+   decks (dense over 45 to 80 % of the 16 km surroundings): isolated towers keep the light of their
+   own slopes. It fades in from 20° to 49° of sun elevation, below which the real light shows
+   relief; the finer windows read it from the 4 km window.
 
 **March.** Half the CSS size (`high`, at most 48 crossings) or 0.4 (`medium`, 40); a quarter of the
 pixels per frame, the rest reprojected at the depth the march returns. Clear air is crossed about
@@ -105,8 +117,10 @@ sun-facing walls lit directly at their own incidence (grey under a high sun), an
 the air under each height (high tops stay white at a low sun, low cloud turns peach). Sunlight meets
 the extinction of the 0.8 veil, so light and shadows reach as deep whatever opacity is drawn. Under
 a high sun, dense tops take the incidence of their slope over 3 km drawn 1.5× steeper again (faded
-when looking along the sun, where shaded faces hide), creases keep up to 35 % less sunlight, the sun
-is neutral white and the exposure drops to 0.86 of the gain. A highlight shoulder (from 0.6, hue
+when looking along the sun, where shaded faces hide), creases keep up to 35 % less sunlight, the
+deck light falls on each top, fading within about a kilometre below it (thin edges take their
+deck's, so no line marks their border; its shaded side turns a little bluer, not grey), the sun is
+neutral white and the exposure drops to 0.86 of the gain. A highlight shoulder (from 0.6, hue
 kept) brings sunlit tops below white instead of clipping them; the flash glow is added after it. Steps and rays take low-discrepancy offsets that a
 history averages; the history shortens where cover changes or the camera moves. A tier downgrade
 lowers the march resolution and crossings too.
@@ -130,7 +144,8 @@ through the air above them.
 edges, channel heights: assumed. Swell, billows, lobes, streaks, dip depressions and domes,
 transparency knee and the lighter veil over flashes: styled, within the bounds. Sunlight, shadows,
 relief shading, creases, haze: procedural; slopes exaggerated 1.6× in the lighting, 2.4× in the
-incidence of dense tops under a high sun (heights are not exaggerated).
+incidence of dense tops under a high sun. Deck light under a high sun: styled, on the observed broad
+shape, slopes 6× steeper and the sun lowered to 40°. Heights are not exaggerated.
 
 **Bounds** (ADR 0030 rule 2), measured on the shader with `cloudVolume.styleCheck()`, which reads
 the finest window back in full precision before and after styling: cover averaged over 4 km blocks within 0.05 of the
@@ -167,8 +182,12 @@ march skip the night side and the streaks run only where they show: scaled by 6 
 laptop). The midday changes keep that cost: in interleaved runs on the same replays (noon `window`
 and `iss`, dusk follow, 1920 × 1080 at DPR 2) the median frame moved by −1.0 to 0 ms against the
 first version. The sky seen by each top costs about 0.3 ms per re-baked window on the reference Mac,
-paid only when a window is baked again. GPU memory: −1 MB (3D noise), +2 MB (raw window), +4 MB
-(field in half floats), +0.7 to 1 MB (depth target).
+paid only when a window is baked again. The deck light adds three passes when the 4 or 8 km window
+is baked again (about 55 texture reads per texel, estimated at 0.4 ms each time on the reference
+Mac from the measured sun bake) and up to two reads per lit crossing; on still noon views (`window`,
+`iss`, storm follow, 1920 × 1080 at DPR 2, interleaved) the median frame moved by −0.5 to +0.3 ms,
+within the noise. GPU memory: −1 MB (3D noise), +2 MB (raw window), +4 MB (field in half floats),
++0.7 to 1 MB (depth target), +3 MB (deck light and its spread tops).
 
 ## Consequences
 
@@ -180,8 +199,9 @@ paid only when a window is baked again. GPU memory: −1 MB (3D noise), +2 MB (r
 - The lift of semi-transparent edges moves tops by several km; it stays only if it beats the
   observed tops against GOES `ACHA2KMF` on the reference hours.
 - City lights and the ground show through the densest clouds at 5 %, flashes at 20 %.
-- Broad anvils stay smooth under a high sun, as photographed; the relief of noon shows on towers,
-  overshooting tops, walls and creases.
+- Under a high sun broad decks show their observed shape in a lowered, stylised light: more relief
+  than astronaut photographs show at that hour, by the maintainer's choice. It is shading only: the
+  style bounds, cover and tops do not move.
 - The neighbourhood measures can feed a cloud-type map for a hover label, at no R2 cost: evaluated
   separately.
 - Phones keep the flat layer until a real phone is measured, as in ADR 0028.

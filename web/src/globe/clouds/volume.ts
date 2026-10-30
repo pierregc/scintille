@@ -13,6 +13,7 @@ import {
 	NormalBlending,
 	type Object3D,
 	OrthographicCamera,
+	RedFormat,
 	RGBAFormat,
 	Scene,
 	ShaderMaterial,
@@ -29,10 +30,12 @@ import { type StyleBounds, styleBounds, VEIL_MAX_OPACITY, VOLUME_KNEE, VOLUME_MA
 import {
 	compositeFragmentShader,
 	compositeVertexShader,
+	deckFragmentShader,
 	marchFragmentShader,
 	passVertexShader,
 	rawFieldFragmentShader,
 	resolveFragmentShader,
+	spreadFragmentShader,
 	styleFragmentShader,
 	sunFragmentShader,
 } from './volume.glsl';
@@ -59,6 +62,12 @@ const SCATTER_GAIN = 2;
 const NOON_EXPOSURE = 0.86;
 /** Further steepening of the styled slopes in the light of a high sun only, which barely changes with slope. */
 const NOON_RELIEF = 1.5;
+/** Steepening of the dense decks' broad slopes in their stylised light under a high sun. */
+const DECK_RELIEF = 6;
+/** Windows whose dense tops give the decks' broad shape, by their texel (km): 4 and 8. */
+const DECK_FIRST = 2;
+/** Widths (km) of the decks' broad shape and of the surroundings its hollows are measured against. */
+const DECK_WIDTH_KM = [6, 16] as const;
 
 export interface Window {
 	/** Centre latitude and longitude, radians. */
@@ -191,7 +200,10 @@ export function createCloudVolume({
 	const field = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: HalfFloatType });
 	const sun = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: UnsignedByteType });
 	const raw = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
-	for (const target of [field, sun, raw]) {
+	// The decks' stylised light over the coarse windows, and their spread tops on the way.
+	const deck = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length - DECK_FIRST, { depthBuffer: false, type: HalfFloatType, format: RedFormat });
+	const spread = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
+	for (const target of [field, sun, raw, deck, spread]) {
 		target.texture.minFilter = LinearFilter;
 		target.texture.magFilter = LinearFilter;
 		target.texture.generateMipmaps = false;
@@ -237,6 +249,16 @@ export function createCloudVolume({
 	const styleMaterial = pass(styleFragmentShader, styleUniforms);
 	const skyViewOn = { value: 0 };
 	const sunMaterial = pass(sunFragmentShader, { ...uniforms, bakeWindow, sunDir, lightGain, skyViewOn });
+	const spreadUniforms: Record<string, IUniform> = {
+		volumeField: { value: field.texture },
+		spreadSource: { value: raw.texture },
+		spreadLayer: { value: 0 },
+		spreadStep: { value: new Vector2() },
+		spreadWidth: { value: new Vector2(1, 1) },
+	};
+	const spreadMaterial = pass(spreadFragmentShader, spreadUniforms);
+	const deckRelief = { value: detail ? DECK_RELIEF : 0 };
+	const deckMaterial = pass(deckFragmentShader, { spread: { value: spread.texture }, bakeWindow, bakeTexels, sunDir, deckRelief });
 	const rayMatrix = { value: new Matrix4() };
 	const eyeKm = { value: new Vector3() };
 	const marchSize = { value: new Vector2(1, 1) };
@@ -251,6 +273,7 @@ export function createCloudVolume({
 		subPixel: { value: new Vector2() },
 		sunDir,
 		lightGain,
+		volumeDeck: { value: deck.texture },
 		scatterGain: { value: SCATTER_GAIN },
 		noonExposure: { value: NOON_EXPOSURE },
 		noonRelief: { value: detail ? NOON_RELIEF : 1 },
@@ -369,6 +392,19 @@ export function createCloudVolume({
 		draw(renderer, rawMaterial, raw);
 		draw(renderer, styleMaterial, field, k);
 		draw(renderer, sunMaterial, sun, k);
+		if (k >= DECK_FIRST) {
+			// Dense tops spread across, then along (through the free observations target), then lit.
+			spreadUniforms.spreadWidth.value.set(DECK_WIDTH_KM[0], DECK_WIDTH_KM[1]).divideScalar(WINDOW_TEXEL_KM[k]);
+			spreadUniforms.spreadLayer.value = k;
+			spreadUniforms.spreadSource.value = spread.texture;
+			spreadUniforms.spreadStep.value.set(1 / texels, 0);
+			draw(renderer, spreadMaterial, raw);
+			spreadUniforms.spreadLayer.value = -1;
+			spreadUniforms.spreadSource.value = raw.texture;
+			spreadUniforms.spreadStep.value.set(0, 1 / texels);
+			draw(renderer, spreadMaterial, spread);
+			draw(renderer, deckMaterial, deck, k - DECK_FIRST);
+		}
 	};
 
 	const volume: CloudVolume = {
@@ -381,6 +417,7 @@ export function createCloudVolume({
 			styleUniforms.styled.value = on ? 1 : 0;
 			marchUniforms.relief.value = on ? RELIEF : 1;
 			marchUniforms.noonRelief.value = on ? NOON_RELIEF : 1;
+			deckRelief.value = on ? DECK_RELIEF : 0;
 			baked = 0;
 			lastViewProjection = null;
 		},
@@ -502,8 +539,8 @@ export function createCloudVolume({
 			return bounds;
 		},
 		dispose() {
-			for (const t of [field, sun, raw, fresh, ...history]) t.dispose();
-			for (const m of [rawMaterial, styleMaterial, sunMaterial, marchMaterial, resolveMaterial, composite]) m.dispose();
+			for (const t of [field, sun, raw, deck, spread, fresh, ...history]) t.dispose();
+			for (const m of [rawMaterial, styleMaterial, sunMaterial, spreadMaterial, deckMaterial, marchMaterial, resolveMaterial, composite]) m.dispose();
 			quad.geometry.dispose();
 			mesh.geometry.dispose();
 		},

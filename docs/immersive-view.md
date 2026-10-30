@@ -313,7 +313,7 @@ the south pole).
 | Tops of semi-transparent edges of high systems | Assumed (ADR 0031): lifted toward the nearest opaque plateau inward, as infrared places them too low | `styleFragmentShader` |
 | Cloud detail: swell, billows on rising or rough tops, streaks on thin and fraying edges, visible dips as depressions | Styled (ADR 0031), chosen from the observed neighbourhood: cover over 4 km blocks within 0.05 of the observed on average and 0.1 per block, saturated tops within 1 km | `styleFragmentShader`, checked by `cloudVolume.styleCheck()` |
 | Translucency, glow of flashes inside | Styled (ADR 0031): drawn as observed up to 0.5, eased to 0.95 at full cover; flashes under them veiled as if eased to 0.8, so they show through; brightness follows the real depth, sunlit tops kept below white by a highlight shoulder; the glow rises and fades in real time, outside the history | `capOpacity`, `veilOpacity`, `scatterGain`, `compositeFragmentShader` |
-| Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `marchFragmentShader`, `cloudShadowAt`, `atmosphere.glsl.ts` |
+| Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; under a high sun, large dense decks lit by the sun lowered to 40° with their observed 6 km shape drawn 6× steeper (styled); the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `deckFragmentShader`, `marchFragmentShader`, `cloudShadowAt`, `atmosphere.glsl.ts` |
 | Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering | `veil.ts` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
@@ -332,7 +332,9 @@ captures and the comparison with ISS photographs are in [cloud look](cloud-look.
   it), the 4 and 8 km windows around the screen centre. Three passes: the observations (blended
   opacity, top, convective core, heights known), their styling from the neighbourhood (hashed
   noise, never finer than 2.5 texels), and the sunlight through the other columns at the ground and
-  at each column's own top, with the sky each dense top sees in the two finest windows. A window is baked again
+  at each column's own top, with the sky each dense top sees in the two finest windows. The 4 and
+  8 km windows add the decks' light under a high sun, from their dense tops spread over 6 and
+  16 km. A window is baked again
   when its place, frames, tiles or sun change (at most one every other frame); windows fade into
   each other near their edges.
 - **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected at
@@ -341,8 +343,9 @@ captures and the comparison with ISS photographs are in [cloud look](cloud-look.
   so the picture does not depend on where steps fall. Steps and rays get low-discrepancy offsets
   that a history averages; it shortens where cover changes or the camera moves. Flashes light the
   cloud around them from the flash light map, added in the composite so the glow is never
-  delayed. Under a high sun the exposure comes down and dense tops show their slopes and creases;
-  a highlight shoulder keeps sunlit tops below white. The atmosphere hazes the clouds by the air
+  delayed. Under a high sun the exposure comes down, dense tops show their slopes and creases and
+  dense decks their broad shape in a lowered light; a highlight shoulder keeps sunlit tops below
+  white. The atmosphere hazes the clouds by the air
   above their tops only.
 - **Ground**: the Earth shader darkens sunlight by the baked transmittance at the ground.
 - **Tiers**: `high` (half the CSS size) and `medium` (0.4); `low` and phones keep the flat layer
