@@ -41,9 +41,11 @@ describe('createGlobeControls flight handoff', () => {
 	let controls: GlobeControls;
 	let pointerDown: () => void;
 	let fire: (type: string, event: Record<string, unknown>) => void;
+	let reducedMotion: { matches: boolean };
 
 	beforeEach(() => {
-		vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+		reducedMotion = { matches: false };
+		vi.stubGlobal('window', { matchMedia: () => reducedMotion });
 		time = 0;
 		camera = new PerspectiveCamera(45, 1, 0.1, 100);
 		const fake = fakeElement();
@@ -92,6 +94,84 @@ describe('createGlobeControls flight handoff', () => {
 		const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
 		const forward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 		expect(up.dot(new Vector3(0, 1, 0).projectOnPlane(forward).normalize())).toBeCloseTo(1, 3);
+	});
+
+	const interruptSurfaceFlight = async (tilt: number, reduced = false) => {
+		reducedMotion.matches = false;
+		controls.place({ lat: 10, lon: 20, altitude: 400, tilt, heading: 30 });
+		const flight = controls.flyTo({ lat: 12, lon: 22, altitude: 3000, tilt: 20, duration: 1000 });
+		step(400);
+		const before = { position: camera.position.clone(), quaternion: camera.quaternion.clone() };
+		reducedMotion.matches = reduced;
+		pointerDown();
+		await expect(flight).resolves.toBe(false);
+		return before;
+	};
+
+	it.each([60, 86])('eases out the roll when the user interrupts a surface flight from a %i degree tilt', async (tilt) => {
+		// Reduced motion lands on the surface pose at once: the pose the easing must converge to.
+		await interruptSurfaceFlight(tilt, true);
+		const surface = { position: camera.position.clone(), quaternion: camera.quaternion.clone() };
+		fire('pointerup', {});
+		const before = await interruptSurfaceFlight(tilt);
+		expect(before.quaternion.angleTo(surface.quaternion)).toBeGreaterThan(0.03);
+		expect(camera.quaternion.angleTo(before.quaternion)).toBeLessThan(1e-6);
+		expect(camera.position.distanceTo(before.position)).toBeLessThan(1e-9);
+		let previous = camera.quaternion.clone();
+		for (let i = 0; i < 40; i++) {
+			step(16);
+			expect(camera.quaternion.angleTo(previous)).toBeLessThan(0.005);
+			previous = camera.quaternion.clone();
+		}
+		expect(camera.quaternion.angleTo(surface.quaternion)).toBeLessThan(1e-6);
+		expect(camera.position.distanceTo(surface.position)).toBeLessThan(1e-9);
+	});
+
+	it('moves on from the eased pose when a gesture starts during the easing', async () => {
+		let shown = (await interruptSurfaceFlight(60)).quaternion;
+		const turns = (bound: number) => {
+			expect(camera.quaternion.angleTo(shown)).toBeLessThan(bound);
+			shown = camera.quaternion.clone();
+		};
+		const frames = (count: number) => {
+			for (let i = 0; i < count; i++) {
+				step(16);
+				turns(0.005);
+			}
+		};
+		turns(1e-6);
+		frames(12);
+		fire('pointermove', { clientX: 1 });
+		turns(0.005);
+		fire('pointerup', { clientX: 1 });
+		fire('wheel', { deltaY: 1, deltaMode: 0 });
+		expect(controls.flying()).toBe(false);
+		turns(0.005);
+		frames(40);
+
+		// A tilt that starts from the globe view while its own roll eases out.
+		await settle(controls.flyTo({ lat: 60, lon: 0, altitude: 8000, duration: 0 }));
+		const flight = controls.flyTo({ lat: 60, lon: 180, duration: 1000 });
+		step(500);
+		shown = camera.quaternion.clone();
+		fire('pointerdown', { button: 2 });
+		await expect(flight).resolves.toBe(false);
+		turns(1e-6);
+		frames(6);
+		fire('pointermove', { button: 2, clientY: -1 });
+		turns(0.01);
+		frames(40);
+	});
+
+	it('drops the leftover roll when a view is placed at once', async () => {
+		const spot = { lat: 30, lon: -40, altitude: 900, tilt: 40, heading: 10 };
+		controls.place(spot);
+		const placed = camera.quaternion.clone();
+		await interruptSurfaceFlight(60);
+		controls.place(spot);
+		expect(camera.quaternion.angleTo(placed)).toBeLessThan(1e-6);
+		step(16);
+		expect(camera.quaternion.angleTo(placed)).toBeLessThan(1e-6);
 	});
 
 	const height = () => camera.position.length() - R;
@@ -168,7 +248,8 @@ describe('createGlobeControls flight handoff', () => {
 		pointerDown();
 		await expect(flight).resolves.toBe(false);
 		expect(camera.position.distanceTo(before.position)).toBeLessThan(1e-9);
-		// Dropping the gaze left at this point would turn the view by 0.08 rad; the flight's roll is not kept.
+		for (let i = 0; i < 40; i++) step(16);
+		// Dropping the gaze left at this point would turn the view by 0.08 rad; easing out the flight's roll turns it a little.
 		expect(forward().angleTo(before.forward)).toBeLessThan(0.01);
 	});
 
