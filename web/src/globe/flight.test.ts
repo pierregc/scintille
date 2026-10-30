@@ -1,7 +1,8 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parseDevFlights } from './dev-flight';
-import { CAMERA_FLOOR_KM, easeInOut, Flight, headingOf, kmToWorld, northTangent, poseAt, worldToKm } from './flight';
+import { CAMERA_FLOOR_KM, type CameraPose, easeInOut, Flight, FLIGHT, headingOf, kmToWorld, northTangent, poseAt, raiseGaze, worldToKm } from './flight';
+import { floorRange } from './surface';
 import { latLonToVector } from './sun';
 
 const R = 1;
@@ -31,6 +32,19 @@ describe('poseAt', () => {
 		const toTarget = pose.target.clone().sub(pose.position).normalize();
 		expect(forward.dot(toTarget)).toBeCloseTo(1, 6);
 		expect(forward.dot(pose.target.clone().normalize())).toBeCloseTo(-Math.cos(Math.PI / 3), 6);
+	});
+
+	it('keeps the 80 degree orbit and raises the gaze above it, up to 90 degrees', () => {
+		const altitude = floorRange((FLIGHT.maxTiltDeg * Math.PI) / 180, R);
+		const orbit = poseAt(PARIS.lat, PARIS.lon, altitude, FLIGHT.maxTiltDeg, R);
+		const raised = poseAt(PARIS.lat, PARIS.lon, altitude, 85, R);
+		expect(raised.position.distanceTo(orbit.position)).toBe(0);
+		expect(raised.target.distanceTo(orbit.target)).toBe(0);
+		expect(raised.gaze).toBeCloseTo((5 * Math.PI) / 180, 12);
+		const forward = (pose: CameraPose) => new Vector3(0, 0, -1).applyQuaternion(pose.quaternion);
+		expect(forward(raised).angleTo(forward(orbit))).toBeCloseTo((5 * Math.PI) / 180, 9);
+		expect(poseAt(PARIS.lat, PARIS.lon, altitude, 120, R).gaze).toBeCloseTo((FLIGHT.maxGazeDeg * Math.PI) / 180, 12);
+		expect(poseAt(PARIS.lat, PARIS.lon, altitude, 60, R).gaze).toBe(0);
 	});
 
 	it('stays defined at the poles', () => {
@@ -82,6 +96,42 @@ describe('Flight', () => {
 		const short = new Flight(from, poseAt(50, 5, 2, 0, R), R);
 		expect(short.duration).toBeLessThan(flight.duration);
 		expect(new Flight(from, to, R, 500).duration).toBe(500);
+	});
+});
+
+describe('Flight with a raised gaze', () => {
+	const floor = (pose: CameraPose) => worldToKm(pose.position.length() - R, R);
+	const lowered = (pose: CameraPose) => raiseGaze(pose.quaternion.clone(), -(pose.gaze ?? 0));
+	const limb = poseAt(PARIS.lat, PARIS.lon, floorRange((FLIGHT.maxTiltDeg * Math.PI) / 180, R), 90, R, 120);
+	const trips = {
+		'to the globe': [limb, poseAt(PARIS.lat, PARIS.lon, 2, 0, R)],
+		'from the globe': [poseAt(SYDNEY.lat, SYDNEY.lon, 2, 0, R), limb],
+		'to a nearby horizon view': [limb, poseAt(PARIS.lat + 1, PARIS.lon + 1, floorRange((72 * Math.PI) / 180, R), 72, R, 40)],
+	} as const;
+
+	it.each(Object.entries(trips))('starts and ends on the given poses %s', (_, [from, to]) => {
+		const flight = new Flight(from, to, R);
+		for (const [pose, end] of [[flight.at(0), from], [flight.at(flight.duration), to]] as const) {
+			expect(pose.position.distanceTo(end.position)).toBeLessThan(1e-6);
+			expect(pose.quaternion.angleTo(end.quaternion)).toBeLessThan(1e-6);
+			expect(pose.gaze).toBeCloseTo(end.gaze ?? 0, 12);
+		}
+	});
+
+	it.each(Object.entries(trips))('looks at its anchor under the gaze, eased without a jump, %s', (_, [from, to]) => {
+		const flight = new Flight(from, to, R);
+		const poses = samples(flight);
+		for (const pose of poses) {
+			const toAnchor = pose.target.clone().sub(pose.position).normalize();
+			expect(new Vector3(0, 0, -1).applyQuaternion(lowered(pose)).dot(toAnchor)).toBeCloseTo(1, 5);
+			expect(floor(pose)).toBeGreaterThan(CAMERA_FLOOR_KM - 1e-6);
+		}
+		const gazes = poses.map((pose) => pose.gaze ?? 0);
+		const rising = (to.gaze ?? 0) >= (from.gaze ?? 0);
+		for (let i = 1; i < gazes.length; i++) expect(rising ? gazes[i] >= gazes[i - 1] - 1e-12 : gazes[i] <= gazes[i - 1] + 1e-12).toBe(true);
+		const turns = poses.slice(1).map((p, i) => p.quaternion.angleTo(poses[i].quaternion));
+		const mean = turns.reduce((a, b) => a + b, 0) / turns.length;
+		expect(Math.max(...turns)).toBeLessThan(3.5 * mean);
 	});
 });
 

@@ -1,4 +1,4 @@
-import type { CameraView } from '../flight';
+import { type CameraView, FLIGHT } from '../flight';
 
 export interface ReplayLocation {
 	slug: string;
@@ -26,7 +26,7 @@ export function parseReplayLocation(url: URL): ReplayLocation | null {
 	if (fields && (fields.length === 4 || fields.length === 5) && fields.every((field) => field.trim() !== '' && Number.isFinite(Number(field)))) {
 		const [lat, lon, altitude, tilt, heading] = fields.map(Number);
 		if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-			view = { lat, lon, altitude: clamp(altitude, 20, 200_000), tilt: clamp(tilt, 0, 80) };
+			view = { lat, lon, altitude: clamp(altitude, 20, 200_000), tilt: clamp(tilt, 0, FLIGHT.maxTiltDeg + FLIGHT.maxGazeDeg) };
 			if (heading !== undefined) view.heading = ((heading % 360) + 360) % 360;
 		}
 	}

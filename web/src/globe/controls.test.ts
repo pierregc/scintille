@@ -2,6 +2,7 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { worldToKm } from './flight';
+import { floorRange } from './surface';
 import fixture from '../../../fixtures/storms/2026-07-15-orlando.json';
 import type { StormDetail } from '../contract/types';
 import { SceneClock } from './clock';
@@ -109,10 +110,74 @@ describe('createGlobeControls flight handoff', () => {
 	it('tilts toward the horizon with a right drag and keeps the camera above the clouds', async () => {
 		await settle(controls.flyTo({ lat: 10, lon: 20, altitude: 300, tilt: 0, duration: 0 }));
 		drag(-2000, { button: 2 });
-		expect(tiltOf()).toBeGreaterThan(30);
-		expect(worldToKm(height(), R)).toBeGreaterThan(15);
+		expect(controls.view().tilt).toBeCloseTo(90, 9);
+		expect(worldToKm(height(), R)).toBeGreaterThan(400 - 1e-6);
 		drag(2000, { button: 2 });
 		expect(tiltOf()).toBeLessThan(1);
+	});
+
+	it.each([
+		['iss', { altitude: 400, tilt: 1 }],
+		['window', { altitude: 740, tilt: 60 }],
+		['Horizon', { altitude: worldToKm(floorRange((72 * Math.PI) / 180, R), R) + 1, tilt: 72 }],
+	])('tilts past 85 degrees from the %s view with one drag and comes back to it', async (_, start) => {
+		await settle(controls.flyTo({ lat: 10, lon: 20, heading: 30, duration: 0, ...start }));
+		const position = camera.position.clone();
+		const quaternion = camera.quaternion.clone();
+		// The helper moves 10 px less than asked, and stays short of 90 degrees so the way back is exact.
+		const pixels = Math.floor(((89 - start.tilt) * Math.PI) / 180 / 0.005 / 10) * 10 + 10;
+		drag(-pixels, { button: 2 });
+		expect(controls.view().tilt).toBeGreaterThan(85);
+		expect(worldToKm(height(), R)).toBeGreaterThan(400 - 1e-6);
+		drag(pixels, { button: 2 });
+		expect(camera.position.distanceTo(position)).toBeLessThan(1e-9);
+		expect(camera.quaternion.angleTo(quaternion)).toBeLessThan(1e-6);
+		drag(-2000, { button: 2 });
+		expect(controls.view().tilt).toBeCloseTo(90, 9);
+	});
+
+	it('reaches 90 degrees from the floor with a two finger drag', async () => {
+		await settle(controls.flyTo({ lat: 10, lon: 20, altitude: 400, tilt: 1, duration: 0 }));
+		const touch = { pointerType: 'touch' };
+		fire('pointerdown', { ...touch, pointerId: 1, clientX: 0, clientY: 0 });
+		fire('pointerdown', { ...touch, pointerId: 2, clientX: 100, clientY: 0 });
+		for (let y = 0; y > -400; y -= 10) {
+			fire('pointermove', { ...touch, pointerId: 1, clientX: 0, clientY: y });
+			fire('pointermove', { ...touch, pointerId: 2, clientX: 100, clientY: y });
+		}
+		fire('pointerup', { ...touch, pointerId: 1 });
+		fire('pointerup', { ...touch, pointerId: 2 });
+		expect(controls.view().tilt).toBeCloseTo(90, 9);
+		expect(worldToKm(height(), R)).toBeCloseTo(400, 6);
+	});
+
+	it('shares and restores a raised gaze, and keeps it when a flight is interrupted', async () => {
+		controls.place({ lat: 10, lon: 20, altitude: 400, tilt: 86, heading: 30 });
+		const shared = controls.view();
+		expect(shared.tilt).toBeCloseTo(86, 9);
+		const position = camera.position.clone();
+		const quaternion = camera.quaternion.clone();
+		controls.place({ lat: 0, lon: 0, altitude: 900, tilt: 20 });
+		controls.place(shared);
+		expect(camera.position.distanceTo(position)).toBeLessThan(1e-9);
+		expect(camera.quaternion.angleTo(quaternion)).toBeLessThan(1e-6);
+		const flight = controls.flyTo({ lat: 12, lon: 22, altitude: 3000, tilt: 20, duration: 1000 });
+		step(400);
+		const forward = () => new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+		const before = { position: camera.position.clone(), forward: forward() };
+		pointerDown();
+		await expect(flight).resolves.toBe(false);
+		expect(camera.position.distanceTo(before.position)).toBeLessThan(1e-9);
+		// Dropping the gaze left at this point would turn the view by 0.08 rad; the flight's roll is not kept.
+		expect(forward().angleTo(before.forward)).toBeLessThan(0.01);
+	});
+
+	it('stays close when zooming out a little from a grazing view', async () => {
+		await settle(controls.flyTo({ lat: 10, lon: 20, altitude: 400, tilt: 90, duration: 0 }));
+		fire('wheel', { deltaY: 100, deltaMode: 0 });
+		expect(controls.flying()).toBe(false);
+		expect(controls.view().tilt).toBeCloseTo(90, 9);
+		expect(worldToKm(height(), R)).toBeLessThan(1000);
 	});
 
 	it('places a surface view at once and reports visitor input', async () => {

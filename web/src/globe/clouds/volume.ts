@@ -37,6 +37,7 @@ import {
 	resolveFragmentShader,
 	sunFragmentShader,
 } from './volume.glsl';
+import { lookedAt } from '../surface';
 
 export { volumeFieldGlsl } from './volume.glsl';
 
@@ -300,11 +301,8 @@ export function createCloudVolume({
 				}
 				noiseReady = true;
 			}
-			// The point looked at: the screen centre on the ground, else under the camera.
 			dir.set(0, 0, 0.5).unproject(camera as Camera & { projectionMatrixInverse: Matrix4 }).applyMatrix4(earthInverse).sub(eye).normalize();
-			const b = eye.dot(dir);
-			const disc = b * b - (eye.lengthSq() - 1);
-			look.copy(disc > 0 && -b - Math.sqrt(disc) > 0 ? dir.multiplyScalar(-b - Math.sqrt(disc)).add(eye) : eye).normalize();
+			lookedAt(eye, dir, 1, look);
 			const latDeg = Math.asin(look.y) / DEG;
 			const lonDeg = Math.atan2(-look.z, look.x) / DEG;
 			sunDir.value.copy(view.sun).normalize();
