@@ -167,7 +167,7 @@ export function createGlobeApp(
 	const cloudMode = compareClouds ? new URLSearchParams(location.search).get('clouds') : null;
 	const volumeScale = renderParams || phone || cloudMode === 'flat' ? 0 : preset.cloudVolume;
 	const heightDetail = volumeScale > 0 && cloudDetail
-		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 16 })
+		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 24, finerFallback: true })
 		: undefined;
 	const volume: CloudVolume | undefined = heightDetail
 		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, maxSamples: preset.cloudSamples, detail: cloudMode !== 'columns' })
@@ -392,6 +392,8 @@ export function createGlobeApp(
 		} else if (volume) {
 			volume.mesh.visible = false;
 			volume.uniforms.volumeOn.value = 0;
+			volume.uniforms.reliefOn.value = 0;
+			volume.uniforms.shadeOn.value = 0;
 			clouds.setFlatShown(1);
 		}
 		if (post) {

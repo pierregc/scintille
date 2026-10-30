@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { halton, marchPhase, NEAR_MAX_KM, volumeFade, VOLUME_FADE_KM, WINDOW_TEXEL_KM, windowAround, within } from './volume';
+import {
+	bakeTaps,
+	halton,
+	kmBetween,
+	marchPhase,
+	NEAR_MAX_KM,
+	RELIEF_NEAR_KM,
+	RELIEF_TOP_PX_KM,
+	reliefFade,
+	volumeFade,
+	VOLUME_FADE_KM,
+	WINDOW_TEXEL_KM,
+	windowAround,
+	windowToBake,
+	within,
+} from './volume';
 
 const DEG = Math.PI / 180;
 const KM_PER_DEGREE = (6371 * Math.PI) / 180;
@@ -84,5 +99,62 @@ describe('halton', () => {
 		expect([1, 2, 3].map((i) => halton(i, 3))).toEqual([1 / 3, 2 / 3, 1 / 9]);
 		const sixteen = Array.from({ length: 16 }, (_, i) => halton(i + 1, 2));
 		for (let bin = 0; bin < 4; bin++) expect(sixteen.filter((v) => v >= bin / 4 && v < (bin + 1) / 4)).toHaveLength(4);
+	});
+});
+
+describe('reliefFade', () => {
+	it('leaves close views to the volume, shades far ones, and stops before the heights do', () => {
+		expect(reliefFade(400, 0.25)).toEqual({ shade: 1, relief: 0 });
+		expect(reliefFade(RELIEF_NEAR_KM[1], 0.8)).toEqual({ shade: 1, relief: 1 });
+		expect(reliefFade(VOLUME_FADE_KM[1], 1.8)).toEqual({ shade: 1, relief: 1 });
+		expect(reliefFade(7700, RELIEF_TOP_PX_KM[1])).toEqual({ shade: 0, relief: 0 });
+		expect(reliefFade(18000, 11)).toEqual({ shade: 0, relief: 0 });
+		const mid = reliefFade(7000, (RELIEF_TOP_PX_KM[0] + RELIEF_TOP_PX_KM[1]) / 2);
+		expect(mid.shade).toBeCloseTo(0.5, 6);
+		expect(mid.relief).toBeCloseTo(0.5, 6);
+	});
+
+	it('stops before a texel of the global frame (9.8 km) spans two pixels, where heights stop loading', () => {
+		expect(RELIEF_TOP_PX_KM[1]).toBeLessThan((((360 / 4096) * Math.PI) / 180) * 6371 / 2);
+	});
+});
+
+describe('windowToBake', () => {
+	const none = () => [false, false, false, false, false];
+	it('bakes missing windows first, coarsest first', () => {
+		expect(windowToBake([false, false, true, true, true], none, 2, 1, 4, 128)).toBe(4);
+		expect(windowToBake([false, false, true, true, false], none, 2, 1, 4, 128)).toBe(3);
+	});
+
+	it('takes changed windows in turn, so a window changing every time never starves the others', () => {
+		const all = () => [true, true, true, true, true];
+		const picked = [0, 4, 8, 12, 16, 20].map((frame) => windowToBake([false, false, false, false, false], all, 2, frame, 4, 128));
+		expect(new Set(picked)).toEqual(new Set([2, 3, 4]));
+		expect(windowToBake([false, false, false, false, false], all, 2, 5, 4, 128)).toBe(-1);
+	});
+
+	it('refreshes one window in turn now and then when nothing changed', () => {
+		const missing = [false, false, false, false];
+		expect(windowToBake(missing, () => missing, 0, 30, 2, 32)).toBe(-1);
+		const refreshed = [0, 32, 64, 96].map((frame) => windowToBake(missing, () => missing, 0, frame, 2, 32));
+		expect(refreshed).toEqual([0, 1, 2, 3]);
+	});
+});
+
+describe('bakeTaps', () => {
+	it('averages each coarse texel at about the spacing of the finest heights (2 to 4 km)', () => {
+		for (let k = 0; k < WINDOW_TEXEL_KM.length; k++) {
+			const [heights, cover] = bakeTaps(k);
+			expect(WINDOW_TEXEL_KM[k] / heights).toBeLessThanOrEqual(4);
+			expect(cover).toBeLessThanOrEqual(heights);
+		}
+	});
+});
+
+describe('kmBetween', () => {
+	it('measures great-circle distances', () => {
+		expect(kmBetween([0, 0], [0, 1])).toBeCloseTo((6371 * Math.PI) / 180, 6);
+		expect(kmBetween([10, 20], [10, 20])).toBe(0);
+		expect(kmBetween([0, 179.5], [0, -179.5])).toBeCloseTo((6371 * Math.PI) / 180, 6);
 	});
 });

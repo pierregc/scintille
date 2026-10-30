@@ -27,7 +27,11 @@ A first version of this record looked right at dawn and dusk but flat at noon, a
 flat layer: sunlit tops came out brighter than white and clipped, a 0.8 cap let the sea show through
 the densest decks, a slope barely changes the light of a high sun, and the 1 km window sat on the
 screen centre rather than on the magnified foreground. A second review found broad decks still flat
-at noon and asked for more relief there, even if more stylised.
+at noon and asked for more relief there, even if more stylised. A third asked for all that relief to
+read from farther away: it showed only below about 2,000 km. Above 2,800 km the flat layer has no
+shading at all; between 1,800 and 2,800 km the crossfade halved the relief and thinned dense decks
+(0.95 showed as 0.72 halfway); and the styled detail grows too fine for the march's pixels from
+about 600 to 1,300 km.
 
 What the data gives the client:
 
@@ -67,6 +71,14 @@ observed shape about 6 km across, smoothed so that no crease, texel or noise sho
 sun. Sampling that shape on rings instead of smoothing it drew polygons and ghosts; the same light on
 every cloud stained small ones over land khaki.
 
+**Relief from afar**: slopes read at the pixel's footprint and steepened in the march (ends at
+2,800 km and stays before the highlight shoulder, which compresses it 3.5 to 7×); the volume raised to
+about 5,500 km with 16 and 32 km windows (a quick try showed fine dimples and a hard seam where the
+8 km window ends; about 3 to 4 ms more on an Iris Xe at regional views, estimated); **a far relief
+light baked with the coarse windows and drawn at full resolution by the composite and the flat
+layer** (chosen). Enlarging the styled billows for far views would invent shapes at a scale the tops
+are observed at.
+
 **Without heights**: invented slab (ADR 0028's); **the flat layer, pixel by pixel** (chosen).
 
 ## Decision
@@ -75,14 +87,17 @@ every cloud stained small ones over land khaki.
 nothing and the flat layer shows instead (`cloudKnownAt`), with a soft edge at tile and window
 borders.
 
-**Bake**, per window (1, 2, 4, 8 km texels, 512²), when its inputs change (place, frames and blend,
-tiles loaded, sun, styling) and once every 32 frames otherwise. The 1 and 2 km windows centre on the
+**Bake**, per window (1, 2, 4 and 8 km texels for the march, 16 km for the far relief, 512²), when
+its inputs change (place, frames and blend, tiles loaded, sun, styling) and once every 32 frames
+otherwise. The 1 and 2 km windows centre on the
 ground 40 % of the half-height below the screen centre, where oblique views magnify it, at most
 400 km from the others' centre (the screen centre), so the windows stay nested. Field and
 observations are kept in half floats: 8 bits stepped the tops by 78 m, which the light drew as
 contour lines.
 
-1. **Observations**: blended opacity, observed top, convective core, heights known.
+1. **Observations**: blended opacity, observed top, convective core, share of heights known. The
+   4, 8 and 16 km windows hold the mean of each texel (2 × 2 to 4 × 4 taps of heights, 1 to 2 × 2
+   of cover) instead of a point of finer tiles.
 2. **Style**, from the neighbourhood (8 km ring, local spread of the tops, cover gradient):
 
 | Where | What | Bound |
@@ -94,18 +109,28 @@ contour lines.
 | Semi-transparent edges of a high system | Top lifted toward the plateau 3 to 18 km inward (local radiative centre, as in the ABI cloud-type algorithm), as a thin plate | Assumed: corrects the infrared's low bias; to validate against GOES `ACHA2KMF` |
 
 Noise is hashed gradient noise in Earth-frame km: no texture, no period. Octaves finer than 2.5
-window texels are dropped, so nothing aliases.
+window texels are dropped, so nothing aliases. The swell and the dips and domes stay in the 1 and
+2 km windows: the coarser ones feed the far relief, which would magnify them.
 
 3. **Sun**: transmittance through the other columns at the ground and at each column's own top,
    and, in the 1 and 2 km windows, the share of sky each dense top sees past its neighbours
    (8 directions, 1.5 to 12 km); skipped on the night side.
-4. **Deck light**, in the 4 and 8 km windows: dense tops (cover 0.4 to 0.8 and above) spread by
-   Gaussians 6 and 16 km wide in two separable passes; the 6 km shape drawn 6× steeper (tilt at most
-   45°) and lit by the sun lowered to 40° of elevation (fading out within 9° of the zenith, where the
-   sun has no direction), hollows below their 16 km surroundings up to 18 % darker. Only on large
-   decks (dense over 45 to 80 % of the 16 km surroundings): isolated towers keep the light of their
-   own slopes. It fades in from 20° to 49° of sun elevation, below which the real light shows
-   relief; the finer windows read it from the 4 km window.
+4. **Light of the broad shape**, in the 4, 8 and 16 km windows: dense tops (cover 0.4 to 0.8 and
+   above) spread by Gaussians 1.5 and 4 texels wide (6 and 16 km in the 4 km window) in two
+   separable passes, then one pass for three values:
+   - the **deck light** (4 and 8 km windows): the narrow shape drawn 6× steeper (tilt at most 45°)
+     and lit by the sun lowered to 40° of elevation (fading out within 9° of the zenith, where the
+     sun has no direction), hollows below their wide surroundings up to 18 % darker. Only on large
+     decks (dense over 45 to 80 % of the wide surroundings): isolated towers keep the light of their
+     own slopes. It fades in from 20° to 49° of sun elevation, below which the real light shows
+     relief; the finer windows read it from the 4 km window;
+   - the **far relief light**: the same shape drawn 6 · √(texel / 4 km) times steeper (6, 8.5 and
+     12), slopes under about 0.06 cored out, tilt at most 45°, lit by the sun at most 40° high with
+     its response per unit slope held to that of the 40° light (a lower sun draws slopes down to
+     0.35 of that), hollows up to 18 % darker (27 % within 9° of the zenith) and domes 6 % brighter;
+     on large decks under a high sun and on every dense system under a low one, where heights are
+     known;
+   - the **sunlit share of each top** from the sun pass, smoothed over about a texel.
 
 **March.** Half the CSS size (`high`, at most 48 crossings) or 0.4 (`medium`, 40); a quarter of the
 pixels per frame, the rest reprojected at the depth the march returns. Clear air is crossed about
@@ -124,6 +149,27 @@ neutral white and the exposure drops to 0.86 of the gain. A highlight shoulder (
 kept) brings sunlit tops below white instead of clipping them; the flash glow is added after it. Steps and rays take low-discrepancy offsets that a
 history averages; the history shortens where cover changes or the camera moves. A tier downgrade
 lowers the march resolution and crossings too.
+
+**Far relief.** The far relief light is read at full resolution from the window whose texel spans
+about 3.4 CSS pixels (two windows blended), so its shapes are 10 to 40 pixels across while a pixel
+covers up to about 4.7 km (they shrink toward the limb beyond). It is applied after the highlight shoulder and before the flash glow, at 0.7 of its
+shading (0.5 left relief 13 % weaker at 2,000 km than the deck light it takes over from), the shade
+a little bluer and the light filling only the headroom below white:
+- by the composite on the volume, where a pixel covers 0.9 to 1.6 km and more; the march hands its
+  deck light over by the same share, and under a low sun keeps its own light until pixels reach 1.1
+  to 1.7 km;
+- by the flat layer, with the shadows of taller clouds (direct light down to 15 %).
+
+It comes in from 700 to 1,200 km of camera height, so close views keep the volume's own light
+exactly, and fades out as a pixel at the screen centre grows from 4.1 to 4.85 km (6,500 to 7,700 km
+straight down on a 1,000-pixel-tall view), before the height tiles stop loading at 4.9 km (the globe
+stays flat). The 16 km window joins the march's bakes once the far relief comes in. Above the march
+only the coarse windows it reads are baked: missing ones first, coarsest first, one per frame;
+changed ones in turn, at most one every four frames; one anyway every 128 frames. A coarse window
+moves only once the view has gone 32 of its texels, and the sun pass skips the ground there. Storm packs keep heights at
+level 4 only: from afar the client loads those in place of the missing level 3, in 24 height layers
+instead of 16. In the crossfade the flat layer is drawn over the volume's share `y` as
+`a (1 − y) / (1 − y a)`, so a deck keeps its cover.
 
 **Transparency and brightness.** Drawn opacity straight down is the cover up to 0.5, then eased
 linearly to 0.95 at full cover (`capOpacity`), which the flat layer near the ground follows where the
@@ -145,7 +191,10 @@ edges, channel heights: assumed. Swell, billows, lobes, streaks, dip depressions
 transparency knee and the lighter veil over flashes: styled, within the bounds. Sunlight, shadows,
 relief shading, creases, haze: procedural; slopes exaggerated 1.6× in the lighting, 2.4× in the
 incidence of dense tops under a high sun. Deck light under a high sun: styled, on the observed broad
-shape, slopes 6× steeper and the sun lowered to 40°. Heights are not exaggerated.
+shape, slopes 6× steeper and the sun lowered to 40°. Far relief light: styled, shading only, on the
+observed broad shape at the scale of the screen, slopes 6 to 12× steeper, the sun lowered to 40° or
+its response held to that light. Shadows of taller clouds on the flat layer: procedural. Means of
+the coarse windows: observed. Heights are not exaggerated.
 
 **Bounds** (ADR 0030 rule 2), measured on the shader with `cloudVolume.styleCheck()`, which reads
 the finest window back in full precision before and after styling: cover averaged over 4 km blocks within 0.05 of the
@@ -189,6 +238,29 @@ Mac from the measured sun bake) and up to two reads per lit crossing; on still n
 within the noise. GPU memory: −1 MB (3D noise), +2 MB (raw window), +4 MB (field in half floats),
 +0.7 to 1 MB (depth target), +3 MB (deck light and its spread tops).
 
+Relief from afar, Pacific replay at noon (20:00 UTC), 1600 × 1000, `high`: RMS of the luminance
+band-pass from 3 to 12 CSS pixels over dense cloud, relative to its mean (%):
+
+| Camera | 1,274 km (orbit floor) | 2,000 km | 2,600 km | 3,500 km |
+|---|---|---|---|---|
+| Nadir, before | 7.3 | 7.4 | 2.8 | 3.3 |
+| Nadir, after | 7.3 | 7.8 | 7.4 | 7.2 |
+| 45° tilt, before | | 6.7 | 5.2 | 2.0 |
+| 45° tilt, after | | 8.2 | 8.1 | 4.9 |
+
+At 5,000 km the flat layer had no relief at all; it now shows the decks' broad shape. A zoom from
+1,400 to 3,400 km shows no step at 1,800 or 2,800 km (relief between 6.9 and 8.4). The finest band
+(1 to 3 pixels, where orange peel would show) stays between 1.7 and 2.1, against 1.2 to 1.9 before
+(the previous volume had 1.9 at 2,000 km). `iss`, `window` and storm follow differ from the previous version by 0.1 to 0.3 grey
+levels on average. Frame cost, GPU synchronised, 1920 × 1080 at DPR 2, far relief on against off
+(interleaved): still views at 2,000, 3,500 and 5,000 km, median −0.5 to +0.5 ms (one run +1.7 ms at
+2,000 km, +0.2 and +0.3 ms when repeated); panning at 3,500 and 5,000 km, −1.0 to +0.8 ms, p95
+−1.1 to +0.8 ms; within the noise. Not measured on an Iris Xe: a far window bake is about 1.5 to
+2 ms on the reference Mac (estimated), paid each time a window is baked again (it moves, a frame or
+the blend changes, tiles arrive, the sun moves, or the refresh every 128 frames), at most once every
+four frames. GPU memory: about +11 MB (16 km
+field and sun layers, the light of the broad shape in RGBA half floats, 8 more height layers).
+
 ## Consequences
 
 - No repeating motif anywhere: the only texture is hashed and follows the observed field.
@@ -202,6 +274,11 @@ within the noise. GPU memory: −1 MB (3D noise), +2 MB (raw window), +4 MB (fie
 - Under a high sun broad decks show their observed shape in a lowered, stylised light: more relief
   than astronaut photographs show at that hour, by the maintainer's choice. It is shading only: the
   style bounds, cover and tops do not move.
+- Relief reads from the orbit floor to about 6,500 km of camera height, as the observed broad shape
+  at the scale of the screen; the fine styled relief (cells, billows, creases) still needs the
+  floor, as the march's pixels limit it. Above 7,700 km the globe stays flat: no heights are loaded.
+- Around the subsolar point, within 9° of the zenith, far relief at noon keeps its hollows and domes
+  only, as the light has no direction there.
 - The neighbourhood measures can feed a cloud-type map for a hover label, at no R2 cost: evaluated
   separately.
 - Phones keep the flat layer until a real phone is measured, as in ADR 0028.

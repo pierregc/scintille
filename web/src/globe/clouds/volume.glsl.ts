@@ -1,8 +1,8 @@
 import { flashLightGlsl } from '../lightning/light-map.glsl';
 import { cloudOpacityGlsl } from './clouds.glsl';
-import { volumeFieldGlsl } from './field.glsl';
+import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
-export { volumeFieldGlsl } from './field.glsl';
+export { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
 const overlapGlsl = /* glsl */ `
 // Length of the segment from height h0 to h1 (over len km) that lies between lo and hi.
@@ -65,6 +65,8 @@ precision highp sampler2DArray;
 varying vec2 vUv;
 uniform vec4 bakeWindow;
 uniform float bakeTexels;
+// Taps per side for the heights and the cover: coarse windows hold the mean of each texel.
+uniform vec2 bakeTaps;
 ${cloudOpacityGlsl}
 ${windowGlsl}
 #ifdef HEIGHTS
@@ -112,10 +114,33 @@ void main() {
 	vec2 uv = vec2(geo.x, 1.0 - geo.y);
 	vec2 gx = vec2(bakeWindow.w / (3.141592654 * bakeTexels), 0.0);
 	vec2 gy = vec2(0.0, bakeWindow.z / (1.570796327 * bakeTexels));
-	float a = cloudOpacity(uv, geo, gx, gy) / max(cloudMaxOpacity, 1e-3);
+	// Finer tiles read at one point per coarse texel would alias: average them over the texel.
+	float a = 0.0;
+	for (int j = 0; j < 4; j++) {
+		for (int i = 0; i < 4; i++) {
+			if (float(i) >= bakeTaps.y || float(j) >= bakeTaps.y) continue;
+			vec2 o = (vec2(float(i), float(j)) + 0.5) / bakeTaps.y - 0.5;
+			vec2 g = vec2(fract(geo.x + o.x * gx.x), geo.y + o.y * gy.y);
+			a += cloudOpacity(vec2(g.x, 1.0 - g.y), g, gx / bakeTaps.y, gy / bakeTaps.y);
+		}
+	}
+	a /= bakeTaps.y * bakeTaps.y * max(cloudMaxOpacity, 1e-3);
 	float wide = mix(textureLod(cloudMap, uv, 2.5).r, textureLod(cloudMapNext, uv, 2.5).r, cloudMix);
-	float h = cloudHeight(geo);
-	gl_FragColor = vec4(a, clamp(h, 0.0, 20.0) / 20.0, smoothstep(0.55, 0.85, wide), h >= 0.0 ? 1.0 : 0.0);
+	float h = 0.0;
+	float known = 0.0;
+	for (int j = 0; j < 4; j++) {
+		for (int i = 0; i < 4; i++) {
+			if (float(i) >= bakeTaps.x || float(j) >= bakeTaps.x) continue;
+			vec2 o = (vec2(float(i), float(j)) + 0.5) / bakeTaps.x - 0.5;
+			float t = cloudHeight(vec2(fract(geo.x + o.x * gx.x), geo.y + o.y * gy.y));
+			if (t >= 0.0) {
+				h += t;
+				known += 1.0;
+			}
+		}
+	}
+	h = known > 0.0 ? h / known : -1.0;
+	gl_FragColor = vec4(a, clamp(h, 0.0, 20.0) / 20.0, smoothstep(0.55, 0.85, wide), known / (bakeTaps.x * bakeTaps.x));
 }
 `;
 
@@ -239,8 +264,10 @@ void main() {
 	// the visible ratio (never under 0.5) can have taken away, sink the shadow a little and raise
 	// the dome found on its sunward side.
 	// Under a high sun shadows are too short for that: dips stay as observed, crevices or thinner spots.
+	// Only the fine windows hold it (and the swell): coarse ones feed the far relief, which would magnify it.
+	float fine = 1.0 - step(3.0, texelKm);
 	float sunlit = smoothstep(-0.05, 0.05, dot(n, sunDir)) * (1.0 - smoothstep(0.5, 0.8, dot(n, sunDir)));
-	float inside = smoothstep(0.8, 0.95, aSum / 8.0) * (1.0 - edge) * smoothstep(6.0, 8.0, top) * sunlit;
+	float inside = smoothstep(0.8, 0.95, aSum / 8.0) * (1.0 - edge) * smoothstep(6.0, 8.0, top) * sunlit * fine;
 	float dip = (1.0 - a) * inside;
 	a = max(a, min(a + 0.35 * dip, min(1.0, 2.0 * a)));
 	vec2 sunward = vec2(dot(sunDir, east), dot(sunDir, north));
@@ -273,7 +300,7 @@ void main() {
 	float activity = smoothstep(0.35, 1.0, roughness) * opaque * high;
 	float lumpy = max(rise, 0.6 * activity) * (1.0 - lift);
 	float cells = opaque * (1.0 - high) * smoothstep(1.5, 3.0, top) * smoothstep(0.2, 0.6, max(roughness, observedTop - hMean));
-	float swell = gnoise(p / 14.0 + vec3(3.0, 7.0, 11.0)) * band(14.0);
+	float swell = gnoise(p / 14.0 + vec3(3.0, 7.0, 11.0)) * band(14.0) * fine;
 	float relief = lumpy * (0.6 * billows(p, 4.0) + 0.45 * billows(p, 8.0)) + 0.5 * cells * billows(p, 3.5)
 		+ (0.15 * high * opaque + 0.3 * mid * opaque + 0.1 * low) * (1.0 - max(lumpy, cells)) * swell
 		+ 0.8 * dome - 0.25 * dip;
@@ -292,6 +319,7 @@ uniform vec4 bakeWindow;
 uniform vec3 sunDir;
 uniform float lightGain;
 uniform float skyViewOn;
+uniform float groundOn;
 ${volumeFieldGlsl}
 ${overlapGlsl}
 ${windowGlsl}
@@ -349,7 +377,8 @@ void main() {
 	// Only dense tops in the fine windows read it: in coarser ones the search is finer than a texel.
 	bool dense = skyViewOn > 0.5 && f.a > 0.5 && f.r > 0.5;
 	float top = f.a > 0.5 ? f.g * 20.0 : 10.5;
-	gl_FragColor = vec4(towardSun(n, 0.05), towardSun(n, top + 0.05), dense ? skyView(n, latLon, top) : 1.0, 1.0);
+	float ground = groundOn > 0.5 ? towardSun(n, 0.05) : 1.0;
+	gl_FragColor = vec4(ground, towardSun(n, top + 0.05), dense ? skyView(n, latLon, top) : 1.0, 1.0);
 }
 `;
 
@@ -392,18 +421,28 @@ void main() {
 `;
 
 /**
- * Stylised light of a high sun on large dense decks (ADR 0031), over one coarse window: the shape
- * of their tops about 6 km across, slopes drawn deckRelief times steeper and lit by the sun lowered
- * to 40°, hollows below their 16 km surroundings dimmed. Under a low sun the real light shows relief.
+ * Light of the dense tops' broad shape over one coarse window (ADR 0031), from their tops spread
+ * over 1.5 and 4 texels. Red: the decks' stylised light under a high sun (4 and 8 km windows),
+ * slopes drawn deckRelief times steeper, lit by the sun lowered to 40°, hollows dimmed. Green: the
+ * far relief light, the same at this window's scale, slopes steeper as the window coarsens, lit by
+ * the sun at most 40° high with the response of that light, on every dense system under a low sun.
+ * Blue: the sunlit share of each top, for the far relief's shadows.
  */
 export const deckFragmentShader = /* glsl */ `
 precision highp float;
+precision highp sampler2DArray;
 varying vec2 vUv;
 uniform sampler2D spread;
+uniform highp sampler2DArray volumeField;
+uniform highp sampler2DArray volumeSun;
+uniform float bakeLayer;
 uniform vec4 bakeWindow;
 uniform float bakeTexels;
+uniform float texelKm;
 uniform vec3 sunDir;
 uniform float deckRelief;
+uniform float deckOn;
+uniform float reliefStrength;
 ${windowGlsl}
 
 // Mean dense top (km) over both widths and the shares of dense cloud they hold, at a texel.
@@ -412,13 +451,28 @@ vec4 broad(vec2 uv, vec4 fallback) {
 	return b.y > 0.02 ? vec4(b.x / b.y, b.z / max(b.w, 1e-4), b.y, b.w) : fallback;
 }
 
+// Sunlit share of the tops around a texel, smoothed over about a texel: column by column it steps.
+float sunlitTops(vec2 uv) {
+	float sum = 0.0;
+	for (int j = -2; j <= 2; j++) {
+		for (int i = -2; i <= 2; i++) {
+			vec3 at = vec3(uv + vec2(float(i), float(j)) / bakeTexels, bakeLayer);
+			float w = (i == 0 ? 6.0 : abs(i) == 1 ? 4.0 : 1.0) * (j == 0 ? 6.0 : abs(j) == 1 ? 4.0 : 1.0);
+			sum += w * (textureLod(volumeField, at, 0.0).a > 0.5 ? textureLod(volumeSun, at, 0.0).g : 1.0);
+		}
+	}
+	return sum / 256.0;
+}
+
 void main() {
 	vec2 latLon = bakeLatLon(vUv);
 	vec3 n = bakeDirection(latLon);
 	float s = dot(n, sunDir);
+	float lit = sunlitTops(vUv);
 	vec4 c = broad(vUv, vec4(0.0));
-	if (deckRelief <= 0.0 || s < 0.2 || c.z < 0.05 || c.w < 0.4) {
-		gl_FragColor = vec4(1.0);
+	float day = smoothstep(0.02, 0.12, s);
+	if (deckRelief <= 0.0 || day <= 0.0 || c.z < 0.05) {
+		gl_FragColor = vec4(1.0, 1.0, lit, 1.0);
 		return;
 	}
 	vec3 east = vec3(-sin(latLon.y), 0.0, -cos(latLon.y));
@@ -429,17 +483,35 @@ void main() {
 		broad(vUv + vec2(d.x, 0.0), c).x - broad(vUv - vec2(d.x, 0.0), c).x,
 		broad(vUv + vec2(0.0, d.y), c).x - broad(vUv - vec2(0.0, d.y), c).x
 	) / (2.0 * km);
-	slope *= deckRelief;
-	slope /= max(1.0, length(slope));
 	vec3 side = sunDir - n * s;
+	float aim = smoothstep(0.03, 0.15, length(side));
 	float lift = min(s, 0.64);
-	vec3 light = length(side) > 1e-4 ? normalize(side) * sqrt(1.0 - lift * lift) + n * lift : n;
-	vec3 shaped = normalize(n - east * slope.x - north * slope.y);
-	float hill = mix(1.0, (max(dot(shaped, light), 0.0) + 0.3) / (lift + 0.3), smoothstep(0.03, 0.15, length(side)));
-	float hollow = 1.0 - 0.18 * smoothstep(0.0, 1.5, (c.y - c.x) * deckRelief);
-	// Large decks only: isolated towers keep the relief of their own slopes.
-	float on = smoothstep(0.35, 0.75, s) * smoothstep(0.1, 0.4, c.z) * smoothstep(0.45, 0.8, c.w);
-	gl_FragColor = vec4(mix(1.0, hill * hollow, on), 0.0, 0.0, 1.0);
+	float level = sqrt(1.0 - lift * lift);
+	vec3 light = length(side) > 1e-4 ? normalize(side) * level + n * lift : n;
+
+	float deck = 1.0;
+	if (deckOn > 0.5 && s >= 0.2 && c.w >= 0.4) {
+		vec2 g = slope * deckRelief;
+		g /= max(1.0, length(g));
+		float hill = mix(1.0, (max(dot(normalize(n - east * g.x - north * g.y), light), 0.0) + 0.3) / (lift + 0.3), aim);
+		float hollow = 1.0 - 0.18 * smoothstep(0.0, 1.5, (c.y - c.x) * deckRelief);
+		// Large decks only: isolated towers keep the relief of their own slopes.
+		float on = smoothstep(0.35, 0.75, s) * smoothstep(0.1, 0.4, c.z) * smoothstep(0.45, 0.8, c.w);
+		deck = mix(1.0, hill * hollow, on);
+	}
+
+	// Broad slopes are gentler: steeper as the window coarsens, noise cored out, and under a lower sun
+	// the response per unit slope of the 40° light, so dusk is no stronger.
+	vec2 g = slope * deckRelief * sqrt(texelKm / 4.0);
+	g *= smoothstep(0.035, 0.09, length(g)) * clamp(0.815 * (lift + 0.3) / level, 0.35, 1.0);
+	g /= max(1.0, length(g));
+	float hill = mix(1.0, (max(dot(normalize(n - east * g.x - north * g.y), light), 0.0) + 0.3) / (lift + 0.3), aim);
+	float rise = (c.x - c.y) * deckRelief;
+	float bowl = (1.0 - 0.18 * mix(1.5, 1.0, aim) * smoothstep(0.0, 1.5, -rise)) * (1.0 + 0.06 * smoothstep(0.0, 1.5, rise));
+	// Only where heights are known here: the spread shape reaches a little past them.
+	float known = smoothstep(0.3, 0.7, textureLod(volumeField, vec3(vUv, bakeLayer), 0.0).a);
+	float on = day * known * smoothstep(0.1, 0.4, c.z) * mix(1.0, smoothstep(0.45, 0.8, c.w), smoothstep(0.35, 0.75, s));
+	gl_FragColor = vec4(deck, 1.0 + (hill * bowl - 1.0) * reliefStrength * on, lit, 1.0);
 }
 `;
 
@@ -467,6 +539,8 @@ uniform int maxSamples;
 uniform vec3 flashColor;
 uniform float flashGain;
 uniform highp sampler2DArray volumeDeck;
+uniform float reliefOn;
+uniform float reliefPixelAngle;
 ${volumeFieldGlsl}
 ${flashLightGlsl}
 ${overlapGlsl}
@@ -647,7 +721,9 @@ void main() {
 					vec3 broad = noon > 0.02 ? surfaceNormal(ll, nrm, max(foot, 3.0), col.y) : nrm;
 					vec3 steep = normalize(broad + (broad - nrm * dot(broad, nrm)) * (noonRelief - 1.0));
 					float incidence = (max(dot(steep, sunDir), 0.0) + 0.25) / (max(s, 0.0) + 0.25);
-					float deck = mix(1.0, deckAt(ll), exp(-d0));
+					// Where pixels grow large the composite draws the far relief light instead, at full resolution.
+					float farShare = reliefOn * smoothstep(0.9, 1.6, tv * reliefPixelAngle / max(abs(rise), 0.3));
+					float deck = mix(1.0, deckAt(ll), exp(-d0) * (1.0 - farShare));
 					float surface = mix(1.0, incidence, noon) * wall * mix(1.0, view, 0.35 * dense * high);
 					// The sun reddens through the air below it: high tops stay white at a low sun, low cloud
 					// turns peach, and only near sunset do anvils go ivory and pink.
@@ -758,6 +834,7 @@ void main() {
 `;
 
 export const compositeFragmentShader = /* glsl */ `
+precision highp sampler2DArray;
 varying vec2 vUv;
 uniform sampler2D resolved;
 uniform sampler2D freshDepth;
@@ -766,6 +843,12 @@ uniform vec2 freshSize;
 uniform vec2 phase;
 uniform vec3 flashColor;
 uniform float fade;
+uniform mat4 rayMatrix;
+uniform vec3 eyeKm;
+uniform vec3 sunDir;
+uniform float reliefPixelAngle;
+${volumeFieldGlsl}
+${reliefFieldGlsl}
 
 // Bright whites ease toward 1 instead of clipping, so sunlit tops keep their shading; the
 // brightest channel sets the curve, so peach and ivory keep their hue.
@@ -780,10 +863,32 @@ void main() {
 	vec4 c = texture2D(resolved, vUv);
 	// The flashes' glow comes straight from this frame's quarter, never from the history.
 	vec2 q = ((vUv * marchSize - phase - 0.5) / 2.0 + 0.5) / freshSize;
-	float glow = texture2D(freshDepth, q).g;
-	float coverage = (1.0 - c.a) * fade;
-	float shown = max(1.0 - c.a, 1e-3);
-	gl_FragColor = vec4(shoulder(c.rgb / shown) + flashColor * glow / shown, coverage);
+	vec4 seen = texture2D(freshDepth, q);
+	float cover = 1.0 - c.a;
+	float shown = max(cover, 1e-3);
+	vec3 rgb = shoulder(c.rgb / shown);
+	// Far relief light, after the shoulder so bright tops keep it, on the cloud seen.
+	if (reliefOn > 0.0 && cover > 0.02) {
+		vec4 far = rayMatrix * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+		vec3 rd = normalize(far.xyz / far.w - eyeKm);
+		float r = 6371.0 + (seen.b > 0.1 ? seen.b : 10.0);
+		float b = dot(eyeKm, rd);
+		float disc = b * b - dot(eyeKm, eyeKm) + r * r;
+		if (disc > 0.0) {
+			float t = -b - sqrt(disc);
+			vec3 p = eyeKm + rd * t;
+			vec3 up = normalize(p);
+			float pxKm = t * reliefPixelAngle / max(-dot(rd, up), 0.3);
+			float w = reliefWeight(pxKm, cover);
+			if (w > 0.001) {
+				float f = farRelief(volumeLatLon(p), pxKm).g;
+				// Under a low sun the march's own light carries the relief until pixels grow large.
+				f = 1.0 + (f - 1.0) * mix(smoothstep(1.1, 1.7, pxKm), 1.0, smoothstep(0.35, 0.75, dot(up, sunDir)));
+				rgb = reliefTone(rgb, mix(1.0, f, w));
+			}
+		}
+	}
+	gl_FragColor = vec4(rgb + flashColor * seen.g / shown, cover * fade);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

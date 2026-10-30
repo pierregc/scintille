@@ -13,7 +13,6 @@ import {
 	NormalBlending,
 	type Object3D,
 	OrthographicCamera,
-	RedFormat,
 	RGBAFormat,
 	Scene,
 	ShaderMaterial,
@@ -46,8 +45,13 @@ const EARTH_RADIUS_KM = 6371;
 const DEG = Math.PI / 180;
 const KM_PER_DEGREE = (EARTH_RADIUS_KM * Math.PI) / 180;
 
-/** Texel sizes (km) of the nested windows: the two finest around the ground below the screen centre, the others around the centre. */
-export const WINDOW_TEXEL_KM = [1, 2, 4, 8] as const;
+/**
+ * Texel sizes (km) of the nested windows: the two finest around the ground below the screen centre,
+ * the others around the centre. The march reads the first four; the 16 km one serves the far relief.
+ */
+export const WINDOW_TEXEL_KM = [1, 2, 4, 8, 16] as const;
+/** Windows the march reads. */
+const MARCH_WINDOWS = 4;
 /** Screen height (NDC) the two finest windows centre on, where oblique views magnify the ground. */
 const NEAR_SCREEN_Y = -0.4;
 /** Farthest (km) the two finest windows' centre may sit from the others', so the 2 km window stays inside the 4 km one. */
@@ -64,10 +68,20 @@ const NOON_EXPOSURE = 0.86;
 const NOON_RELIEF = 1.5;
 /** Steepening of the dense decks' broad slopes in their stylised light under a high sun. */
 const DECK_RELIEF = 6;
-/** Windows whose dense tops give the decks' broad shape, by their texel (km): 4 and 8. */
+/** First window whose dense tops give the broad shape (4 km texels); the decks' light stops at the 8 km one. */
 const DECK_FIRST = 2;
-/** Widths (km) of the decks' broad shape and of the surroundings its hollows are measured against. */
-const DECK_WIDTH_KM = [6, 16] as const;
+/** Widths (texels) of the broad shape and of the surroundings its hollows are measured against: 6 and 16 km in the 4 km window. */
+const DECK_WIDTH_TEXELS = [1.5, 4] as const;
+/** Share of the far relief light's shading kept on screen, after the highlight shoulder. */
+const RELIEF_STRENGTH = 0.7;
+/** Direct light left on a top in the shadow of a taller cloud, in the flat layer. */
+const RELIEF_SKY = 0.15;
+/** Camera heights (km) over which the far relief light comes in, so close views keep the volume's own light. */
+export const RELIEF_NEAR_KM = [700, 1200] as const;
+/** Km per CSS pixel at the screen centre over which the far relief fades out, before the height tiles stop loading (4.9). */
+export const RELIEF_TOP_PX_KM = [4.1, 4.85] as const;
+/** Above the march, a window moves only once the view has moved this many of its texels. */
+const FAR_SNAP_TEXELS = 32;
 
 export interface Window {
 	/** Centre latitude and longitude, radians. */
@@ -84,7 +98,7 @@ export interface Window {
  */
 export function windowAround(latDeg: number, lonDeg: number, k: number, texels: number): Window {
 	const stepLat = WINDOW_TEXEL_KM[k] / KM_PER_DEGREE;
-	const coarse = WINDOW_TEXEL_KM[WINDOW_TEXEL_KM.length - 1] / KM_PER_DEGREE;
+	const coarse = WINDOW_TEXEL_KM[MARCH_WINDOWS - 1] / KM_PER_DEGREE;
 	const snappedLat = Math.round(latDeg / coarse) * coarse;
 	const cos = Math.max(Math.round(Math.cos(Math.min(Math.abs(snappedLat), 72.7) * DEG) * 20) / 20, 0.3);
 	const stepLon = stepLat / cos;
@@ -106,6 +120,12 @@ export function within(from: [number, number], to: [number, number], maxKm: numb
 	const wb = Math.sin(most) / sin;
 	const p = a.map((v, i) => v * wa + b[i] * wb);
 	return [Math.asin(Math.min(1, Math.max(-1, p[1]))) / DEG, Math.atan2(-p[2], p[0]) / DEG];
+}
+
+/** Great-circle distance (km) between two points (degrees). */
+export function kmBetween([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]): number {
+	const a = Math.sin(((lat2 - lat1) * DEG) / 2) ** 2 + Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin(((lon2 - lon1) * DEG) / 2) ** 2;
+	return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 /** Sub-pixel of the 2 by 2 block marched in frame `n`. */
@@ -130,6 +150,43 @@ export function volumeFade(heightKm: number): number {
 	const [a, b] = VOLUME_FADE_KM;
 	const t = Math.min(1, Math.max(0, (heightKm - a) / (b - a)));
 	return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * How much of the far relief shows at a camera height (km) and a footprint at the screen centre (km
+ * per CSS pixel): `shade` for the shadows of taller clouds on the flat layer, `relief` for the far
+ * relief light, which close views leave to the volume.
+ */
+export function reliefFade(heightKm: number, centrePxKm: number): { shade: number; relief: number } {
+	const step = ([a, b]: readonly [number, number], x: number) => {
+		const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+		return t * t * (3 - 2 * t);
+	};
+	const shade = 1 - step(RELIEF_TOP_PX_KM, centrePxKm);
+	return { shade, relief: shade * step(RELIEF_NEAR_KM, heightKm) };
+}
+
+/**
+ * Window to bake this frame among `from` and up: a missing one first, coarsest first; else, every
+ * `every` frames, the next stale one in turn, so no window starves the others; else one in turn every
+ * `refresh` frames, in case something unseen moved. -1 for none.
+ */
+export function windowToBake(missing: readonly boolean[], stale: () => readonly boolean[], from: number, frame: number, every: number, refresh: number): number {
+	const count = missing.length - from;
+	for (let k = missing.length - 1; k >= from; k--) if (missing[k]) return k;
+	if (count <= 0 || frame % every !== 0) return -1;
+	const changed = stale();
+	const start = Math.floor(frame / every) % count;
+	for (let i = 0; i < count; i++) {
+		const k = from + ((start + i) % count);
+		if (changed[k]) return k;
+	}
+	return frame % refresh === 0 ? from + (Math.floor(frame / refresh) % count) : -1;
+}
+
+/** Taps per side over each texel of window `k` for the heights and the cover, so coarse windows hold texel means. */
+export function bakeTaps(k: number): [number, number] {
+	return [[1, 1], [1, 1], [2, 1], [2, 2], [4, 2]][k] as [number, number];
 }
 
 export interface CloudVolumeOptions {
@@ -200,8 +257,8 @@ export function createCloudVolume({
 	const field = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: HalfFloatType });
 	const sun = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: UnsignedByteType });
 	const raw = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
-	// The decks' stylised light over the coarse windows, and their spread tops on the way.
-	const deck = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length - DECK_FIRST, { depthBuffer: false, type: HalfFloatType, format: RedFormat });
+	// The light of the broad shape over the coarse windows (decks, far relief, sunlit tops), and their spread tops on the way.
+	const deck = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length - DECK_FIRST, { depthBuffer: false, type: HalfFloatType });
 	const spread = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
 	for (const target of [field, sun, raw, deck, spread]) {
 		target.texture.minFilter = LinearFilter;
@@ -221,7 +278,13 @@ export function createCloudVolume({
 		volumeField: { value: field.texture },
 		volumeSun: { value: sun.texture },
 		volumeWindows: { value: windows },
+		volumeCount: { value: MARCH_WINDOWS },
 		volumeOn: { value: 0 },
+		volumeRelief: { value: deck.texture },
+		reliefOn: { value: 0 },
+		shadeOn: { value: 0 },
+		reliefKmPerUnit: { value: 0 },
+		reliefSky: { value: RELIEF_SKY },
 		volumeMaxOpacity: { value: VOLUME_MAX_OPACITY },
 		volumeKnee: { value: VOLUME_KNEE },
 		volumeVeilOpacity: { value: VEIL_MAX_OPACITY },
@@ -233,9 +296,10 @@ export function createCloudVolume({
 
 	const pass = (fragmentShader: string, passUniforms: Record<string, IUniform>, defines: Record<string, string> = {}) =>
 		new ShaderMaterial({ vertexShader: passVertexShader, fragmentShader, uniforms: passUniforms, defines, depthTest: false, depthWrite: false });
+	const taps = { value: new Vector2(1, 1) };
 	const rawMaterial = pass(
 		rawFieldFragmentShader,
-		{ ...opacity.uniforms, ...heights, bakeWindow, bakeTexels },
+		{ ...opacity.uniforms, ...heights, bakeWindow, bakeTexels, bakeTaps: taps },
 		{ ...opacity.defines, ...(Object.keys(heights).length > 0 ? { HEIGHTS: '' } : {}) },
 	);
 	const styleUniforms: Record<string, IUniform> = {
@@ -248,7 +312,8 @@ export function createCloudVolume({
 	};
 	const styleMaterial = pass(styleFragmentShader, styleUniforms);
 	const skyViewOn = { value: 0 };
-	const sunMaterial = pass(sunFragmentShader, { ...uniforms, bakeWindow, sunDir, lightGain, skyViewOn });
+	const groundOn = { value: 1 };
+	const sunMaterial = pass(sunFragmentShader, { ...uniforms, bakeWindow, sunDir, lightGain, skyViewOn, groundOn });
 	const spreadUniforms: Record<string, IUniform> = {
 		volumeField: { value: field.texture },
 		spreadSource: { value: raw.texture },
@@ -258,7 +323,22 @@ export function createCloudVolume({
 	};
 	const spreadMaterial = pass(spreadFragmentShader, spreadUniforms);
 	const deckRelief = { value: detail ? DECK_RELIEF : 0 };
-	const deckMaterial = pass(deckFragmentShader, { spread: { value: spread.texture }, bakeWindow, bakeTexels, sunDir, deckRelief });
+	const deckOn = { value: 1 };
+	const bakeLayer = { value: 0 };
+	const deckMaterial = pass(deckFragmentShader, {
+		spread: { value: spread.texture },
+		volumeField: { value: field.texture },
+		volumeSun: { value: sun.texture },
+		bakeLayer,
+		bakeWindow,
+		bakeTexels,
+		texelKm: styleUniforms.texelKm,
+		sunDir,
+		deckRelief,
+		deckOn,
+		reliefStrength: { value: RELIEF_STRENGTH },
+	});
+	const reliefPixelAngle = { value: 0.001 };
 	const rayMatrix = { value: new Matrix4() };
 	const eyeKm = { value: new Vector3() };
 	const marchSize = { value: new Vector2(1, 1) };
@@ -274,6 +354,7 @@ export function createCloudVolume({
 		sunDir,
 		lightGain,
 		volumeDeck: { value: deck.texture },
+		reliefPixelAngle,
 		scatterGain: { value: SCATTER_GAIN },
 		noonExposure: { value: NOON_EXPOSURE },
 		noonRelief: { value: detail ? NOON_RELIEF : 1 },
@@ -313,6 +394,11 @@ export function createCloudVolume({
 		vertexShader: compositeVertexShader,
 		fragmentShader: compositeFragmentShader,
 		uniforms: {
+			...uniforms,
+			rayMatrix,
+			eyeKm,
+			sunDir,
+			reliefPixelAngle,
 			resolved: { value: history[0].texture },
 			freshDepth: { value: fresh.textures[1] },
 			marchSize,
@@ -364,37 +450,58 @@ export function createCloudVolume({
 		const texture = uniform?.value as Texture | null | undefined;
 		return texture ? `${texture.uuid}.${texture.version}` : '-';
 	};
-	const inputs = () => [
+	// Above the march, coarser steps of blend and sun: far shading changes little between them.
+	const inputs = (far: boolean) => [
 		versionOf(opacity.uniforms.cloudMap),
 		versionOf(opacity.uniforms.cloudMapNext),
-		Math.round((opacity.uniforms.cloudMix?.value ?? 0) * 64),
+		Math.round((opacity.uniforms.cloudMix?.value ?? 0) * (far ? 8 : 64)),
 		versionOf(opacity.uniforms.detailPagesA),
 		versionOf(opacity.uniforms.detailPagesB),
 		versionOf(heights.heightPagesA),
 		versionOf(heights.heightPagesB),
-		sunDir.value.toArray().map((v) => Math.round(v * 1000)).join(','),
+		sunDir.value.toArray().map((v) => Math.round(v * (far ? 100 : 1000))).join(','),
 		styleUniforms.styled.value,
 	].join('|');
 	const signatures: string[] = WINDOW_TEXEL_KM.map(() => '');
+	// The same with the coarser steps used above the march, so crossing 2,800 km bakes nothing again.
+	const farSignatures: string[] = WINDOW_TEXEL_KM.map(() => '');
 	const signature = (k: number, latDeg: number, lonDeg: number, shared: string) => {
 		const w = windowAround(latDeg, lonDeg, k, texels);
 		return `${w.lat.toFixed(6)},${w.lon.toFixed(6)}|${shared}`;
 	};
 
-	// Observations, then their styling, then the sunlight through the styled columns.
-	const bake = (renderer: WebGLRenderer, k: number, latDeg: number, lonDeg: number, shared: string) => {
-		signatures[k] = signature(k, latDeg, lonDeg, shared);
+	// Where each window was last baked: above the march a window stays until the view has moved far enough.
+	const placed: ([number, number] | null)[] = WINDOW_TEXEL_KM.map(() => null);
+	const empty = (k: number) => {
+		windows[k].set(0, 0, 1e-6, 1e-6);
+		signatures[k] = '';
+		farSignatures[k] = '';
+		placed[k] = null;
+	};
+
+	// Observations, then their styling, then the sunlight through the styled columns, then the light
+	// of the broad shape.
+	const bake = (renderer: WebGLRenderer, k: number, latDeg: number, lonDeg: number) => {
+		signatures[k] = signature(k, latDeg, lonDeg, inputs(false));
+		farSignatures[k] = signature(k, latDeg, lonDeg, inputs(true));
+		placed[k] = [latDeg, lonDeg];
 		const w = windowAround(latDeg, lonDeg, k, texels);
 		windows[k].set(w.lat, w.lon, w.halfLat, w.halfLon);
 		bakeWindow.value.copy(windows[k]);
 		styleUniforms.texelKm.value = WINDOW_TEXEL_KM[k];
+		taps.value.set(...bakeTaps(k));
 		skyViewOn.value = k < 2 ? 1 : 0;
+		// Only the march's windows give the ground its shadows; the 16 km one reads itself for its tops.
+		const count = uniforms.volumeCount.value;
+		groundOn.value = k < MARCH_WINDOWS && uniforms.volumeOn.value > 0 ? 1 : 0;
+		if (k >= MARCH_WINDOWS) uniforms.volumeCount.value = WINDOW_TEXEL_KM.length;
 		draw(renderer, rawMaterial, raw);
 		draw(renderer, styleMaterial, field, k);
 		draw(renderer, sunMaterial, sun, k);
+		uniforms.volumeCount.value = count;
 		if (k >= DECK_FIRST) {
 			// Dense tops spread across, then along (through the free observations target), then lit.
-			spreadUniforms.spreadWidth.value.set(DECK_WIDTH_KM[0], DECK_WIDTH_KM[1]).divideScalar(WINDOW_TEXEL_KM[k]);
+			spreadUniforms.spreadWidth.value.set(...DECK_WIDTH_TEXELS);
 			spreadUniforms.spreadLayer.value = k;
 			spreadUniforms.spreadSource.value = spread.texture;
 			spreadUniforms.spreadStep.value.set(1 / texels, 0);
@@ -403,6 +510,8 @@ export function createCloudVolume({
 			spreadUniforms.spreadSource.value = raw.texture;
 			spreadUniforms.spreadStep.value.set(0, 1 / texels);
 			draw(renderer, spreadMaterial, spread);
+			bakeLayer.value = k;
+			deckOn.value = k < MARCH_WINDOWS ? 1 : 0;
 			draw(renderer, deckMaterial, deck, k - DECK_FIRST);
 		}
 	};
@@ -428,47 +537,87 @@ export function createCloudVolume({
 			const radius = view.earth.matrixWorld.getMaxScaleOnAxis();
 			const kmPerUnit = EARTH_RADIUS_KM / radius;
 			const heightKm = (eye.length() - 1) * EARTH_RADIUS_KM;
-			const fade = (opacity.uniforms.cloudShown?.value ?? 0) > 0.5 ? volumeFade(heightKm) : 0;
-			fadeUniform.value = fade;
-			uniforms.volumeOn.value = fade > 0 ? fade : 0;
-			mesh.visible = fade > 0;
-			if (fade <= 0) {
-				lastViewProjection = null;
-				baked = 0;
-				return;
-			}
-			const target = renderer.getRenderTarget();
-			const autoClear = renderer.autoClear;
-			renderer.autoClear = false;
+			const fov = (camera as Camera & { fov?: number }).fov ?? 35;
+			const cssAngle = (2 * Math.tan((fov * DEG) / 2)) / Math.max(1, view.height);
 			// The points looked at: the ground at a screen height, else under the camera. The coarse windows
 			// centre on the screen centre; the fine ones lower down, where the nearer ground is magnified.
+			// `slant` keeps the distance (km) to the last point found, or to the horizon.
+			let slant = 0;
 			const groundAt = (ndcY: number): [number, number] => {
 				dir.set(0, ndcY, 0.5).unproject(camera as Camera & { projectionMatrixInverse: Matrix4 }).applyMatrix4(earthInverse).sub(eye).normalize();
 				const b = eye.dot(dir);
 				const disc = b * b - (eye.lengthSq() - 1);
-				look.copy(disc > 0 && -b - Math.sqrt(disc) > 0 ? dir.multiplyScalar(-b - Math.sqrt(disc)).add(eye) : eye).normalize();
+				const hit = disc > 0 && -b - Math.sqrt(disc) > 0;
+				slant = (hit ? -b - Math.sqrt(disc) : Math.sqrt(Math.max(eye.lengthSq() - 1, 0))) * EARTH_RADIUS_KM;
+				look.copy(hit ? dir.multiplyScalar(-b - Math.sqrt(disc)).add(eye) : eye).normalize();
 				return [Math.asin(look.y) / DEG, Math.atan2(-look.z, look.x) / DEG];
 			};
 			const centre = groundAt(0);
+			const shown = (opacity.uniforms.cloudShown?.value ?? 0) > 0.5;
+			const fade = shown ? volumeFade(heightKm) : 0;
+			const far = shown ? reliefFade(heightKm, slant * cssAngle) : { shade: 0, relief: 0 };
+			const marching = fade > 0;
+			fadeUniform.value = fade;
+			uniforms.volumeOn.value = fade;
+			uniforms.reliefOn.value = far.relief;
+			uniforms.shadeOn.value = far.shade;
+			mesh.visible = marching;
+			if (!marching && far.shade <= 0) {
+				lastViewProjection = null;
+				baked = 0;
+				return;
+			}
+			reliefPixelAngle.value = cssAngle;
+			uniforms.reliefKmPerUnit.value = kmPerUnit * cssAngle;
+			const target = renderer.getRenderTarget();
+			const autoClear = renderer.autoClear;
+			renderer.autoClear = false;
 			const near = within(centre, groundAt(NEAR_SCREEN_Y), NEAR_MAX_KM);
 			const pointFor = (k: number) => (k < 2 ? near : centre);
+			// The 16 km window, and above the march every coarse one, moves only once the view has gone a good way.
+			const wanted = (k: number): [number, number] => {
+				const q = placed[k];
+				return q && (k >= MARCH_WINDOWS || !marching) && kmBetween(q, centre) < FAR_SNAP_TEXELS * WINDOW_TEXEL_KM[k] ? q : pointFor(k);
+			};
 			sunDir.value.copy(view.sun).normalize();
-			// Every window at once after a jump; then, every other frame, the next window whose inputs
-			// changed, and one anyway every 32 frames in case something unseen moved.
-			const shared = inputs();
-			if (baked === 0) {
-				for (let k = WINDOW_TEXEL_KM.length - 1; k >= 0; k--) bake(renderer, k, ...pointFor(k), shared);
-			} else if (baked % 2 === 0) {
-				const start = (baked / 2) % WINDOW_TEXEL_KM.length;
-				let done = false;
-				for (let i = 0; i < WINDOW_TEXEL_KM.length && !done; i++) {
-					const k = (start + i) % WINDOW_TEXEL_KM.length;
-					if (signatures[k] !== signature(k, ...pointFor(k), shared)) {
-						bake(renderer, k, ...pointFor(k), shared);
-						done = true;
-					}
+
+			if (!marching) {
+				// Above the march only the coarse windows the far relief reads are baked, coarsest first, one
+				// at a time, and they move only once the view has gone a good way.
+				if (uniforms.volumeCount.value !== WINDOW_TEXEL_KM.length) {
+					uniforms.volumeCount.value = WINDOW_TEXEL_KM.length;
+					baked = 0;
 				}
-				if (!done && baked % 32 === 0) bake(renderer, start, ...pointFor(start), shared);
+				lastViewProjection = null;
+				groundAt(-1);
+				// The finest window the far relief reads at the bottom of the screen, where pixels are smallest.
+				const first = Math.min(3, Math.max(DECK_FIRST, Math.floor(Math.log2(3.4 * slant * cssAngle))));
+				for (let k = 0; k < first; k++) if (placed[k] || signatures[k]) empty(k);
+				const shared = inputs(true);
+				const missing = signatures.map((sig) => !sig);
+				const next = windowToBake(missing, () => WINDOW_TEXEL_KM.map((_, k) => farSignatures[k] !== signature(k, ...wanted(k), shared)), first, baked, 4, 128);
+				if (next >= 0) bake(renderer, next, ...wanted(next));
+				baked++;
+				renderer.setRenderTarget(target);
+				renderer.autoClear = autoClear;
+				return;
+			}
+
+			// The march's windows at once after a jump; then, every other frame, the next window whose inputs
+			// changed, and one anyway every 32 frames. The 16 km window joins them once far relief shows.
+			if (uniforms.volumeCount.value !== MARCH_WINDOWS) {
+				uniforms.volumeCount.value = MARCH_WINDOWS;
+				baked = 0;
+			}
+			const shared = inputs(false);
+			const count = far.relief > 0 ? WINDOW_TEXEL_KM.length : MARCH_WINDOWS;
+			if (count === MARCH_WINDOWS && placed[MARCH_WINDOWS]) empty(MARCH_WINDOWS);
+			if (baked === 0) {
+				for (let k = MARCH_WINDOWS - 1; k >= 0; k--) bake(renderer, k, ...pointFor(k));
+			} else {
+				const missing = signatures.slice(0, count).map((sig) => !sig);
+				const next = windowToBake(missing, () => missing.map((_, k) => signatures[k] !== signature(k, ...wanted(k), shared)), 0, baked, 2, 32);
+				if (next >= 0) bake(renderer, next, ...wanted(next));
 			}
 			baked++;
 
@@ -480,7 +629,6 @@ export function createCloudVolume({
 				lastViewProjection = null;
 			}
 			marchSize.value.set(width, height);
-			const fov = (camera as Camera & { fov?: number }).fov ?? 35;
 			marchUniforms.pixelAngle.value = (2 * Math.tan((fov * DEG) / 2)) / height;
 			resolveUniforms.freshSize.value.set(fresh.width, fresh.height);
 			phase.value.set(...marchPhase(frame));
@@ -522,9 +670,11 @@ export function createCloudVolume({
 			return { width: target.width, height: target.height, values };
 		},
 		styleCheck(renderer) {
+			if (!placed[0]) throw new Error('styleCheck needs the march: bring the camera below 2,800 km');
 			const target = renderer.getRenderTarget();
 			bakeWindow.value.copy(windows[0]);
 			styleUniforms.texelKm.value = WINDOW_TEXEL_KM[0];
+			taps.value.set(...bakeTaps(0));
 			const styled = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
 			draw(renderer, rawMaterial, raw);
 			draw(renderer, styleMaterial, styled);

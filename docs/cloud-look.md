@@ -125,7 +125,8 @@ Second review: "more relief on the large decks at noon, even if more stylised, w
 orange peel". Under a high sun the decks now take a light of their own, baked with the 4 and 8 km
 windows:
 
-- **Shape**: the observed dense tops, spread by Gaussians 6 and 16 km wide. Nothing finer: no
+- **Shape**: the observed dense tops, spread by Gaussians 6 and 16 km wide in the 4 km window
+  (12 and 32 km in the 8 km one, toward the horizon). Nothing finer: no
   billow crease, no 2 km texel and no noise reaches it, so no line or regular dimple can appear.
   On a flat observed deck it stays flat; the swell (14 km) is smoothed away.
 - **Light**: the 6 km shape drawn 6× steeper (tilt at most 45°), lit by the sun lowered to 40°
@@ -159,6 +160,56 @@ khaki (live, Gulf of Guinea, 2026-10-30 14 UTC). Filling the shade with bluish l
 tinting it halved the relief, which the highlight shoulder already compresses:
 ![Rejected deck light](immersive/cloud-look/noon-deck-rejected.jpg)
 
+## Relief from afar
+
+Third review: "all these reliefs visible from farther away; it seems you have to zoom in quite
+low to see them". Measured on the same replays from the orbit floor (1,274 km) to 5,000 km:
+
+| Height | What hid the relief |
+|---|---|
+| From about 600 km | Cells and 4 km billows under 4 march pixels; 8 km billows from about 1,300 km |
+| 1,800 to 2,800 km | The crossfade to the flat layer: relief halved at 2,300 km, dense decks thinned (0.95 shown as 0.72) |
+| Above 2,800 km | The flat layer: one colour, no shading, no shadows, although the height tiles are loaded up to about 7,700 km |
+| Everywhere | The highlight shoulder compresses relief on bright tops 3.5 to 7× |
+
+Three designs were weighed (code analysis, research on cartographic relief shading and real-time
+cloud renderers, a judge). Raising the volume itself showed relief at 3,500 km in a quick try, but
+as fine dimples with a hard seam where the 8 km window ends, at the full cost of the march. The
+chosen way follows small-scale relief shading in cartography: generalise first, then shade. The
+coarse windows hold texel means of the observed tops; their broad shape, spread over 1.5 and 4
+texels, is lit with slopes steeper as the window coarsens (6, 8.5 and 12×, as hillshading raises its
+exaggeration at small scales) and read from the window whose texel spans about 3.4 screen pixels,
+so its shapes are 10 to 40 pixels across at any height. It is drawn at full resolution, after the
+highlight shoulder, by the composite on the volume and by the flat layer, which also takes the
+shadows of taller clouds. Under a low sun its slopes keep the contrast of a 40° sun, so dusk gets no
+stronger than noon from that light; the real light and shadows carry it. Close views keep the accepted light: it comes in where a pixel covers
+0.9 to 1.6 km. Details in [ADR 0031](adr/0031-cloud-look.md#decision).
+
+Before (left), after (right).
+
+2,600 km, straight down, at noon: the crossfade had flattened the deck.
+![Far relief, 2,600 km](immersive/cloud-look/far-2600.jpg)
+
+3,500 km, 45° tilt: the flat layer, now shaded.
+![Far relief, 3,500 km tilted](immersive/cloud-look/far-3500-tilt.jpg)
+
+5,000 km, straight down: the deck's broad shape.
+![Far relief, 5,000 km](immersive/cloud-look/far-5000.jpg)
+
+Colombia at dusk, 3,500 km: masses lit from the side and the shadows of taller clouds.
+![Far relief at dusk](immersive/cloud-look/far-dusk.jpg)
+
+After, zooming out from 1,400 to 3,400 km over the same deck: no step where the volume hands over
+to the flat layer (1,800 to 2,800 km).
+![Zoom out](immersive/cloud-look/far-zoom.jpg)
+
+Relief (RMS of the 3 to 12 pixel band over dense cloud, % of the mean) at noon straight down: 7.3,
+7.4, 2.8 and 3.3 before at 1,274, 2,000, 2,600 and 3,500 km; 7.3, 7.8, 7.4 and 7.2 after. The near
+poses (`iss`, `window`, storm follow) differ by 0.1 to 0.3 grey levels on average. The light of the
+far relief fades out before the height tiles stop loading (6,500 to 7,700 km straight down on a
+1,000-pixel-tall view): the whole globe stays flat. The flat layer stays a little bluer than the volume, as the atmosphere hazes it as a
+shell at 10 km.
+
 ## Bounds and cost
 
 Style bounds (ADR 0030 rule 2) hold at five places, read back from the shader in full precision
@@ -166,8 +217,10 @@ with `cloudVolume.styleCheck()`: mean cover difference at most 0.0013 (bound 0.0
 0.073 (bound 0.1), saturated tops within 0.95 km (bound 1 km). Frame cost on the reference Mac stays
 at the first version's level. Tables in [ADR 0031](adr/0031-cloud-look.md#measurements).
 
-No new R2 object or byte: the renderer uses the tiles already published. The deck light is shading
-only: cover and tops, and so the bounds, do not move.
+No new R2 object or byte: the renderer uses the tiles already published; storm packs, which keep
+only level 4 heights, load those from afar too. The deck light and the far relief are shading only:
+cover and tops, and so the bounds, do not move. The coarse windows' texel means are observations
+averaged, not styling.
 
 ## Hover cloud type: evaluation
 
@@ -192,7 +245,9 @@ the ten strongest storms of each day.
 
 ## Open points
 
-- Frame cost on a mid-range laptop (Iris Xe, `medium`) and on a phone is estimated, not measured.
+- Frame cost on a mid-range laptop (Iris Xe, `medium`) and on a phone is estimated, not measured;
+  so is a far window bake there (about 1.5 to 2 ms on the reference Mac).
+- Within 9° of the subsolar point far relief at noon keeps its hollows and domes only (no sun azimuth).
 - The lift of semi-transparent anvil edges is assumed; validate against GOES `ACHA2KMF`.
 - Warm low clouds stay faint; no stratocumulus cells.
 - Shadows at a very low sun keep 1 km steps.

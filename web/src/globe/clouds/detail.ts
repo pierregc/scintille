@@ -171,21 +171,26 @@ export interface ViewPoint {
 
 /**
  * Tiles to show for the sampled points of a view, each with its available ancestors, finest last
- * within a point and nearest the centre first: the order to load them in.
+ * within a point and nearest the centre first: the order to load them in. With `finerFallback`, a
+ * point no tile covers at its level takes the next finer level that has one (storm packs keep only
+ * the finest heights).
  */
-export function wantedTiles(source: DetailSource, points: readonly ViewPoint[]): TileKey[] {
+export function wantedTiles(source: DetailSource, points: readonly ViewPoint[], finerFallback = false): TileKey[] {
 	const scored = new Map<string, { key: TileKey; score: number }>();
 	for (const point of points) {
 		const level = levelFor(source, point.kmPerPx);
 		if (level === null) continue;
+		let found = false;
 		for (const z of source.levels) {
-			if (z > level) break;
+			if (z > level && (found || !finerFallback)) break;
 			const key = tileAt(point.lat, point.lon, z);
 			if (!hasTile(source, key)) continue;
+			found = true;
 			const id = keyId(key);
 			const score = z * 10 + point.offCentre;
 			const known = scored.get(id);
 			if (!known || score < known.score) scored.set(id, { key, score });
+			if (z > level) break;
 		}
 	}
 	return [...scored.values()].sort((a, b) => a.score - b.score).map((s) => s.key);
@@ -274,6 +279,8 @@ export interface CloudDetailOptions {
 	slots?: number;
 	maxLoads?: number;
 	fadeMs?: number;
+	/** Where no tile covers a point at its level, load the next finer one instead (heights of storm packs). */
+	finerFallback?: boolean;
 	fetch?: typeof fetch;
 	/** One byte per texel, rows from the north. */
 	decode?: (blob: Blob, size: number) => Promise<Uint8Array>;
@@ -317,6 +324,7 @@ export function createCloudDetail(
 		slots: slotCount = 48,
 		maxLoads = 6,
 		fadeMs = 400,
+		finerFallback = false,
 		fetch: fetchTile = (input, init) => fetch(input, init),
 		decode = decodeTile,
 	}: CloudDetailOptions = {},
@@ -498,7 +506,7 @@ export function createCloudDetail(
 			const queue: [DetailSource, TileKey][] = [];
 			for (const source of view.frames) {
 				if (!source) continue;
-				for (const key of wantedTiles(source, points)) {
+				for (const key of wantedTiles(source, points, finerFallback)) {
 					if (keep.size >= slotCount - 4) break;
 					const id = tileId(source, key);
 					if (keep.has(id)) continue;
