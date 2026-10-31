@@ -260,7 +260,10 @@ Physical scale and compensation:
 - Each flash flickers for its observed duration in wall clock time, so at 60× a storm view shows
   about a minute of flashes at once ([flash profile](flash-profile.md)). Glows there use screen
   blending, the cloud light keeps the brightest flash, and bloom and cloud light scale with how
-  dark the scene is, so overlaps and sunlit clouds never turn white.
+  dark the scene is, so overlaps and sunlit clouds never turn white. At replay speed, channels and
+  near-floor sprites go to a seeded sample of the flashes sized for the speed (about 50 / 20 / 8
+  within their flicker at once at 60× / 600× / 3600×); every flash still lights the cloud
+  ([overlaps in a storm view](flash-profile.md#overlaps-in-a-storm-view)).
 
 Measured on 2026-10-28 with a local production build of #254 against production data, on the same
 Mac as the baseline; captures at the four poses in [`immersive/lightning-scale/`](immersive/lightning-scale/).
@@ -353,6 +356,7 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
+| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all at 1×; bands 30-100 / 12-30 / 5-12), stronger flashes up to 2.5× likelier; the rest keep a point from afar | `DENSITY`, `heroLot`, `heroShare`, [flash profile](flash-profile.md#overlaps-in-a-storm-view) |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
@@ -620,6 +624,13 @@ buffers, drawing buffer) and the screenshot brightness. `--afterglow <minutes>` 
 reference afterglow, `--speed` plays at another replay speed than 60×, `--no-clouds` hides the
 clouds, `--warm` measures a second visit and `--network 4g` or `slow4g` throttles the page. Active flashes count those started within a second of wall clock time, or within the
 afterglow window.
+
+In the page, `window.__app.lightning.stats` reads the storm view sample of the current frame
+([flash profile](flash-profile.md#overlaps-in-a-storm-view)): `alive`, the flashes played in the
+last 0.4 s of wall clock time; `drawn`, the flashes of the sample within their flicker or fade
+(0 when the view is too far for channels); `share`, the applied share of the lots, and `target`,
+the flashes within their flicker it aims at (Infinity at 1×); `channels`, the flashes holding a
+channel slot. A capture tool reads it once per frame to check the targets.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the

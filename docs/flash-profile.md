@@ -65,10 +65,32 @@ At 60×, a storm view shows about a minute of flashes at once. Glows there use s
 shows over sunlit clouds without whitening them. The cloud light keeps the brightest flash at each point.
 On the globe overview, flashes keep adding up, so active regions glow brighter.
 
-A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
-time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
-shortens each flash to its first pulses, at 3600× to a frame or two: the cost stays bounded, but near
-the floor the image still whitens at those speeds.
+**Replay speed never removes a flash.** Every flash lights the cloud at its observed time, place,
+footprint and energy, with its full profile and drift, for its observed duration, at every replay
+speed. What a storm view draws in full, with its channel, its near-floor sprite, its halo and its
+crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
+lightning look rework, #398):
+
+- Each flash holds a fixed lot `channelHash(seed, 3) × mix(1, 0.4, intensity)`: a revisit or a
+  shared URL shows the same flashes, and the strongest flash is 2.5 times likelier than the weakest
+  to be drawn. A flash is drawn while its lot is under the applied share, fading out over the next
+  10 % of the share rather than popping at its edge.
+- The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
+  600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
+  between the speeds the target follows a power law). `share = target / (1.5 × alive)`, `alive`
+  being the flashes played in the last 0.4 s of wall clock time (1.5 is the mean of the lot
+  weights). On a quiet storm the share is 1 and every flash is drawn.
+- The applied share follows the wanted one with a 2 s time constant, so a changing rate never
+  pumps the picture, and jumps to it at once on a seek, a speed change or a new storm view.
+- Outside the sample, a flash keeps its point from afar (its sprite times the farness), and half a
+  sprite when the cloud light has no surface to show it (clouds hidden, no cloud frame, `low` tier),
+  so every flash stays a point ([visual rule 1](immersive-view.md#visual-rules)).
+
+The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
+of wall clock time) binds only while every flash is drawn, in practice at 1×; the cloud light never
+has a cap (`DENSITY.lightMapCeiling` is Infinity: the bench needed none). The channel pool builds
+channels for the sample only, and the sound voices it only. The HUD rate stays the data rate:
+`lightning.stats` ([benchmark](immersive-view.md#benchmark)) tells how many flashes are drawn.
 
 ## Channel
 
