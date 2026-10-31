@@ -4,6 +4,7 @@ import { CHANNEL, channelGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { ribbonGlsl } from './ribbon';
 import { SKELETON } from './skeleton';
 import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
@@ -23,6 +24,8 @@ uniform float flicker;
 uniform float radius;
 uniform float kmToWorld;
 uniform vec2 viewport;
+uniform float viewScale;
+uniform float pixelRatio;
 uniform float halo;
 uniform float haloStrength;
 uniform vec3 sunDirection;
@@ -38,6 +41,7 @@ ${intensityGlsl}
 ${zoomGlsl}
 ${channelGlsl}
 ${veilGlsl}
+${ribbonGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
 #endif
@@ -121,11 +125,10 @@ void main() {
 	} else {
 		light *= cloudTransmission(opacity, slant);
 	}
-	// Hairlines draw a pixel wide and give up light instead, so they never break into dashes.
-	if (width < 0.75) {
-		light *= width / 0.75;
-		width = 0.75;
-	}
+	// Hairlines draw at the raster's floor and give up light instead, so they never break into dashes.
+	vec2 thin = hairline(width, pixelRatio * viewScale);
+	width = thin.x;
+	light *= thin.y;
 	if (light < 0.002) {
 		cull();
 		return;
@@ -140,12 +143,13 @@ void main() {
 	t = dot(t, t) > 1e-8 ? normalize(t) : vec2(1.0, 0.0);
 	vec4 c = corner.x > 0.5 ? cb : ca;
 	float w = width * (halo > 0.5 ? 8.0 : 1.0);
-	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, so they never bead.
-	float cap = halo > 0.5 ? 1.0 : 0.5;
+	vLength = length(sb - sa) / w;
+	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, and a core
+	// segment shorter than its width is drawn as a round stamp, so a chain of them makes one smooth thread.
+	float cap = halo > 0.5 ? 1.0 : max(0.5, 1.0 - 0.5 * vLength);
 	float along = corner.x > 0.5 ? cap : -cap;
 	c.xy += (vec2(-t.y, t.x) * corner.y + t * along) * w / viewport * c.w;
 	gl_Position = c;
-	vLength = length(sb - sa) / w;
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
 	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
@@ -163,20 +167,24 @@ varying vec2 vLocal;
 varying float vLength;
 varying float vLight;
 varying vec3 vTint;
+${ribbonGlsl}
 void main() {
 	float light;
+	float share = 1.0;
 	if (halo > 0.5) {
 		vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
 		float x2 = min(dot(d, d), 1.0);
 		light = 0.3 * exp(-x2 * 5.0) * (1.0 - x2);
 	} else {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
-		float ends = clamp((vLocal.x + 0.5), 0.0, 1.0) * clamp((vLength + 0.5 - vLocal.x), 0.0, 1.0);
-		light = exp(-y2 * 3.0) * (1.0 - y2) * ends;
+		light = exp(-y2 * 3.0) * (1.0 - y2);
+		share = segmentWeight(vLocal.x, vLocal.y, vLength);
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
+	// A segment's share of the joint splits the screen value, not the linear one, so the quads there add up to one.
+	gl_FragColor.rgb *= share;
 }
 `;

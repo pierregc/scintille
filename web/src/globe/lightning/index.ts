@@ -199,6 +199,7 @@ export function createLightning(
 	}
 	channelGeometry.instanceCount = 0;
 	const poolShift = new NumberUniform();
+	const pixelRatio = { value: 1 };
 	// Channel cores add to what is behind them, so they stay visible over a lit cloud; halos keep the brightest.
 	const ribbon = (halo: number) =>
 		new ShaderMaterial({
@@ -207,6 +208,7 @@ export function createLightning(
 			uniforms: {
 				...material.uniforms,
 				poolShift,
+				pixelRatio,
 				viewport: { value: viewport },
 				halo: { value: halo },
 				color: { value: new Color(halo ? '#c4cdff' : '#eef2ff') },
@@ -227,6 +229,7 @@ export function createLightning(
 	channelMesh.onBeforeRender = (renderer) => {
 		renderer.getSize(viewport);
 		viewport.multiplyScalar(0.5 / viewScale(viewport.y, phone));
+		pixelRatio.value = renderer.getPixelRatio();
 	};
 	const haloMesh = new Mesh(channelGeometry, haloMaterial);
 	haloMesh.frustumCulled = false;
