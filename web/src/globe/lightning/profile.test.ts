@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import golden from '../../../fixtures/lightning/flash-profile-golden.json';
+import { FlashKind } from './kind';
 import {
+	cloudProfile,
 	continuingCurrent,
 	flashLife,
 	flashProfile,
@@ -7,6 +10,7 @@ import {
 	glowDecay,
 	glowLevel,
 	glslFloat,
+	groundProfile,
 	MAX_LIFE,
 	PROFILE,
 	pulseGap,
@@ -16,8 +20,8 @@ import {
 } from './profile';
 
 const seeds = Array.from({ length: 400 }, (_, i) => (i * 0.6180339887) % 1);
-const at = (wall: number, durationMs = 300, seed = 0.5, display = 0, sceneAge = wall, flicker = true) =>
-	flashProfile(wall, sceneAge, display, durationMs, seed, flicker);
+const at = (wall: number, durationMs = 300, seed = 0.5, display = 0, sceneAge = wall, flicker = true, kind = FlashKind.IcTrunkFan) =>
+	flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind);
 
 function peaks(durationMs: number, seed: number, flicker = true): number {
 	const samples = Array.from({ length: 1501 }, (_, i) => at(i / 1000, durationMs, seed, 0, i / 1000, flicker));
@@ -119,8 +123,8 @@ describe('glslFloat', () => {
 });
 
 describe('flash kinds', () => {
-	const ground = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, true);
-	const cloud = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, false);
+	const ground = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, FlashKind.CgMulti);
+	const cloud = (wall: number, seed: number, durationMs = 400) => flashProfile(wall, wall, 0, durationMs, seed, true, FlashKind.IcTrunkFan);
 
 	it('darkens between the strokes of a cloud-to-ground flash and keeps a cloud flash glowing', () => {
 		for (const seed of seeds.slice(0, 40)) {
@@ -150,5 +154,54 @@ describe('flash kinds', () => {
 		expect(spread(0.2, 0.5, false)).toBeGreaterThan(0.5);
 		expect(spread(0.4, 0.5, false)).toBe(1);
 		expect(spread(0.02, 0.5, true)).toBe(1);
+	});
+});
+
+describe('kind profiles', () => {
+	/** The inputs of the golden fixture, recorded before `flashProfile` was split into `groundProfile` and `cloudProfile`. */
+	function cases() {
+		let state = 0x9e3779b9;
+		const next = () => {
+			state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+			return state / 4294967296;
+		};
+		return Array.from({ length: 1000 }, () => {
+			const wall = next() * 2.1 - 0.1;
+			const speed = [1, 60, 600][Math.floor(next() * 3)];
+			const display = [0, 0, 60, 1800][Math.floor(next() * 4)];
+			const durationMs = Math.round(20 + next() * 1480);
+			const seed = next();
+			const flicker = next() < 0.8;
+			const ground = next() < 0.5;
+			return { wall, sceneAge: wall * speed, display, durationMs, seed, flicker, ground };
+		});
+	}
+
+	it('equals the profile before the split on 1,000 recorded inputs', () => {
+		const inputs = cases();
+		expect(golden.expected).toHaveLength(inputs.length);
+		inputs.forEach((c, i) => {
+			const kind = c.ground ? FlashKind.CgMulti : FlashKind.IcTrunkFan;
+			expect(flashProfile(c.wall, c.sceneAge, c.display, c.durationMs, c.seed, c.flicker, kind)).toBeCloseTo(golden.expected[i], 12);
+		});
+	});
+
+	it('draws the cloud-to-ground kinds alike and the in-cloud kinds alike, for now', () => {
+		for (const c of cases().slice(0, 200)) {
+			const value = (kind: FlashKind) => flashProfile(c.wall, c.sceneAge, c.display, c.durationMs, c.seed, c.flicker, kind);
+			expect(value(FlashKind.CgSingle)).toBe(value(FlashKind.CgMulti));
+			expect(value(FlashKind.CgPositive)).toBe(value(FlashKind.CgMulti));
+			expect(value(FlashKind.BoltFromBlue)).toBe(value(FlashKind.CgMulti));
+			expect(value(FlashKind.IcCrawler)).toBe(value(FlashKind.IcTrunkFan));
+			expect(value(FlashKind.CloudToAir)).toBe(value(FlashKind.IcTrunkFan));
+		}
+	});
+
+	it('keeps a cloud flash glowing between pulses and a ground flash dark', () => {
+		const lows = (f: (wall: number) => number) => Math.min(...Array.from({ length: 30 }, (_, i) => f(0.05 + i * 0.01)));
+		for (const seed of seeds.slice(0, 40)) {
+			expect(lows((wall) => cloudProfile(wall, 0.4, seed))).toBeGreaterThan(0.2 * PROFILE.cloudGlow);
+			if (!continuingCurrent(seed)) expect(lows((wall) => groundProfile(wall, 0.4, seed))).toBeLessThan(PROFILE.afterglow);
+		}
 	});
 });
