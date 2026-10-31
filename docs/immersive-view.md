@@ -86,12 +86,12 @@ at 20° against 0.71 at 45°, while a horizontal one shows in full at either: th
 every flash by construction ("flashes are too horizontal", #398). `frameStorm` is unchanged: the
 footprint is fitted in the 62 % safe area by bisection, never nearer than the floor range of the tilt
 (`floorRange`: 424 km at 20°, 550 km at 45°), so a small storm sits at 561 km instead of 432 km and
-wide storms back off further for the same bounds. At the floor the nearest visible ground is
-451 km away (the bottom edge looks 27.5° from nadir), between `iss` (400 km) and `window`
-(510 km), so a 1 km cloud texel stays under 4 px (visual rule 9). A 16:9 frame's top corners look 66°
-from nadir: under the horizon from the floor (70° at 400 km), so small storms keep it out of the
-frame, while wide storms framed from higher (Basse-Kotto from 1,250 km, R2 from 960 km, where the
-horizon sits 57 to 60° from nadir) show the limb along the top edge. The horizon view (72°) and the
+wide storms move by −15 to +6 % (table below). At the floor the camera is 408 km high and the
+bottom edge looks 24° from nadir: the nearest visible ground is 450 km away, between `iss` (400 km)
+and `window` (510 km), so a 1 km cloud texel stays under 4 px (visual rule 9). A 16:9 frame's top
+corners look 63° from nadir, under the horizon (70° from the floor), so small storms keep it out of
+the frame, while wide storms framed from higher (Basse-Kotto from 1,250 km, R2 from 970 km, where the
+horizon sits 57 to 60° from nadir) show the limb in the top corners. The horizon view (72°) and the
 floor poses are unchanged. A reload with a frame checkpoint saved at the old tilt flies to the new frame
 (`sameFrame` is false). The tilt is a tunable of [ADR 0020](adr/0020-immersive-storm-view.md)
 point 5, chosen by the maintainer on captures: the sweep below shows 20°, 35°, 42°, 45° and 50° on
@@ -110,9 +110,12 @@ phone 390 × 844, in [`immersive/lightning-look/framing-tilt/`](immersive/lightn
 | R4 Ngaoundéré (88 × 66 km) | 432 / 510 | 491 / 517 | 536 / 536 | 561 / 561 | 610 / 610 |
 | R5 Ibiza (160 × 105 km) | 432 / 926 | 491 / 938 | 536 / 943 | 561 / 945 | 610 / 949 |
 
-Small storms sit on the floor range of the tilt (432 km at 20°, 561 km at 45°, 610 km at 50°). Wide
-storms fit closer at a higher tilt, since their far side foreshortens: Basse-Kotto 1,827 → 1,639 km.
-Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.0 to 3.3× at 20°).
+Small storms sit on the floor range of the tilt (432 km at 20°, 561 km at 45°, 610 km at 50°). Storms
+bound by their north-south extent fit closer at a higher tilt, which foreshortens it: Basse-Kotto
+1,827 → 1,639 km, R2 1,471 → 1,289 km, R3 677 → 575 km; R1, bound by its east-west extent, backs off
+from 965 to 1,024 km.
+Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.2 to 3.3× at 20°); four storms pass
+3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1).
 
 ### Free tilt
 
