@@ -27,10 +27,10 @@ varying float vBrightness;
 varying float vDip;
 
 ${playbackGlsl}
+${channelGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
-${channelGlsl}
 ${cloudDriftGlsl}
 ${veilGlsl}
 #ifdef CLOUDS
@@ -44,9 +44,10 @@ void main() {
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
 	float seed = flashShape.w;
-	bool ground = isGround(seed);
+	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	bool ground = isGround(kind);
 	float age = wallAge(time, flash.w);
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -76,7 +77,7 @@ void main() {
 		vDip *= cloudTransmission(opacity, 1.0);
 	}
 #endif
-	vec2 drift = cloudDrift(age, end, flashShape.y, seed, ground) * kmToWorld * flicker;
+	vec2 drift = cloudDrift(age, end, flashShape.y, seed, kind) * kmToWorld * flicker;
 	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;

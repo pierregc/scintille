@@ -33,10 +33,10 @@ varying float vLight;
 varying vec3 vTint;
 
 ${playbackGlsl}
+${channelGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
-${channelGlsl}
 ${veilGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
@@ -51,7 +51,8 @@ void cull() {
 
 void main() {
 	float seed = flashShape.w;
-	bool ground = isGround(seed);
+	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	bool ground = isGround(kind);
 	bool branch = segC.z > 0.5;
 	bool inCloud = segC.w > 0.5;
 	// Halos follow the main channel of ground flashes in clear air only; fainter paths keep a bare core.
@@ -66,7 +67,7 @@ void main() {
 	float facing = dot(normal, normalize(cameraPosition - base));
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
-	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, ground)
+	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, kind)
 		* intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
