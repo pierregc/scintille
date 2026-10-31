@@ -339,7 +339,7 @@ describe('GLSL twins', () => {
 	it('carry the bounds of the profile', () => {
 		const P = PROFILE;
 		const profile = [
-			P.maxFlicker, P.pulseGap, P.positiveGap, P.minGap, P.maxGap, P.fit, ...P.firstTau, P.minTau, P.maxTau, ...P.cloudTau, P.leaderLevel,
+			P.maxFlicker, P.pulseGap, P.positiveGap, P.minGap, P.maxGap, P.fit, P.trainSpan, ...P.firstTau, P.minTau, P.maxTau, ...P.cloudTau, P.leaderLevel,
 			P.positiveSingle, P.boltStrokes[0], P.boltStrokes[0] + P.boltStrokes[1], ...P.currentShare, ...P.currentLevel, ...P.currentDuration,
 			...P.singleActivity, ...P.icGlow, P.icPulses[0], P.icPulses[0] + P.icPulses[1], ...P.icDimPeak, ...P.icLevel, P.icGap, P.icFirstBy,
 			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade,

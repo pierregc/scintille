@@ -17,20 +17,33 @@ frame shows the flashes of the last second of play at their current stage. Offli
 
 ## Flicker, then fade
 
-1. **Pulses.** The flicker lasts the observed flash duration, clamped to 60 ms to 1 s. It holds pulses
-   timed like return strokes: about 60 ms apart (log-triangular gaps from 10 to 200 ms, median 60 ms),
-   as many as fit in the duration, at most 12. The first pulse has the full level; each later one is
-   picked between 0.3 and 0.9 of it. Each pulse rises at once and decays with a time constant picked
-   between 15 and 60 ms. The pattern is procedural and seeded by the flash position: only the start,
-   duration, energy and footprint are observed.
+1. **Strokes and pulses.** The flicker lasts the observed flash duration, clamped to 60 ms to 2 s, and
+   each [flash kind](#flash-kinds) fills it with its own pattern, in wall clock time (table below). A
+   cloud-to-ground flash first shows its leader coming down at 12 % of the first stroke, then strikes:
+   strokes rise at once, dark in between, the first at full level and decaying with a time constant of
+   20 to 30 ms, later ones at 0.3 to 0.9 of it, decaying over 10 to 30 ms. Gaps between strokes are
+   log-triangular, 57 ms in geometric mean (94 ms for positive flashes), from 10 to 400 ms; a
+   multi-stroke flash holds as many strokes as its flicker does, 2 to 12, its gaps spread when twelve
+   would end early (they span 0.86 s on average), and strokes a flash must hold are brought closer to fit
+   in. A continuing current holds a steady 20 to 30 % for 40 to 300 ms past its stroke's own tail (two
+   decay times), within the flicker. An in-cloud flash rises with its trunk, glows at 15 to 25 % while
+   its leaders spread, and carries none, one, or two to three bright pulses (at least 60 ms apart, later
+   ones at 0.75 to 0.9, decaying over 20 to 60 ms): the first comes after the trunk and before 90 % of
+   the flicker, mostly early; without one, the glow swells once to 35 to 50 %. The glow of in-cloud
+   flashes without a bright pulse or with several stutters over the last half of the flicker, as
+   K-changes do: 12.5 ms steps, 40 % of them lit 0.15 to 0.3 above the glow, never above 0.5. In-cloud
+   light fades 80 ms after the flicker. The patterns are procedural and seeded by the flash position: only
+   the start, duration, energy and footprint are observed.
 2. **Shutter.** Each frame shows a pulse averaged over the last 1/60 s, like a camera shutter, so a pulse
    is never lost between two frames and its light reaches the screen whatever the frame rate.
 3. **Fade.** A dim glow (12 % of the first pulse) rises over the flicker, then decays exponentially to
    exactly zero at the end of the flash life: 1 s, or the flicker plus 0.5 s for long flashes. At
    afterglow 0, the flash then leaves no trace.
 
-The result is the brightest of the three. A short flash is one or two blinks; a long one crackles for its
-whole duration before fading.
+The result is the brightest of the three. About half of all flashes do not flicker: a single stroke is
+one blink, a one-pulse in-cloud flash one burst over its glow, a crawler a steady light (52 % of flashes
+drawn with the shares of the kinds, durations and areas spread like GLM's); a multi-stroke flash crackles
+for its whole duration.
 
 ## Flash kinds
 
@@ -54,19 +67,26 @@ the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds
 cloud-to-ground drop (clamped to 50 to 150 ms; 150 to 250 ms for a bolt from the blue) or up an
 in-cloud trunk (10 to 20 ms), `spreadSeconds` the time the fans take to cover 2.2 r (within 80 % of the
 flicker; the whole flicker for crawlers). The table is the contract of the geometry (#401) and timing
-(#402) tickets; until they land, the four cloud-to-ground kinds are drawn with the cloud-to-ground
-profile and silhouette below, and the three in-cloud kinds with the in-cloud ones.
+(#402) tickets; until #401 lands, the four cloud-to-ground kinds are drawn with the cloud-to-ground
+silhouette below, and the three in-cloud kinds with the in-cloud one.
 
-- **Cloud-to-ground** kinds flash in distinct strokes and go dark in between, as return strokes do. In
-  40 % of them, the first or second subsequent stroke holds a continuing current: a steady 20 to 30 %
-  glow for up to 250 ms, within the observed duration.
-- **In-cloud** kinds glow between their pulses (15 to 25 % of the first pulse) while their leaders
-  spread, and fade 80 ms after the observed duration.
+Each kind keeps its own timing within the observed duration (`flashProfile`, see
+[flicker](#flicker-then-fade)); the leader of a cloud-to-ground flash takes at most half its flicker:
 
-Leaders light the channel as they go. In-cloud ones start from a fifth of the path and cover it by
-80 % of the flicker, slowing down (`1 - (1 - t)²`); their light drifts along the channel from 0.6 radius
-on one side of the observed position to 0.6 radius on the other, so it stays within the observed
-footprint and averages back to the observed position. Ground leaders reach the ground within 20 ms.
+| Kind | Before the first stroke or pulse | Strokes or bright pulses | Steady light |
+|---|---|---|---|
+| Multi-stroke | leader at 12 %, 50-150 ms | 2-12 strokes, 10-400 ms apart (57 ms in geometric mean) | continuing current in 40 %, after one of strokes 2 to 5 |
+| Single-stroke | leader at 12 %, 50-150 ms | 1 stroke | in-cloud activity at 12-18 % to the end of the flicker; continuing current in 15 % |
+| Positive | leader at 12 %, 50-150 ms | 1 stroke (81 %) or 2, 94 ms apart in geometric mean | long continuing current in 75 % |
+| Bolt from the blue | leader at 12 %, 150-250 ms | 1, 2 or 3 strokes (25 / 40 / 35 %, 2.1 on average) | continuing current in 30 % |
+| Trunk and fan, cloud-to-air | trunk rising in 10-20 ms, glow 15-25 % while the fans spread | none (25 %, a swell to 35-50 %), 1 (45 %) or 2-3 (30 %) | stutters in the last half of flashes with none or several |
+| Crawler | none | none | 25-35 % for the whole flicker, the leader's tip at full |
+
+Leaders light the channel as they go (`spread`): cloud-to-ground ones come down over their leader time
+and in-cloud ones cover their path over `spreadSeconds`, both slowing down (`1 - (1 - t)²`); crawlers walk
+at a steady pace. The light of in-cloud flashes drifts along the channel from 0.6 radius on one side of
+the observed position to 0.6 radius on the other, so it stays within the observed footprint and averages
+back to the observed position.
 
 ## Afterglow
 
@@ -121,11 +141,17 @@ the ground. Branches are about 60 % as wide and fainter, sub-branches thinner st
 in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
 sometimes lavender-rose or warm.
 
-**Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
-reach the ground within 20 ms. Branches light once, when the leader reaches them, then fade (60 ms for
-ground flashes, 120 ms in-cloud); later pulses light the main channels again, as return strokes follow
-an established path. The channel fades over 150 ms after the flicker, leaving the round glow. A channel
-appears as it gets readable: its opacity rises while its half length grows from 6 to 18 CSS px.
+**Timing.** Leaders light the path as they go. A cloud-to-ground channel grows down with its leader at
+12 %, its branches lit as it passes; the first stroke then fills it from the ground up in 33 ms, two
+frames (a real return stroke takes microseconds). Branches die first, over 60 ms from the first stroke,
+while the trunk lingers; before each later stroke a dart leader runs down the trunk in 40 ms at 30 %, and
+the stroke lights the trunk again, as later strokes follow an established path. A second ground contact
+stays dark until the stroke that takes it: the first in 20 % of flashes, the second, third or fourth
+otherwise. In-cloud branches light once, when the leader reaches them, then fade over 120 ms; main
+channels light again with every pulse. Along a crawler, the tip of the leader shines at full over the
+last tenth of its path while the rest holds the steady glow. The channel fades over 150 ms after the
+flicker, leaving the round glow. A channel appears as it gets readable: its opacity rises while its half
+length grows from 6 to 18 CSS px.
 
 **Through the cloud.** The observed cloud layer decides what of a channel shows (`veil.ts`). For each
 segment, the renderer follows the line of sight from its middle up to the camera and reads the cloud
@@ -176,4 +202,5 @@ The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
 ## Reduced motion
 
 With `prefers-reduced-motion: reduce`, there is no flicker: one soft fade, rising over 60 ms, falling with
-a 250 ms time constant, then following the same glow. Light does not drift and channels show whole.
+a 250 ms time constant, then following the same glow, whatever the kind. Light does not drift and
+channels show whole: no leader, no return stroke sweeping up, no dart, no stutter.

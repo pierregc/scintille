@@ -10,9 +10,11 @@ export const PROFILE = {
 	positiveGap: 0.094,
 	minGap: 0.01,
 	maxGap: 0.4,
-	maxPulses: 24,
+	maxPulses: 12,
 	/** Strokes a flash must hold are brought within this share of the flicker left. */
 	fit: 0.8,
+	/** Twelve strokes span this long after the leader on average, seconds: a longer flicker spreads the gaps of a multi-stroke flash to fill it. */
+	trainSpan: 0.86,
 	/** Decay constant of a stroke, seconds: the first one between `firstTau`, later ones between `minTau` and `maxTau`; in-cloud pulses between `cloudTau`. */
 	firstTau: [0.02, 0.03],
 	minTau: 0.01,
@@ -150,9 +152,14 @@ function strokeCounts(kind: FlashKind, seed: number): [number, number] {
 	return [1, 1];
 }
 
+/** How much the gaps of a multi-stroke flash spread so that its strokes fill a long flicker. */
+function stretch(kind: FlashKind, length: number, leader: number): number {
+	return kind === FlashKind.CgMulti ? Math.max(1, (length - leader) / PROFILE.trainSpan) : 1;
+}
+
 /** Start of stroke `k` after one at `start`: strokes the flicker must hold are brought closer so they fit. */
-function nextStroke(kind: FlashKind, seed: number, k: number, start: number, length: number, forced: number): number {
-	let gap = pulseGap(seed, k, kind === FlashKind.CgPositive ? PROFILE.positiveGap : PROFILE.pulseGap);
+function nextStroke(kind: FlashKind, seed: number, k: number, start: number, length: number, forced: number, spread: number): number {
+	let gap = Math.min(PROFILE.maxGap, spread * pulseGap(seed, k, kind === FlashKind.CgPositive ? PROFILE.positiveGap : PROFILE.pulseGap));
 	if (k < forced) gap = Math.min(gap, (PROFILE.fit * (length - start)) / (forced - k));
 	return start + gap;
 }
@@ -163,10 +170,11 @@ const strokeTau = (seed: number, k: number): number => logLerp(k === 0 ? PROFILE
 /** Strokes of a cloud-to-ground flash in a flicker of `length` seconds, the first at the end of its leader. */
 export function strokeTrain(kind: FlashKind, length: number, seed: number, leader: number): Pulse[] {
 	const [most, forced] = strokeCounts(kind, seed);
+	const spread = stretch(kind, length, leader);
 	const strokes: Pulse[] = [];
 	let start = leader;
 	for (let k = 0; k < most; k++) {
-		if (k > 0) start = nextStroke(kind, seed, k, start, length, forced);
+		if (k > 0) start = nextStroke(kind, seed, k, start, length, forced, spread);
 		if (start > length) break;
 		strokes.push({ start, level: strokeLevel(seed, k), tau: strokeTau(seed, k) });
 	}
@@ -176,12 +184,13 @@ export function strokeTrain(kind: FlashKind, length: number, seed: number, leade
 /** The stroke a cloud-to-ground flash is in, `wallAge` seconds after it started: its index (−1 during the leader), its age, and the time to the next one (Infinity after the last). */
 export function flashStroke(wallAge: number, length: number, seed: number, kind: FlashKind, leader: number): { index: number; age: number; next: number } {
 	const [most, forced] = strokeCounts(kind, seed);
+	const spread = stretch(kind, length, leader);
 	let index = -1;
 	let age = wallAge;
 	let next = leader - wallAge;
 	let start = leader;
 	for (let k = 0; k < most; k++) {
-		if (k > 0) start = nextStroke(kind, seed, k, start, length, forced);
+		if (k > 0) start = nextStroke(kind, seed, k, start, length, forced, spread);
 		if (start > length) break;
 		if (start > wallAge) {
 			next = start - wallAge;
@@ -342,8 +351,11 @@ vec2 strokeCounts(int kind, float seed) {
 	if (kind == ${FlashKind.BoltFromBlue}) return vec2(u < ${f(P.boltStrokes[0])} ? 1.0 : u < ${f(P.boltStrokes[0] + P.boltStrokes[1])} ? 2.0 : 3.0);
 	return vec2(1.0);
 }
-float nextStroke(int kind, float seed, float k, float start, float len, float forced) {
-	float gap = pulseGap(seed, k, kind == ${FlashKind.CgPositive} ? ${f(P.positiveGap)} : ${f(P.pulseGap)});
+float strokeStretch(int kind, float len, float leader) {
+	return kind == ${FlashKind.CgMulti} ? max(1.0, (len - leader) / ${f(P.trainSpan)}) : 1.0;
+}
+float nextStroke(int kind, float seed, float k, float start, float len, float forced, float stretch) {
+	float gap = min(${f(P.maxGap)}, stretch * pulseGap(seed, k, kind == ${FlashKind.CgPositive} ? ${f(P.positiveGap)} : ${f(P.pulseGap)}));
 	if (k < forced) gap = min(gap, ${f(P.fit)} * (len - start) / (forced - k));
 	return start + gap;
 }
@@ -359,12 +371,13 @@ float shutterPulse(float a, float tau) {
 // The stroke a cloud-to-ground flash is in: index (-1 during the leader), age, time to the next one (1e6 after the last).
 vec3 flashStroke(float wallAge, float len, float seed, int kind, float leader) {
 	vec2 counts = strokeCounts(kind, seed);
+	float stretch = strokeStretch(kind, len, leader);
 	vec3 stroke = vec3(-1.0, wallAge, leader - wallAge);
 	float start = leader;
 	for (int i = 0; i < ${P.maxPulses}; i++) {
 		float k = float(i);
 		if (k >= counts.x) break;
-		if (i > 0) start = nextStroke(kind, seed, k, start, len, counts.y);
+		if (i > 0) start = nextStroke(kind, seed, k, start, len, counts.y, stretch);
 		if (start > len) break;
 		if (start > wallAge) {
 			stroke.z = start - wallAge;
@@ -380,6 +393,7 @@ float currentLight(float a, float level, float duration) {
 float groundProfile(float wallAge, float len, float seed, int kind, float leader) {
 	float b = wallAge < leader + ${f(P.shutter)} ? ${f(P.leaderLevel)} * smoothstep(0.0, leader, wallAge) : 0.0;
 	vec2 counts = strokeCounts(kind, seed);
+	float stretch = strokeStretch(kind, len, leader);
 	float currentStroke = kind == ${FlashKind.CgMulti} ? 1.0 + floor(4.0 * pulseHash(seed, 91.0)) : kind == ${FlashKind.CgSingle} ? 0.0 : ${f(P.maxPulses)};
 	vec2 current = vec2(-1.0);
 	vec2 last = vec2(-1.0);
@@ -388,7 +402,7 @@ float groundProfile(float wallAge, float len, float seed, int kind, float leader
 	for (int i = 0; i < ${P.maxPulses}; i++) {
 		float k = float(i);
 		if (k >= counts.x) break;
-		if (i > 0) start = nextStroke(kind, seed, k, start, len, counts.y);
+		if (i > 0) start = nextStroke(kind, seed, k, start, len, counts.y, stretch);
 		if (start > len) break;
 		if (start > wallAge) {
 			ended = false;
