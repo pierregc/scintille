@@ -36,6 +36,8 @@ export const SKELETON = {
 	/** Vertical share of the sideways offsets of fans and of crawlers, which keep to a layer. */
 	fanFlatten: 0.3,
 	crawlerFlatten: 0.15,
+	/** Light of a crawler's leaders against a fan's, seen through the whole cloud. */
+	crawlerLight: 0.5,
 	/** In-cloud trunks climb this much, km. */
 	trunkClimbKm: [2, 4],
 	/** Cloud-to-ground origins, trunk feet and crawler starts spread over this disc around the position, r. */
@@ -469,7 +471,9 @@ function trunkAndFans(flash: Flash, kind: FlashKind, durationMs: number): Look {
 		paths.push(w.path(wander(s, top, tip, SKELETON.fanFlatten, rng() < 0.5 ? 2 : 1).map(keep), trunkKm, [trunk, trunk * 0.6], [strength, strength * 0.55], 0, inCloud));
 	}
 	const firstFan = paths[0].points.length - 1;
-	const branches = look === 'filament' ? Math.floor(rng() * 2) : look === 'branching' ? 2 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 6);
+	// Fans cut short by the flash's duration have had less time to branch.
+	const grown = reach / (CHANNEL.lengthScale * r);
+	const branches = Math.round(grown * (look === 'filament' ? Math.floor(rng() * 2) : look === 'branching' ? 2 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 6)));
 	for (const path of paths) cloudBranches(flash, s, path, Math.ceil(branches / leaders), 1, reach * 0.7, trunk * 0.6, 0.7, SKELETON.fanKm, SKELETON.fanFlatten);
 	w.fit(fans, top, reach);
 	if (kind === FlashKind.CloudToAir) leaveCloud(flash, s, fans, fans + firstFan, top);
@@ -501,11 +505,11 @@ function crawler(flash: Flash): Look {
 	const paths: Path[] = [];
 	for (let i = 0; i < leaders; i++) {
 		const tip = keep(toward(start, heading + i * Math.PI + (rng() - 0.5) * 0.9, within(k.runR, rng()) * r, start[2] + (rng() - 0.5) * 1.5));
-		const strength = i === 0 ? 1 : 0.6 + 0.35 * rng();
+		const strength = SKELETON.crawlerLight * (i === 0 ? 1 : 0.6 + 0.35 * rng());
 		paths.push(w.path(wander(s, start, tip, SKELETON.crawlerFlatten, rng() < 0.5 ? 2 : 1).map(keep), 0, [trunk, trunk * 0.6], [strength, strength * 0.55], 0, inCloud));
 	}
 	const branches = count(k.branches, rng());
-	paths.forEach((path, i) => cloudBranches(flash, s, path, Math.floor((branches + i) / leaders), 1, k.runR[0] * r * 0.5, trunk * 0.6, 0.7, SKELETON.crawlerKm, SKELETON.crawlerFlatten));
+	paths.forEach((path, i) => cloudBranches(flash, s, path, Math.floor((branches + i) / leaders), 1, k.runR[0] * r * 0.5, trunk * 0.6, 0.7 * SKELETON.crawlerLight, SKELETON.crawlerKm, SKELETON.crawlerFlatten));
 	w.arrive(0, w.longest());
 	return 'filament';
 }
