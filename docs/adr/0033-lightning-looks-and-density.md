@@ -160,15 +160,15 @@ record.
 - The picture at speed becomes a sample over a field, measurable through `lightning.stats`; the same
   heroes on a revisit or a shared URL; the sound follows the sample.
 - Hand-mirrored GLSL twins (`flashProfile`, `spread`, `cloudDrift`, `shown`), guarded by
-  string-containment tests of their constants and by GPU captures; the twins of `channel.ts` are also
-  run as JavaScript against the TypeScript in the tests.
+  string-containment tests of their constants and by GPU captures; the profile's twins are also run
+  as JavaScript against the TypeScript in the tests.
 - The kind is drawn once from the seed, on the CPU, and carried to every pass (`flashLook`, three floats
   per flash instance and per channel segment: the kind, the leader and the spread times). Drawn on the
   GPU in float32 as well, it disagreed with the CPU's for about 21 % of flashes (12 % on
   cloud-to-ground against in-cloud), so a skeleton of one kind would have got the timing of another.
   The stroke and pulse draws stay on the GPU, in float32, alike in every pass but not equal to the
   TypeScript draws: a stroke time the CPU predicts can land a few tens of milliseconds off on screen.
-- The sample drifts for about two seconds after a lightning jump (named). A storm's predecessor cell
+- The sample follows a storm's rate with a 0.5 s lag and is set at once on a seek or a speed change. A storm's predecessor cell
   before its first replay chunk stays out of the replay until the pipeline scans from `t_start`.
 - To watch: near-white ≤ 2 % at night, p95 frame cost relative to a same-evening `main`, the `low` tier
   (no light map: heroes plus half sprites), real phones (only emulated so far). Not reached in this

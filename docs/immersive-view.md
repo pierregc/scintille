@@ -736,7 +736,7 @@ its research notes are in [`analysis/lightning-look/`](analysis/lightning-look/)
 | Near white at night, 600× and 3600× (C13, C18, C19, C21) | 1.7 to 36 % | 0.9 to 13.4 % | ≤ 2 % | 0 to 0.01 % |
 | Near white at night, 60× (C17, C20) | 0.5 to 1.7 % | 0.55 to 1.79 % | ≤ 1 % | 0 to 0.01 % |
 | Near white by day at `iss`, C3 / C6 / C9 | 1.6 to 2.6 / 5 to 13 / 2.5 to 31 % | 2.0 to 2.7 / 5.7 to 7.9 / 0.1 to 30.6 % | ≤ 1.5 / ≤ 2 / ≤ 2 % | 0.02 to 0.05 / 0 to 0.02 / 0 % |
-| Lit radius of a lone flash, C15 | about 2 `r` | 2 `r` | 1.3 `r` ± 20 % | 1.09 `r` on its pulse, ending at 1.24 `r` (#404; the light map is unchanged by the merge) |
+| Lit radius of a lone flash, C15 | about 2 `r` | 1.98 `r` (#404) | 1.3 `r` ± 20 % | 1.09 `r` on its pulse, ending at 1.24 `r` (#404; the light map is unchanged by the merge) |
 | Separate lit cells along the line, C7 (noon) and C11 (15:30) | kept | kept (C7: a line of stubs and glows) | kept | C11 kept; C7 not met: at noon, 600× over a sunlit deck shows 2 or 3 marks |
 | 600× and 3600× told apart, C5 against C8 | | | by channels and front motion | 13 to 26 against 5 to 11 channels; the front moves 27 min against 2 h 40 min of scene over the four frames |
 | Replay start, C0 | 03:30:02 | 03:30:02 | 04:00:06 | 04:00:06 |
