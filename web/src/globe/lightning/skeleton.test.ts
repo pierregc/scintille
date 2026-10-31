@@ -51,9 +51,12 @@ const build = (kind: FlashKind) => seeds.map((seed, i) => ({ seed, r: radius(i),
 const built = new Map(ALL.map((kind) => [kind, build(kind)]));
 const flashes = (kind: FlashKind) => built.get(kind) ?? [];
 
+/** Whether a segment of a cloud-to-ground channel belongs to its in-cloud stem, run before the drop starts. */
+const inStem = (g: Segment) => g.level === 0 && g.from < SKELETON.stemArrival - 1e-6;
+
 /** The drop of a cloud-to-ground channel: its main path after the stem, from its top to its strike. */
 function drop(parts: Segment[]) {
-	const main = parts.filter((g) => g.level === 0 && g.from >= SKELETON.stemArrival - 1e-6);
+	const main = parts.filter((g) => g.level === 0 && !inStem(g));
 	return { top: main[0].a, strike: main[main.length - 1].b, last: main[main.length - 1] };
 }
 
@@ -93,24 +96,39 @@ describe('channelSkeleton', () => {
 				expect(top[2]).toBeGreaterThanOrEqual(k.originKm[0] - 1e-6);
 				expect(top[2]).toBeLessThanOrEqual(k.originKm[1] + 1e-6);
 				expect(Math.hypot(strike[0], strike[1])).toBeLessThanOrEqual(Math.max(r, k.reachKm) + 1e-4);
-				// Under the cloud base a channel is in clear air.
-				for (const g of parts) if (Math.max(g.a[2], g.b[2]) <= SKELETON.cloudBaseKm) expect(g.flag).toBe(0);
-				// The stem is run first.
-				for (const g of parts.filter((p) => p.level === 0 && p.to <= SKELETON.stemArrival + 1e-6)) expect(g.to).toBeLessThanOrEqual(0.2);
+					// The stem runs in the cloud whatever its height; under the cloud base the rest is in clear air.
+				const stem = parts.filter(inStem);
+				expect(stem.length).toBeGreaterThan(0);
+				for (const g of stem) expect(g.flag).toBe(1);
+				for (const g of parts) if (!inStem(g) && Math.max(g.a[2], g.b[2]) <= SKELETON.cloudBaseKm) expect(g.flag).toBe(0);
+				// The stem is run first, and the drop leaves from its end.
+				for (const g of stem) expect(g.to).toBeLessThanOrEqual(SKELETON.stemArrival + 1e-6);
+				expect(Math.max(...stem.map((g) => g.to))).toBeCloseTo(SKELETON.stemArrival, 6);
+				expect(horizontal(stem[stem.length - 1].b, top)).toBeLessThan(1e-5);
 				expect(parts.some((g) => g.flag === 2)).toBe(false);
 			}
 		}
 	});
 
-	it('keeps negative drops within 30 degrees of the vertical for most flashes and 45 for nearly all', () => {
+	it('keeps negative drops within 30 degrees of the vertical for most flashes and 45 for nearly all, 2 to 8 km sideways', () => {
 		for (const kind of [FlashKind.CgMulti, FlashKind.CgSingle]) {
-			const tilts = flashes(kind).map(({ parts }) => {
-				const { top, strike } = drop(parts);
-				return fromVertical(top, strike);
-			});
+			const drops = flashes(kind).map(({ parts }) => drop(parts));
+			const tilts = drops.map(({ top, strike }) => fromVertical(top, strike));
 			expect(share(tilts.map((t) => t <= 45))).toBeGreaterThanOrEqual(0.95);
 			expect(share(tilts.map((t) => t <= 30))).toBeGreaterThanOrEqual(0.75);
+			const sideways = drops.map(({ top, strike }) => horizontal(top, strike));
+			expect(share(sideways.map((d) => d >= KIND[kind].strikeKm[0] - 1e-4 && d <= KIND[kind].strikeKm[1] + 1e-4))).toBeGreaterThanOrEqual(0.95);
 		}
+	});
+
+	it('strikes positive flashes 0.6 to 1 r from the position', () => {
+		const [inner, outer] = KIND[FlashKind.CgPositive].strikeR;
+		const ring = flashes(FlashKind.CgPositive).map(({ r, parts }) => {
+			const { strike } = drop(parts);
+			const d = Math.hypot(strike[0], strike[1]) / Math.max(3, r);
+			return d >= inner - 1e-4 && d <= outer + 1e-4;
+		});
+		expect(share(ring)).toBeGreaterThanOrEqual(0.95);
 	});
 
 	it('branches cloud-to-ground drops on both sides, below 5 km, ending in the air', () => {
@@ -149,6 +167,17 @@ describe('channelSkeleton', () => {
 		for (const kind of ALL.filter((k) => k !== FlashKind.CgMulti)) for (const { parts } of flashes(kind)) expect(parts.some((g) => g.level === 4)).toBe(false);
 	});
 
+	it('runs every second ground contact down to the ground, even in small footprints', () => {
+		let contacts = 0;
+		for (let i = 0; i < 3000; i++) {
+			const contact = segments(channelSkeleton(((i + 1) * 0.7548776662) % 1, 3 + (i % 3), FlashKind.CgMulti, 60 + ((i * 113) % 940))).filter((g) => g.level === 4);
+			if (!contact.length) continue;
+			contacts++;
+			expect(contact[contact.length - 1].b[2]).toBe(0);
+		}
+		expect(contacts).toBeGreaterThan(1000);
+	});
+
 	it('climbs an oblique in-cloud trunk before the fans spread, within the footprint and their speed', () => {
 		for (const kind of [FlashKind.IcTrunkFan, FlashKind.CloudToAir]) {
 			const k = KIND[kind];
@@ -181,6 +210,17 @@ describe('channelSkeleton', () => {
 	it('lets cloud-to-air channels end beyond the fan or just over the cloud top', () => {
 		for (const { parts } of flashes(FlashKind.CloudToAir)) {
 			for (const g of parts) expect(Math.max(g.a[2], g.b[2])).toBeLessThanOrEqual(SKELETON.cloudTopKm + SKELETON.airAboveTopKm + 1e-6);
+			// The last leader leaves the first fan's tip in clear air, 1 to 3 km farther out from the trunk top.
+			const top = parts.filter((g) => g.flag === 2).at(-1)?.b ?? parts[0].a;
+			const end = parts[parts.length - 1];
+			expect(end.flag).toBe(0);
+			expect(end.level).toBe(0);
+			const out = Math.atan2(end.b[1] - top[1], end.b[0] - top[0]);
+			const tip = parts.find((g) => {
+				const beyond = horizontal(top, end.b) - horizontal(top, g.b);
+				return g.flag === 0 && turn(Math.atan2(g.b[1] - top[1], g.b[0] - top[0]), out) < 1e-3 && beyond >= SKELETON.airBeyondKm[0] - 1e-3 && beyond <= SKELETON.airBeyondKm[1] + 1e-3;
+			});
+			expect(tip).toBeDefined();
 		}
 	});
 

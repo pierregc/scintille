@@ -36,8 +36,6 @@ export const SKELETON = {
 	/** Vertical share of the sideways offsets of fans and of crawlers, which keep to a layer. */
 	fanFlatten: 0.3,
 	crawlerFlatten: 0.15,
-	/** Light of a crawler's leaders against a fan's, seen through the whole cloud. */
-	crawlerLight: 0.5,
 	/** In-cloud trunks climb this much, km. */
 	trunkClimbKm: [2, 4],
 	/** Cloud-to-ground origins, trunk feet and crawler starts spread over this disc around the position, r. */
@@ -60,10 +58,14 @@ export const SKELETON = {
 	secondShare: 0.4,
 	secondFromKm: [1, 3],
 	secondAwayKm: [1, 4],
+	/** Segments kept for that contact. */
+	secondSegments: 24,
 	/** Cloud-to-air: outer share of the longest fan out of the cloud, ending this far beyond the fan or up to this above the top, km. */
 	airShare: [0.3, 0.6],
 	airBeyondKm: [1, 3],
 	airAboveTopKm: 1,
+	/** Segments kept for that way out. */
+	airSegments: 16,
 	/** Path arrival by which the in-cloud stem is run. */
 	stemArrival: 0.15,
 	/** Cloud-to-ground heights scale about the ground by this (1: not exaggerated; at most 1.5, ADR 0033), the origin kept under `maxOriginKm`. */
@@ -175,6 +177,13 @@ function wander(style: Style, a: Vec, b: Vec, flatten: number, bends: number): V
 
 const pathLength = (points: Vec[]): number => points.reduce((sum, p, k) => (k ? sum + length(sub(p, points[k - 1])) : 0), 0);
 
+/** `wander`, drawn coarser until it fits in `room` segments (or is down to its broad bends). */
+function wanderWithin(style: Style, a: Vec, b: Vec, flatten: number, bends: number, room: number): Vec[] {
+	let points = wander(style, a, b, flatten, bends);
+	for (let minLength = style.minLength * 2; points.length - 1 > room && minLength < 2 * length(sub(b, a)); minLength *= 2) points = wander({ ...style, minLength }, a, b, flatten, bends);
+	return points;
+}
+
 /** Cloud flag of a segment from the height of its highest end, km. */
 type Flag = (top: number) => number;
 const inCloud: Flag = () => 1;
@@ -183,11 +192,12 @@ const clearAir: Flag = () => 0;
 /** A cloud-to-ground path is in the cloud above its base and in clear air below. */
 const underBase: Flag = (top) => (top > SKELETON.cloudBaseKm ? 1 : 0);
 
-/** Writes segments, keeping within `MAX_SEGMENTS` less the `reserve` left for a path written later. */
+/** Writes segments, keeping within `MAX_SEGMENTS` less the `reserve` left for a path written later, heights scaled about the ground by `heightScale`. */
 class Writer {
 	readonly data = new Float32Array(MAX_SEGMENTS * SEGMENT_FLOATS);
 	count = 0;
 	reserve = 0;
+	heightScale = 1;
 
 	/** Writes `points` reached once the leaders have run `from` km, the arrival growing `pace` km per km of path. */
 	path(points: Vec[], from: number, width: Range, light: Range, level: number, flag: Flag, pace = 1): Path {
@@ -195,8 +205,8 @@ class Writer {
 		let along = from;
 		for (let k = 1; k < points.length; k++) {
 			if (this.count >= MAX_SEGMENTS - this.reserve) break;
-			const a = points[k - 1];
-			const b = points[k];
+			const a: Vec = [points[k - 1][0], points[k - 1][1], points[k - 1][2] * this.heightScale];
+			const b: Vec = [points[k][0], points[k][1], points[k][2] * this.heightScale];
 			const t = (k - 0.5) / (points.length - 1);
 			const o = this.count * SEGMENT_FLOATS;
 			this.data.set(a, o);
@@ -209,7 +219,7 @@ class Writer {
 			this.data[o + 10] = level;
 			this.data[o + 11] = flag(Math.max(a[2], b[2]));
 			this.count++;
-			out.points.push(b);
+			out.points.push(points[k]);
 			out.from.push(along);
 		}
 		return out;
@@ -286,14 +296,15 @@ function runToEdge(p: Vec, bearing: number, radius: number): number {
 }
 
 /**
- * Ground point `run` km from `from` horizontally on the bearing nearest `bearing` that falls within `limit` km of the
- * position; failing any, toward the position, the run cut to fit.
+ * Ground point `run` km from `from` horizontally on the bearing nearest `bearing` that falls between `inner` and `limit`
+ * km of the position; failing any, toward the position, the run cut to fit within `limit`.
  */
-function strikeWithin(from: Vec, bearing: number, run: number, limit: number): Vec {
+function strikeWithin(from: Vec, bearing: number, run: number, limit: number, inner = 0): Vec {
 	for (let k = 0; k <= 24; k++) {
 		const turn = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * (Math.PI / 12);
 		const p = toward(from, bearing + turn, run, 0);
-		if (Math.hypot(p[0], p[1]) <= limit) return p;
+		const d = Math.hypot(p[0], p[1]);
+		if (d <= limit && d >= inner) return p;
 	}
 	const d = Math.hypot(from[0], from[1]);
 	const fit = Math.min(Math.max(run, d - 0.95 * limit), d + 0.95 * limit);
@@ -383,7 +394,6 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	let stem: Vec[];
 	let top: Vec;
 	let bearing: number;
-	let drop: number;
 	if (bolt) {
 		const start = disc(rng, SKELETON.originR * r, within(k.footKm, rng()));
 		const climbTop = within(k.topKm, rng());
@@ -393,7 +403,6 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 		top = toward(climb, heading, Math.min(run, runToEdge(climb, heading, 0.9 * limit)), within(k.originKm, rng()));
 		stem = [start, climb, top];
 		bearing = heading;
-		drop = Math.min(k.strikeKm[1], Math.max(k.strikeKm[0], top[2] * Math.tan(tilt)));
 	} else {
 		const origin = disc(rng, SKELETON.originR * r, within(k.originKm, rng()));
 		top = toward(origin, heading, Math.min(run, runToEdge(origin, heading, (positive ? 1 : SKELETON.feedWithinR) * r)));
@@ -401,33 +410,27 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 		const swing = (rng() - 0.5) * 2 * SKELETON.dropBearing;
 		const aim = toward([0, 0, 0], heading + swing, within(k.strikeR, rng()) * r);
 		bearing = positive ? Math.atan2(aim[1] - top[1], aim[0] - top[0]) : heading + swing;
-		drop = top[2] * Math.tan(tilt);
 	}
-	const strike = strikeWithin(top, bearing, drop, limit);
+	const drop = Math.min(k.strikeKm[1], Math.max(k.strikeKm[0], top[2] * Math.tan(tilt)));
+	const strike = strikeWithin(top, bearing, drop, limit, k.strikeR[0] * r);
 	const extent = pathLength(stem) + length(sub(strike, top)) * 1.3;
 	const s = style(flash, extent);
+	w.heightScale = Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / Math.max(...stem.map((p) => p[2])));
 	let feed: Vec[] = [stem[0]];
 	for (let i = 1; i < stem.length; i++) feed = feed.concat(wander(s, stem[i - 1], stem[i], i === 1 && bolt ? 1 : SKELETON.fanFlatten, 1).slice(1).map(layer([0, SKELETON.cloudTopKm])));
-	const leader = w.path(feed, 0, [trunk * 0.8, trunk], [0.7, 1], 0, underBase);
+	// The stem runs in the cloud whatever its height; under the base only the drop and its branches are in clear air.
+	const leader = w.path(feed, 0, [trunk * 0.8, trunk], [0.7, 1], 0, inCloud);
 	const stemKm = leader.from.at(-1) ?? 0;
 	const fall = wander(s, top, strike, 1, rng() < 0.6 ? 2 : 1).map(layer([0, SKELETON.cloudTopKm]));
 	const descent = w.path(fall, stemKm, [trunk, trunk], [1, 1], 0, bolt ? clearAir : underBase);
 	const end = descent.from.at(-1) ?? stemKm;
 	const second = kind === FlashKind.CgMulti && channelHash(seed, 6) < SKELETON.secondShare;
 	// Room left for the second contact once the branches are written.
-	w.reserve = second ? 24 : 0;
+	w.reserve = second ? SKELETON.secondSegments : 0;
 	const branches = groundBranches(flash, s, descent, count(k.branches, rng()), 1, length(sub(strike, top)), trunk * 0.6, 1, end);
 	w.reserve = 0;
 	if (second) secondContact(flash, s, branches.length ? branches : [descent], descent, strike, end);
 	w.arrive(stemKm, end);
-	const highest = Math.max(...stem.map((p) => p[2]));
-	const scale = Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / highest);
-	if (scale !== 1) {
-		for (let o = 0; o < w.count * SEGMENT_FLOATS; o += SEGMENT_FLOATS) {
-			w.data[o + 2] *= scale;
-			w.data[o + 6] *= scale;
-		}
-	}
 	return kind === FlashKind.CgSingle || positive ? 'filament' : 'branching';
 }
 
@@ -440,7 +443,7 @@ function secondContact(flash: Flash, s: Style, branches: Path[], descent: Path, 
 	if (!starts.length) return;
 	const { p, from } = starts[Math.floor(rng() * starts.length)];
 	const foot = strikeWithin(strike, Math.atan2(p[1] - strike[1], p[0] - strike[0]), within(SKELETON.secondAwayKm, rng()), r);
-	const points = wander(s, p, foot, 1, 1).map(aboveGround(0));
+	const points = wanderWithin(s, p, foot, 1, 1, MAX_SEGMENTS - w.count).map(aboveGround(0));
 	const pace = Math.min(1, Math.max(0, end - from) / (pathLength(points) || 1));
 	w.path(points, from, [trunk * 0.85, trunk * 0.75], [0.9, 0.9], 4, underBase, pace);
 }
@@ -466,6 +469,8 @@ function trunkAndFans(flash: Flash, kind: FlashKind, durationMs: number): Look {
 	const leaders = look === 'filament' ? 1 : look === 'branching' ? 2 : 2 + Math.floor(rng() * 2);
 	const keep = layer(SKELETON.fanKm);
 	const fans = w.count;
+	// Room left for a cloud-to-air leader's way out once the fans are written.
+	w.reserve = kind === FlashKind.CloudToAir ? SKELETON.airSegments : 0;
 	const paths: Path[] = [];
 	for (let i = 0; i < leaders; i++) {
 		const dir = heading + (i === 1 ? Math.PI : i * 2.1) + (rng() - 0.5) * 0.9;
@@ -475,11 +480,10 @@ function trunkAndFans(flash: Flash, kind: FlashKind, durationMs: number): Look {
 		paths.push(w.path(wander(s, top, tip, SKELETON.fanFlatten, rng() < 0.5 ? 2 : 1).map(keep), trunkKm, [trunk, trunk * 0.6], [strength, strength * 0.55], 0, inCloud));
 	}
 	const firstFan = paths[0].points.length - 1;
-	// Fans cut short by the flash's duration have had less time to branch.
-	const grown = reach / (CHANNEL.lengthScale * r);
-	const branches = Math.round(grown * (look === 'filament' ? Math.floor(rng() * 2) : look === 'branching' ? 2 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 6)));
+	const branches = look === 'filament' ? Math.floor(rng() * 2) : look === 'branching' ? 2 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 6);
 	for (const path of paths) cloudBranches(flash, s, path, Math.ceil(branches / leaders), 1, reach * 0.7, trunk * 0.6, 0.7, SKELETON.fanKm, SKELETON.fanFlatten);
 	w.fit(fans, top, reach);
+	w.reserve = 0;
 	if (kind === FlashKind.CloudToAir) leaveCloud(flash, s, fans, fans + firstFan, top);
 	w.arrive(trunkKm, w.longest());
 	return look;
@@ -495,7 +499,8 @@ function leaveCloud(flash: Flash, s: Style, first: number, last: number, top: Ve
 	const tip = w.point(last - 1, 1);
 	const z = rng() < 0.5 ? tip[2] : SKELETON.cloudTopKm + SKELETON.airAboveTopKm * rng();
 	const beyond = toward(tip, Math.atan2(tip[1] - top[1], tip[0] - top[0]), within(SKELETON.airBeyondKm, rng()), z);
-	w.path(wander(s, tip, beyond, 1, 1).map(layer([0, SKELETON.cloudTopKm + SKELETON.airAboveTopKm])), end, [trunk * 0.6, trunk * 0.45], [0.55, 0.3], 0, clearAir);
+	const way = wanderWithin(s, tip, beyond, 1, 1, MAX_SEGMENTS - w.count).map(layer([0, SKELETON.cloudTopKm + SKELETON.airAboveTopKm]));
+	w.path(way, end, [trunk * 0.6, trunk * 0.45], [0.55, 0.3], 0, clearAir);
 }
 
 /** Crawler: one or two long leaders along the cloud base, both ways from where it starts, without a trunk. */
@@ -509,11 +514,11 @@ function crawler(flash: Flash): Look {
 	const paths: Path[] = [];
 	for (let i = 0; i < leaders; i++) {
 		const tip = keep(toward(start, heading + i * Math.PI + (rng() - 0.5) * 0.9, within(k.runR, rng()) * r, start[2] + (rng() - 0.5) * 1.5));
-		const strength = SKELETON.crawlerLight * (i === 0 ? 1 : 0.6 + 0.35 * rng());
+		const strength = i === 0 ? 1 : 0.6 + 0.35 * rng();
 		paths.push(w.path(wander(s, start, tip, SKELETON.crawlerFlatten, rng() < 0.5 ? 2 : 1).map(keep), 0, [trunk, trunk * 0.6], [strength, strength * 0.55], 0, inCloud));
 	}
 	const branches = count(k.branches, rng());
-	paths.forEach((path, i) => cloudBranches(flash, s, path, Math.floor((branches + i) / leaders), 1, k.runR[0] * r * 0.5, trunk * 0.6, 0.7 * SKELETON.crawlerLight, SKELETON.crawlerKm, SKELETON.crawlerFlatten));
+	paths.forEach((path, i) => cloudBranches(flash, s, path, Math.floor((branches + i) / leaders), 1, k.runR[0] * r * 0.5, trunk * 0.6, 0.7, SKELETON.crawlerKm, SKELETON.crawlerFlatten));
 	w.arrive(0, w.longest());
 	return 'filament';
 }
