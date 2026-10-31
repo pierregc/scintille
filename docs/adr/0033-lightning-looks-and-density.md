@@ -125,12 +125,13 @@ while a channel of the sample shows, it steps back to 40 % for a cloud-to-ground
 halo, and only as much as the cloud lets the channel through) and to 25 % for an in-cloud one; in storm views below 1 km per CSS px overlapping glows keep the
 brightest, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom radius tightens to
 0.4 at the floor; the halo is cool only, 8 core widths at 30 %. Each flash lights an elongated,
-irregular patch of the cloud along its drift (long over short axis 1.4 to 2.2), reaching
+irregular patch of the cloud along its drift or, for a ground flash, its in-cloud feed (long over short axis 1.4 to 2.2), reaching
 `(1.3 + 1.7 w) r` (1.5 r at the 400 km floor, `w` the share of the globe the light window covers) on
 its pulses (whole from a profile of 0.7) and 0.65 of that between them, at `0.35 + 0.65 w` of its
 level, max-blended; the cloud reads it sharpened by `1.25 - 0.25 w`, with a gain of 5, and the volume
 lights each column in a band of 3.5 km half width, 3 km under its own top where that top rises above
-11.5 km and at 8.5 km otherwise, at 1.8 times the flat layer's level; 35 % of it over sunlit cloud; a 2048 × 1024 light map on `high`, 1024 × 512 on `medium` and phones.
+11.5 km and at 8.5 km otherwise, at 1.8 times the flat layer's level; 35 % of it over sunlit cloud; a 1024 × 512 light map on `medium` and `high`: the 2048 × 1024 map on `high` was kept only
+within 384 MB of GPU memory on desktop, and this set measured 386.2 MB with it at 60× (383.1 MB without).
 
 **Drawing and framing.** Channel cores cross-fade their joints in screen values and are drawn no
 thinner than 1.25 device px, so threads never bead (#407). Storms are framed at 45° instead of 20°
@@ -147,8 +148,9 @@ pulses in cloud, flicker up to 2 s.
 **Final values (#408).** The validation pass on the capture matrix of the epic (#398) kept every
 named value at its design value within its band: targets 50 / 20 / 8 (bands 30-100 / 12-30 / 5-12),
 near-floor sprite 0.15 (0.1-0.2), cloud light level 0.35 near the floor (0.3-0.4), volume boost 1.8
-(1.5-2.5), sharpen 1.25 (1-1.5), `VEIL.trace` 0.3 (0.2-0.35), `cgHeightScale` 1.5 (1-1.5). Measured
-in [Lightning look validation](../immersive-view.md#lightning-look-validation).
+(1.5-2.5), sharpen 1.25 (1-1.5), `VEIL.trace` 0.3 (0.2-0.35), `cgHeightScale` 1.5 (1-1.5); the light
+map stays at 1024 × 512 on `high`, the fallback #398 named for a desktop over 384 MB. Measured in
+[Lightning look validation](../immersive-view.md#lightning-look-validation).
 
 Delivery: #400 introduced the kinds and the contracts with the picture unchanged, #399 the density
 budget, #401 the geometry, #402 the timing, #403 the glow, #404 the cloud light, #405 the replay
@@ -174,9 +176,11 @@ record.
   (no light map: heroes plus half sprites), real phones (only emulated so far). Not reached in this
   set: the share of channel length steeper than 60° on screen (9.7 % at 45°, 1.2 % at 20°, against
   targets of 20 and 8 %), since in-cloud fans, horizontal by nature, are most of the drawn length; the
-  noon picture at speed, where little of a flash shows over a sunlit deck by design; and GPU memory,
-  over its budget by 2 to 13 MB (desktop 386 MB at 60×, 397 MB at speed; phone 259 MB at speed), of
-  which this set adds 7.4 MB on desktop (the 2048 × 1024 light map, the `flashLook` buffers) and 4.3 MB
-  on phones, the rest being cloud frames that `main` also loads at speed.
+  noon picture at speed, where little of a flash shows over a sunlit deck by design; and GPU memory
+  at replay speed, over its budget by 3 to 10 MB (desktop 394.3 MB at 600× and 3600×, phone 259.3 MB),
+  of which this set adds 4.4 MB on desktop and 4.3 MB on phones (the `flashLook` buffers), the rest
+  being cloud frames that `main` also loads at speed (389.9 and 255.0 MB). At 60× desktop stays within
+  it (383.1 MB) because the light map stays at 1024 × 512 on `high`: the 2048 × 1024 map of #404 would
+  take it to 386.2 MB.
 - ADR 0013-bis no longer describes the code (vertex-shader paths, 2,048 channels): the CPU skeletons of
   256 segments for 384 flashes and the kinds are recorded here.

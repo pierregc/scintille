@@ -277,9 +277,13 @@ radius and `i` the intensity:
   1 from 3 km per px.
 - **Closeness** `c = 1 - smoothstep(0, 1, ln(k / 0.3) / ln(1 / 0.3))`: 1 up to 0.3 km per px, 0 from
   1 km per px, where storm views screen-blend glows again. It weighs the rules of the floor, so views
-  from 1 km per px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) are drawn as
-  before them; smaller storms frame closer and get the rules of the floor (`regional` is 0.51 km per
-  px for R1, 0.18 for R4 and R5, table below).
+  from 1 km per px (the globe) are drawn as before them. Since the 45° storm frame (#406) every
+  whole-storm frame of the reference storms is under 1 km per px on a 1,000 px tall view (`k` from
+  the camera height): Basse-Kotto's, camera 1,248 km high, is at 0.79 km per px, inside the
+  cross-fade from max to screen blending (75 % max-blended, 10 % of the rules of the floor; at 20° it
+  was 1.1 km per px, screen-blended with the far rules), R2 at 0.61 and R1 at 0.48 (37 % and 66 % of
+  the rules of the floor), R3, R4 and R5 at 0.26, on the floor rules. The table below gives the sizes
+  at representative `k`.
 - **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
   1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
   point of 3 to 7 CSS px when that is larger. Level `mix(mix(0.4, 1, f), 0.15, c)`: 15 % at the
@@ -293,7 +297,7 @@ radius and `i` the intensity:
   1,500 to 6,000 km away.
 - **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius `mix(0.55, 0.4, c)`, with `k` taken from the camera height only.
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
-  (2.3 km texels at 400 km on `high`, 4.7 km on `medium`, the whole globe from about 3,300 km);
+  (4.7 km texels at 400 km on `medium` and `high`, the whole globe from about 3,300 km);
   each flash lights an elongated, irregular patch reaching `(1.3 + 1.7 w) r` on its pulses and 0.65 of that between them, at least
   2 texels and `150 w²` km, `w` being the share of the globe the window covers, at `0.35 + 0.65 w`
   of its level (1.5 `r` at 43 % at the 400 km floor), read sharpened by `1.25 - 0.25 w`.
@@ -445,9 +449,9 @@ against what physics alone would show, within the bounds of
 | Channel heights | Assumed: cloud from 7 to 11.5 km, fans 8.5 to 11.5 km, trunks from 6-8 to 9-11 km, crawlers 6 to 8 km. Styled for cloud-to-ground channels: drawn 1.5 times as tall about the ground, their stem kept under 11 km (so negative ones run from 9 to 11 km down to the ground); in-cloud heights 1.0×. Where the clouds are in relief the part above 7 km is compressed under the drawn top (to at least 30 %, ADR 0028, 0031) while a drop under it keeps its height | `SKELETON.cgHeightScale`, `SKELETON.maxOriginKm`, `reliefLift` |
 | Channel light through the cloud | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering: in the cloud a channel spreads over 0.5 km under the top to 4 km at the base, times the opacity, losing up to half its light, each short segment keeping its share of the spread (`max(length, core width) / spread width`). Styled: under the cloud a channel keeps at least 30 % of its light through any cloud; in-cloud trunks are a crisp trace, at most 2 core widths and at least 30 % (physics: 0 %, from orbit a channel shows only in clear air); over sunlit cloud channels keep 30 % (physics: none) | `veil.ts`: `VEIL`, `cloudVeil`, `veilOverlap`, `clearAirLight`; `CHANNEL.dayLevel` |
 | Channel cores and halo on screen | Styled: joints cross-faded in screen values, each segment's cross-fade adding up to its length and given back the light its overlaps used to add (channels keep 92 to 102 % of their former light), no core thinner than 1.25 device px, so threads never bead; a halo on clear-air main channels and trunk traces, 8 core widths at 30 % of the core, cool only | `RIBBON`, `lengthShare`, `overlapGain`, `overlapTone`, `vTint` |
-| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration, uncapped; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all of them at 1× and on quiet storms; bands 30 to 100, 12 to 30, 5 to 12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share, the share following the load over 0.5 s and set at once on a seek or a speed change; the others keep a point from afar (farness 0.7 to 1) and half a sprite where no cloud light shows, both among the 500 newest | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, `lightning.stats` |
+| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration, uncapped; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all of them at 1× and on quiet storms; bands 30 to 100, 12 to 30, 5 to 12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share, the share following the load over 0.5 s and set at once on a seek or a speed change; the others keep a point from afar (farness 0.7 to 1) and half a sprite where no cloud light shows, both among the 500 newest, so on the `low` tier at 600× and 3600× most flashes outside the sample draw nothing | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, `lightning.stats` |
 | Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where no cloud light shows), 35 % of that over sunlit cloud (physics: none), easing back from 0.3 to 1 km per CSS px to the far view's 40 % to full ramp; in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; while a channel of the sample shows, it steps back to 40 % (10 % with a halo, and only as much as the cloud lets a ground channel through) or 25 % in cloud; bloom radius 0.4 at the floor | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `nearFloor`, `maxBlendShare`, `CHANNEL.glowDayLevel`, `CHANNEL.glowDip`, `BLOOM.nearRadius` |
-| Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10), the whole of it during the flash's pulses and 0.65 of it between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor) at `0.35 + 0.65 w` of its level; shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise, 1.8 times the flat layer's level), read sharpened by up to 1.25 near the floor, 35 % of it over sunlit cloud (physics: none); in storm views overlaps keep the brightest, never add up | `CLOUD_LIGHT`, `LIGHT_WINDOW`, `cloudPatch`, `flashBand`, `glowDepths` |
+| Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift or, for a ground flash, its drawn in-cloud feed (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10), the whole of it during the flash's pulses and 0.65 of it between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor) at `0.35 + 0.65 w` of its level; shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise, 1.8 times the flat layer's level), read sharpened by up to 1.25 near the floor, 35 % of it over sunlit cloud (physics: none); in storm views overlaps keep the brightest, never add up | `CLOUD_LIGHT`, `LIGHT_WINDOW`, `cloudPatch`, `flashBand`, `glowDepths` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
 | Cloud-top height | Observed IR matched to the GFS temperature profile (ADR 0028); 2 km, about 1 km median difference with GOES ACHA on opaque tops, thin cirrus placed too low | Height tiles, `volumeField` |
@@ -554,11 +558,13 @@ Audit of `main` at b1b35cf with the lightning look rework (#399 to #407, validat
 - Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and
   high), with surface detail tiles near the floor (ADR 0022).
 - Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, in relief near the floor
-  (ADR 0028, 0031), lit from inside by a flash light map of 2048 × 1024 texels on `high`, 1024 × 512 on
-  `medium` and on phones, none on `low`.
-- Lightning: every flash in the display window (up to the 262,144 flash ring) keeps an instanced
-  glow and lights the cloud; in a storm view at replay speed, a seeded sample of about 50 / 20 / 8
-  flashes at once (60× / 600× / 3600×) is drawn in full ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
+  (ADR 0028, 0031), lit from inside by a flash light map of 1024 × 512 texels on `medium` and
+  `high`, none on `low`.
+- Lightning: every flash in the display window (up to the 262,144 flash ring) lights the cloud and,
+  outside storm views at replay speed, keeps an instanced glow; in a storm view at replay speed, a
+  seeded sample of about 50 / 20 / 8 flashes at once (60× / 600× / 3600×) is drawn in full
+  ([ADR 0033](adr/0033-lightning-looks-and-density.md)), and the other flashes keep a glow only as
+  points from afar and, among the 500 newest, as half sprites where no cloud light shows.
   Each flash has one of seven kinds, drawn once on the CPU with its leader and spread times
   (`flashLook`). Channels are CPU skeletons of up to 256 segments for the 384 newest flickering
   flashes of the sample, at most 24 built per frame; a halo follows clear-air main channels and
@@ -716,11 +722,16 @@ Findings:
 Measured 2026-10-31 on the nine tickets of the lightning look rework merged together (#399 to #407,
 #408), against production data through a local dev server, with `main` (b1b35cf) measured the same
 evening on the same Mac. That Mac also ran another project, so frame costs are noisy: they are compared
-run against run, best of two interleaved runs.
+run against run, best of two interleaved runs. After review (2026-11-01) the light map of `high` went
+back to 1024 × 512 and the lit patch took its own seeded draws along the ground channel's feed; the
+matrix, the stepped frames and GPU memory were measured again on that build (7491b7c), the frame
+costs, the `low` tier and the phone captures were not (the change does not reach `low`, and changes
+only per-flash patch shapes on the phone's `medium`).
 
 **Captures.** The matrix of #398 (C0 to C21 and its variants) with `capture.mjs --frames 4 --gap 700
 --settle 12 --stats` at 1,600 × 1,000 on `high`, the size of the baseline report so the metrics
-compare; the leader and reduced-motion frames with `--step 50`. One frame per capture is in
+compare; the leader and reduced-motion frames with `--step 50` (and `--at` for the bolt from the blue of
+C16L). One frame per capture is in
 [`immersive/lightning-look/matrix/`](immersive/lightning-look/matrix/) with every frame's metrics and
 `lightning.stats` in `measurements.json`; the before and after sheets against `main` are in
 [`immersive/lightning-look/408/`](immersive/lightning-look/408/); the baseline report of the rework and
@@ -730,15 +741,15 @@ its research notes are in [`analysis/lightning-look/`](analysis/lightning-look/)
 |---|---|---|---|---|
 | On-screen channel length steeper than 60°, tilt 45° / 20° (2,000 skeletons) | 4 % / 0.4 % | | ≥ 20 % / ≥ 8 % | 9.7 % / 1.2 % (cloud-to-ground 31.5 % / 5.0 %): not met |
 | Cloud-to-ground channels reaching down in C2 (noon, 60×, oblique) | 0 | | ≥ 6 per frame | 6 to 10 short steep drops per frame, 10 to 30 px, faint over the sunlit deck |
-| Leader visible over consecutive frames, C16L | never | | ≥ 3 frames | 4 frames 50 ms apart, the stroke on the fifth |
-| Flashes that do not flicker | about 0 | | 45 to 55 % | 52 % (`profile.test.ts`) |
-| `stats.drawn`, C2 / C5 / C8 | about 45 / 30 to 40 stubs / 0 | | 50 ± 15 / 20 ± 6 / 8 ± 3 | 46 to 61 / 13 to 26 / 5 to 11 (bands 30 to 100 / 12 to 30 / 5 to 12) |
+| Leader visible over consecutive frames, C16L | never | | ≥ 3 frames | the bolt from the blue of C16L (00:31:57.375Z): 4 frames 50 ms apart, the stroke on the fifth (`stepped.C16B` in `measurements.json`, `c16l-bolt.jpg`) |
+| Flashes that do not flicker | about 0 | | 45 to 55 % | 54.4 % of Basse-Kotto's 212,695 flashes, 54.7 % of Amazonas' 222,356, 54.0 % of R1's 77,558 (their observed durations and areas through the app's own draws; 52 % on the synthetic set of `profile.test.ts`) |
+| `stats.drawn`, C2 / C5 / C8 | about 45 / 30 to 40 stubs / 0 | | 50 ± 15 / 20 ± 6 / 8 ± 3 | 44 to 60 / 14 to 26 / 5 to 11 (bands 30 to 100 / 12 to 30 / 5 to 12; the first run had one C5 frame at 13, inside the band, outside 20 ± 6) |
 | Near white at night, 600× and 3600× (C13, C18, C19, C21) | 1.7 to 36 % | 0.9 to 13.4 % | ≤ 2 % | 0 to 0.01 % |
 | Near white at night, 60× (C17, C20) | 0.5 to 1.7 % | 0.55 to 1.79 % | ≤ 1 % | 0 to 0.01 % |
 | Near white by day at `iss`, C3 / C6 / C9 | 1.6 to 2.6 / 5 to 13 / 2.5 to 31 % | 2.0 to 2.7 / 5.7 to 7.9 / 0.1 to 30.6 % | ≤ 1.5 / ≤ 2 / ≤ 2 % | 0.02 to 0.05 / 0 to 0.02 / 0 % |
-| Lit radius of a lone flash, C15 | about 2 `r` | 1.98 `r` (#404) | 1.3 `r` ± 20 % | 1.09 `r` on its pulse, ending at 1.24 `r` (#404; the light map is unchanged by the merge) |
+| Lit radius of a lone flash, C15 | about 2 `r` | 1.98 `r` (#404) | 1.3 `r` ± 20 % | on a stroke or a bright pulse 1.21 to 1.25 `r` along the patch (1.23 to 1.28 `r` farthest), for one or two frames 10 ms apart; 0.71 to 0.77 `r` between pulses; a crawler, which never pulses, 0.81 `r`: met on pulses only (#404's procedure on this build, glows hidden; `lone` in `measurements.json`) |
 | Separate lit cells along the line, C7 (noon) and C11 (15:30) | kept | kept (C7: a line of stubs and glows) | kept | C11 kept; C7 not met: at noon, 600× over a sunlit deck shows 2 or 3 marks |
-| 600× and 3600× told apart, C5 against C8 | | | by channels and front motion | 13 to 26 against 5 to 11 channels; the front moves 27 min against 2 h 40 min of scene over the four frames |
+| 600× and 3600× told apart, C5 against C8 | | | by channels and front motion | 14 to 26 against 5 to 11 channels; the front moves 27 min against 2 h 38 min of scene over the four frames |
 | Replay start, C0 | 03:30:02 | 03:30:02 | 04:00:06 | 04:00:06 |
 
 **Budgets.** `bench.mjs --afterglow 0 --seconds 6` with clouds on, headless Chromium on the GPU (the
@@ -749,25 +760,27 @@ round B `main` first), best of the two per pose; on mobile two rounds of the bra
 `main`. Frame cost p95 is GPU-synchronized; flights count the intervals over 50 ms that show in both
 rounds; near white is the bench's paused screenshot after each flight.
 
-Desktop:
+Desktop (GPU memory with the 1024 × 512 light map of `high`, 7491b7c, measured on R1; textures and
+buffers are the same at every storm and pose; frame costs and flights are those of the first run, with
+the 2048 × 1024 map):
 
 | Storm | Speed | p95 frame cost, worst pose (ms), this branch / `main` | Poses over 10 ms | Flights: worst interval (ms), intervals over 50 ms | Tier | GPU MB, this branch / `main` | Near-white, worst pose |
 |---|---|---|---|---|---|---|---|
-| R1 | 60× | 12.5 / 12.9 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
-| R1 | 600× | 12.5 / 14.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
-| R1 | 3600× | 12.2 / 15 | 4 of 6 | 133.3, 6 (`main` 133.2, 7) | high | 397.4 / 389.9 | 0.0 % |
-| R2 | 60× | 12.2 / 12.1 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
-| R2 | 600× | 12.4 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
-| R2 | 3600× | 11.9 / 14 | 3 of 6 | 83.4, 8 (`main` 116.7, 8) | high | 397.4 / 389.9 | 0.0 % |
-| R3 | 60× | 12.7 / 12.2 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
-| R3 | 600× | 12.1 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
-| R3 | 3600× | 12.3 / 15.1 | 6 of 6 | 133.2, 7 (`main` 133.4, 7) | high | 397.4 / 389.9 | 0.0 % |
-| R5 | 60× | 12.1 / 11.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
-| R5 | 600× | 12.2 / 11.8 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
-| R5 | 3600× | 11.4 / 12.5 | 5 of 6 | 83.3, 7 (`main` 83.3, 8) | high | 397.4 / 389.9 | 0.0 % |
-| BK | 60× | 12.8 / 13.6 | 5 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.1 % |
-| BK | 600× | 13.2 / 13.6 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
-| BK | 3600× | 13.6 / 16.7 | 5 of 6 | 83.4, 10 (`main` 83.3, 10) | high | 397.4 / 389.9 | 0.0 % |
+| R1 | 60× | 12.5 / 12.9 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 383.1 / 378.7 | 0.0 % |
+| R1 | 600× | 12.5 / 14.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 394.3 / 389.9 | 0.0 % |
+| R1 | 3600× | 12.2 / 15 | 4 of 6 | 133.3, 6 (`main` 133.2, 7) | high | 394.3 / 389.9 | 0.0 % |
+| R2 | 60× | 12.2 / 12.1 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 383.1 / 378.7 | 0.0 % |
+| R2 | 600× | 12.4 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 394.3 / 389.9 | 0.0 % |
+| R2 | 3600× | 11.9 / 14 | 3 of 6 | 83.4, 8 (`main` 116.7, 8) | high | 394.3 / 389.9 | 0.0 % |
+| R3 | 60× | 12.7 / 12.2 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 383.1 / 378.7 | 0.0 % |
+| R3 | 600× | 12.1 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 394.3 / 389.9 | 0.0 % |
+| R3 | 3600× | 12.3 / 15.1 | 6 of 6 | 133.2, 7 (`main` 133.4, 7) | high | 394.3 / 389.9 | 0.0 % |
+| R5 | 60× | 12.1 / 11.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 383.1 / 378.7 | 0.0 % |
+| R5 | 600× | 12.2 / 11.8 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 394.3 / 389.9 | 0.0 % |
+| R5 | 3600× | 11.4 / 12.5 | 5 of 6 | 83.3, 7 (`main` 83.3, 8) | high | 394.3 / 389.9 | 0.0 % |
+| BK | 60× | 12.8 / 13.6 | 5 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 383.1 / 378.7 | 0.1 % |
+| BK | 600× | 13.2 / 13.6 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 394.3 / 389.9 | 0.0 % |
+| BK | 3600× | 13.6 / 16.7 | 5 of 6 | 83.4, 10 (`main` 83.3, 10) | high | 394.3 / 389.9 | 0.0 % |
 
 Mobile emulation:
 
@@ -797,12 +810,14 @@ Mobile emulation:
 - **Tier** kept: `high` on desktop, `medium` on mobile, at every storm, speed and pose.
 - **Flights.** No interval over 50 ms at 60× and 600×. At 3600× both builds hitch, 83 to 133 ms, 4 to
   10 intervals per storm: an hour of scene a second loads cloud frames during the flights.
-- **GPU memory.** Over budget: desktop 386.2 MB at 60× and 397.4 MB at speed (`main` 378.7 and 389.9),
-  mobile 248.1 and 259.3 MB (`main` 243.8 and 255.0). The branch adds 3.1 MB of textures, the
-  2048 × 1024 light map on `high` (#404, kept by ADR 0033 only within 384 MB), and 4.3 MB of buffers, the
-  three `flashLook` floats per flash of the ring and per channel segment (#402); the 11 MB more at
-  speed are cloud frames, on both builds. MSAA renderbuffers (8.3 MB) are not counted, as in every
-  earlier figure.
+- **GPU memory.** Within budget at 60×, over it at speed: desktop 383.1 MB at 60× and 394.3 MB at
+  speed (`main` 378.7 and 389.9), mobile 248.1 and 259.3 MB (`main` 243.8 and 255.0). The branch adds
+  4.4 MB of buffers on desktop and 4.3 MB on phones, the three `flashLook` floats per flash of the ring
+  and per channel segment (#402); the 11 MB more at speed are cloud frames, on both builds. The
+  2048 × 1024 light map #404 put on `high` added 3.1 MB (386.2 and 397.4 MB in the first run): #398
+  kept it only within 384 MB, so `high` stays at 1024 × 512 (the patches read a little softer; C17
+  shows no tiled texels at the design values). MSAA renderbuffers (8.3 MB) are not counted, as in
+  every earlier figure.
 - **Near white** on the paused screenshots: at most 0.1 % on desktop; on mobile at most 1.7 % but
   2.4 % at R2's `regional` frame at 3600× (`main` 3.5 %), where the far-view points of the 500 newest
   flashes merge on a phone's whole-storm frame (rule 1, unchanged by the rework). The capture matrix
@@ -813,6 +828,14 @@ What the pictures show:
 - **The ball is gone.** At night the cells read as soft lit cloud with a few channels at every speed;
   no pixel reaches white where `main` whitens 1 to 13 % of the frame at speed. 600× is the breathing
   storm, cells separate along the line (C21); 3600× the travelling field with rare strokes on it (C19).
+- **The night is 10 to 25 times darker at 60× too.** The lit share (luminance over 90) falls from
+  `main` to this branch in every night view at 60×: C16 11.9-13.4 → 1.0-1.2 %, C17 22.4-30.4 →
+  1.4-2.0 %, C20 15.3-17.1 → 0.5-0.7 %, C15 1.2-6.0 → 0.15-0.4 %. The sample is not the cause (C16
+  and C17 draw 49 to 58 of their 51 to 66 flashes alive, C14 and C15 all of them): the glow at 15 %
+  near the floor (#403) and the cloud light at 0.35 of its level with the dimmer splat between pulses
+  (#404) are. Within the bands the brightest values (sprite 0.2, cloud light level 0.4, volume boost
+  2.5, and sharpen 1.0) together lift it 2.3 to 3.7 times (C16 2.3-3.2 %, C17 5.0-6.3 %, C20
+  1.7-2.1 %), each alone by 0 to 50 %; `main`'s 60× picture is out of reach inside the bands.
 - **Speed changes the subject:** about 50, 20 and 8 flashes drawn in full at once; the same heroes on
   two loads of a share URL (C2, C5 and C8 paused at 12:00: the same hashed list of hero flashes).
 - **Strokes unfold:** a leader comes down dim for four frames, the column whips white, branches die
@@ -829,13 +852,21 @@ What the pictures show:
 - **The cloud light at speed** reads as overlapping elongated patches (C18, C19, C21): the shape #404
   gives each flash. No value within the bands changes that (`tuning-variants.jpg`).
 - **Phones** (`--profile mobile`, tier `medium`): near white 0 % at night and at most 1.3 % by day
-  (`phone.jpg`). **`?quality=low`**: heroes with their sprite and every other flash as a half sprite,
-  nothing removed (`quality-low.jpg`).
+  (`phone.jpg`). **`?quality=low`** (no light map): the sample keeps its sprite and channel, and every
+  other flash a half sprite only while among the 500 newest. At 60× that is every flash (C16Q: 51 to
+  53 drawn of 54 to 68 alive), but at 600× on R1 (C21Q) 1,444 to 1,575 flashes are alive, so about
+  930 to 1,060 of them draw nothing (`quality-low.jpg`): on `low`, replay speed removes flashes,
+  against ADR 0030 point 1. The cap is #399's: without it the points outside the sample cost 2.4 ms
+  more at 3600×.
 
-Tuning: none. Within their bands (sharpen 1 to 1.5, cloud light level 0.3 to 0.4, volume boost 1.5 to
-2.5, `VEIL.trace` 0.2 to 0.35), the variants only scaled the lit share (sharpen 1 doubled it at 600×,
-1.5 halved it) without changing the look, and `cgHeightScale` is already at its bound; every value stays
-at its design value ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
+Tuning: none. Within their bands (sprite 0.1 to 0.2, sharpen 1 to 1.5, cloud light level 0.3 to 0.4,
+volume boost 1.5 to 2.5, `VEIL.trace` 0.2 to 0.35), the variants only scaled the lit share without
+changing the look: on the first build sharpen 1 doubled it at 600×, 1.5 halved it, level 0.3 and boost
+1.5 dimmed it by 10 to 25 %, trace 0.35 changed nothing measurable; on the review build sprite 0.2,
+level 0.4 and boost 2.5 each raised it by 0 to 50 % at 60× and all bright ends together 2.3 to 3.7
+times (`tuning-variants.jpg`, `variants` in `measurements.json`). `cgHeightScale` is already at its
+bound; every value stays at its design value ([ADR 0033](adr/0033-lightning-looks-and-density.md)),
+and whether the night at 60× should be brighter than the bands allow is the maintainer's call.
 
 ## Benchmark
 
@@ -871,7 +902,8 @@ lit (luminance over 90) and lit 8 × 8 blocks over the central 84 % × 76 % of t
 `--stats`, `lightning.stats` on each frame. `--no-clouds` hides the cloud layer so day frames measure
 the lightning alone, `--reduced-motion` emulates `prefers-reduced-motion`, `--quality` sets the tier,
 `--profile mobile` emulates the phone, and `--step 50` freezes the page's wall clock and moves it
-50 ms per frame, so leader frames are exactly that far apart.
+50 ms per frame, so leader frames are exactly that far apart; with `--at <ISO>` the first of them
+shows that scene time, to follow a given flash.
 
 ```sh
 node web/scripts/capture.mjs --base http://localhost:4321 --storm 2026-10-27-basse-kotto \

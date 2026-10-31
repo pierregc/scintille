@@ -9,7 +9,7 @@ tier there.
 | Pixel ratio cap | 1 | 1.5 | 2 |
 | Flashes on the GPU | 65,536 around the playhead | whole live window | whole live window |
 | Clouds lit by flashes (#64) | off | on | on |
-| Flash light map | none | 1024 × 512 | 2048 × 1024 |
+| Flash light map | none | 1024 × 512 | 1024 × 512 |
 | Bicubic cloud filtering | off | on | on |
 | Bloom on flashes (#58) | off | off | on (about 0.5 ms GPU per frame) |
 
