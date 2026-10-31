@@ -748,11 +748,11 @@ void main() {
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
 				L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
 				// Flashes light the cloud from inside, in a band under each column's own top, so the lit
-				// area takes the cloud's shape. Kept apart from the history, so each flash rises and fades in real time.
+				// area takes the cloud's shape, as a trace by day. Kept apart from the history, so each flash rises and fades in real time.
 				float hm = 0.5 * (length(ro + rd * ta) + length(ro + rd * tb)) - R;
 				vec2 geo = vec2(ll.y / 6.283185307 + 0.5, ll.x / 3.141592654 + 0.5);
 				float glow = flashLightAtLod(geo) * flashBand(hm, col.y);
-				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha;
+				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * mix(1.0, ${f(CLOUD_LIGHT.dayLevel)}, smoothstep(-0.05, 0.25, s));
 				depthSum += T * alpha * tv;
 				heightSum += T * alpha * h;
 				depthWeight += T * alpha;
@@ -891,7 +891,8 @@ void main() {
 			}
 		}
 	}
-	gl_FragColor = vec4(rgb + flashColor * seen.g / shown, cover * fade);
+	// The flashes light the cloud into its headroom only, as the flat layer does: barely visible on sunlit tops.
+	gl_FragColor = vec4(rgb + flashColor * seen.g / shown * max(1.0 - rgb, 0.0), cover * fade);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

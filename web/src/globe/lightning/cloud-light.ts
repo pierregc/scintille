@@ -12,6 +12,8 @@ export const CLOUD_LIGHT = {
 	dimSplat: 0.65,
 	/** Cloud brightness from the light map, `1 - exp(-gain × light)` [4 to 6]. */
 	gain: 5,
+	/** Share kept over sunlit cloud, a styled trace like the channel's (physics: none) [0.25 to 0.5]. */
+	dayLevel: 0.35,
 	/** Contrast of the light map read, `pow(light, sharpen)` [1 to 1.5]. */
 	sharpen: 1.25,
 	/** The volume's glow over the flat layer's [1.5 to 2.5]. */

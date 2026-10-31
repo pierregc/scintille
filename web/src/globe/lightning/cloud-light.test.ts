@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marchFragmentShader } from '../clouds/volume.glsl';
+import { compositeFragmentShader, marchFragmentShader } from '../clouds/volume.glsl';
 import { cloudsFragmentShader } from '../clouds/clouds.glsl';
 import { glslFloat as f } from './profile';
 import { bandCentre, CLOUD_LIGHT, cloudLightGlsl, flashBand } from './cloud-light';
@@ -39,5 +39,13 @@ describe('the GLSL consumers share the cloud light numbers', () => {
 		expect(marchFragmentShader).toContain(cloudLightGlsl);
 		expect(marchFragmentShader).toContain(`flashBand(hm, col.y)`);
 		expect(marchFragmentShader).toContain(`* ${f(CLOUD_LIGHT.volumeBoost)} * alpha`);
+	});
+
+	it('keeps the same trace over sunlit cloud in both renderers', () => {
+		const trace = `mix(1.0, ${f(CLOUD_LIGHT.dayLevel)}, smoothstep(-0.05, 0.25, s))`;
+		expect(cloudsFragmentShader).toContain(`* max(1.0 - color, 0.0) * ${trace}`);
+		expect(marchFragmentShader).toContain(`* alpha * ${trace}`);
+		expect(cloudsFragmentShader).toContain('* max(1.0 - color, 0.0) *');
+		expect(compositeFragmentShader).toContain('seen.g / shown * max(1.0 - rgb, 0.0)');
 	});
 });

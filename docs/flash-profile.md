@@ -153,8 +153,9 @@ flash lights a disc that ends at 1.3 `r` and keeps 4 % of its centre at `r`, the
 a patch of 0.65 of it between them, where its light has drifted; at least 2 texels, and 150 km from
 afar, as on the globe. Near the floor it is drawn at 35 %, so channels read over it; in a storm view
 the map keeps the brightest flash at each point, never their sum. The cloud reads the map sharpened
-(`pow(light, 1.25)`) and adds `1 - exp(-5 × light)` of the flash colour, scaled by how dark it is, so
-sunlit tops barely change. Where the clouds are in relief, the volume lights each column in a band
+(`pow(light, 1.25)`) and adds `1 - exp(-5 × light)` of the flash colour into its headroom only, in the
+flat layer and in the volume alike, and keeps 35 % of it over sunlit cloud, a styled trace like the
+channel's (physics: nothing of a flash shows by day). Where the clouds are in relief, the volume lights each column in a band
 3.5 km wide centred 3 km under the column's own top where that top rises above 11.5 km and at the
 assumed flash height of 8.5 km otherwise, at 1.8 times the flat layer's level: towers glow near their
 crown, thin anvils veil, low cloud stays dark, so the lit area takes the cloud's shape (ADR 0031).
