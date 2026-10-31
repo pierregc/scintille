@@ -161,7 +161,9 @@ back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
 - **End of a replay.** Past the storm's last flash, `Replay from start` plays it again from its first
   flash, the camera where it is. After 10 s playing past the end the globe goes back to live with
   every flash and flies out, as `Back to live` does. Captures in
-  [`immersive/replay-end/`](immersive/replay-end/).
+  [`immersive/replay-end/`](immersive/replay-end/). A replay opens, restores and restarts at the
+  first flash its chunks hold (the earliest `event_min`), which can be later than the catalog's
+  `t_start`: Basse-Kotto (2026-10-27) opens at 04:00:06 UTC while its catalog entry starts at 03:30.
 
 Measured on the five storms with a local production build against production data, 60× from
 12 minutes before the reference hour, following, then the horizon view

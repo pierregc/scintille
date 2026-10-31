@@ -1151,6 +1151,9 @@ injected archive source for fixtures or future time-range queries.
 Loading keeps the current observations until the new extract is complete. Replay stops live
 polling, retains the immutable extract on the CPU and moves a bounded window through the same
 ring used by lightning and sound. Seeking updates that window on the next animation frame.
+The client opens, clamps and restarts a replay at the earliest `event_min` of its chunks (empty
+chunks ignored, `start` when `event_min` is null, the storm's `t_start` when no chunk gives a time),
+which may be after the catalog's `t_start`: a `track-bounds` extract begins at the first track window.
 `data.live()` cancels pending loads, clears the replay window and starts a fresh live client;
 it downloads the current manifest's chunks again. Disposal releases the archive and subscriptions.
 CPU memory scales with the extract's flash count; the renderer ring and GPU capacity stay fixed.
