@@ -1,4 +1,6 @@
+import { CLOUD_LIGHT, cloudLightGlsl } from '../lightning/cloud-light';
 import { flashLightGlsl } from '../lightning/light-map.glsl';
+import { glslFloat as f } from '../lightning/profile';
 import { cloudOpacityGlsl } from './clouds.glsl';
 import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
@@ -543,6 +545,7 @@ uniform float reliefOn;
 uniform float reliefPixelAngle;
 ${volumeFieldGlsl}
 ${flashLightGlsl}
+${cloudLightGlsl}
 ${overlapGlsl}
 layout(location = 1) out highp vec4 marchDepth;
 
@@ -744,12 +747,12 @@ void main() {
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
 				L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
-				// Flashes light the cloud from inside, around the middle of the column. Kept apart from
-				// the history, so each flash rises and fades in real time.
+				// Flashes light the cloud from inside, in a band under each column's own top, so the lit
+				// area takes the cloud's shape. Kept apart from the history, so each flash rises and fades in real time.
 				float hm = 0.5 * (length(ro + rd * ta) + length(ro + rd * tb)) - R;
 				vec2 geo = vec2(ll.y / 6.283185307 + 0.5, ll.x / 3.141592654 + 0.5);
-				float glow = flashLightAtLod(geo) * exp(-pow((hm - 8.5) / 3.5, 2.0));
-				glowLight += T * (1.0 - exp(-flashGain * glow)) * 2.5 * alpha;
+				float glow = flashLightAtLod(geo) * flashBand(hm, col.y);
+				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha;
 				depthSum += T * alpha * tv;
 				heightSum += T * alpha * h;
 				depthWeight += T * alpha;

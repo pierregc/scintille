@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
-import { budgetStart, createLightning, lightWindow } from './index';
+import { budgetStart, createLightning, LIGHT_WINDOW, lightWindow } from './index';
 import { MAX_SEGMENTS } from './skeleton';
 
 afterEach(() => {
@@ -127,5 +127,12 @@ describe('light map window', () => {
 		const window = lightWindow({ lat: 1.4, lon: 0 }, 1000);
 		expect(window.y + window.w).toBeCloseTo(Math.PI / 2, 6);
 		expect(window.z).toBe(Math.PI);
+	});
+
+	it('ends each lit disc at the footprint near the floor, below the channels', () => {
+		expect(LIGHT_WINDOW.nearSplat).toBe(1.3);
+		expect(LIGHT_WINDOW.nearLevel).toBe(0.35);
+		expect(LIGHT_WINDOW.heightScale).toBe(3);
+		expect([LIGHT_WINDOW.farSplat, LIGHT_WINDOW.farSpreadKm]).toEqual([3, 150]);
 	});
 });
