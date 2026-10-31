@@ -90,5 +90,6 @@ brightness mapping also drives the glow that flashes cast inside the clouds.
 
 **Limits.** Brightness on screen is relative: it depends on the device, the bloom pass and how many
 flashes overlap. It shows which flashes are stronger, not absolute energy values. In a storm view,
-overlapping glows use screen blending and fade on sunlit clouds, so a flash over a bright cloud
-looks fainter than the same flash at night.
+overlapping glows keep the brightest near the floor (below 1 km per CSS px) and use screen blending
+from afar; glows and channels fade on sunlit clouds, so a flash over a bright cloud looks fainter than
+the same flash at night.

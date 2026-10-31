@@ -60,10 +60,13 @@ HUD shows 0 and greys the other choices. The 1 and 30 minute afterglows stay for
 
 ## Overlaps in a storm view
 
-At 60×, a storm view shows about a minute of flashes at once. Glows there use screen blending
-(`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white, and a flash still
-shows over sunlit clouds without whitening them. The cloud light keeps the brightest flash at each point.
-On the globe overview, flashes keep adding up, so active regions glow brighter.
+At 60×, a storm view shows about a minute of flashes at once. Below 1 km per CSS px, glows there keep
+the brightest at each pixel, so a cell never piles up into a white ball; from 1 km per CSS px they use
+screen blending (`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white,
+and a flash still shows over sunlit clouds without whitening them. From 0.7 to 1 km per CSS px a
+screen-blended copy of the glows, weighted from 0 to 1, is drawn under the max-blended ones, so zooming
+across never pops and a lone glow keeps its light. The cloud light keeps the brightest flash at each
+point. On the globe overview, flashes keep adding up, so active regions glow brighter.
 
 A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
 time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
@@ -97,8 +100,7 @@ three levels, coarser as they get finer.
 **Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
 the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
 (drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
-in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
-sometimes lavender-rose or warm.
+in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue.
 
 **Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
 reach the ground within 20 ms. Branches light once, when the leader reaches them, then fade (60 ms for
@@ -129,8 +131,15 @@ each other, they are one flash: both keep their glow, only the newest gets a cha
 overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
-channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
-channel carry the flash.
+channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn
+at 15 % (styled), as the lit cloud and the channel carry the flash; where the cloud light does not show
+(the `low` tier, clouds hidden or not loaded yet), it keeps 40 %. Over sunlit clouds it keeps 35 % of
+that (styled: from orbit, nothing of a flash shows by day). These are rules of the floor: they ease out
+from 0.3 to 1 km per CSS px, and from there the glow climbs from 40 % to full as before, so views from
+1 km per CSS px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) keep their points
+and their day marks; smaller storms frame closer and get the rules of the floor. Phones scale both 15 %
+and 40 % by 0.6. In a storm view below 1 km per CSS px, overlapping glows keep the brightest, never add
+up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
@@ -140,8 +149,9 @@ channel carry the flash.
 
 A second, soft ribbon follows the main channel of ground flashes in clear air: eight times wider, at
 30 % of the core level, sharing its opacity, profile, growth and fade, keeping the brightest light where
-it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
-250 ms, which bounds its cost during bursts.
+it overlaps. Its tint is cool only (`vec3(0.86, 0.9, 1.0)` on the pale blue halo colour): the rose and
+warm halos of photographs are dust and distance seen from the ground. It fades with camera distance
+from 1,500 to 6,000 km. Above 256 channels it fades out over 250 ms, which bounds its cost during bursts.
 
 ## Cloud light
 

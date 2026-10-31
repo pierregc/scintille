@@ -148,9 +148,8 @@ void main() {
 	vLength = length(sb - sa) / w;
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
-	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
-	float hue = pulseHash(seed, 120.0);
-	vTint = hue < 0.15 ? vec3(1.0, 0.86, 0.95) : hue < 0.3 ? vec3(1.0, 0.94, 0.86) : vec3(0.86, 0.9, 1.0);
+	// The light around a channel leans cool; its core stays white. Rose and warm tints are dust and distance, seen from the ground.
+	vTint = vec3(0.86, 0.9, 1.0);
 }
 `;
 

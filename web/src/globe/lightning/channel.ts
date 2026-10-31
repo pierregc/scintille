@@ -21,6 +21,8 @@ export const CHANNEL = {
 	glowDip: 0.6,
 	haloGlowDip: 0.9,
 	cloudGlowDip: 0.75,
+	/** Share of the glow left near the floor over sunlit clouds, where nothing of a flash shows from orbit. */
+	glowDayLevel: 0.35,
 	haloCapacity: 256,
 	haloFadeStartKm: 1500,
 	haloFadeEndKm: 6000,

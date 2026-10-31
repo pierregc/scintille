@@ -1,15 +1,23 @@
-import { AdditiveBlending, CustomBlending, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
+import { AddEquation, AdditiveBlending, CustomBlending, InstancedBufferGeometry, MaxEquation, Mesh, OneFactor, OneMinusSrcColorFactor, ShaderMaterial, Vector2, type WebGLRenderer } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { budgetStart, createLightning, lightWindow } from './index';
 import { MAX_SEGMENTS } from './skeleton';
+import { maxBlendShare, PHONE, ZOOM } from './zoom';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
+
+/** The screen-blended copy of the glow, drawn while a storm view crosses from max to screen blending. */
+function screenTwin(glow: Mesh): Mesh {
+	const twin = glow.children.find((child) => child instanceof Mesh && child.geometry === glow.geometry);
+	if (!(twin instanceof Mesh)) throw new Error('missing screen twin');
+	return twin;
+}
 
 describe('3D channel integration', () => {
 	it('shares bloom layers and retires channels while the afterglow remains', () => {
@@ -99,6 +107,101 @@ describe('storm view', () => {
 		expect(material.uniforms.duration.value).toBe(1800);
 		expect(material.blending).toBe(AdditiveBlending);
 		lightning.dispose();
+	});
+
+	it('keeps the brightest glow at each pixel near the floor and screen-blends from afar', () => {
+		const lightning = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		const twin = screenTwin(lightning.mesh);
+		lightning.viewKmPerPx = 0.3;
+		expect(material.blending).toBe(AdditiveBlending);
+		expect(twin.visible).toBe(false);
+		lightning.stormView = true;
+		expect(material.blending).toBe(CustomBlending);
+		expect(material.blendEquation).toBe(MaxEquation);
+		expect([material.blendSrc, material.blendDst]).toEqual([OneFactor, OneFactor]);
+		expect(twin.visible).toBe(false);
+		lightning.viewKmPerPx = 2;
+		expect(material.blendEquation).toBe(AddEquation);
+		expect([material.blendSrc, material.blendDst]).toEqual([OneFactor, OneMinusSrcColorFactor]);
+		expect(twin.visible).toBe(false);
+		lightning.viewKmPerPx = ZOOM.floorKmPerPx * 0.9;
+		expect(material.blendEquation).toBe(MaxEquation);
+		lightning.stormView = false;
+		expect(material.blending).toBe(AdditiveBlending);
+		expect(twin.visible).toBe(false);
+		lightning.dispose();
+	});
+
+	it('fades a screen-blended twin in under the max-blended glow on the way out, without a new material', () => {
+		const lightning = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		const twin = screenTwin(lightning.mesh);
+		const twinMaterial = twin.material as ShaderMaterial;
+		expect(twin.geometry).toBe(lightning.mesh.geometry);
+		expect(twin.layers).toBe(lightning.mesh.layers);
+		expect(twin.renderOrder).toBeLessThan(lightning.mesh.renderOrder);
+		expect(twinMaterial.uniforms.time).toBe(material.uniforms.time);
+		expect(twinMaterial.uniforms.nearGlowLevel).toBe(material.uniforms.nearGlowLevel);
+		expect(material.uniforms.blendWeight.value).toBe(1);
+		expect(twinMaterial.blendEquation).toBe(AddEquation);
+		expect([twinMaterial.blendSrc, twinMaterial.blendDst]).toEqual([OneFactor, OneMinusSrcColorFactor]);
+		lightning.stormView = true;
+		let previous = 0;
+		for (let kmPerPx = 0.6; kmPerPx < 1.1; kmPerPx *= 1.02) {
+			lightning.viewKmPerPx = kmPerPx;
+			const share = maxBlendShare(kmPerPx);
+			expect(twin.visible).toBe(share > 0 && share < 1);
+			expect(material.blendEquation).toBe(share > 0 ? MaxEquation : AddEquation);
+			expect(material.uniforms.blendWeight.value).toBe(1);
+			if (twin.visible) {
+				expect(twinMaterial.uniforms.blendWeight.value).toBeCloseTo(1 - share, 9);
+				expect(twinMaterial.uniforms.blendWeight.value).toBeGreaterThanOrEqual(previous);
+				previous = twinMaterial.uniforms.blendWeight.value as number;
+			}
+		}
+		expect(previous).toBeGreaterThan(0.9);
+		lightning.dispose();
+	});
+
+	it('picks the blend from the zoom a phone draws at', () => {
+		const lightning = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0, phone: true });
+		const material = lightning.mesh.material as ShaderMaterial;
+		const renderer = { getSize: (target: Vector2) => target.set(375, PHONE.viewHeight * 0.75) } as unknown as WebGLRenderer;
+		// Only the renderer size matters to the glow before it draws.
+		(lightning.mesh.onBeforeRender as unknown as (renderer: WebGLRenderer) => void)(renderer);
+		lightning.stormView = true;
+		lightning.viewKmPerPx = 1.2;
+		expect(material.blendEquation).toBe(MaxEquation);
+		expect(screenTwin(lightning.mesh).visible).toBe(true);
+		lightning.viewKmPerPx = 1.4;
+		expect(material.blendEquation).toBe(AddEquation);
+		lightning.dispose();
+	});
+
+	it('draws the glow at a fraction near the floor only while the lit cloud carries the flash', () => {
+		const level = (lightning: ReturnType<typeof createLightning>) => (lightning.mesh.material as ShaderMaterial).uniforms.nearGlowLevel.value as number;
+		const lit = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 64 });
+		expect(lit.cloudLit).toBe(true);
+		expect(level(lit)).toBe(ZOOM.nearGlowLevel);
+		lit.cloudLit = false;
+		expect(level(lit)).toBe(ZOOM.glowLevel);
+		lit.cloudLit = true;
+		expect(level(lit)).toBe(ZOOM.nearGlowLevel);
+		lit.dispose();
+		const unlit = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0 });
+		expect(unlit.cloudLit).toBe(false);
+		unlit.cloudLit = true;
+		expect(unlit.cloudLit).toBe(false);
+		expect(level(unlit)).toBe(ZOOM.glowLevel);
+		unlit.dispose();
+		const phone = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 64, phone: true });
+		const uniforms = (phone.mesh.material as ShaderMaterial).uniforms;
+		expect(level(phone)).toBeCloseTo(ZOOM.nearGlowLevel * PHONE.nearLevel, 9);
+		expect(uniforms.glowLevel.value).toBeCloseTo(ZOOM.glowLevel * PHONE.nearLevel, 9);
+		phone.cloudLit = false;
+		expect(level(phone)).toBeCloseTo(ZOOM.glowLevel * PHONE.nearLevel, 9);
+		phone.dispose();
 	});
 });
 
