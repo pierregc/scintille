@@ -179,7 +179,9 @@ and stage, not from its height alone:
 - *In the cloud* (fans, crawlers, a cloud-to-ground stem whatever its height, the part of a drop above
   the base): light scatters around the channel. It spreads over 0.5 km just under the 11.5 km top to
   4 km at the base, times the opacity, keeps the same light over that width and loses up to half of it,
-  with no halo.
+  with no halo. A segment shorter on screen than that width overlaps its neighbours over it, so it keeps
+  only its share, `max(length, core width) / spread width` (`veilOverlap`, styled): without it the
+  overlapping ends of a path deep in the cloud add up to a saturated white tube.
   Crawlers, along the base, are the most veiled.
 - *A trace in the cloud* (in-cloud trunks): the channel spreads at most to twice its core width and
   keeps at least 30 % of its light, with a halo, so a trunk reads as a crisp, dim stroke inside the
