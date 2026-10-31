@@ -16,9 +16,10 @@ export const ZOOM = {
 	/** Channel opacity rises while its half length grows over this range, CSS px. */
 	revealPx: [6, 18],
 	/** Share of the bloom kept near the floor, where glows are resolved and need no halo to be seen. */
-	nearBloom: 0.15,
-	/** Glow level near the floor, where the lit cloud and the channels carry the flash. */
-	nearGlowLevel: 0.4,
+	nearBloom: 0.1,
+	/** Glow level near the floor, where the lit cloud and the channels carry the flash; `nearGlowAlone` without cloud light. */
+	nearGlowLevel: 0.15,
+	nearGlowAlone: 0.4,
 } as const;
 
 /** Phones draw lightning as a view of `viewHeight` CSS px would, shrunk to their screen, and dim the glows near the floor. */

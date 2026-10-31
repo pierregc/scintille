@@ -19,7 +19,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 /** Objects on this layer glow; everything else is drawn as usual. */
 export const BLOOM_LAYER = 1;
 
-export const BLOOM = { strength: 0.9, radius: 0.55, threshold: 0 };
+export const BLOOM = { strength: 0.9, radius: 0.4, threshold: 0 };
 
 export interface PostProcessing {
 	render(): void;

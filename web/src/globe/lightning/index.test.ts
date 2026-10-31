@@ -1,10 +1,11 @@
-import { AdditiveBlending, CustomBlending, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
+import { AddEquation, AdditiveBlending, CustomBlending, InstancedBufferGeometry, MaxEquation, Mesh, OneFactor, OneMinusSrcColorFactor, ShaderMaterial } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { budgetStart, createLightning, lightWindow } from './index';
 import { MAX_SEGMENTS } from './skeleton';
+import { PHONE, ZOOM } from './zoom';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -99,6 +100,37 @@ describe('storm view', () => {
 		expect(material.uniforms.duration.value).toBe(1800);
 		expect(material.blending).toBe(AdditiveBlending);
 		lightning.dispose();
+	});
+
+	it('keeps the brightest glow at each pixel near the floor and screen-blends from afar', () => {
+		const lightning = createLightning(new FlashRing(8), { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		lightning.viewKmPerPx = 0.3;
+		expect(material.blending).toBe(AdditiveBlending);
+		lightning.stormView = true;
+		expect(material.blending).toBe(CustomBlending);
+		expect(material.blendEquation).toBe(MaxEquation);
+		expect([material.blendSrc, material.blendDst]).toEqual([OneFactor, OneFactor]);
+		lightning.viewKmPerPx = 2;
+		expect(material.blendEquation).toBe(AddEquation);
+		expect([material.blendSrc, material.blendDst]).toEqual([OneFactor, OneMinusSrcColorFactor]);
+		lightning.viewKmPerPx = 0.5;
+		expect(material.blendEquation).toBe(MaxEquation);
+		lightning.stormView = false;
+		expect(material.blending).toBe(AdditiveBlending);
+		lightning.dispose();
+	});
+
+	it('draws the glow at a fraction near the floor only where the lit cloud carries the flash', () => {
+		const level = (options: Parameters<typeof createLightning>[1]) => {
+			const lightning = createLightning(new FlashRing(8), { storage: null, ...options });
+			const value = (lightning.mesh.material as ShaderMaterial).uniforms.nearGlowLevel.value as number;
+			lightning.dispose();
+			return value;
+		};
+		expect(level({ lightMapWidth: 64 })).toBe(ZOOM.nearGlowLevel);
+		expect(level({ lightMapWidth: 0 })).toBe(ZOOM.nearGlowAlone);
+		expect(level({ lightMapWidth: 64, phone: true })).toBeCloseTo(ZOOM.nearGlowLevel * PHONE.nearLevel, 9);
 	});
 });
 
