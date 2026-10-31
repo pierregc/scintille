@@ -3,11 +3,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
-import { DENSITY, heroShare } from './density';
-import { CHANNEL } from './channel';
-import { aliveCount, aliveLoad, budgetStart, createLightning, lightWindow } from './index';
+import { NO_DELAY } from '../live/delay';
+import { DENSITY, heroLot, heroShare } from './density';
+import { CHANNEL, flashSeed } from './channel';
+import { aliveCount, aliveLoad, budgetStart, createLightning, lightWindow, sampleCount } from './index';
+import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { MAX_SEGMENTS } from './skeleton';
+
+/** A playback that has played at `speed` up to `now`. */
+function playbackAt(now: number, speed: number): FlashPlayback {
+	const playback = new FlashPlayback();
+	playback.update(now, speed);
+	return playback;
+}
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -137,13 +146,28 @@ describe('storm view budget', () => {
 	});
 });
 
+describe('sampleCount', () => {
+	it('counts the flashes within their flicker or fade, and those under the share', () => {
+		const ring = new FlashRing(16);
+		ring.push(decodeChunk(encodeChunk(100, [0, 100, 200, 300, 400].map((offsetMs) => ({ offsetMs, lat: offsetMs / 100, lon: 0 }))).buffer));
+		[100, 100, 900, 100, 100].forEach((ms, i) => { ring.durationMs[ring.slot(i)] = ms; });
+		const life = (ms: number) => (flickerLength(ms) + CHANNEL.fade) * 1000;
+		expect(sampleCount(ring, 100_000 + life(100) + 50, playbackAt(0, 1), NO_DELAY, 1)).toEqual({ alive: 3, drawn: 3 });
+		expect(sampleCount(ring, 100_200 + life(900) - 1, playbackAt(0, 1), NO_DELAY, 1)).toEqual({ alive: 1, drawn: 1 });
+		expect(sampleCount(ring, 100_400, playbackAt(0, 600), NO_DELAY, 1)).toEqual({ alive: 5, drawn: 5 });
+		const lots = Array.from({ length: 5 }, (_, i) => { const s = ring.slot(i); return heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]); });
+		const share = [...lots].sort((a, b) => a - b)[2];
+		expect(sampleCount(ring, 100_400, playbackAt(0, 600), NO_DELAY, share)).toEqual({ alive: 5, drawn: 2 });
+	});
+});
+
 describe('storm view sample', () => {
-	/** 2,000 flashes over 240 s of scene time, then 200 over the next 240 s. */
+	/** 2,000 flashes of one instrument over 240 s of scene time, then 200 over the next 240 s. */
 	const burst = () => {
 		const ring = new FlashRing(4096);
 		const flashes = [
-			...Array.from({ length: 2000 }, (_, i) => ({ offsetMs: i * 120, lat: (i % 50) * 0.1, lon: Math.floor(i / 50) * 0.1 })),
-			...Array.from({ length: 200 }, (_, i) => ({ offsetMs: 240_000 + i * 1200, lat: (i % 50) * 0.1, lon: 5 + Math.floor(i / 50) * 0.1 })),
+			...Array.from({ length: 2000 }, (_, i) => ({ offsetMs: i * 120, lat: (i % 50) * 0.1, lon: Math.floor(i / 50) * 0.1, source: 0 })),
+			...Array.from({ length: 200 }, (_, i) => ({ offsetMs: 240_000 + i * 1200, lat: (i % 50) * 0.1, lon: 5 + Math.floor(i / 50) * 0.1, source: 0 })),
 		];
 		ring.push(decodeChunk(encodeChunk(100, flashes).buffer));
 		return ring;
@@ -159,15 +183,19 @@ describe('storm view sample', () => {
 		const wanted = heroShare(20, alive);
 		expect(alive).toBeCloseTo((2000 * (flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade)) / DENSITY.aliveWindow, 6);
 		expect(alive).toBeGreaterThan(500);
-		expect(lightning.stats.alive).toBeCloseTo(alive, 9);
+		expect(lightning.stats.load).toBeCloseTo(alive, 9);
 		expect(lightning.stats.target).toBe(20);
 		expect(lightning.heroShare).toBeCloseTo(wanted, 9);
 		expect(material.uniforms.heroShare.value).toBe(lightning.heroShare);
 		expect(material.uniforms.budgetFrom.value).toBe(-1e6);
-		expect(lightning.stats.drawn).toBeGreaterThan(0);
-		expect(lightning.stats.drawn).toBeLessThan(200);
+		const { alive: all, drawn } = lightning.stats;
+		expect(all).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, 1).alive);
+		expect(drawn).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, lightning.heroShare).drawn);
+		expect(drawn).toBeGreaterThan(5);
+		expect(drawn).toBeLessThan(60);
 		lightning.setTime(340_000, undefined, 600);
-		expect(lightning.stats.channels).toBe(lightning.stats.drawn);
+		expect(lightning.stats.channels).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, lightning.heroShare * DENSITY.edge).drawn);
+		expect(lightning.stats.channels).toBeLessThanOrEqual(drawn * 1.2);
 		lightning.dispose();
 	});
 
@@ -182,6 +210,8 @@ describe('storm view sample', () => {
 		lightning.setTime(340_000, undefined, 1);
 		expect(lightning.heroShare).toBe(1);
 		expect(lightning.stats.target).toBe(Infinity);
+		expect(lightning.stats.drawn).toBe(lightning.stats.alive);
+		expect(lightning.stats.alive).toBeGreaterThan(0);
 		expect(material.uniforms.budgetFrom.value).toBeCloseTo((budgetStart(ring, 340_000, 500) - 340_000) / 1000, 6);
 		lightning.dispose();
 	});
@@ -194,15 +224,15 @@ describe('storm view sample', () => {
 		lightning.stormView = true;
 		lightning.setTime(340_000, undefined, 600);
 		const dense = lightning.heroShare;
-		const alive0 = lightning.stats.alive;
+		const alive0 = lightning.stats.load;
 		const shares: number[] = [];
 		for (let frame = 1; frame <= 120; frame++) {
 			wall += 1000 / 60;
 			lightning.setTime(340_000 + frame * 10_000, undefined, 600);
 			shares.push(lightning.heroShare);
 		}
-		const sparse = heroShare(20, lightning.stats.alive);
-		expect(lightning.stats.alive).toBeLessThan(alive0);
+		const sparse = heroShare(20, lightning.stats.load);
+		expect(lightning.stats.load).toBeLessThan(alive0);
 		for (let i = 1; i < shares.length; i++) {
 			expect(shares[i]).toBeGreaterThanOrEqual(shares[i - 1]);
 			expect(shares[i] / shares[i - 1]).toBeLessThanOrEqual((sparse / dense) ** (1 / 60 / DENSITY.smoothing) + 1e-9);

@@ -30,18 +30,18 @@ import { type Clouds, cloudShellRadius } from '../clouds';
 import { browserStorage, type PreferenceStorage } from '../clouds/preference';
 import { sunDirection } from '../sun';
 import { lookedAt } from '../surface';
-import type { FlashRing, SourceDelays } from '../live';
+import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
-import { CHANNEL } from './channel';
+import { CHANNEL, flashSeed } from './channel';
 import { ChannelPool, POOL_FLASHES, SEGMENT_STRIDE } from './channel-pool';
-import { DENSITY, followShare, heroShare, heroTarget } from './density';
+import { DENSITY, followShare, heroLot, heroShare, heroTarget } from './density';
 import { segmentGeometry } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 import { FlashPlayback } from './playback';
-import { flickerLength, MAX_LIFE } from './profile';
+import { flickerLength, MAX_LIFE, PROFILE } from './profile';
 import { PHONE, viewScale, ZOOM } from './zoom';
 
 export { DISPLAY_MINUTES } from './display';
@@ -71,14 +71,14 @@ export interface FlashLight {
 }
 
 /**
- * Sampling of a storm view this frame: `alive` flashes within their flicker or fade at once (`aliveLoad` over
- * the last `DENSITY.aliveWindow` of wall clock time), `drawn` flashes of the sample within their flicker or
- * fade (0 when the view is too far for channels), the applied `share` of the lots and its `target`, and
- * `channels` holding a slot in the pool.
+ * Sampling of a storm view this frame: `alive` flashes within their flicker or fade, `drawn` those of them in
+ * the sample, `load` the estimate of `alive` the share is sized by (`aliveLoad`), the applied `share` of the
+ * lots and its `target`, and `channels` holding a slot in the pool.
  */
 export interface LightningStats {
 	alive: number;
 	drawn: number;
+	load: number;
 	share: number;
 	target: number;
 	channels: number;
@@ -293,14 +293,18 @@ export function createLightning(
 	let lastWall = Number.NaN;
 	let viewKmPerPx = 0;
 	let share = 1;
-	let alive = 0;
+	let load = 0;
 	let target = Infinity;
 	let sampled = false;
+	let lastTime = Number.NaN;
+	let lastDelays = NO_DELAY;
 
 	return {
 		mesh,
 		setTime(utcMs, delays, replaySpeed = 1) {
 			playback.update(utcMs, replaySpeed);
+			lastTime = utcMs;
+			lastDelays = delays ?? NO_DELAY;
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
 			instances.lookbackMs = Math.max(displayMs(shownMinutes()), playback.span(MAX_LIFE, utcMs));
 			instances.sync(utcMs, delays);
@@ -315,8 +319,8 @@ export function createLightning(
 			lastWall = now;
 			// At replay speed a storm view would show thousands of flashes at once: a seeded sample of them is drawn in full, every flash lights the cloud.
 			target = stormView ? heroTarget(playback.speed) : Infinity;
-			alive = stormView ? aliveLoad(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs), DENSITY.aliveWindow) : 0;
-			share = followShare(share, heroShare(target, alive), dt, playback.jumped || stormView !== sampled);
+			load = stormView ? aliveLoad(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs), DENSITY.aliveWindow) : 0;
+			share = followShare(share, heroShare(target, load), dt, playback.jumped || stormView !== sampled);
 			sampled = stormView;
 			sample.value = share;
 			// The sample is the budget: the cap on the newest flashes binds only while every flash is drawn.
@@ -340,7 +344,8 @@ export function createLightning(
 			return share;
 		},
 		get stats() {
-			return { alive, drawn: channels.flickering, share, target, channels: channels.flashes };
+			const { alive, drawn } = Number.isFinite(lastTime) ? sampleCount(ring, lastTime, playback, lastDelays, share) : { alive: 0, drawn: 0 };
+			return { alive, drawn, load, share, target, channels: channels.flashes };
 		},
 		get viewKmPerPx() {
 			return viewKmPerPx;
@@ -427,6 +432,21 @@ export function aliveLoad(ring: FlashRing, now: number, spanMs: number, seconds:
 	let life = 0;
 	for (let i = playedBy(ring, now - spanMs); i < to; i++) life += flickerLength(ring.durationMs[ring.slot(i)]) + CHANNEL.fade;
 	return life / seconds;
+}
+
+/** Flashes within their flicker or fade at `now`, each source `delays` behind, and those of them whose lot is under `share`. */
+export function sampleCount(ring: FlashRing, now: number, playback: FlashPlayback, delays: SourceDelays, share: number): { alive: number; drawn: number } {
+	const to = playedBy(ring, now - delays.min);
+	let alive = 0;
+	let drawn = 0;
+	for (let i = playedBy(ring, now - playback.span(PROFILE.maxFlicker + CHANNEL.fade, now) - delays.max); i < to; i++) {
+		const s = ring.slot(i);
+		const at = ring.time[s] + delays.ms[ring.source[s]];
+		if (at > now || playback.age(at, now) >= flickerLength(ring.durationMs[s]) + CHANNEL.fade) continue;
+		alive++;
+		if (share >= 1 || heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share) drawn++;
+	}
+	return { alive, drawn };
 }
 
 /** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */

@@ -4,7 +4,7 @@ import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { flashSeed } from './channel';
 import { BUILDS_PER_FRAME, ChannelPool, SEGMENT_STRIDE } from './channel-pool';
-import { heroLot } from './density';
+import { DENSITY, heroLot } from './density';
 import { FlashPlayback } from './playback';
 import { MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
 
@@ -58,21 +58,19 @@ describe('ChannelPool', () => {
 		expect(pool.flashes).toBe(1);
 	});
 
-	it('builds channels for the flashes under the share only', () => {
+	it('builds channels for the flashes under the share, or fading out past it, only', () => {
 		const { ring, pool } = setup(Array.from({ length: 60 }, (_, i) => i * 3), 64);
 		const share = 0.3;
 		const sample = Array.from({ length: ring.size }, (_, i) => ring.slot(i)).filter(
-			(s) => heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share,
+			(s) => heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share * DENSITY.edge,
 		);
 		expect(sample.length).toBeGreaterThan(5);
 		expect(sample.length).toBeLessThan(55);
 		pool.sync(100_200, undefined, undefined, true, share);
-		expect(pool.flickering).toBe(sample.length);
 		expect(pool.flashes).toBe(Math.min(sample.length, BUILDS_PER_FRAME));
 		pool.sync(100_200, undefined, undefined, true, share);
 		expect(pool.flashes).toBe(sample.length);
 		pool.sync(100_200, undefined, undefined, true, 1);
-		expect(pool.flickering).toBe(60);
 		expect(pool.flashes).toBe(Math.min(60, sample.length + BUILDS_PER_FRAME));
 	});
 
