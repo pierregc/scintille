@@ -1,6 +1,7 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { volumeFieldGlsl } from '../clouds/field.glsl';
 import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
+import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -39,10 +40,19 @@ ${cloudOpacityGlsl}
 #ifdef VOLUME
 ${volumeFieldGlsl}
 #endif
+${densityGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
+	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, the newest of which stay points from afar.
+	float hero = heroWeight(heroLot(flashShape.w, flashShape.x), heroShare);
+	float pointKm = 2.0 * length(cameraPosition - center) / (projectionMatrix[1][1] * viewportHeight) / kmToWorld * viewScale;
+	float keep = max(hero, pointWeight(farness(pointKm), lightMapOff) * pointBudget(flash.w));
+	if (keep <= 0.0) {
+		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+		return;
+	}
 	float seed = flashShape.w;
 	int kind = flashKind(seed, flashShape.z, flashShape.y);
 	bool ground = isGround(kind);
@@ -58,6 +68,7 @@ void main() {
 	float distance = length(cameraPosition - center);
 	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
 	float viewKmPerPx = kmPerPx * viewScale;
+	brightness *= keep;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
 	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
 
@@ -66,6 +77,7 @@ void main() {
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float channel = channelReveal(flashShape.y, viewKmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
 	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
+	vDip *= hero;
 #ifdef CLOUDS
 	// Only as much as the cloud lets a ground channel show; in-cloud ones still carry their light, veiled.
 	if (ground && vDip > 0.0 && cloudShown > 0.5) {
