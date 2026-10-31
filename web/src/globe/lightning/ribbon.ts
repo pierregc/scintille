@@ -54,7 +54,24 @@ export function segmentWeight(x: number, y: number, len: number): number {
 	return stamp + (ribbon - stamp) * smoothstep(0.5, 1, len);
 }
 
-/** GLSL twins of `hairline`, `crossfadeArea` and `segmentWeight`. */
+/** What the square roots of those cross-fades integrate to: their screen light, the sRGB encoding taken as a square root. */
+export function crossfadeScreenArea(len: number): number {
+	if (len >= 1) return len + 1 / 3;
+	const h = (1 - len) / 2;
+	const r = (1 + len) / 2;
+	return (4 / 3) * len ** 1.5 + h * Math.sqrt(len) + r * r * Math.asin(h / r);
+}
+
+/**
+ * Screen light of a core segment `span` widths long over its light: what its overlapping cross-fades added once
+ * each was converted to screen values, 1 + 1 / (3 span) from a width on, up to 3π/4 for the shortest. The core keeps
+ * it, evenly, so channels stay as bright as when their joints beaded.
+ */
+export function overlapGain(span: number): number {
+	return crossfadeScreenArea(span) / crossfadeArea(span);
+}
+
+/** GLSL twins of `hairline`, `crossfadeArea`, `segmentWeight` and `overlapGain`. */
 export const ribbonGlsl = /* glsl */ `
 vec2 hairline(float width, float pxPerCss) {
 	float least = ${f(RIBBON.hairlinePx)} / pxPerCss;
@@ -71,6 +88,12 @@ float segmentWeight(float x, float y, float len) {
 	float y2 = min(y * y, 1.0);
 	float stamp = y2 < 1.0 ? ${f(RIBBON.stampGain)} * len * exp(-3.0 * dx * dx) * max(0.0, 1.0 - dx * dx - y2) / (1.0 - y2) : 0.0;
 	return mix(stamp, ribbon, smoothstep(0.5, 1.0, len));
+}
+float overlapGain(float span) {
+	if (span >= 1.0) return 1.0 + 1.0 / (3.0 * span);
+	float h = 0.5 * (1.0 - span);
+	float r = 0.5 * (1.0 + span);
+	return (4.0 / 3.0 * span * sqrt(span) + h * sqrt(span) + r * r * asin(h / r)) / crossfadeArea(span);
 }
 `;
 

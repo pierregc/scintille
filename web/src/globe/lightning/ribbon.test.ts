@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coreProfile, crossfadeArea, hairline, RIBBON, ribbonGlsl, segmentWeight } from './ribbon';
+import { coreProfile, crossfadeArea, crossfadeScreenArea, hairline, overlapGain, RIBBON, ribbonGlsl, segmentWeight } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 
 /** Light of a straight chain of segments `len` widths long, `y` widths off its axis, at `x` along it. */
@@ -67,6 +67,42 @@ describe('segmentWeight', () => {
 	});
 });
 
+/** Cross-fade of a segment `len` widths long, `x` widths from its start: the ramps the segments overlap with. */
+const ramp = (x: number, len: number) => Math.min(1, Math.max(0, x + 0.5)) * Math.min(1, Math.max(0, len + 0.5 - x));
+/** The sRGB transfer of three.js, linear light to screen value. */
+const srgb = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+const integral = (g: (x: number) => number, a: number, b: number, n = 8000) => {
+	let s = 0;
+	for (let k = 0; k < n; k++) s += g(a + ((b - a) * (k + 0.5)) / n);
+	return (s * (b - a)) / n;
+};
+
+describe('overlapGain', () => {
+	it('integrates the square root of the cross-fades in closed form', () => {
+		for (const len of [0.02, 0.1, 0.3, 0.6, 0.9, 1, 2.5]) {
+			expect(crossfadeScreenArea(len)).toBeCloseTo(integral((x) => Math.sqrt(ramp(x, len)), -0.5, len + 0.5), 4);
+		}
+	});
+
+	it('runs from 1 + 1 / (3 span) on long segments up to 3π/4, continuous at a width', () => {
+		expect(overlapGain(3)).toBeCloseTo(1 + 1 / 9, 10);
+		expect(overlapGain(1)).toBeCloseTo(4 / 3, 10);
+		expect(overlapGain(1 - 1e-6)).toBeCloseTo(4 / 3, 4);
+		expect(overlapGain(1e-6)).toBeCloseTo((3 * Math.PI) / 4, 3);
+		for (let span = 0.05; span < 4; span += 0.05) expect(overlapGain(span)).toBeLessThan(overlapGain(span - 0.05));
+	});
+
+	it('is what a cross-fade adds once converted to screen values over the light it shares, within 10 % for mid tones', () => {
+		for (const level of [0.05, 0.1, 0.3]) {
+			for (const span of [0.3, 0.6, 1, 2, 4]) {
+				const added = integral((x) => srgb(level * ramp(x, span)), -0.5, span + 0.5) / crossfadeArea(span);
+				expect(overlapGain(span) / (added / srgb(level))).toBeGreaterThan(0.9);
+				expect(overlapGain(span) / (added / srgb(level))).toBeLessThan(1.1);
+			}
+		}
+	});
+});
+
 describe('ribbon shaders', () => {
 	it('draw cores with the GLSL twins', () => {
 		expect(ribbonVertex).toContain(ribbonGlsl);
@@ -74,6 +110,7 @@ describe('ribbon shaders', () => {
 		expect(ribbonFragment).toContain(ribbonGlsl);
 		expect(ribbonFragment).toContain('segmentWeight(vLocal.x, vLocal.y, vLength)');
 		expect(ribbonFragment).toContain('exp(-y2 * 3.0) * (1.0 - y2)');
+		expect(ribbonFragment).toContain('share *= overlapGain(vSpan)');
 	});
 
 	it('split the screen value at the joints, after the colour space conversion', () => {

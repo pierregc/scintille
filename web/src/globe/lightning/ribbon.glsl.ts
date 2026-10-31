@@ -32,6 +32,7 @@ uniform vec3 sunDirection;
 
 varying vec2 vLocal;
 varying float vLength;
+varying float vSpan;
 varying float vLight;
 varying vec3 vTint;
 
@@ -125,7 +126,7 @@ void main() {
 	} else {
 		light *= cloudTransmission(opacity, slant);
 	}
-	// Hairlines draw at the raster's floor and give up light instead, so they never break into dashes.
+	// Hairlines draw no thinner than the pixel grid renders evenly and give up light instead, so they never break into dashes.
 	vec2 thin = hairline(width, pixelRatio * viewScale);
 	width = thin.x;
 	light *= thin.y;
@@ -144,6 +145,7 @@ void main() {
 	vec4 c = corner.x > 0.5 ? cb : ca;
 	float w = width * (halo > 0.5 ? 8.0 : 1.0);
 	vLength = length(sb - sa) / w;
+	vSpan = length((segB.xyz - segA.xyz) * lift) / kmPerPx / w;
 	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, and a core
 	// segment shorter than its width is drawn as a round stamp, so a chain of them makes one smooth thread.
 	float cap = halo > 0.5 ? 1.0 : max(0.5, 1.0 - 0.5 * vLength);
@@ -165,6 +167,7 @@ uniform float halo;
 
 varying vec2 vLocal;
 varying float vLength;
+varying float vSpan;
 varying float vLight;
 varying vec3 vTint;
 ${ribbonGlsl}
@@ -178,13 +181,16 @@ void main() {
 	} else {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
 		light = exp(-y2 * 3.0) * (1.0 - y2);
+		// The share splits the screen value, after the conversion below, so the quads at a joint add up to one. On the
+		// screen (not in the bloom's linear buffer) the core keeps the light its overlaps used to add, by the segment's
+		// unforeshortened span so that it stays even along the channel.
 		share = segmentWeight(vLocal.x, vLocal.y, vLength);
+		if (linearToOutputTexel(vec4(0.25)).r > 0.4) share *= overlapGain(vSpan);
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
-	// A segment's share of the joint splits the screen value, not the linear one, so the quads there add up to one.
 	gl_FragColor.rgb *= share;
 }
 `;
