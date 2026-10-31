@@ -46,16 +46,18 @@ void main() {
 	// Flashes near the antimeridian of the window are drawn a second time on the other side.
 	relative += wrap * (relative > 0.0 ? -6.28318531 : 6.28318531);
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
+	float pulse = 0.0;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * onScreen(flash.w);
+		pulse = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground);
+		brightness = pulse * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
 	}
-	// The whole footprint lights on bright pulses, a smaller patch between them, where the light has drifted; reduced motion keeps the footprint.
-	float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, brightness), flicker);
+	// The whole footprint lights on the flash's pulses, whatever its energy, a smaller patch between them, where the light has drifted; reduced motion keeps the footprint.
+	float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse), flicker);
 	float radius = max(max(flashShape.y * splat * mix(${f(CLOUD_LIGHT.dimSplat)}, 1.0, full), spreadKm), minSplatKm) / 6371.0;
 	vec2 pixels = vec2(radius / max(cos(lat), 0.05), radius) / window.zw * mapSize * 0.5;
 	gl_PointSize = 2.0 * max(pixels.x, pixels.y);

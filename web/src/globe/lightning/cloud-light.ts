@@ -5,7 +5,7 @@ import { glslFloat as f } from './profile';
  * the volume read it. Tuning ranges in brackets.
  */
 export const CLOUD_LIGHT = {
-	/** Light map brightness (profile × energy) from which a flash lights its whole footprint [0.3 to 0.5, 0.6 to 0.8]. */
+	/** Flash profile (its pulses, 0 to 1, whatever its energy) from which it lights its whole footprint [0.3 to 0.5, 0.6 to 0.8]. */
 	fullFrom: 0.35,
 	fullTo: 0.7,
 	/** Splat radius between bright pulses over the full one: a patch crawling along the channel [0.5 to 0.8]. */

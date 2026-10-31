@@ -24,7 +24,7 @@ describe('flashBand', () => {
 
 describe('the GLSL consumers share the cloud light numbers', () => {
 	it('splats the whole footprint on bright pulses and a patch between them', () => {
-		expect(lightMapVertexShader).toContain(`smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, brightness)`);
+		expect(lightMapVertexShader).toContain(`smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse)`);
 		expect(lightMapVertexShader).toContain(`mix(${f(CLOUD_LIGHT.dimSplat)}, 1.0, full)`);
 	});
 
