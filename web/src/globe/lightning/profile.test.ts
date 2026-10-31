@@ -158,7 +158,7 @@ describe('flash kinds', () => {
 });
 
 describe('kind profiles', () => {
-	/** The inputs of the golden fixture, recorded before `flashProfile` was split into `groundProfile` and `cloudProfile` (#400); #402 retires this test when it gives each kind its own timing. */
+	/** The inputs of the golden fixture, recorded before `flashProfile` was split into `groundProfile` and `cloudProfile`. */
 	function cases() {
 		let state = 0x9e3779b9;
 		const next = () => {
