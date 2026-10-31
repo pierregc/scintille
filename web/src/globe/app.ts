@@ -376,6 +376,7 @@ export function createGlobeApp(
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		sound.update(now, delays);
 		if (!renderParams && fps.frame(time)) downgrade();
+		lightning.cloudLit = clouds.mesh.visible && PRESETS[tier].cloudLight;
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {
 			volume.render(renderer, {

@@ -41,7 +41,7 @@ import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 import { FlashPlayback } from './playback';
 import { MAX_LIFE } from './profile';
-import { PHONE, viewScale, ZOOM } from './zoom';
+import { maxBlendShare, PHONE, viewScale, ZOOM } from './zoom';
 
 export { DISPLAY_MINUTES } from './display';
 export { FlashInstances } from './instances';
@@ -82,8 +82,10 @@ export interface Lightning {
 	setDisplayMinutes(minutes: number): void;
 	/** A storm view shows each flash alone, whatever the afterglow chosen. */
 	stormView: boolean;
-	/** Km per CSS px at the camera height; channels are only built when they can be seen. */
+	/** Km per CSS px at the camera height; gates channel builds and, in a storm view, the glow blend (max below `ZOOM.floorKmPerPx`). */
 	viewKmPerPx: number;
+	/** Whether the cloud light shows; without it the glow keeps `ZOOM.glowLevel` near the floor. */
+	cloudLit: boolean;
 	/** Null when disabled. */
 	light: FlashLight | null;
 	/** Redraws the light map around what `camera` looks at; call once per frame before the main render. */
@@ -110,7 +112,8 @@ const BUDGET_FADE = 0.15;
  * Overlapping flashes add up on the globe. A storm view shows a minute of flashes at once at 60×:
  * near the floor the brightest glow sets each pixel, so a cell never piles up into white; from
  * `ZOOM.floorKmPerPx` glows screen-blend, so points still accumulate softly and show on sunlit
- * clouds. The cloud light keeps the brightest flash at each point.
+ * clouds, and in between a screen-blended twin fades in under them (`maxBlendShare`). The cloud
+ * light keeps the brightest flash at each point.
  */
 function blendFlashes(material: ShaderMaterial, mode: 'add' | 'max' | 'screen'): void {
 	material.blending = mode === 'add' ? AdditiveBlending : CustomBlending;
@@ -157,6 +160,15 @@ export function createLightning(
 	const budgetFade = new NumberUniform();
 	const scale = new NumberUniform();
 	scale.value = 1;
+	const nearGlowLevel = new NumberUniform();
+	const phoneLevel = phone ? PHONE.nearLevel : 1;
+	let cloudLit = false;
+	const applyCloudLit = (lit: boolean) => {
+		cloudLit = lit && lightMapWidth > 0;
+		nearGlowLevel.value = (cloudLit ? ZOOM.nearGlowLevel : ZOOM.glowLevel) * phoneLevel;
+	};
+	applyCloudLit(true);
+	const screenWeight = new NumberUniform();
 	const cloudDefines = clouds ? { ...clouds.defines, CLOUDS: '' } : {};
 	const material = new ShaderMaterial({
 		vertexShader: lightningVertexShader,
@@ -174,7 +186,9 @@ export function createLightning(
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
 			viewportHeight: { value: 1 },
 			viewScale: scale,
-			nearGlowLevel: { value: (lightMapWidth > 0 ? ZOOM.nearGlowLevel : ZOOM.glowLevel) * (phone ? PHONE.nearLevel : 1) },
+			nearGlowLevel,
+			glowLevel: { value: ZOOM.glowLevel * phoneLevel },
+			blendWeight: { value: 1 },
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
 			sunDirection: { value: new Vector3(1, 0, 0) },
@@ -249,15 +263,31 @@ export function createLightning(
 	const mesh = new Mesh(geometry, material);
 	mesh.frustumCulled = false;
 	mesh.renderOrder = 1;
-	mesh.add(channelMesh, haloMesh);
+	// Drawn just before the max-blended glow while a storm view crosses from max to screen blending.
+	const screenMaterial = new ShaderMaterial({
+		vertexShader: lightningVertexShader,
+		fragmentShader: lightningFragmentShader,
+		uniforms: { ...material.uniforms, blendWeight: screenWeight },
+		defines: cloudDefines,
+		transparent: true,
+		depthWrite: false,
+	});
+	blendFlashes(screenMaterial, 'screen');
+	const screenMesh = new Mesh(geometry, screenMaterial);
+	screenMesh.frustumCulled = false;
+	screenMesh.renderOrder = 0.5;
+	screenMesh.visible = false;
+	mesh.add(channelMesh, haloMesh, screenMesh);
 	haloMesh.layers = mesh.layers;
 	channelMesh.layers = mesh.layers;
+	screenMesh.layers = mesh.layers;
 	const size = new Vector2();
 	mesh.onBeforeRender = (renderer) => {
 		const height = renderer.getSize(size).y;
 		material.uniforms.viewportHeight.value = height;
 		scale.value = viewScale(height, phone);
 	};
+	screenMesh.onBeforeRender = mesh.onBeforeRender;
 
 	const applyDisplay = () => {
 		const ms = displayMs(shownMinutes());
@@ -268,10 +298,15 @@ export function createLightning(
 	let viewKmPerPx = 0;
 	let blend: 'add' | 'max' | 'screen' = 'add';
 	const applyBlend = () => {
-		const mode = stormView ? (viewKmPerPx < ZOOM.floorKmPerPx ? 'max' : 'screen') : 'add';
-		if (mode === blend) return;
-		blend = mode;
-		blendFlashes(material, mode);
+		const share = stormView ? maxBlendShare(viewKmPerPx * scale.value) : 0;
+		const mode = !stormView ? 'add' : share > 0 ? 'max' : 'screen';
+		if (mode !== blend) {
+			blend = mode;
+			blendFlashes(material, mode);
+		}
+		// Max over a screen sum weighted by 1 - share: pure max at 1, pure screen at 0, a lone glow on the dark unchanged between.
+		screenMesh.visible = mode === 'max' && share < 1;
+		screenWeight.value = 1 - share;
 	};
 
 	return {
@@ -309,6 +344,12 @@ export function createLightning(
 			viewKmPerPx = kmPerPx;
 			applyBlend();
 		},
+		get cloudLit() {
+			return cloudLit;
+		},
+		set cloudLit(lit) {
+			applyCloudLit(lit);
+		},
 		get displayMinutes() {
 			return displayMinutes;
 		},
@@ -336,6 +377,7 @@ export function createLightning(
 			lightMap?.dispose();
 			reducedMotion?.removeEventListener('change', applyMotion);
 			haloMaterial.dispose();
+			screenMaterial.dispose();
 			channelGeometry.dispose();
 			channelMaterial.dispose();
 			geometry.dispose();

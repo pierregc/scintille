@@ -219,13 +219,17 @@ radius and `i` the intensity:
 - **Farness** `f = smoothstep(0, 1, ln(k / 0.3) / ln 10)`: 0 up to 0.3 km per px (the floor poses),
   1 from 3 km per px.
 - **Closeness** `c = 1 - smoothstep(0, 1, ln(k / 0.3) / ln(1 / 0.3))`: 1 up to 0.3 km per px, 0 from
-  1 km per px, where storm views screen-blend glows again. It weighs the rules of the floor, so the
-  whole-storm frame (about 1.1 km per px) and the globe are drawn as before them.
+  1 km per px, where storm views screen-blend glows again. It weighs the rules of the floor, so views
+  from 1 km per px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) are drawn as
+  before them; smaller storms frame closer and get the rules of the floor (`regional` is 0.51 km per
+  px for R1, 0.18 for R4 and R5, table below).
 - **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
   1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
   point of 3 to 7 CSS px when that is larger. Level `mix(mix(0.4, 1, f), 0.15, c)`: 15 % at the
-  floor, where the lit cloud and the channel carry the flash (40 % on the `low` tier, which has no
-  cloud light), the ramp from 40 % to full from 1 km per px. Times `mix(1, 0.35, day × c)` over
+  floor, where the lit cloud and the channel carry the flash (40 % where the cloud light does not
+  show: the `low` tier, clouds hidden or not loaded yet), the ramp from 40 % to full from 1 km per px.
+  The level steps between 15 and 40 % in the frame the cloud light turns on or off, as the picture
+  itself does then. Times `mix(1, 0.35, day × c)` over
   sunlit cloud, with `day = smoothstep(-0.05, 0.25, n · sun)` as for channels.
 - **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
 - **Halo**: 8 core widths at 30 % of the core, cool only, with the channel opacity, fading from
@@ -236,8 +240,8 @@ radius and `i` the intensity:
   at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
 - **Phones** draw these sizes as a 1080 CSS px tall view would, shrunk to their height (`k` and
   channel widths times `h / 1080`), so a phone shows the middle of the desktop picture; the point
-  floor stays in CSS px. Their glow and cloud light near the floor drop to 0.6 of the desktop level
-  (#333).
+  floor stays in CSS px. Their glow (at the floor and at the start of its ramp from afar) and their
+  cloud light near the floor drop to 0.6 of the desktop level (#333).
 
 1 world unit is 6,371 km: a world length is `km / 6371`, a CSS px is `k` km. Representative values
 at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 5, 10.5 and 18.6 km):
@@ -266,8 +270,12 @@ Physical scale and compensation:
 - Each flash flickers for its observed duration in wall clock time, so at 60× a storm view shows
   about a minute of flashes at once ([flash profile](flash-profile.md)). Overlaps there blend by
   distance: below 1 km per CSS px the brightest glow sets each pixel, so a cell never piles up into
-  a white ball; from 1 km per CSS px glows screen-blend, so points still accumulate softly. The
-  cloud light keeps the brightest flash, and bloom, cloud light and the near-floor glow scale with
+  a white ball; from 1 km per CSS px glows screen-blend, so points still accumulate softly. From 0.7
+  to 1 km per CSS px (`k` from the camera height, times `h / 1080` on phones) a screen-blended copy
+  weighted `1 - m` is drawn under the max-blended glows, `m = 1 - smoothstep(0, 1, ln(k / 0.7) /
+  ln(1 / 0.7))`: a lone glow on the dark keeps its light and an overlap brightens smoothly from its
+  brightest flash to its screen sum, so zooming across never pops (rule 3). The copy is drawn only
+  in that band. The cloud light keeps the brightest flash, and bloom, cloud light and the near-floor glow scale with
   how dark the scene is, so overlaps and sunlit clouds never turn white.
 
 Measured on 2026-10-28 with a local production build of #254 against production data, on the same
@@ -361,7 +369,7 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % on the `low` tier, without cloud light), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `nearFloor`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
+| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where the cloud light does not show: `low` tier, clouds hidden or not loaded), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `ZOOM.blendFromKmPerPx`, `nearFloor`, `maxBlendShare`, `Lightning.cloudLit`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |

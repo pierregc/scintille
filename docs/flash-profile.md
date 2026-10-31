@@ -63,8 +63,10 @@ HUD shows 0 and greys the other choices. The 1 and 30 minute afterglows stay for
 At 60×, a storm view shows about a minute of flashes at once. Below 1 km per CSS px, glows there keep
 the brightest at each pixel, so a cell never piles up into a white ball; from 1 km per CSS px they use
 screen blending (`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white,
-and a flash still shows over sunlit clouds without whitening them. The cloud light keeps the brightest
-flash at each point. On the globe overview, flashes keep adding up, so active regions glow brighter.
+and a flash still shows over sunlit clouds without whitening them. From 0.7 to 1 km per CSS px a
+screen-blended copy of the glows, weighted from 0 to 1, is drawn under the max-blended ones, so zooming
+across never pops and a lone glow keeps its light. The cloud light keeps the brightest flash at each
+point. On the globe overview, flashes keep adding up, so active regions glow brighter.
 
 A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
 time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
@@ -130,12 +132,14 @@ overlap half a width at each joint and cross-fade there, so they never bead. Whi
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn
-at 15 % (styled), as the lit cloud and the channel carry the flash; on the `low` tier, which has no cloud
-light, it keeps 40 %. Over sunlit clouds it keeps 35 % of that (styled: from orbit, nothing of a flash
-shows by day). These are rules of the floor: they ease out from 0.3 to 1 km per CSS px, and from there
-the glow climbs from 40 % to full as before, so the whole-storm frame and the globe keep their points
-and their day marks. In a storm view below 1 km per CSS px, overlapping glows keep the brightest,
-never add up.
+at 15 % (styled), as the lit cloud and the channel carry the flash; where the cloud light does not show
+(the `low` tier, clouds hidden or not loaded yet), it keeps 40 %. Over sunlit clouds it keeps 35 % of
+that (styled: from orbit, nothing of a flash shows by day). These are rules of the floor: they ease out
+from 0.3 to 1 km per CSS px, and from there the glow climbs from 40 % to full as before, so views from
+1 km per CSS px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) keep their points
+and their day marks; smaller storms frame closer and get the rules of the floor. Phones scale both 15 %
+and 40 % by 0.6. In a storm view below 1 km per CSS px, overlapping glows keep the brightest, never add
+up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to

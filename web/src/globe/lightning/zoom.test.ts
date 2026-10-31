@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { intensityScale } from './intensity';
-import { bloomRadius, bloomStrength, channelReveal, farness, glowRadiusKm, glowShare, nearFloor, PHONE, viewScale, ZOOM } from './zoom';
+import { bloomRadius, bloomStrength, channelReveal, farness, glowRadiusKm, glowShare, maxBlendShare, nearFloor, PHONE, viewScale, ZOOM } from './zoom';
 
 const POSES = { globe: 11.7, mid: 1.2, regional: 0.51, window: 0.3, iss: 0.23 };
 
@@ -56,6 +56,20 @@ describe('flash size with zoom', () => {
 		}
 	});
 
+	it('fades the screen blend in over the max blend from 0.7 to 1 km per px', () => {
+		expect(maxBlendShare(POSES.iss)).toBe(1);
+		expect(maxBlendShare(ZOOM.blendFromKmPerPx)).toBe(1);
+		expect(maxBlendShare(ZOOM.floorKmPerPx)).toBe(0);
+		expect(maxBlendShare(POSES.mid)).toBe(0);
+		let previous = 1;
+		for (let kmPerPx = ZOOM.blendFromKmPerPx; kmPerPx < 1.05; kmPerPx *= 1.01) {
+			const share = maxBlendShare(kmPerPx);
+			expect(share).toBeLessThanOrEqual(previous);
+			expect(previous - share).toBeLessThan(0.06);
+			previous = share;
+		}
+	});
+
 	it('lets the lit cloud and the channels carry the flash near the floor', () => {
 		expect(glowShare(POSES.iss)).toBe(0.15);
 		expect(glowShare(ZOOM.farKmPerPx)).toBe(1);
@@ -90,5 +104,13 @@ describe('flash size with zoom', () => {
 		expect(glowRadiusKm(8, 0.5, POSES.globe, scale)).toBeCloseTo(glowRadiusKm(8, 0.5, POSES.globe), 6);
 		expect(glowShare(POSES.iss, ZOOM.nearGlowLevel * PHONE.nearLevel)).toBeLessThan(glowShare(POSES.iss));
 		expect(glowShare(POSES.globe, ZOOM.nearGlowLevel * PHONE.nearLevel)).toBe(1);
+		const near = ZOOM.nearGlowLevel * PHONE.nearLevel;
+		const ramp = ZOOM.glowLevel * PHONE.nearLevel;
+		expect(near).toBeCloseTo(0.09, 9);
+		expect(ramp).toBeCloseTo(0.24, 9);
+		expect(glowShare(POSES.iss, near, ramp)).toBeCloseTo(0.09, 9);
+		for (const kmPerPx of [ZOOM.floorKmPerPx, POSES.mid, 2, ZOOM.farKmPerPx]) {
+			expect(glowShare(kmPerPx, near, ramp)).toBeCloseTo(0.24 + 0.76 * farness(kmPerPx), 9);
+		}
 	});
 });

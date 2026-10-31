@@ -18,8 +18,14 @@ describe('glow shader', () => {
 
 	it('eases the glow level to the named floor level only below the named zoom', () => {
 		expect(zoomGlsl).toContain(`log(kmPerPx / ${f(ZOOM.nearKmPerPx)}) / ${f(Math.log(ZOOM.floorKmPerPx / ZOOM.nearKmPerPx))}`);
-		expect(zoomGlsl).toContain(`mix(mix(${f(ZOOM.glowLevel)}, 1.0, farness(kmPerPx)), nearLevel, nearFloor(kmPerPx))`);
-		expect(lightningVertexShader).toContain('glowShare(viewKmPerPx, nearGlowLevel)');
+		expect(zoomGlsl).toContain('float glowShare(float kmPerPx, float nearLevel, float rampLevel)');
+		expect(zoomGlsl).toContain('mix(mix(rampLevel, 1.0, farness(kmPerPx)), nearLevel, nearFloor(kmPerPx))');
+		expect(lightningVertexShader).toContain('glowShare(viewKmPerPx, nearGlowLevel, glowLevel)');
+	});
+
+	it('weighs the glow by its share of a storm view blend', () => {
+		expect(lightningVertexShader).toContain('uniform float blendWeight;');
+		expect(lightningVertexShader).toContain('vBrightness = brightness * blendWeight;');
 	});
 });
 
