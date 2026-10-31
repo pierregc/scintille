@@ -387,6 +387,7 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	if (bolt) {
 		const start = disc(rng, SKELETON.originR * r, within(k.footKm, rng()));
 		const climbTop = within(k.topKm, rng());
+		// It climbs like an in-cloud trunk before crossing the cloud.
 		const lean = within(KIND[FlashKind.IcTrunkFan].inclinationDeg[0], rng()) * DEG;
 		const climb = toward(start, heading, (climbTop - start[2]) * Math.tan(lean), climbTop);
 		top = toward(climb, heading, Math.min(run, runToEdge(climb, heading, 0.9 * limit)), within(k.originKm, rng()));
@@ -413,6 +414,7 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	const descent = w.path(fall, stemKm, [trunk, trunk], [1, 1], 0, bolt ? clearAir : underBase);
 	const end = descent.from.at(-1) ?? stemKm;
 	const second = kind === FlashKind.CgMulti && channelHash(seed, 6) < SKELETON.secondShare;
+	// Room left for the second contact once the branches are written.
 	w.reserve = second ? 24 : 0;
 	const branches = groundBranches(flash, s, descent, count(k.branches, rng()), 1, length(sub(strike, top)), trunk * 0.6, 1, end);
 	w.reserve = 0;
@@ -420,9 +422,11 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	w.arrive(stemKm, end);
 	const highest = Math.max(...stem.map((p) => p[2]));
 	const scale = Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / highest);
-	if (scale !== 1) for (let o = 0; o < w.count * SEGMENT_FLOATS; o += SEGMENT_FLOATS) {
-		w.data[o + 2] *= scale;
-		w.data[o + 6] *= scale;
+	if (scale !== 1) {
+		for (let o = 0; o < w.count * SEGMENT_FLOATS; o += SEGMENT_FLOATS) {
+			w.data[o + 2] *= scale;
+			w.data[o + 6] *= scale;
+		}
 	}
 	return kind === FlashKind.CgSingle || positive ? 'filament' : 'branching';
 }
