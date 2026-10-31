@@ -244,6 +244,38 @@ describe('storm view sample', () => {
 		expect(lightning.heroShare).toBeCloseTo(dense, 9);
 		lightning.dispose();
 	});
+
+	it('settles within 5 s of play on a storm of 2,000 flashes per wall second at 600×', () => {
+		// 100 flashes over 1,000 s of scene time, then one every 300 ms for 4,000 s: 2,000 per wall second at 600×, each lit 0.4 s.
+		const ring = new FlashRing(16_384);
+		const flashes = [
+			...Array.from({ length: 100 }, (_, i) => ({ offsetMs: i * 10_000, lat: (i % 50) * 0.1, lon: Math.floor(i / 50) * 0.1, source: 0 })),
+			...Array.from({ length: 13_333 }, (_, i) => ({ offsetMs: 1_000_000 + i * 300, lat: (i % 100) * 0.05, lon: 5 + Math.floor(i / 100) * 0.05, source: 0 })),
+		];
+		ring.push(decodeChunk(encodeChunk(100, flashes).buffer));
+		expect(flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade).toBeCloseTo(DENSITY.aliveWindow, 9);
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		let wall = 0;
+		vi.spyOn(performance, 'now').mockImplementation(() => wall);
+		lightning.stormView = true;
+		let scene = 1_000_000;
+		lightning.setTime(scene, undefined, 600);
+		const sparse = lightning.heroShare;
+		const wanted = 20 / (1.5 * 2000 * 0.4 * (600 / 600));
+		expect(sparse).toBeGreaterThan(wanted * 10);
+		let settled = Number.NaN;
+		for (let frame = 1; frame <= 6 * 60; frame++) {
+			wall += 1000 / 60;
+			scene += 10_000;
+			lightning.setTime(scene, undefined, 600);
+			expect(material.uniforms.budgetFrom.value).toBe(-1e6);
+			if (Number.isNaN(settled) && Math.abs(lightning.heroShare / wanted - 1) <= 0.1) settled = wall / 1000;
+		}
+		expect(settled).toBeLessThan(5);
+		expect(Math.abs(lightning.heroShare / wanted - 1)).toBeLessThan(0.1);
+		lightning.dispose();
+	});
 });
 
 describe('light map window', () => {
