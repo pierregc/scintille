@@ -261,7 +261,7 @@ export function createGlobeApp(
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
-		lightMapWidth: preset.cloudLight ? 1024 : 0,
+		lightMapWidth: preset.lightMapWidth,
 		clouds: clouds.opacity,
 		phone,
 	});

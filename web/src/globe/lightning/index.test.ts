@@ -6,7 +6,7 @@ import { encodeChunk } from '../live/testing';
 import { NO_DELAY } from '../live/delay';
 import { DENSITY, heroLot, heroShare } from './density';
 import { CHANNEL, flashSeed } from './channel';
-import { aliveCount, aliveLoad, budgetStart, createLightning, lightWindow, sampleCount } from './index';
+import { aliveCount, aliveLoad, budgetStart, createLightning, LIGHT_WINDOW, lightWindow, sampleCount } from './index';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { MAX_SEGMENTS } from './skeleton';
@@ -463,5 +463,12 @@ describe('light map window', () => {
 		const window = lightWindow({ lat: 1.4, lon: 0 }, 1000);
 		expect(window.y + window.w).toBeCloseTo(Math.PI / 2, 6);
 		expect(window.z).toBe(Math.PI);
+	});
+
+	it('ends each lit disc at the footprint near the floor, below the channels', () => {
+		expect(LIGHT_WINDOW.nearSplat).toBe(1.3);
+		expect(LIGHT_WINDOW.nearLevel).toBe(0.35);
+		expect(LIGHT_WINDOW.heightScale).toBe(3);
+		expect([LIGHT_WINDOW.farSplat, LIGHT_WINDOW.farSpreadKm]).toEqual([3, 150]);
 	});
 });
