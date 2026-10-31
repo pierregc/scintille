@@ -119,7 +119,8 @@ void main() {
 #endif
 	if (inCloud) {
 		vec2 veiled = cloudVeil(opacity, 0.5 * (segA.z + segB.z), kmPerPx, width, segC.w);
-		width = veiled.x;
+		// A trace's halo is sized from its core width, not from the width the cloud spreads it to.
+		if (halo < 0.5 || !trace) width = veiled.x;
 		light *= veiled.y;
 	} else {
 		light *= clearAirLight(opacity, slant);
