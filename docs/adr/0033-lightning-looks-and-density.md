@@ -99,9 +99,16 @@ motion keeps the single soft fade.
 - `channel.ts`: `flashKind(seed, durationMs, areaKm2)` with `KIND_SHARES` cumulative
   `[0.19, 0.26, 0.29, 0.30]`, `CRAWLER` (600 ms, 1,500 km²) and `CLOUD_TO_AIR_SHARE` 0.03; the `KIND`
   table of bounds per kind; `leaderSeconds(kind, radiusKm, seed)` and
-  `spreadSeconds(kind, radiusKm, flicker, seed)`; GLSL twins of each, the shaders passing the radius.
-- `profile.ts`: `flashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind)` dispatching
-  to `groundProfile` and `cloudProfile`; `skeleton.ts`:
+  `spreadSeconds(kind, radiusKm, flicker, seed)`.
+- `channel.ts` (#402): `flashTiming(kind, radiusKm, flicker, seed)` → `{ leader, spread }`, the leader
+  within half the flicker; `flashLook(seed, durationMs, areaKm2, radiusKm)` → `[kind, leader, spread]`,
+  drawn once per flash on the CPU and carried to the shaders as the `flashLook` attribute of the flash
+  instances and channel segments, so no shader draws the kind or the timing itself.
+- `profile.ts`: `flashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind, timing,
+  activity?)` dispatching to `groundProfile` and `cloudProfile`, and its GLSL twin `flashProfile(…,
+  kind, timing, activity)`; `flashStroke(wallAge, flicker, seed, kind, leader)` → the stroke a
+  cloud-to-ground flash is in (−1 during the leader), its age and the time to the next, whose GLSL twin
+  is read from the same loop as the profile (`flashProfileStroke`, for the channel); `skeleton.ts`:
   `channelSkeleton(seed, radiusKm, kind, durationMs)`.
 - Channel segments: `level` 4 marks a second ground contact path, lit from a later stroke; the cloud
   flag is tri-state: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in
@@ -123,7 +130,7 @@ turns this record to accepted.
 
 - The picture at speed becomes a sample over a field, measurable through `lightning.stats`; the same
   heroes on a revisit or a shared URL; the sound follows the sample.
-- Four hand-mirrored GLSL twins (`flashKind`, `flashProfile`, `spread`, `shown`), guarded by
+- Hand-mirrored GLSL twins (`flashProfile`, `spread`, `cloudDrift`, `shown`), guarded by
   string-containment tests of their constants and by GPU captures; the twins of `channel.ts` are also
   run as JavaScript against the TypeScript in the tests.
 - The kind is drawn twice from the same seed: on the CPU for the skeleton, on the GPU for the profile,
@@ -132,7 +139,10 @@ turns this record to accepted.
   25 % split of `b1b35cf` already did (float32 emulation over 200,000 Basse-Kotto seeds; rounding the
   seed alone gives 10 % and 4.4 %). Harmless while the kinds of each family draw alike. Before the kinds
   look different, either the CPU computes the kind once and carries it to the GPU, or both twins hash
-  a quantised seed with an integer hash exact in float32.
+  a quantised seed with an integer hash exact in float32. #402, where the kinds start to differ in time,
+  takes the first: the CPU draws the kind and the leader and spread times once per flash (`flashLook`,
+  three floats per flash instance and per channel segment) and every pass reads them; the stroke and
+  pulse draws stay on the GPU, in float32, alike in every pass but not equal to the TypeScript draws.
 - The sample drifts for about two seconds after a lightning jump (named). A storm's predecessor cell
   before its first replay chunk stays out of the replay until the pipeline scans from `t_start`.
 - To watch: near-white ≤ 2 % at night, p95 frame cost relative to a same-evening `main`, the `low` tier

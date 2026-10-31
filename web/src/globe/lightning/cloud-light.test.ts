@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { cloudsFragmentShader } from '../clouds/clouds.glsl';
 import { compositeFragmentShader, marchFragmentShader } from '../clouds/volume.glsl';
-import { cloudDrift, cloudDriftGlsl, flashKind } from './channel';
+import { cloudDrift, cloudDriftGlsl, flashKind, flashTiming } from './channel';
 import { isGround } from './kind';
 import {
 	bandCentre,
@@ -106,7 +106,7 @@ describe('cloudPatch', () => {
 	it('lies along the drift of in-cloud flashes', () => {
 		for (const seed of seeds.filter((s) => !isGround(kindOf(s)))) {
 			const { heading } = cloudPatch(seed, kindOf(seed));
-			const [east, north] = cloudDrift(0.05, 0.3, 10, seed, kindOf(seed));
+			const [east, north] = cloudDrift(0.05, 10, seed, kindOf(seed), flashTiming(kindOf(seed), 10, 0.3, seed));
 			expect(Math.abs(east * Math.sin(heading) - north * Math.cos(heading))).toBeLessThan(1e-9);
 		}
 		expect(cloudDriftGlsl).toContain('channelHash(seed, 1.0)');
