@@ -16,7 +16,7 @@ export const DENSITY = {
 	energyWeight: 0.4,
 	/** Mean of the energy weight over the flashes, so `share × alive × meanWeight ≈ target`. */
 	meanWeight: 1.5,
-	/** Time constant of the applied share, wall clock seconds, short enough to follow a storm's rate at 600×; a seek or a speed change applies it at once. */
+	/** Time constant of the applied share, wall clock seconds, short enough to follow a storm's rate at 600×; a seek applies it at once, a speed change on every frame until the alive window has passed it. */
 	smoothing: 0.5,
 	/** A flash fades out over this factor of the share instead of popping at its edge. */
 	edge: 1.1,
