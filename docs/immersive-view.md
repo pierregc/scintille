@@ -351,7 +351,7 @@ the south pole).
 | Flash brightness | Observed energy, normalized | `intensityBrightness` |
 | Flicker pulses within the duration | Procedural, seeded, timed like return strokes, played in wall clock time | `flashProfile` |
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
-| Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
+| Channel path, branches, widths, brightness along them | Procedural, seeded; drawn no narrower than 1.25 device px, hairlines dimmed in proportion, segments shorter than their width stamped round with their light weighted by their length | `skeleton.ts`, `ribbon.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
