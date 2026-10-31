@@ -120,7 +120,10 @@ bound by their north-south extent fit closer at a higher tilt, which foreshorten
 1,827 → 1,639 km, R2 1,471 → 1,289 km, R3 677 → 575 km; R1, bound by its east-west extent, backs off
 from 965 to 1,024 km.
 Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.2 to 3.3× at 20°); four storms pass
-3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1).
+3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1). The phone ranges barely move
+(+1.8 to +2.8 %, R4 +10 % onto the floor range): the crossing comes from the desktop frames of the
+storms bound north-south coming 10 to 15 % closer. At 35° only R1 passes 3× (3.26, against 3.35 at
+20°).
 
 The `regional` pose of `bench.mjs` (`"framed"` in `immersive/references.json`) moves with the
 constant: benches before #406 measured the 20° frame. Against it, same evening, R1, R2 and R5 at
