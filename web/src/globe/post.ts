@@ -19,7 +19,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 /** Objects on this layer glow; everything else is drawn as usual. */
 export const BLOOM_LAYER = 1;
 
-/** `radius` from afar; near the floor the bloom tightens to `nearRadius` around resolved channels. */
+/** `radius` from afar; near the floor, where glows are resolved, the bloom tightens to `nearRadius`. */
 export const BLOOM = { strength: 0.9, radius: 0.55, nearRadius: 0.4, threshold: 0 };
 
 export interface PostProcessing {
