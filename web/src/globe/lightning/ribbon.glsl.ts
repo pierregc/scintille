@@ -150,9 +150,9 @@ void main() {
 	c.xy += (vec2(-t.y, t.x) * corner.y + t * along) * w / viewport * c.w;
 	gl_Position = c;
 	vLength = length(sb - sa) / w;
-	// Each segment's cross-fade adds up to its length; on screen, the core keeps the light its overlapping segments
-	// used to add, by the unforeshortened span so that it stays even along the channel.
-	vShare = vec2(lengthShare(vLength), overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w));
+	// Each segment's cross-fade adds up to its length, then gets back the light overlapping segments used to add, by its
+	// unforeshortened span: on screen and in the bloom's linear buffer.
+	vShare = lengthShare(vLength) * overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w);
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
 	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
@@ -182,9 +182,9 @@ void main() {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
 		light = exp(-y2 * 3.0) * (1.0 - y2);
 		// The cross-fade splits the screen value, after the conversion below, so the two quads at a joint add up to one
-		// instead of beading; the overlap light is for the screen, not the bloom's linear buffer.
-		share = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0) * vShare.x;
-		if (linearToOutputTexel(vec4(0.25)).r > 0.4) share *= vShare.y;
+		// instead of beading.
+		share = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0);
+		share *= linearToOutputTexel(vec4(0.25)).r > 0.4 ? vShare.x : vShare.y;
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);

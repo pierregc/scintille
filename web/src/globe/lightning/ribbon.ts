@@ -5,11 +5,13 @@ import { glslFloat as f } from './profile';
 export const RIBBON = {
 	/** Narrowest core drawn, device px: thinner ones alias into dashes on the pixel grid and give up light instead. */
 	hairlinePx: 1.25,
+	/** Shortest segment, in widths, whose overlap light `overlapGain` keeps: it stops growing below. */
+	minSpan: 0.125,
 } as const;
 
-/** Width and light share of a core `width` CSS px wide drawn at `pxPerCss` device px per CSS px. */
-export function hairline(width: number, pxPerCss: number): { width: number; light: number } {
-	const least = RIBBON.hairlinePx / pxPerCss;
+/** Width and light share of a core `width` units wide drawn at `pxPerUnit` device px per width unit (pixel ratio × view scale). */
+export function hairline(width: number, pxPerUnit: number): { width: number; light: number } {
+	const least = RIBBON.hairlinePx / pxPerUnit;
 	return width < least ? { width: least, light: width / least } : { width, light: 1 };
 }
 
@@ -25,7 +27,7 @@ export function crossfadeArea(len: number): number {
 	return len * len + ((len + 1) * (1 - len * len)) / 2 - (1 - len ** 3) / 3;
 }
 
-/** Scale of a segment's cross-fade so that it adds up to the segment's length: chains of any lengths make an even thread. */
+/** Scale of a segment's cross-fade so that it adds up to the segment's length: joints add up to one. */
 export function lengthShare(len: number): number {
 	return len > 0 ? len / crossfadeArea(len) : 0;
 }
@@ -39,18 +41,21 @@ export function crossfadeScreenArea(len: number): number {
 }
 
 /**
- * Screen light of a core segment `span` widths long over its light: what its overlapping cross-fades added once each
- * was converted to screen values, 1 + 1 / (3 span) from a width on, up to 3π/4 for the shortest. The core keeps it,
- * evenly, so channels stay as bright as when their joints beaded.
+ * Light per unit length that a chain of core segments `span` widths long added where they overlapped, over their own
+ * light, when each was cross-faded in light: on screen, where each was converted to screen values on its own,
+ * 1 + 1 / (3 span) from a width on and about 0.39 / span below; in the bloom's linear buffer, 1 from a width on and
+ * about 1 / (6 span) below. Each core keeps it, so channels stay as bright as when their joints beaded; it stops
+ * growing below `RIBBON.minSpan`.
  */
-export function overlapGain(span: number): number {
-	return crossfadeScreenArea(span) / crossfadeArea(span);
+export function overlapGain(span: number): { screen: number; linear: number } {
+	const s = Math.max(span, RIBBON.minSpan);
+	return { screen: crossfadeScreenArea(s) / s, linear: crossfadeArea(s) / s };
 }
 
-/** GLSL twins of `hairline`, `crossfadeArea`, `lengthShare` and `overlapGain`. */
+/** GLSL twins of `hairline`, `crossfadeArea`, `lengthShare` and `overlapGain` (screen, linear). */
 export const ribbonGlsl = /* glsl */ `
-vec2 hairline(float width, float pxPerCss) {
-	float least = ${f(RIBBON.hairlinePx)} / pxPerCss;
+vec2 hairline(float width, float pxPerUnit) {
+	float least = ${f(RIBBON.hairlinePx)} / pxPerUnit;
 	return width < least ? vec2(least, width / least) : vec2(width, 1.0);
 }
 float crossfadeArea(float len) {
@@ -60,11 +65,12 @@ float crossfadeArea(float len) {
 float lengthShare(float len) {
 	return len > 0.0 ? len / crossfadeArea(len) : 0.0;
 }
-float overlapGain(float span) {
-	if (span >= 1.0) return 1.0 + 1.0 / (3.0 * span);
-	float h = 0.5 * (1.0 - span);
-	float r = 0.5 * (1.0 + span);
-	return (4.0 / 3.0 * span * sqrt(span) + h * sqrt(span) + r * r * asin(h / r)) / crossfadeArea(span);
+vec2 overlapGain(float span) {
+	float s = max(span, ${f(RIBBON.minSpan)});
+	if (s >= 1.0) return vec2(1.0 + 1.0 / (3.0 * s), 1.0);
+	float h = 0.5 * (1.0 - s);
+	float r = 0.5 * (1.0 + s);
+	return vec2(4.0 / 3.0 * s * sqrt(s) + h * sqrt(s) + r * r * asin(h / r), crossfadeArea(s)) / s;
 }
 `;
 
