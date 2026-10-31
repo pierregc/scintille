@@ -18,6 +18,8 @@ export type Look = 'filament' | 'branching' | 'network';
 export interface Skeleton {
 	look: Look;
 	kind: FlashKind;
+	/** Observed duration the skeleton is drawn for, ms. */
+	durationMs: number;
 	/** Segments written in `data`. */
 	count: number;
 	data: Float32Array;
@@ -40,13 +42,8 @@ export const SKELETON = {
 	originR: 0.5,
 	/** A negative feed ends within this of the position, r, leaving its drop room in the footprint. */
 	feedWithinR: 0.8,
-	/** A negative drop bears within this of its feed, radians; a positive one aims at this ring around the position, r. */
+	/** A negative drop bears within this of its feed, radians; a positive one aims at the kind's `strikeR` ring. */
 	dropBearing: Math.PI / 3,
-	positiveStrikeR: [0.6, 1],
-	/** Bolt from the blue: start and climb top heights, km, then the run of its descent from the cloud exit, km. */
-	boltStartKm: [7, 8.4],
-	boltTopKm: [9, 10],
-	boltRunKm: [5, 12],
 	/** Cloud-to-ground branches leave the drop between these heights and end this high above the ground, km. */
 	branchFromKm: [1.5, 5],
 	branchEndKm: [0.3, 2],
@@ -386,20 +383,20 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	let bearing: number;
 	let drop: number;
 	if (bolt) {
-		const start = disc(rng, SKELETON.originR * r, within(SKELETON.boltStartKm, rng()));
-		const climbTop = within(SKELETON.boltTopKm, rng());
+		const start = disc(rng, SKELETON.originR * r, within(k.footKm, rng()));
+		const climbTop = within(k.topKm, rng());
 		const lean = within(KIND[FlashKind.IcTrunkFan].inclinationDeg[0], rng()) * DEG;
 		const climb = toward(start, heading, (climbTop - start[2]) * Math.tan(lean), climbTop);
 		top = toward(climb, heading, Math.min(run, runToEdge(climb, heading, 0.9 * limit)), within(k.originKm, rng()));
 		stem = [start, climb, top];
 		bearing = heading;
-		drop = Math.min(SKELETON.boltRunKm[1], Math.max(SKELETON.boltRunKm[0], top[2] * Math.tan(tilt)));
+		drop = Math.min(k.strikeKm[1], Math.max(k.strikeKm[0], top[2] * Math.tan(tilt)));
 	} else {
 		const origin = disc(rng, SKELETON.originR * r, within(k.originKm, rng()));
 		top = toward(origin, heading, Math.min(run, runToEdge(origin, heading, (positive ? 1 : SKELETON.feedWithinR) * r)));
 		stem = [origin, top];
 		const swing = (rng() - 0.5) * 2 * SKELETON.dropBearing;
-		const aim = toward([0, 0, 0], heading + swing, within(SKELETON.positiveStrikeR, rng()) * r);
+		const aim = toward([0, 0, 0], heading + swing, within(k.strikeR, rng()) * r);
 		bearing = positive ? Math.atan2(aim[1] - top[1], aim[0] - top[0]) : heading + swing;
 		drop = top[2] * Math.tan(tilt);
 	}
@@ -529,5 +526,5 @@ export function channelSkeleton(seed: number, radiusKm: number, kind: FlashKind,
 		trunk: SKELETON.trunkWidth * (0.85 + 0.4 * rng()),
 	};
 	const look = isGround(kind) ? groundChannel(flash, seed, kind) : kind === FlashKind.IcCrawler ? crawler(flash) : trunkAndFans(flash, kind, durationMs);
-	return { look, kind, count: flash.w.count, data: flash.w.data };
+	return { look, kind, durationMs, count: flash.w.count, data: flash.w.data };
 }

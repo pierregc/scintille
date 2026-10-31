@@ -62,6 +62,7 @@ describe('channelSkeleton', () => {
 		expect(channelSkeleton(0.42, 10, FlashKind.CgMulti, 200).data).toEqual(channelSkeleton(0.42, 10, FlashKind.CgMulti, 200).data);
 		expect(channelSkeleton(0.42, 10, FlashKind.IcTrunkFan, 200).data).not.toEqual(channelSkeleton(0.43, 10, FlashKind.IcTrunkFan, 200).data);
 		expect(channelSkeleton(0.42, 10, FlashKind.CgSingle, 200).kind).toBe(FlashKind.CgSingle);
+		expect(channelSkeleton(0.42, 10, FlashKind.IcTrunkFan, 900).durationMs).toBe(900);
 	});
 
 	it('stays within its budget with sane widths, lights and arrivals', () => {

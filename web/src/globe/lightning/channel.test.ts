@@ -22,6 +22,31 @@ const kindOf = (seed: number) => flashKind(seed, 200, 300);
 const kinds = seeds.map(kindOf);
 const count = (kind: FlashKind) => kinds.filter((k) => k === kind).length;
 const share = (kind: FlashKind) => count(kind) / seeds.length;
+const radii = Array.from({ length: 17 }, (_, i) => 3 + i);
+
+interface ChannelTwins {
+	flashKind(seed: number, durationMs: number, radiusKm: number): FlashKind;
+	leaderSeconds(kind: FlashKind, radiusKm: number, seed: number): number;
+	spreadSeconds(kind: FlashKind, radiusKm: number, flicker: number, seed: number): number;
+}
+
+/** `channelGlsl` evaluated as JavaScript: its functions use only float arithmetic and these built-ins. */
+function channelGlslAsJs(): ChannelTwins {
+	const js = channelGlsl
+		.replace(/^(?:float|int|bool) (\w+)\(([^)]*)\) \{/gm, (_, name: string, params: string) => `function ${name}(${params.replace(/\b(?:float|int) /g, '')}) {`)
+		.replace(/\b(?:float|int|bool) (\w+) =/g, 'let $1 =');
+	const builtins: Record<string, (...x: never[]) => unknown> = {
+		fract: (x: number) => x - Math.floor(x),
+		sin: Math.sin,
+		mix: (a: number, b: number, t: number) => a + (b - a) * t,
+		clamp: (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x)),
+		min: Math.min,
+		max: Math.max,
+		vec2: (x: number, y: number) => [x, y],
+		length: (v: number[]) => Math.hypot(...v),
+	};
+	return new Function(...Object.keys(builtins), `${js}\nreturn { flashKind, leaderSeconds, spreadSeconds };`)(...Object.values(builtins));
+}
 
 describe('channelHash', () => {
 	it('is in [0, 1) and differs per draw', () => {
@@ -83,10 +108,13 @@ describe('flash kinds', () => {
 		expect(Math.min(...leaders)).toBeGreaterThanOrEqual(0.05);
 		expect(Math.max(...leaders)).toBeLessThanOrEqual(0.15);
 		expect(Math.max(...leaders) - Math.min(...leaders)).toBeGreaterThan(0.03);
+		for (const radius of radii) {
+			const bolts = seeds.slice(0, 1000).map((seed) => leaderSeconds(FlashKind.BoltFromBlue, radius, seed));
+			expect(Math.min(...bolts)).toBeGreaterThanOrEqual(0.15);
+			expect(Math.max(...bolts)).toBeLessThanOrEqual(0.25);
+			if (radius >= 12) expect(Math.max(...bolts) - Math.min(...bolts)).toBeGreaterThan(0.03);
+		}
 		for (const seed of seeds.slice(0, 200)) {
-			const bolt = leaderSeconds(FlashKind.BoltFromBlue, 6, seed);
-			expect(bolt).toBeGreaterThanOrEqual(0.15);
-			expect(bolt).toBeLessThanOrEqual(0.25);
 			const trunk = leaderSeconds(FlashKind.IcTrunkFan, 6, seed);
 			expect(trunk).toBeGreaterThanOrEqual(0.01);
 			expect(trunk).toBeLessThanOrEqual(0.02);
@@ -101,6 +129,21 @@ describe('flash kinds', () => {
 			expect(spreadSeconds(FlashKind.IcTrunkFan, 20, 0.3, seed)).toBeCloseTo(PROFILE.cloudSpread * 0.3, 6);
 			expect(spreadSeconds(FlashKind.IcCrawler, 20, 0.3, seed)).toBeCloseTo(0.3, 6);
 			expect(spreadSeconds(FlashKind.CgMulti, 6, 0.3, seed)).toBe(leaderSeconds(FlashKind.CgMulti, 6, seed));
+		}
+	});
+
+	it('runs the GLSL twins as the TypeScript functions', () => {
+		const glsl = channelGlslAsJs();
+		for (const seed of seeds.filter((_, i) => i % 40 === 0)) {
+			for (const [durationMs, areaKm2] of [[200, 300], [700, 300], [200, 2000]]) {
+				expect(glsl.flashKind(seed, durationMs, Math.sqrt(areaKm2 / Math.PI))).toBe(flashKind(seed, durationMs, areaKm2));
+			}
+			for (const radius of radii) {
+				for (let kind = FlashKind.CgMulti; kind <= FlashKind.CloudToAir; kind++) {
+					expect(glsl.leaderSeconds(kind, radius, seed)).toBeCloseTo(leaderSeconds(kind, radius, seed), 12);
+					expect(glsl.spreadSeconds(kind, radius, 0.3, seed)).toBeCloseTo(spreadSeconds(kind, radius, 0.3, seed), 12);
+				}
+			}
 		}
 	});
 
