@@ -1,11 +1,11 @@
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
-import { CHANNEL, flashKind, flashSeed } from './channel';
+import { CHANNEL, flashLook, flashSeed } from './channel';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { channelSkeleton, MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
 
-/** Floats per drawn segment: its skeleton segment, then its flash (direction, time, intensity, radius, duration, seed). */
-export const SEGMENT_STRIDE = SEGMENT_FLOATS + 8;
+/** Floats per drawn segment: its skeleton segment, then its flash (direction, time, intensity, radius, duration, seed) and look (kind, leader, spread). */
+export const SEGMENT_STRIDE = SEGMENT_FLOATS + 11;
 /** Flashes whose channels can show at once; the newest win. */
 export const POOL_FLASHES = 384;
 /** Channels built per frame at most, so a burst spreads over a few frames. */
@@ -139,7 +139,8 @@ export class ChannelPool {
 		const lon = (ring.lon[s] * Math.PI) / 180;
 		const seed = flashSeed(ring.time[s], ring.lat[s], ring.lon[s]);
 		const radius = Math.max(3, Math.sqrt(ring.areaKm2[s] / Math.PI));
-		const kind = flashKind(seed, ring.durationMs[s], ring.areaKm2[s]);
+		const look = flashLook(seed, ring.durationMs[s], ring.areaKm2[s], radius);
+		const kind = look[0];
 		const skeleton = channelSkeleton(seed, radius, kind, ring.durationMs[s]);
 		const flash = [
 			Math.cos(lat) * Math.cos(lon),
@@ -150,6 +151,7 @@ export class ChannelPool {
 			radius,
 			ring.durationMs[s],
 			seed,
+			...look,
 		];
 		const start = slot * MAX_SEGMENTS;
 		for (let k = 0; k < MAX_SEGMENTS; k++) {

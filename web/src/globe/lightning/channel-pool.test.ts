@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
-import { flashSeed } from './channel';
+import { flashLook, flashSeed } from './channel';
 import { BUILDS_PER_FRAME, ChannelPool, SEGMENT_STRIDE } from './channel-pool';
 import { FlashPlayback } from './playback';
 import { MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
@@ -15,7 +15,7 @@ function setup(offsets: number[], capacity = 4) {
 }
 
 describe('ChannelPool', () => {
-	it('builds one slot of segments per flickering flash, with its flash on every segment', () => {
+	it('builds one slot of segments per flickering flash, with its flash and look on every segment', () => {
 		const { ring, pool, ranges } = setup([0, 650, 900, 1050]);
 		pool.sync(101_000);
 		expect(pool.flashes).toBe(2);
@@ -24,7 +24,10 @@ describe('ChannelPool', () => {
 		const flash = (slot: number, k: number) => pool.data.subarray((slot * MAX_SEGMENTS + k) * SEGMENT_STRIDE + SEGMENT_FLOATS, (slot * MAX_SEGMENTS + k + 1) * SEGMENT_STRIDE);
 		const time = (slot: number) => Math.round(pool.origin + flash(slot, 0)[3] * 1000);
 		expect([time(0), time(1)]).toEqual([100_900, 100_650]);
-		expect(flash(0, MAX_SEGMENTS - 1)[7]).toBeCloseTo(flashSeed(100_900, ring.lat[2], ring.lon[2]), 6);
+		const seed = flashSeed(100_900, ring.lat[2], ring.lon[2]);
+		expect(flash(0, MAX_SEGMENTS - 1)[7]).toBeCloseTo(seed, 6);
+		const look = flashLook(seed, ring.durationMs[2], ring.areaKm2[2], Math.max(3, Math.sqrt(ring.areaKm2[2] / Math.PI)));
+		expect(Array.from(flash(0, MAX_SEGMENTS - 1).subarray(8))).toEqual(Array.from(Float32Array.from(look)));
 		const widths = Array.from({ length: MAX_SEGMENTS }, (_, k) => pool.data[k * SEGMENT_STRIDE + 3]);
 		expect(widths.some((w) => w === 0)).toBe(true);
 		expect(widths[0]).toBeGreaterThan(0);

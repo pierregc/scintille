@@ -8,6 +8,7 @@ import {
 	cloudDriftGlsl,
 	CRAWLER,
 	flashKind,
+	flashLook,
 	flashSeed,
 	flashTiming,
 	KIND,
@@ -16,7 +17,7 @@ import {
 	spreadSeconds,
 } from './channel';
 import { FlashKind, isGround } from './kind';
-import { flashProfileGlsl, flickerLength, glslFloat, PROFILE } from './profile';
+import { flashProfileGlsl, flickerLength, PROFILE } from './profile';
 import { glslAsJs } from './testing';
 
 const seeds = Array.from({ length: 40_000 }, (_, i) => (i + 0.5) / 40_000);
@@ -26,14 +27,6 @@ const kinds = seeds.map(kindOf);
 const count = (kind: FlashKind) => kinds.filter((k) => k === kind).length;
 const share = (kind: FlashKind) => count(kind) / seeds.length;
 const radii = Array.from({ length: 17 }, (_, i) => 3 + i);
-
-interface ChannelTwins {
-	flashKind(seed: number, durationMs: number, radiusKm: number): FlashKind;
-	leaderSeconds(kind: FlashKind, radiusKm: number, seed: number): number;
-	spreadSeconds(kind: FlashKind, radiusKm: number, flicker: number, seed: number): number;
-}
-
-const channelGlslAsJs = () => glslAsJs<ChannelTwins>(channelGlsl, ['flashKind', 'leaderSeconds', 'spreadSeconds']);
 
 describe('channelHash', () => {
 	it('is in [0, 1) and differs per draw', () => {
@@ -119,48 +112,41 @@ describe('flash kinds', () => {
 		}
 	});
 
-	it('runs the GLSL twins as the TypeScript functions', () => {
-		const glsl = channelGlslAsJs();
-		for (const seed of seeds.filter((_, i) => i % 40 === 0)) {
-			for (const [durationMs, areaKm2] of [[200, 300], [700, 300], [200, 2000]]) {
-				expect(glsl.flashKind(seed, durationMs, Math.sqrt(areaKm2 / Math.PI))).toBe(flashKind(seed, durationMs, areaKm2));
-			}
-			for (const radius of radii) {
-				for (let kind = FlashKind.CgMulti; kind <= FlashKind.CloudToAir; kind++) {
-					expect(glsl.leaderSeconds(kind, radius, seed)).toBeCloseTo(leaderSeconds(kind, radius, seed), 12);
-					expect(glsl.spreadSeconds(kind, radius, 0.3, seed)).toBeCloseTo(spreadSeconds(kind, radius, 0.3, seed), 12);
-				}
+	it('carries the kind and the timing of the skeleton to the shaders', () => {
+		for (const seed of seeds.filter((_, i) => i % 400 === 0)) {
+			for (const [durationMs, areaKm2] of [[200, 300], [700, 300], [200, 2000], [40, 20]]) {
+				const radius = Math.max(3, Math.sqrt(areaKm2 / Math.PI));
+				const kind = flashKind(seed, durationMs, areaKm2);
+				const { leader, spread } = flashTiming(kind, radius, flickerLength(durationMs), seed);
+				expect(flashLook(seed, durationMs, areaKm2, radius)).toEqual([kind, leader, spread]);
 			}
 		}
-	});
-
-	it('mirrors the shares, thresholds and speeds in the GLSL twin', () => {
-		const literals = [...KIND_SHARES, KIND_SHARES[3] + CLOUD_TO_AIR_SHARE, CRAWLER.minDurationMs, CRAWLER.minAreaKm2, 1e5, 1.5e5, 2e5, 8e4];
-		for (const x of literals) expect(channelGlsl).toContain(glslFloat(Number(x.toFixed(4))));
-		for (const [lo, hi] of KIND.map((k) => k.leaderBounds)) expect(channelGlsl).toContain(`${glslFloat(lo)}, ${glslFloat(hi)});`);
-		expect(channelGlsl).toContain('int flashKind(float seed, float durationMs, float radiusKm)');
+		// The shaders no longer draw the kind or the timing themselves: the float32 hash of the seed would differ (ADR 0033).
+		expect(channelGlsl).not.toContain('flashKind');
+		expect(channelGlsl).not.toContain('leaderSeconds');
 		expect(channelGlsl).toContain('bool isGround(int kind)');
 	});
 
 	it('moves the light of in-cloud flashes across their footprint, symmetric around the position', () => {
 		const seed = seeds.find((s) => kindOf(s) === FlashKind.IcTrunkFan) ?? 0;
-		const [x0, y0] = cloudDrift(0, 0.4, 10, seed, FlashKind.IcTrunkFan);
-		const [x1, y1] = cloudDrift(1, 0.4, 10, seed, FlashKind.IcTrunkFan);
+		const drift = (age: number, kind: FlashKind) => cloudDrift(age, 10, seed, kind, flashTiming(kind, 10, 0.4, seed));
+		const [x0, y0] = drift(0, FlashKind.IcTrunkFan);
+		const [x1, y1] = drift(0.4, FlashKind.IcTrunkFan);
 		expect(Math.hypot(x0, y0)).toBeCloseTo(CHANNEL.drift * 10, 6);
 		expect(x0 + x1).toBeCloseTo(0, 6);
 		expect(y0 + y1).toBeCloseTo(0, 6);
 		// Crawlers walk at a steady pace, so their light moves by equal steps until their leaders stop.
 		const crawl = flashTiming(FlashKind.IcCrawler, 10, 0.4, seed).spread;
-		const [a, b, c] = [0.2, 0.4, 0.6].map((t) => cloudDrift(t * crawl, 0.4, 10, seed, FlashKind.IcCrawler)[0]);
+		const [a, b, c] = [0.2, 0.4, 0.6].map((t) => drift(t * crawl, FlashKind.IcCrawler)[0]);
 		expect(b - a).toBeCloseTo(c - b, 6);
-		expect(cloudDrift(crawl, 0.4, 10, seed, FlashKind.IcCrawler)).toEqual(cloudDrift(1, 0.4, 10, seed, FlashKind.IcCrawler));
+		expect(drift(crawl, FlashKind.IcCrawler)).toEqual(drift(0.4, FlashKind.IcCrawler));
 		for (const kind of [FlashKind.CgMulti, FlashKind.CgSingle, FlashKind.CgPositive, FlashKind.BoltFromBlue]) {
-			expect(cloudDrift(0.2, 0.4, 10, seed, kind)).toEqual([0, 0]);
+			expect(drift(0.2, kind)).toEqual([0, 0]);
 		}
 	});
 
 	it('drifts in the GLSL twin as in the TypeScript, for every kind', () => {
-		const glsl = glslAsJs<{ cloudDrift(age: number, len: number, radiusKm: number, seed: number, kind: FlashKind): { x: number; y: number } }>(
+		const glsl = glslAsJs<{ cloudDrift(age: number, radiusKm: number, seed: number, kind: FlashKind, timing: { x: number; y: number }): { x: number; y: number } }>(
 			channelGlsl + flashProfileGlsl + cloudDriftGlsl,
 			['cloudDrift'],
 		);
@@ -170,8 +156,9 @@ describe('flash kinds', () => {
 			const flicker = flickerLength(20 + ((i * 0.618) % 1) * 2500);
 			const radius = 3 + ((i * 0.414) % 1) * 30;
 			const age = ((i * 0.732) % 1) * (flicker + 0.3) - 0.02;
-			const [x, y] = cloudDrift(age, flicker, radius, seed, kind);
-			const twin = glsl.cloudDrift(age, flicker, radius, seed, kind);
+			const timing = flashTiming(kind, radius, flicker, seed);
+			const [x, y] = cloudDrift(age, radius, seed, kind, timing);
+			const twin = glsl.cloudDrift(age, radius, seed, kind, { x: timing.leader, y: timing.spread });
 			expect(twin.x).toBeCloseTo(x, 9);
 			expect(twin.y).toBeCloseTo(y, 9);
 		}

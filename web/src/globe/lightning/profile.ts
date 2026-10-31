@@ -334,7 +334,7 @@ const P = PROFILE;
 const mix = ([lo, hi]: Range, t: string): string => `mix(${f(lo)}, ${f(hi)}, ${t})`;
 const logMix = ([lo, hi]: Range, t: string): string => `${f(lo)} * pow(${f(hi)} / ${f(lo)}, ${t})`;
 
-/** GLSL twins of `spread`, `flashStroke` and `flashProfile` (`timedFlashProfile`); need `channelGlsl` (`isGround`, `flashTiming`). The shaders call `flashProfile` with the radius, from which it takes the timing. */
+/** GLSL twins of `spread`, `flashProfile` and, with the profile, `flashStroke` (`flashProfileStroke`); need `channelGlsl` (`isGround`). The shaders read the kind and the timing from the CPU (`flashLook`). */
 export const flashProfileGlsl = /* glsl */ `
 float pulseHash(float seed, float k) {
 	return fract(sin(seed * 91.345 + k * 47.853) * 43758.5453);
@@ -375,29 +375,11 @@ float strokeTau(float seed, float k) {
 float shutterPulse(float a, float tau) {
 	return a <= 0.0 ? 0.0 : tau / ${f(P.shutter)} * (exp(-max(a - ${f(P.shutter)}, 0.0) / tau) - exp(-a / tau));
 }
-// The stroke a cloud-to-ground flash is in: index (-1 during the leader), age, time to the next one (1e6 after the last).
-vec3 flashStroke(float wallAge, float len, float seed, int kind, float leader) {
-	vec2 counts = strokeCounts(kind, seed);
-	float stretch = strokeStretch(kind, len, leader);
-	vec3 stroke = vec3(-1.0, wallAge, leader - wallAge);
-	float start = leader;
-	for (int i = 0; i < ${P.maxPulses}; i++) {
-		float k = float(i);
-		if (k >= counts.x) break;
-		if (i > 0) start = nextStroke(kind, seed, k, start, len, counts.y, stretch);
-		if (start > len) break;
-		if (start > wallAge) {
-			stroke.z = start - wallAge;
-			break;
-		}
-		stroke = vec3(k, wallAge - start, 1e6);
-	}
-	return stroke;
-}
 float currentLight(float a, float level, float duration) {
 	return level * smoothstep(0.0, ${f(P.shutter)}, a) * (1.0 - smoothstep(duration, duration + 0.03, a));
 }
-float groundProfile(float wallAge, float len, float seed, int kind, float leader) {
+// A cloud-to-ground flash's light, then the stroke it is in: index (-1 during the leader), age, time to the next one (1e6 after the last).
+vec4 groundProfile(float wallAge, float len, float seed, int kind, float leader) {
 	float b = wallAge < leader + ${f(P.shutter)} ? ${f(P.leaderLevel)} * smoothstep(0.0, leader, wallAge) : 0.0;
 	vec2 counts = strokeCounts(kind, seed);
 	float stretch = strokeStretch(kind, len, leader);
@@ -425,7 +407,7 @@ float groundProfile(float wallAge, float len, float seed, int kind, float leader
 		float duration = min(${mix(P.currentDuration, 'pulseHash(seed, 93.0)')} + 2.0 * strokeTau(seed, current.y), len - current.x);
 		b = max(b, currentLight(wallAge - current.x, ${mix(P.currentLevel, 'pulseHash(seed, 92.0)')}, duration));
 	}
-	return b;
+	return vec4(b, last.y, last.y < 0.0 ? wallAge : wallAge - last.x, ended ? 1e6 : start - wallAge);
 }
 float singleActivity(float wallAge, float len, float seed, float leader) {
 	return ${mix(P.singleActivity, 'pulseHash(seed, 95.0)')} * smoothstep(leader, leader + ${f(P.shutter)}, wallAge) * (1.0 - smoothstep(len, len + ${f(P.cloudFade)}, wallAge));
@@ -469,24 +451,31 @@ float cloudProfile(float wallAge, float len, float seed, int kind, vec2 timing) 
 	float stutter = pulses == 1.0 ? 0.0 : stutterLight(wallAge, len, seed);
 	return max(b, min(glow + stutter, ${f(P.icDimPeak[1])}));
 }
-float timedFlashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity) {
-	if (sceneAge < 0.0 || wallAge < 0.0) return 0.0;
+// The profile, then for a cloud-to-ground flash the stroke it is in, as groundProfile gives it.
+vec4 flashProfileStroke(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity) {
+	vec4 light = vec4(0.0, -1.0, wallAge, timing.x - wallAge);
+	if (sceneAge < 0.0 || wallAge < 0.0) return light;
 	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
 	float life = max(${f(P.life)}, len + ${f(P.tail)});
 	float glow = display > 0.0 && sceneAge <= display
 		? ${f(P.afterglow)} * min(1.0, pow(${f(P.glowRef)} / display, ${f(P.glowScale)})) * glowDecay(sceneAge / display)
 		: 0.0;
-	if (wallAge > life) return glow;
+	if (wallAge > life) {
+		light.x = glow;
+		return light;
+	}
 	glow = max(glow, ${f(P.afterglow)} * glowDecay(wallAge / life));
-	if (flicker < 0.5) return smoothstep(0.0, ${f(P.softRise)}, wallAge) * max(exp(-wallAge / ${f(P.softFall)}), glow);
-	float b = isGround(kind) ? groundProfile(wallAge, len, seed, kind, timing.x) : cloudProfile(wallAge, len, seed, kind, timing);
-	if (activity && kind == ${FlashKind.CgSingle}) b = max(b, singleActivity(wallAge, len, seed, timing.x));
-	return max(b, glow * smoothstep(0.0, len, wallAge));
+	if (flicker < 0.5) {
+		light.x = smoothstep(0.0, ${f(P.softRise)}, wallAge) * max(exp(-wallAge / ${f(P.softFall)}), glow);
+		return light;
+	}
+	if (isGround(kind)) light = groundProfile(wallAge, len, seed, kind, timing.x);
+	else light.x = cloudProfile(wallAge, len, seed, kind, timing);
+	if (activity && kind == ${FlashKind.CgSingle}) light.x = max(light.x, singleActivity(wallAge, len, seed, timing.x));
+	light.x = max(light.x, glow * smoothstep(0.0, len, wallAge));
+	return light;
 }
-float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, float radiusKm) {
-	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
-	// The timing only matters while the flash is alive and flickers.
-	vec2 timing = flicker > 0.5 && wallAge >= 0.0 && wallAge <= ${f(MAX_LIFE)} ? flashTiming(kind, radiusKm, len, seed) : vec2(1.0);
-	return timedFlashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind, timing, true);
+float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity) {
+	return flashProfileStroke(wallAge, sceneAge, display, durationMs, seed, flicker, kind, timing, activity).x;
 }
 `;

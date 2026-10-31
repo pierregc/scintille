@@ -8,6 +8,7 @@ import {
 	flashProfile,
 	flashProfileGlsl,
 	flashStroke,
+	type FlashTiming,
 	flickerLength,
 	glowDecay,
 	glowLevel,
@@ -46,15 +47,16 @@ interface Vec {
 	x: number;
 	y: number;
 	z: number;
+	w: number;
 }
+type Twin = (wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, timing: Pick<Vec, 'x' | 'y'>, activity: boolean) => Vec;
 interface ProfileTwins {
-	flashTiming(kind: FlashKind, radiusKm: number, flicker: number, seed: number): Vec;
-	spread(age: number, timing: Vec, kind: FlashKind): number;
-	flashStroke(wallAge: number, len: number, seed: number, kind: FlashKind, leader: number): Vec;
-	flashProfile(wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, radiusKm: number): number;
-	timedFlashProfile(wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, timing: Vec, activity: boolean): number;
+	spread(age: number, timing: Pick<Vec, 'x' | 'y'>, kind: FlashKind): number;
+	flashProfile(...args: Parameters<Twin>): number;
+	flashProfileStroke: Twin;
 }
-const glsl = glslAsJs<ProfileTwins>(channelGlsl + flashProfileGlsl, ['flashTiming', 'spread', 'flashStroke', 'flashProfile', 'timedFlashProfile']);
+const glsl = glslAsJs<ProfileTwins>(channelGlsl + flashProfileGlsl, ['spread', 'flashProfile', 'flashProfileStroke']);
+const vec = (timing: FlashTiming) => ({ x: timing.leader, y: timing.spread });
 
 /** Deterministic generator in [0, 1). */
 function generator(state: number): () => number {
@@ -158,8 +160,10 @@ describe('strokes', () => {
 		for (let i = 0; i < 10_000; i++) {
 			const kind = GROUND[Math.floor(next() * 4)];
 			const seed = next();
-			const length = flickerLength(20 + next() * 2000);
-			const { leader } = flashTiming(kind, 3 + next() * 16, length, seed);
+			const durationMs = 20 + next() * 2000;
+			const length = flickerLength(durationMs);
+			const timing = flashTiming(kind, 3 + next() * 16, length, seed);
+			const { leader } = timing;
 			const wall = next() * (length + 0.2);
 			const train = strokeTrain(kind, length, seed, leader);
 			const index = train.findLastIndex((s) => s.start <= wall);
@@ -168,9 +172,11 @@ describe('strokes', () => {
 			expect(stroke.age).toBeCloseTo(index < 0 ? wall : wall - train[index].start, 9);
 			const upcoming = train[index + 1];
 			expect(stroke.next).toBeCloseTo(upcoming ? upcoming.start - wall : index < 0 ? leader - wall : Infinity, 9);
-			const twin = glsl.flashStroke(wall, length, seed, kind, leader);
-			expect([twin.x, twin.y]).toEqual([stroke.index, stroke.age]);
-			expect(twin.z).toBe(Number.isFinite(stroke.next) ? stroke.next : 1e6);
+			// The ribbon reads the stroke from the loop of the profile.
+			const twin = glsl.flashProfileStroke(wall, wall, 0, durationMs, seed, 1, kind, vec(timing), true);
+			expect(twin.x).toBeCloseTo(flashProfile(wall, wall, 0, durationMs, seed, true, kind, timing), 12);
+			expect([twin.y, twin.z]).toEqual([stroke.index, stroke.age]);
+			expect(twin.w).toBe(Number.isFinite(stroke.next) ? stroke.next : 1e6);
 		}
 	});
 });
@@ -413,15 +419,11 @@ describe('GLSL twins', () => {
 			const display = [0, 0, 60, 1800][Math.floor(next() * 4)];
 			const flicker = next() < 0.85;
 			const timing = flashTiming(kind, radius, flickerLength(durationMs), seed);
-			const twin = glsl.flashTiming(kind, radius, flickerLength(durationMs), seed);
-			expect(twin.x).toBeCloseTo(timing.leader, 12);
-			expect(twin.y).toBeCloseTo(timing.spread, 12);
-			expect(glsl.spread(wall, twin, kind)).toBeCloseTo(spread(wall, timing, kind), 12);
-			const expected = flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing);
-			expect(glsl.flashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, radius)).toBeCloseTo(expected, 12);
+			expect(glsl.spread(wall, vec(timing), kind)).toBeCloseTo(spread(wall, timing, kind), 12);
 			const activity = next() < 0.5;
-			const timed = glsl.timedFlashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, twin, activity);
-			expect(timed).toBeCloseTo(flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing, activity), 12);
+			const expected = flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing, activity);
+			expect(glsl.flashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, vec(timing), activity)).toBeCloseTo(expected, 12);
+			expect(glsl.flashProfileStroke(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, vec(timing), activity).x).toBeCloseTo(expected, 12);
 		}
 	});
 
@@ -432,7 +434,7 @@ describe('GLSL twins', () => {
 			P.maxFlicker, P.pulseGap, P.positiveGap, P.minGap, P.maxGap, P.fit, P.trainSpan, ...P.firstTau, P.minTau, P.maxTau, ...P.cloudTau, P.leaderLevel,
 			P.positiveSingle, P.boltStrokes[0], P.boltStrokes[0] + P.boltStrokes[1], ...P.currentShare, ...P.currentLevel, ...P.currentDuration,
 			...P.singleActivity, ...P.icGlow, P.icPulses[0], P.icPulses[0] + P.icPulses[1], ...P.icDimPeak, ...P.icLevel, P.icGap, P.icFirstBy,
-			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade, ...P.icSwell, MAX_LIFE,
+			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade, ...P.icSwell,
 		];
 		for (const x of profile) expect(flashProfileGlsl).toContain(glslFloat(x));
 		// The ribbon's own uses, not the profile it includes.
@@ -448,9 +450,8 @@ describe('GLSL twins', () => {
 		]) {
 			expect(main).toContain(expression);
 		}
-		expect(flashProfileGlsl).toContain('float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, float radiusKm)');
-		expect(flashProfileGlsl).toContain('float timedFlashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity)');
-		expect(flashProfileGlsl).toContain('vec3 flashStroke(float wallAge, float len, float seed, int kind, float leader)');
+		expect(flashProfileGlsl).toContain('float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity)');
+		expect(flashProfileGlsl).toContain('vec4 flashProfileStroke(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity)');
 		expect(flashProfileGlsl).toContain('float spread(float age, vec2 timing, int kind)');
 	});
 });

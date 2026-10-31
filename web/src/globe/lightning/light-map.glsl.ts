@@ -1,12 +1,13 @@
 import { channelGlsl, cloudDriftGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
-import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { flashProfileGlsl } from './profile';
 
 /** Splats each flash as a soft point sprite over an equirectangular window of the globe, in SphereGeometry UV angles. */
 export const lightMapVertexShader = /* glsl */ `
 attribute vec4 flash;
 attribute vec4 flashShape;
+attribute vec3 flashLook;
 
 uniform float time;
 uniform float duration;
@@ -35,10 +36,10 @@ void main() {
 	}
 	vec3 d = normalize(flash.xyz);
 	float seed = flashShape.w;
-	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	int kind = int(flashLook.x + 0.5);
 	float age = wallAge(time, flash.w);
 	float lat = asin(clamp(d.y, -1.0, 1.0));
-	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, kind) / 6371.0 * flicker;
+	vec2 drift = cloudDrift(age, flashShape.y, seed, kind, flashLook.yz) / 6371.0 * flicker;
 	lat += drift.y;
 	float lon = atan(-d.z, d.x) + drift.x / max(cos(lat), 0.05);
 	float relative = mod(lon - window.x + 3.14159265, 6.28318531) - 3.14159265;
@@ -47,7 +48,7 @@ void main() {
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashShape.y) * intensityBrightness(flashShape.x) * onScreen(flash.w);
+		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

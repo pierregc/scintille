@@ -52,6 +52,9 @@ for its whole duration.
 
 Each flash is drawn in one of seven procedural looks ([ADR 0033](adr/0033-lightning-looks-and-density.md)),
 picked by its seed (`flashKind` in `channel.ts`) and, for crawlers, by its observed duration and area.
+The kind and its timing (leader and spread seconds) are drawn once per flash on the CPU and carried to
+the shaders with the flash (`flashLook`), so the glow, the cloud light and the channel follow the
+skeleton's kind. The strokes and pulses themselves are drawn on the GPU, alike in every pass.
 Satellites classify nothing: the looks drawn are not the flash population, and the shares below are a
 rendering choice.
 

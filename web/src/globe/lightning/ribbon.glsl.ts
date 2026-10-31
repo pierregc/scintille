@@ -17,6 +17,7 @@ attribute vec4 segB;
 attribute vec4 segC;
 attribute vec4 flash;
 attribute vec4 flashShape;
+attribute vec3 flashLook;
 uniform float time;
 uniform float poolShift;
 uniform float duration;
@@ -52,7 +53,7 @@ void cull() {
 
 void main() {
 	float seed = flashShape.w;
-	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	int kind = int(flashLook.x + 0.5);
 	bool ground = isGround(kind);
 	bool branch = segC.z > 0.5;
 	bool inCloud = segC.w > 0.5;
@@ -65,7 +66,7 @@ void main() {
 	float age = wallAge(time, at);
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	// Leaders light the path as they go, then strokes light it again (docs/flash-profile.md, "Timing").
-	vec2 timing = flashTiming(kind, flashShape.y, end, seed);
+	vec2 timing = flashLook.yz;
 	float reached = flicker < 0.5 ? 1.0 : spread(age, timing, kind);
 	float grown = clamp((reached - segC.x) / max(segC.y - segC.x, 1e-4), 0.0, 1.0);
 	if (grown < 0.001) {
@@ -78,8 +79,8 @@ void main() {
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
 	// The channel of a single stroke below the cloud leaves the in-cloud activity after it to the glow.
-	float profile = timedFlashProfile(age, time - at, duration, flashShape.z, seed, flicker, kind, timing, kind != ${FlashKind.CgSingle} || inCloud);
-	float brightness = profile * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
+	vec4 profile = flashProfileStroke(age, time - at, duration, flashShape.z, seed, flicker, kind, timing, kind != ${FlashKind.CgSingle} || inCloud);
+	float brightness = profile.x * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 
 	bool contact = segC.z > 3.5;
@@ -95,7 +96,7 @@ void main() {
 		// The first stroke lights the channel from the ground up; the leader holds the rest until it gets there.
 		float swept = 1.0;
 		if (ground) {
-			vec3 stroke = flashStroke(age, end, seed, kind, timing.x);
+			vec3 stroke = profile.yzw;
 			if (stroke.x < 0.0 || (stroke.x < 0.5 && stroke.y < ${f(PROFILE.strokeSweep)})) least = ${f(PROFILE.leaderLevel)};
 			if (stroke.x >= 0.0 && stroke.x < 0.5) swept = step(min(segA.z, segB.z) / ${f(SKELETON.cloudTopKm)}, stroke.y / ${f(PROFILE.strokeSweep)});
 			if (!branch && stroke.x >= 0.0 && stroke.z < ${f(PROFILE.dart)}) {
@@ -103,12 +104,14 @@ void main() {
 				least = max(least, ${f(PROFILE.dartLevel)} * step(segC.x, tip) * smoothstep(tip - ${f(PROFILE.dartTrail)}, tip, segC.y));
 			}
 			// A second ground contact lights from the stroke that takes it, or the last one if the flash ends first.
-			float takes = pulseHash(seed, 96.0) < 0.2 ? 0.0 : 1.0 + floor(3.0 * pulseHash(seed, 97.0));
-			if (contact && !(stroke.x >= takes || (stroke.x >= 0.0 && stroke.z > 1e5))) lit = 0.0;
+			if (contact) {
+				float takes = pulseHash(seed, 96.0) < 0.2 ? 0.0 : 1.0 + floor(3.0 * pulseHash(seed, 97.0));
+				if (!(stroke.x >= takes || (stroke.x >= 0.0 && stroke.z > 1e5))) lit = 0.0;
+			}
 		} else if (kind == ${FlashKind.IcCrawler}) {
 			least = smoothstep(reached - ${f(PROFILE.crawlerTip)}, reached, segC.y) * (1.0 - smoothstep(0.95, 1.0, reached));
 		}
-		lit *= max(swept, least / max(profile, 1e-4));
+		lit *= max(swept, least / max(profile.x, 1e-4));
 	}
 	float light = brightness * fade * lit * segB.w * channelReveal(flashShape.y, kmPerPx);
 	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));

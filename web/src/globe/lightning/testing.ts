@@ -1,8 +1,9 @@
 /** Vectors of the GLSL twins evaluated as JavaScript. */
-type Vec = { x: number; y: number; z?: number };
+type Vec = { x: number; y: number; z?: number; w?: number };
 
 const vec2 = (x: number, y = x): Vec => ({ x, y });
 const vec3 = (x: number, y = x, z = y): Vec => ({ x, y, z });
+const vec4 = (x: number, y = x, z = y, w = z): Vec => ({ x, y, z, w });
 const smoothstep = (a: number, b: number, x: number): number => {
 	const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
 	return t * t * (3 - 2 * t);
@@ -10,10 +11,10 @@ const smoothstep = (a: number, b: number, x: number): number => {
 
 /**
  * GLSL source evaluated as JavaScript, so tests can run the shader twins against the TypeScript
- * functions: float arithmetic, `vec2` and `vec3` as objects with `x`, `y`, `z`, and these built-ins.
+ * functions: float arithmetic, `vec2` to `vec4` as objects with `x`, `y`, `z`, `w` (no swizzles), and these built-ins.
  */
 export function glslAsJs<T>(source: string, names: string[]): T {
-	const types = '(?:float|int|bool|vec2|vec3)';
+	const types = '(?:float|int|bool|vec2|vec3|vec4)';
 	const js = source
 		.replace(new RegExp(`^${types} (\\w+)\\(([^)]*)\\) \\{`, 'gm'), (_, name: string, params: string) => `function ${name}(${params.replace(new RegExp(`\\b${types} `, 'g'), '')}) {`)
 		.replace(new RegExp(`\\b${types} (\\w+) =`, 'g'), 'let $1 =');
@@ -33,6 +34,7 @@ export function glslAsJs<T>(source: string, names: string[]): T {
 		float: (x: number) => x,
 		vec2,
 		vec3,
+		vec4,
 		length: (v: Vec) => Math.hypot(v.x, v.y, v.z ?? 0),
 	};
 	return new Function(...Object.keys(builtins), `${js}\nreturn { ${names.join(', ')} };`)(...Object.values(builtins));

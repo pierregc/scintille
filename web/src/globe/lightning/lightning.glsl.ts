@@ -10,6 +10,7 @@ import { zoomGlsl } from './zoom';
 export const lightningVertexShader = /* glsl */ `
 attribute vec4 flash;
 attribute vec4 flashShape;
+attribute vec3 flashLook;
 
 uniform float time;
 uniform float duration;
@@ -44,10 +45,10 @@ void main() {
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
 	float seed = flashShape.w;
-	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	int kind = int(flashLook.x + 0.5);
 	bool ground = isGround(kind);
 	float age = wallAge(time, flash.w);
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashShape.y) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -77,7 +78,7 @@ void main() {
 		vDip *= cloudTransmission(opacity, 1.0);
 	}
 #endif
-	vec2 drift = cloudDrift(age, end, flashShape.y, seed, kind) * kmToWorld * flicker;
+	vec2 drift = cloudDrift(age, flashShape.y, seed, kind, flashLook.yz) * kmToWorld * flicker;
 	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;
