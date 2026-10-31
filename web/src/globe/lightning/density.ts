@@ -68,9 +68,9 @@ export function heroWeight(lot: number, share: number): number {
 	return 1 - smoothstep(share, share * DENSITY.edge, lot);
 }
 
-/** Sprite kept by a flash outside the sample, from its `farness` and whether the cloud light has no surface (`lightMapOff`, 0 or 1). */
-export function pointWeight(farness: number, lightMapOff: number): number {
-	return Math.max(smoothstep(DENSITY.pointFarness[0], DENSITY.pointFarness[1], farness), lightMapOff * DENSITY.weakGlow);
+/** Sprite kept by a flash outside the sample, from its farness `far` and how much the cloud light is off (`off`, 0 to 1). */
+export function pointWeight(far: number, off: number): number {
+	return Math.max(smoothstep(DENSITY.pointFarness[0], DENSITY.pointFarness[1], far), off * DENSITY.weakGlow);
 }
 
 /** The applied share after `dt` wall clock seconds, following `wanted` geometrically, or at once on a `jump`. */
@@ -82,7 +82,7 @@ export function followShare(current: number, wanted: number, dt: number, jump = 
 
 /**
  * GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `zoomGlsl` and `playbackGlsl`. `heroShare` is
- * the applied share, `lightMapOff` 1 when no cloud light shows, `pointBudgetFrom` the newest-flashes cap on the
+ * the applied share, `lightMapOff` easing to 1 while no cloud light shows, `pointBudgetFrom` the newest-flashes cap on the
  * points outside the sample (`onScreen`).
  */
 export const densityGlsl = /* glsl */ `
@@ -95,8 +95,8 @@ float heroLot(float seed, float intensity) {
 float heroWeight(float lot, float share) {
 	return 1.0 - smoothstep(share, share * ${f(DENSITY.edge)}, lot);
 }
-float pointWeight(float farness, float lightMapOff) {
-	return max(smoothstep(${f(DENSITY.pointFarness[0])}, ${f(DENSITY.pointFarness[1])}, farness), lightMapOff * ${f(DENSITY.weakGlow)});
+float pointWeight(float far, float off) {
+	return max(smoothstep(${f(DENSITY.pointFarness[0])}, ${f(DENSITY.pointFarness[1])}, far), off * ${f(DENSITY.weakGlow)});
 }
 float pointBudget(float at) {
 	return smoothstep(pointBudgetFrom - budgetFade, pointBudgetFrom, at);
