@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { channelHash } from './channel';
-import { DENSITY, densityGlsl, followShare, heroLot, heroShare, heroTarget, heroWeight } from './density';
+import { DENSITY, densityGlsl, followShare, heroLot, heroShare, heroTarget, heroWeight, pointWeight } from './density';
 
 const SEEDS = 50_000;
 const seeds = Array.from({ length: SEEDS }, (_, i) => (i + 0.5) / SEEDS);
@@ -66,26 +66,42 @@ describe('heroWeight', () => {
 	});
 });
 
+describe('pointWeight', () => {
+	it('keeps a point from afar only, and half a sprite without cloud light', () => {
+		expect(pointWeight(0, 0)).toBe(0);
+		expect(pointWeight(0.5, 0)).toBe(0);
+		expect(pointWeight(0.75, 0)).toBe(0.5);
+		expect(pointWeight(1, 0)).toBe(1);
+		expect(pointWeight(0, 1)).toBe(DENSITY.weakGlow);
+		expect(pointWeight(1, 1)).toBe(1);
+	});
+});
+
 describe('followShare', () => {
 	it('moves the share by at most the time constant each frame and jumps at once on a seek', () => {
 		let share = 1;
 		const wanted = 0.01;
 		const dt = 1 / 60;
-		for (let frame = 0; frame < 120; frame++) {
+		for (let frame = 0; frame < 30; frame++) {
 			const next = followShare(share, wanted, dt);
 			expect(next).toBeLessThanOrEqual(share);
-			expect(next).toBeGreaterThanOrEqual(share * (wanted / share) ** (dt / DENSITY.smoothing) - 1e-4);
+			expect(next).toBeGreaterThanOrEqual(share * (wanted / share) ** (dt / DENSITY.smoothing) - 1e-9);
 			share = next;
 		}
 		expect(share).toBeGreaterThan(wanted);
-		expect(Math.log(share / wanted)).toBeCloseTo(Math.log(1 / wanted) * Math.exp(-2 / DENSITY.smoothing), 1);
+		expect(Math.log(share / wanted)).toBeCloseTo(Math.log(1 / wanted) * (1 - dt / DENSITY.smoothing) ** 30, 6);
 		expect(followShare(share, wanted, dt, true)).toBe(wanted);
 	});
 
-	it('settles exactly on the wanted share', () => {
+	it('settles exactly on the wanted share, whatever its size', () => {
 		let share = 0.5;
-		for (let frame = 0; frame < 2000; frame++) share = followShare(share, 1, 1 / 60);
+		for (let frame = 0; frame < 600; frame++) share = followShare(share, 1, 1 / 60);
 		expect(share).toBe(1);
+		share = 0.001;
+		share = followShare(share, 0.0004, 1 / 60);
+		expect(share).toBeGreaterThan(0.0009);
+		for (let frame = 0; frame < 600; frame++) share = followShare(share, 0.0004, 1 / 60);
+		expect(share).toBe(0.0004);
 	});
 });
 
@@ -93,5 +109,6 @@ describe('densityGlsl', () => {
 	it('uses the same constants as the TypeScript lot and weight', () => {
 		expect(densityGlsl).toContain(`channelHash(seed, 3.0) * mix(1.0, ${DENSITY.energyWeight}, clamp(intensity, 0.0, 1.0))`);
 		expect(densityGlsl).toContain(`1.0 - smoothstep(share, share * ${DENSITY.edge}, lot)`);
+		expect(densityGlsl).toContain(`max(smoothstep(${DENSITY.pointFarness[0]}, ${DENSITY.pointFarness[1]}.0, farness), lightMapOff * ${DENSITY.weakGlow})`);
 	});
 });

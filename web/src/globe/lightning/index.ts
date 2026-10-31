@@ -41,7 +41,7 @@ import { FLASH_STRIDE, FlashInstances } from './instances';
 import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 import { FlashPlayback } from './playback';
-import { MAX_LIFE } from './profile';
+import { flickerLength, MAX_LIFE } from './profile';
 import { PHONE, viewScale, ZOOM } from './zoom';
 
 export { DISPLAY_MINUTES } from './display';
@@ -71,9 +71,10 @@ export interface FlashLight {
 }
 
 /**
- * Sampling of a storm view this frame: `alive` flashes played in the last `DENSITY.aliveWindow` of wall clock
- * time, `drawn` flashes of the sample within their flicker or fade (0 when the view is too far for channels),
- * the applied `share` of the lots and its `target`, and `channels` holding a slot in the pool.
+ * Sampling of a storm view this frame: `alive` flashes within their flicker or fade at once (`aliveLoad` over
+ * the last `DENSITY.aliveWindow` of wall clock time), `drawn` flashes of the sample within their flicker or
+ * fade (0 when the view is too far for channels), the applied `share` of the lots and its `target`, and
+ * `channels` holding a slot in the pool.
  */
 export interface LightningStats {
 	alive: number;
@@ -314,7 +315,7 @@ export function createLightning(
 			lastWall = now;
 			// At replay speed a storm view would show thousands of flashes at once: a seeded sample of them is drawn in full, every flash lights the cloud.
 			target = stormView ? heroTarget(playback.speed) : Infinity;
-			alive = stormView ? aliveCount(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs)) : 0;
+			alive = stormView ? aliveLoad(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs), DENSITY.aliveWindow) : 0;
 			share = followShare(share, heroShare(target, alive), dt, playback.jumped || stormView !== sampled);
 			sampled = stormView;
 			sample.value = share;
@@ -414,6 +415,18 @@ export function budgetStart(ring: FlashRing, now: number, count: number): number
 /** Flashes played within the `spanMs` of scene time up to `now`. */
 export function aliveCount(ring: FlashRing, now: number, spanMs: number): number {
 	return playedBy(ring, now) - playedBy(ring, now - spanMs);
+}
+
+/**
+ * Flashes within their flicker or fade at once, estimated from those played within the `spanMs` of scene
+ * time up to `now`, which cover `seconds` of wall clock time: each counts for its flicker and fade over
+ * those seconds, so a storm of long flashes keeps more lit than one of short ones at the same rate.
+ */
+export function aliveLoad(ring: FlashRing, now: number, spanMs: number, seconds: number): number {
+	const to = playedBy(ring, now);
+	let life = 0;
+	for (let i = playedBy(ring, now - spanMs); i < to; i++) life += flickerLength(ring.durationMs[ring.slot(i)]) + CHANNEL.fade;
+	return life / seconds;
 }
 
 /** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */

@@ -17,12 +17,14 @@ export const DENSITY = {
 	energyWeight: 0.4,
 	/** Mean of the energy weight over the flashes, so `share × alive × meanWeight ≈ target`. */
 	meanWeight: 1.5,
-	/** Time constant of the applied share, wall clock seconds; a seek or a speed change applies it at once. */
-	smoothing: 2,
+	/** Time constant of the applied share, wall clock seconds, short enough to follow a storm's rate at 600×; a seek or a speed change applies it at once. */
+	smoothing: 0.5,
 	/** A flash fades out over this factor of the share instead of popping at its edge. */
 	edge: 1.1,
 	/** Sprite kept by the flashes outside the sample when the cloud light has no surface to show them. */
 	weakGlow: 0.5,
+	/** Outside the sample a flash keeps its sprite from afar only, rising over this range of the farness (about 1 to 3 km per px), where flashes are points. */
+	pointFarness: [0.5, 1],
 	/** Newest flashes the cloud light keeps in a storm view; Infinity keeps every flash (the bench needed no ceiling). */
 	lightMapCeiling: Infinity,
 } as const;
@@ -64,14 +66,19 @@ export function heroWeight(lot: number, share: number): number {
 	return 1 - smoothstep(share, share * DENSITY.edge, lot);
 }
 
+/** Sprite kept by a flash outside the sample, from its `farness` and whether the cloud light has no surface (`lightMapOff`, 0 or 1). */
+export function pointWeight(farness: number, lightMapOff: number): number {
+	return Math.max(smoothstep(DENSITY.pointFarness[0], DENSITY.pointFarness[1], farness), lightMapOff * DENSITY.weakGlow);
+}
+
 /** The applied share after `dt` wall clock seconds, following `wanted` geometrically, or at once on a `jump`. */
 export function followShare(current: number, wanted: number, dt: number, jump = false): number {
 	if (jump || !(current > 0)) return wanted;
 	const next = current * (wanted / current) ** Math.min(1, dt / DENSITY.smoothing);
-	return Math.abs(next - wanted) < 1e-4 ? wanted : next;
+	return Math.abs(next - wanted) <= 1e-3 * wanted ? wanted : next;
 }
 
-/** GLSL twins of `heroLot` and `heroWeight`; needs `channelGlsl`. `heroShare` is the applied share, `lightMapOff` 1 when no cloud light shows. */
+/** GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `channelGlsl`. `heroShare` is the applied share, `lightMapOff` 1 when no cloud light shows. */
 export const densityGlsl = /* glsl */ `
 uniform float heroShare;
 uniform float lightMapOff;
@@ -80,5 +87,8 @@ float heroLot(float seed, float intensity) {
 }
 float heroWeight(float lot, float share) {
 	return 1.0 - smoothstep(share, share * ${f(DENSITY.edge)}, lot);
+}
+float pointWeight(float farness, float lightMapOff) {
+	return max(smoothstep(${f(DENSITY.pointFarness[0])}, ${f(DENSITY.pointFarness[1])}, farness), lightMapOff * ${f(DENSITY.weakGlow)});
 }
 `;

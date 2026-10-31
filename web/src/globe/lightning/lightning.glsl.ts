@@ -1,7 +1,7 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { volumeFieldGlsl } from '../clouds/field.glsl';
 import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
-import { DENSITY, densityGlsl } from './density';
+import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -61,8 +61,8 @@ void main() {
 	float viewKmPerPx = kmPerPx * viewScale;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
 	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
-	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, or half a sprite when it has no surface.
-	brightness *= max(heroWeight(heroLot(seed, flashShape.x), heroShare), max(farness(viewKmPerPx), lightMapOff * ${f(DENSITY.weakGlow)}));
+	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, which stay points from afar.
+	brightness *= max(heroWeight(heroLot(seed, flashShape.x), heroShare), pointWeight(farness(viewKmPerPx), lightMapOff));
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

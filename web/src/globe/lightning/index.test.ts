@@ -4,7 +4,9 @@ import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { DENSITY, heroShare } from './density';
-import { aliveCount, budgetStart, createLightning, lightWindow } from './index';
+import { CHANNEL } from './channel';
+import { aliveCount, aliveLoad, budgetStart, createLightning, lightWindow } from './index';
+import { flickerLength, PROFILE } from './profile';
 import { MAX_SEGMENTS } from './skeleton';
 
 afterEach(() => {
@@ -122,6 +124,17 @@ describe('storm view budget', () => {
 		expect(aliveCount(ring, 99_000, 1000)).toBe(0);
 		expect(aliveCount(ring, 200_000, 1e6)).toBe(5);
 	});
+
+	it('weighs each flash alive by its flicker and fade over the window', () => {
+		const ring = new FlashRing(16);
+		ring.push(decodeChunk(encodeChunk(100, [0, 100, 200].map((offsetMs) => ({ offsetMs, lat: 0, lon: 0 }))).buffer));
+		[100, 500, 5000].forEach((ms, i) => { ring.durationMs[ring.slot(i)] = ms; });
+		const life = (ms: number) => flickerLength(ms) + CHANNEL.fade;
+		expect(aliveLoad(ring, 100_200, 150, 0.4)).toBeCloseTo((life(500) + life(5000)) / 0.4, 9);
+		expect(aliveLoad(ring, 100_200, 150, 0.4)).toBeCloseTo((0.65 + PROFILE.maxFlicker + 0.15) / 0.4, 9);
+		expect(aliveLoad(ring, 100_200, 1000, 1)).toBeCloseTo(life(100) + life(500) + life(5000), 9);
+		expect(aliveLoad(ring, 99_000, 1000, 0.4)).toBe(0);
+	});
 });
 
 describe('storm view sample', () => {
@@ -142,8 +155,11 @@ describe('storm view sample', () => {
 		const material = lightning.mesh.material as ShaderMaterial;
 		lightning.stormView = true;
 		lightning.setTime(340_000, undefined, 600);
-		const wanted = heroShare(20, 2000);
-		expect(lightning.stats.alive).toBe(2000);
+		const alive = aliveLoad(ring, 340_000, 240_000, DENSITY.aliveWindow);
+		const wanted = heroShare(20, alive);
+		expect(alive).toBeCloseTo((2000 * (flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade)) / DENSITY.aliveWindow, 6);
+		expect(alive).toBeGreaterThan(500);
+		expect(lightning.stats.alive).toBeCloseTo(alive, 9);
 		expect(lightning.stats.target).toBe(20);
 		expect(lightning.heroShare).toBeCloseTo(wanted, 9);
 		expect(material.uniforms.heroShare.value).toBe(lightning.heroShare);
@@ -178,6 +194,7 @@ describe('storm view sample', () => {
 		lightning.stormView = true;
 		lightning.setTime(340_000, undefined, 600);
 		const dense = lightning.heroShare;
+		const alive0 = lightning.stats.alive;
 		const shares: number[] = [];
 		for (let frame = 1; frame <= 120; frame++) {
 			wall += 1000 / 60;
@@ -185,7 +202,7 @@ describe('storm view sample', () => {
 			shares.push(lightning.heroShare);
 		}
 		const sparse = heroShare(20, lightning.stats.alive);
-		expect(lightning.stats.alive).toBeLessThan(2000);
+		expect(lightning.stats.alive).toBeLessThan(alive0);
 		for (let i = 1; i < shares.length; i++) {
 			expect(shares[i]).toBeGreaterThanOrEqual(shares[i - 1]);
 			expect(shares[i] / shares[i - 1]).toBeLessThanOrEqual((sparse / dense) ** (1 / 60 / DENSITY.smoothing) + 1e-9);

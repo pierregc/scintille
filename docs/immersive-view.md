@@ -626,8 +626,8 @@ clouds, `--warm` measures a second visit and `--network 4g` or `slow4g` throttle
 afterglow window.
 
 In the page, `window.__app.lightning.stats` reads the storm view sample of the current frame
-([flash profile](flash-profile.md#overlaps-in-a-storm-view)): `alive`, the flashes played in the
-last 0.4 s of wall clock time; `drawn`, the flashes of the sample within their flicker or fade
+([flash profile](flash-profile.md#overlaps-in-a-storm-view)): `alive`, the flashes within their
+flicker or fade at once, estimated over the last 0.4 s of wall clock time; `drawn`, the flashes of the sample within their flicker or fade
 (0 when the view is too far for channels); `share`, the applied share of the lots, and `target`,
 the flashes within their flicker it aims at (Infinity at 1×); `channels`, the flashes holding a
 channel slot. A capture tool reads it once per frame to check the targets.

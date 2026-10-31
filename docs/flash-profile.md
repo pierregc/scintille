@@ -78,13 +78,17 @@ lightning look rework, #398):
 - The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
   600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
   between the speeds the target follows a power law). `share = target / (1.5 × alive)`, `alive`
-  being the flashes played in the last 0.4 s of wall clock time (1.5 is the mean of the lot
-  weights). On a quiet storm the share is 1 and every flash is drawn.
-- The applied share follows the wanted one with a 2 s time constant, so a changing rate never
-  pumps the picture, and jumps to it at once on a seek, a speed change or a new storm view.
-- Outside the sample, a flash keeps its point from afar (its sprite times the farness), and half a
-  sprite when the cloud light has no surface to show it (clouds hidden, no cloud frame, `low` tier),
-  so every flash stays a point ([visual rule 1](immersive-view.md#visual-rules)).
+  being the flashes within their flicker or fade at once, estimated from those played in the last
+  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (1.5 is the
+  mean of the lot weights). On a quiet storm the share is 1 and every flash is drawn.
+- The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
+  by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a
+  seek, a speed change or a new storm view.
+- Outside the sample, a flash keeps its sprite from afar only, rising from nothing at about 1 km
+  per px to its full point at 3 km per px (the far half of the [farness](immersive-view.md#lightning-scale)),
+  and half a sprite when the cloud light has no surface to show it (clouds hidden, no cloud frame,
+  `low` tier), so every flash stays a point ([visual rule 1](immersive-view.md#visual-rules)) and the
+  storm framing, at 0.5 to 0.7 km per px, shows the cloud light and the sample alone.
 
 The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
 of wall clock time) binds only while every flash is drawn, in practice at 1×; the cloud light never
