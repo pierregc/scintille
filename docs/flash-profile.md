@@ -132,8 +132,9 @@ scaled by the channel opacity. A ground flash steps back only as much as the clo
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn
 at 15 % (styled), as the lit cloud and the channel carry the flash; on the `low` tier, which has no cloud
 light, it keeps 40 %. Over sunlit clouds it keeps 35 % of that near the floor (styled: from orbit,
-nothing of a flash shows by day), a share that fades out with distance so the far view's points keep
-their level. In a storm view below 1 km per CSS px, overlapping glows keep the brightest, never add up.
+nothing of a flash shows by day), a rule of the floor that is gone by 1 km per CSS px, so the far
+view's points keep their day marks. In a storm view below 1 km per CSS px, overlapping glows keep the
+brightest, never add up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to

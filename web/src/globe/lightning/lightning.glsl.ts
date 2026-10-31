@@ -60,9 +60,10 @@ void main() {
 	float viewKmPerPx = kmPerPx * viewScale;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
 	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
-	// Over sunlit cloud the glow keeps a styled trace near the floor; from afar the points keep their level.
+	// Over sunlit cloud the glow keeps a styled trace: a rule of the floor, gone by 1 km per px, where the points keep their day marks.
 	float day = smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection)));
-	brightness *= mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * (1.0 - farness(viewKmPerPx)));
+	float near = 1.0 - smoothstep(0.0, 0.5, farness(viewKmPerPx));
+	brightness *= mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * near);
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));

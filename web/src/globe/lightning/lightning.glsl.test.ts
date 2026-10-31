@@ -12,7 +12,8 @@ describe('glow shader', () => {
 
 	it('keeps a named share of the glow over sunlit cloud near the floor and the far points whole', () => {
 		expect(lightningVertexShader).toContain('uniform vec3 sunDirection;');
-		expect(lightningVertexShader).toContain(`mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * (1.0 - farness(viewKmPerPx)))`);
+		expect(lightningVertexShader).toContain('float near = 1.0 - smoothstep(0.0, 0.5, farness(viewKmPerPx));');
+		expect(lightningVertexShader).toContain(`mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * near)`);
 	});
 });
 

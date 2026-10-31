@@ -221,9 +221,9 @@ radius and `i` the intensity:
 - **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
   1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
   point of 3 to 7 CSS px when that is larger. Level `mix(0.15, 1, f)` (0.4 near the floor on the
-  `low` tier, which has no cloud light), times `mix(1, 0.35, day × (1 - f))` over sunlit cloud, with
-  `day = smoothstep(-0.05, 0.25, n · sun)` as for channels: the lit cloud and the channel carry the
-  flash near the floor, the points carry it from afar.
+  `low` tier, which has no cloud light), times `mix(1, 0.35, day × (1 - smoothstep(0, 0.5, f)))` over
+  sunlit cloud, with `day = smoothstep(-0.05, 0.25, n · sun)` as for channels: a rule of the floor,
+  gone by 1 km per px (`f` = 0.5), where glows screen-blend again and the points keep their day marks.
 - **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
 - **Halo**: 8 core widths at 30 % of the core, cool only, with the channel opacity, fading from
   1,500 to 6,000 km away.
@@ -358,7 +358,7 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level near the floor (40 % on the `low` tier, without cloud light), full from afar; 35 % of that over sunlit cloud near the floor, fading out with distance (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.nearGlowAlone`, `CHANNEL.glowDayLevel`, `MAX_BLEND_KM_PER_PX`, `vTint` |
+| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level near the floor (40 % on the `low` tier, without cloud light), full from afar; 35 % of that over sunlit cloud near the floor, gone by 1 km per CSS px (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.nearGlowAlone`, `CHANNEL.glowDayLevel`, `MAX_BLEND_KM_PER_PX`, `vTint` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
