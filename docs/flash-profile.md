@@ -32,15 +32,35 @@ frame shows the flashes of the last second of play at their current stage. Offli
 The result is the brightest of the three. A short flash is one or two blinks; a long one crackles for its
 whole duration before fading.
 
-## Cloud-to-ground and in-cloud
+## Flash kinds
 
-A seed picks about 25 % cloud-to-ground looks (see [Channel](#channel)); the rest are in-cloud. Satellites
-cannot tell them apart, so this split, like the patterns below, is procedural.
+Each flash is drawn in one of seven procedural looks ([ADR 0033](adr/0033-lightning-looks-and-density.md)),
+picked by its seed (`flashKind` in `channel.ts`) and, for crawlers, by its observed duration and area.
+Satellites classify nothing: the looks drawn are not the flash population, and the shares below are a
+rendering choice.
 
-- **Cloud-to-ground** flashes flash in distinct strokes and go dark in between, as return strokes do. In
+| Kind | Share | Origin, trunk top | Run, strike | Inclination from the vertical | Leader, fan speed (m/s) | Branches |
+|---|---|---|---|---|---|---|
+| Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.3-0.8 r, strike 2-8 km away inside r | 0-30° for 80 %, 30-45° otherwise | 1 × 10^5 | 3-12 |
+| Negative cloud-to-ground, single-stroke (`CgSingle`) | 7 % | 6-8 km | as above | as above | 1 × 10^5 | 1-3 |
+| Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, strike 6-10 km away inside r | 30-45° | 1 × 10^5 | 0-3 |
+| Bolt from the blue (`BoltFromBlue`) | 1 % | exit 8-9 km, trunk top 9-10 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
+| In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 6-8 km to 9-11 km | fans 0.8-2.2 r | 15-40° | 2 × 10^5, fans 8 × 10^4 | 0-9 |
+| In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
+| Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 15-40° | as the trunk and fan | 0-9 |
+
+Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %). Each flash runs its leaders at
+the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds` is the time down a
+cloud-to-ground drop (clamped to 50 to 150 ms; 150 to 250 ms for a bolt from the blue) or up an
+in-cloud trunk (10 to 20 ms), `spreadSeconds` the time the fans take to cover 2.2 r (within 80 % of the
+flicker; the whole flicker for crawlers). The table is the contract of the geometry (#401) and timing
+(#402) tickets; until they land, the four cloud-to-ground kinds are drawn with the cloud-to-ground
+profile and silhouette below, and the three in-cloud kinds with the in-cloud ones.
+
+- **Cloud-to-ground** kinds flash in distinct strokes and go dark in between, as return strokes do. In
   40 % of them, the first or second subsequent stroke holds a continuing current: a steady 20 to 30 %
   glow for up to 250 ms, within the observed duration.
-- **In-cloud** flashes glow between their pulses (15 to 25 % of the first pulse) while their leaders
+- **In-cloud** kinds glow between their pulses (15 to 25 % of the first pulse) while their leaders
   spread, and fade 80 ms after the observed duration.
 
 Leaders light the channel as they go. In-cloud ones start from a fifth of the path and cover it by
@@ -77,7 +97,8 @@ While a flash flickers, its channel shows: a skeleton of segments built once per
 event time and position, so a flash keeps its shape when revisited. Satellites only see the light: none
 of this shape is observed.
 
-**Silhouette.** A seed picks about 25 % cloud-to-ground looks; the rest are in-cloud.
+**Silhouette.** The [flash kind](#flash-kinds) picks it: the four cloud-to-ground kinds (30 %) are drawn
+as *Ground*, the three in-cloud kinds as *In-cloud*.
 
 - *Ground*: a short leader in the cloud, at 8 to 11.5 km, feeds a channel that drops to the ground
   2 to 9 km away horizontally, mostly vertical, heights not exaggerated. It is a lone filament (30 %),

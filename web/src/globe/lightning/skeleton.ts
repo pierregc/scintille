@@ -1,6 +1,12 @@
 import { CHANNEL } from './channel';
+import { type FlashKind, isGround } from './kind';
 
-/** Floats per channel segment: start xyz, width (CSS px), end xyz, light, path arrival at start and end, level, inside the cloud. */
+/**
+ * Floats per channel segment: start xyz, width (CSS px), end xyz, light, path arrival at start and end, level, cloud flag.
+ * Level: 0 the main channel, 1 to 3 branches by depth, 4 a second ground contact path (ADR 0033; #401 writes it, #402 lights it from a later stroke).
+ * Cloud flag: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in the cloud (crisp, at least 30 % of its light; #401).
+ * The shaders read the flag as in-cloud above 0.5, so 1 and 2 draw alike until #401.
+ */
 export const SEGMENT_FLOATS = 12;
 export const MAX_SEGMENTS = 256;
 
@@ -9,7 +15,7 @@ export type Look = 'filament' | 'branching' | 'fork' | 'network' | 'strikes';
 
 export interface Skeleton {
 	look: Look;
-	ground: boolean;
+	kind: FlashKind;
 	/** Segments written in `data`. */
 	count: number;
 	data: Float32Array;
@@ -200,7 +206,8 @@ function branch(w: Writer, style: Style, parent: Path, count: number, level: num
  * position. Its silhouette, branches and heights are drawn from `seed`: the satellites only see the
  * light, so none of this is observed.
  */
-export function channelSkeleton(seed: number, radiusKm: number, ground: boolean): Skeleton {
+export function channelSkeleton(seed: number, radiusKm: number, kind: FlashKind): Skeleton {
+	const ground = isGround(kind);
 	const rng = random(seed);
 	const r = Math.max(3, radiusKm);
 	const pick = rng();
@@ -265,5 +272,5 @@ export function channelSkeleton(seed: number, radiusKm: number, ground: boolean)
 		w.data[k * SEGMENT_FLOATS + 8] /= longest;
 		w.data[k * SEGMENT_FLOATS + 9] /= longest;
 	}
-	return { look, ground, count: w.count, data: w.data };
+	return { look, kind, count: w.count, data: w.data };
 }
