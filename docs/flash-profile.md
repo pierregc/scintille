@@ -191,8 +191,8 @@ kinds keep their heights.
   long as the drop (0.1 to 0.5 of it), end 0.3 to 2 km above the ground and branch again down to three
   levels: 3 to 12 of them for multi-stroke flashes, 1 to 3 for single-stroke ones, at 30 to 100 % of
   the trunk's light. 40 % of multi-stroke flashes get a second ground contact: a path from a branch 1
-  to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit by a later stroke
-  once #402 lands; until then it shows like a branch).
+  to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit from a later
+  stroke, see Timing).
 - *Positive cloud-to-ground*: from 9 to 11 km a run of 0.8 to 2.2 r along the heading, kept within the
   footprint, then an oblique drop at 30 to 45° from the vertical (5 to 11 km sideways, shorter in the
   smallest footprints) to a strike 0.6 to 1 r from the position (`KIND.strikeR`); 0 to 3 branches.
@@ -298,8 +298,7 @@ A segment foreshortened on screen adds light for its screen length only. A chain
 shorter than their width still varies along it, less than before (within 23 % of its mean, against up
 to 35 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
 dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
-of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide (the start of ground
-leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
+of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide; at 2 and above the
 floor is finer than the old 0.75 CSS px. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
@@ -314,10 +313,10 @@ get the rules of the floor. Phones scale both 15 % and 40 % by 0.6. In a storm v
 px, overlapping glows keep the brightest, never add up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
-9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
-256 segments (24 kept for a second ground contact and 16 for a cloud-to-air leader's way out,
-`SKELETON.secondSegments` and `airSegments`; a path that would not fit is drawn coarser). All flashes
-keep their glow and cloud light.
+9 km per CSS px), for the flashes of the sample (every flash at 1×) up to the 384 newest flickering
+ones, 24 new ones per frame at most, each with up to 256 segments (24 kept for a second ground contact
+and 16 for a cloud-to-air leader's way out, `SKELETON.secondSegments` and `airSegments`; a path that
+would not fit is drawn coarser). All flashes keep their glow and cloud light.
 
 ## Channel halo
 

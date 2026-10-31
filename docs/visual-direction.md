@@ -65,10 +65,10 @@ inside the about sheet.
 These come from the mockup and are expected to change after real use:
 
 - Call to action: **"Drift to a storm"**; time travel entry: **"Travel in time"**.
-- Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default. Flash display and flicker are timed in scene
-  time, so at 60× and above a flash lasts a frame or two; they need wall-time (or speed-scaled) timing before
-  60× ships as the default.
-- Afterglow: **0, 1, 30 minutes**, 0 by default; 0 shows the flash alone, gone after 1 s.
+- Playback speeds: **1×, 60×, 600×, 3600×**, 60× by default. A flash starts at its scene time and flickers
+  for its observed duration in wall clock time at any speed (#254); at speed, about 50, 20 and 8 flashes at
+  once are drawn in full while every flash lights the cloud ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
+- Afterglow: **0, 1, 30 minutes**, 0 by default; 0 shows the flash alone, gone 1 to 2.5 s after it starts.
 - Timeline: one UTC day, ticks every 30 minutes, labels every 6 hours.
 - No flash counter and no activity histogram.
 

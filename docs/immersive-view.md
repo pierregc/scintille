@@ -324,7 +324,7 @@ the cloud light under it ends at 1.5 `r` at the 400 km floor along its long axis
 Physical scale and compensation:
 
 - Positions, footprints, energies and durations keep their measured values at every pose; channel
-  lengths are physical; channel heights follow [Observed, procedural, assumed](#observed-procedural-assumed).
+  lengths are physical; channel heights follow [Observed, procedural, assumed, styled](#observed-procedural-assumed-styled).
 - Compensation only applies where the footprint is a few pixels: the 4 times glow and the point
   size from afar, the pixel width of channels and halos, and the bloom. Near the floor the glow is
   1 to 2 footprints at 15 % of its level and the bloom 10 % of the globe's.
@@ -357,9 +357,10 @@ same build; the figures below compare builds run back to back.
 | GPU textures and buffers | 283 MB desktop, 243 MB mobile | 285 MB, 245 MB |
 | First load, zoom transfer | unchanged | |
 
-At 600× and 3600×, the 500 flash budget keeps the frame cost at 10 to 15 ms and the tier at `high` on
-R1 (without it, 3600× dropped the tier and hitched flights up to 170 ms), but near white pixels reach
-12 % (600×) and 22 % (3600×) at `iss`: those speeds show ten minutes or an hour per second.
+At 600× and 3600× that renderer kept the 500 newest flashes, which held the frame cost at 10 to 15 ms
+on R1 but cut every flash short and left 12 % (600×) and 22 % (3600×) of near white pixels at `iss`.
+Since ADR 0033, every flash lights the cloud and a sample is drawn in full: measured in
+[Lightning look validation](#lightning-look-validation).
 
 ## Surface detail
 
@@ -421,24 +422,32 @@ Captures in [`immersive/surface-detail/`](immersive/surface-detail/): `R1-poses.
 corner of four tiles of every level at 45° N 0° by day and by night, the antimeridian at 65.6° N,
 the south pole).
 
-## Observed, procedural, assumed
+## Observed, procedural, assumed, styled
+
+Observed: measured by the satellites. Procedural: drawn from a seed within stated bounds where nothing
+is observed. Assumed: a fixed physical value where nothing is observed. Styled: chosen for the look,
+against what physics alone would show, within the bounds of
+[ADR 0030](adr/0030-bounded-aesthetic-license.md). The lightning rows are recorded in
+[ADR 0033](adr/0033-lightning-looks-and-density.md) and detailed in the [flash profile](flash-profile.md).
 
 | Element | Status | Source in the renderer |
 |---|---|---|
 | Flash time, duration, source | Observed | Live and replay chunks |
 | Flash position | Observed, within about 8 km (GLM) or 4.5 km (LI) | `FlashInstances` |
-| Flash footprint area | Observed (illuminated cloud top area) | `flashShape.y`, radius `√(area / π)`, at least 3 km |
+| Flash footprint area | Observed (illuminated cloud top area) | `flashShape.y`, radius `r = √(area / π)`, at least 3 km |
 | Flash brightness | Observed energy, normalized | `intensityBrightness` |
-| Strokes and pulses within the duration, flicker up to 2 s | Procedural, seeded, by kind, played in wall clock time: cloud-to-ground leader at 12 % for 50 to 150 ms (150 to 250 ms for a bolt from the blue; real 20 to 40 ms), within half the flicker; first stroke filling the channel from the ground up over 33 ms (real: microseconds); one stroke for a quarter of negative and 81 % of positive flashes, otherwise 2 to 12, drawn 10 to 400 ms apart (57 ms in geometric mean), gaps spread up to 2.3 times in flashes over 0.9 s (twelve strokes span 0.86 s), forced strokes within 80 % of the flicker left, so the gaps shown keep 57 ms in flashes of 0.6 to 1 s and are closer in brief ones (51 ms over GLM-like durations); darts down the trunk in 40 ms at 30 %, over 0.3 of the path behind their tip; continuing current 20 to 30 % for 40 to 300 ms in 15 to 75 % by kind; single-stroke in-cloud activity 12 to 18 % to the end of the flicker, in the glow and the channel in the cloud, not below it; in-cloud 0, 1 or 2 to 3 bright pulses (25 / 45 / 30 %), a swell to 35 to 50 % over 40 ms, decaying over 120 ms, without one, 12.5 ms stutters in the last half of flashes with none or several pulses; crawlers steady at 25 to 35 % | `flashProfile`, `flashStroke`, `ribbon.glsl.ts` |
-| Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position, along the heading of the first drawn leader | `spread`, `cloudDrift`, `skeleton.ts` |
-| Channel path, branches, widths, brightness along them, cloud-to-ground: origins over 0.5 `r`, the in-cloud stem run by 0.15 of the path's arrival; negative: feed 0.3 to 0.8 `r` along the heading, ending within 0.8 `r` of the position, drop 2 to 8 km sideways within 60° of the feed's bearing, its straight line within 30° of the vertical for 80 % (30 to 45° otherwise), strike inside `r`; the drop, its branches and second contact at 0.6 of the path roughness (`dropRoughness`, about 15° from one segment to the next); the stem in segments of at least 1.5 km (`deepMinKm`); branches leave the drop 1.5 to 5 km up, on every side, at 20 to 40° (70 %) or 45 to 75°, 0.1 to 0.5 of the drop, and end 0.3 to 2 km above the ground; a second ground contact in 40 % of multi-stroke flashes, from 1 to 3 km up on a branch to 1 to 4 km from the first foot; positive: origin 9 to 11 km, run 0.8 to 2.2 `r`, drop at 30 to 45°, strike 0.6 to 1 `r` from the position; bolt from the blue: trunk from 7 to 8.4 km up to 9 to 10 km, run 0.5 to 1 `r`, exit at 8 to 9 km, descent at 45 to 60°, 5 to 12 km sideways, strike inside `max(r, 8 km)` | Procedural, seeded, within the footprint | `skeleton.ts`, `SKELETON`, `KIND` |
-| Channel path, in-cloud: trunks climbing 2 to 4 km at 15 to 40°, fans within `min(2.2 r, 8 × 10^4 m/s × 0.8 × flicker)` (filament 20 %, branching 30 %, network 50 %); crawlers 1.76 to 2.2 `r` both ways, in segments of at least 1.5 km (`deepMinKm`, about the width the cloud spreads them to, so their overlapping ends do not add up to a saturated tube); cloud-to-air leaders out of the cloud over their outer 30 to 60 %, 1 to 3 km beyond the fan or up to 1 km over the top | Procedural, seeded, within the footprint | `skeleton.ts`, `SKELETON`, `KIND` |
-| Channel cores on screen: joints cross-faded in screen values, each segment's cross-fade adding up to its length, no core thinner than 1.25 device px | Styled, so threads never bead; each core gets back the light its overlaps used to add (exact from a width on, within 5 % below in mid tones, up to 16 % over for the dimmest; stops growing below segments 1/16 width long): channels keep 92 to 102 % of their old light | `RIBBON.hairlinePx`, `RIBBON.minSpan`, `lengthShare`, `overlapGain`, `overlapTone` |
-| Flash kinds: seven procedural looks, cloud-to-ground 30 % of seeds (negative multi-stroke 19 %, single-stroke 7 %, positive 3 %, bolt from the blue 1 %; observed band 15 to 40 %), cloud-to-air 3 %, crawlers for flashes observed ≥ 600 ms or ≥ 1,500 km², trunk-and-fan for the rest; leaders at 1 × 10^5 m/s (cloud-to-ground), 2 × 10^5 (in-cloud trunk), 1.5 × 10^5 (bolt from the blue), fans 8 × 10^4, crawlers 1 × 10^5, pace 0.75 to 1.35 per flash; leader time clamped to 50 to 150 ms (bolt from the blue 150 to 250 ms over its whole path, in-cloud trunk 10 to 20 ms), fans within 80 % of the flicker | Procedural, not a classification (ADR 0033); until #402 the cloud-to-ground kinds share the ground timing and the in-cloud kinds the in-cloud one | `flashKind`, `KIND`, `leaderSeconds`, `spreadSeconds` |
-| Channel heights (cloud assumed from 7 to 11.5 km; fans 8.5 to 11.5 km, trunks from 6-8 to 9-11 km, crawlers 6 to 8 km, cloud-to-ground channels from 6-11 km to the ground, cloud-to-air leaders up to 12.5 km) | Assumed; cloud-to-ground heights exaggerated 1.5× about the ground (`cgHeightScale`, ADR 0033), their stem kept under 11 km (`maxOriginKm`), so negative channels are drawn from 9 to 11 km: at 1.0× a drop is a 10 to 30 px stub at the oblique 45° pose; in-cloud kinds 1.0×; where the clouds are in relief the part above 7 km is compressed under the drawn top (to at least 30 %, ADR 0028, 0031) while a drop under it keeps its height, all lowered only under a top below 8.85 km | `SKELETON`, `reliefLift`, `ribbon.glsl.ts` |
-| Channel light through the cloud: a channel under the cloud keeps at least 30 % of its light through any cloud; in-cloud trunks are a crisp trace (at most 2 core widths, at least 30 %, with a halo 8 core widths wide); fans, crawlers and cloud-to-ground stems, whatever their height, keep the depth veil, a segment shorter on screen than its spread width keeping only its share of it (`max(length, core width) / spread width`, so overlapping ends do not add up to a saturated tube) | Styled (physics: 0 %, from orbit a channel shows only in clear air) | `VEIL.trace`, `clearAirLight`, `cloudVeil`, `veilOverlap` |
-| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all at 1×; bands 30-100 / 12-30 / 5-12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share (edge 1.1), the share smoothed over 0.5 s and set on each frame through a speed change; the rest keep a point from afar (farness 0.7-1, about 1.3-3 km per px) and half a sprite (0.5, eased over 0.25 s) where no cloud light shows, both for the 500 newest only | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, [flash profile](flash-profile.md#overlaps-in-a-storm-view) |
-| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where the cloud light does not show: `low` tier, clouds hidden or not loaded), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `ZOOM.blendFromKmPerPx`, `nearFloor`, `maxBlendShare`, `Lightning.cloudLit`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
+| Flash kind: seven looks | Procedural, seeded, not a classification: cloud-to-ground 30 % of seeds (negative multi-stroke 19 %, single-stroke 7 %, positive 3 %, bolt from the blue 1 %; observed band 15 to 40 %), cloud-to-air 3 %, crawlers for the flashes observed ≥ 600 ms or ≥ 1,500 km², trunk and fan for the rest; drawn once per flash on the CPU with its leader and spread times | `flashKind`, `KIND_SHARES`, `CRAWLER`, `flashLook` |
+| Strokes and pulses, flicker up to 2 s | Procedural, seeded by kind, in wall clock time within the observed duration (clamped to 60 ms to 2 s): one stroke for a quarter of negative and 81 % of positive cloud-to-ground flashes, otherwise 2 to 12, 10 to 400 ms apart (57 ms in geometric mean; 94 ms for positive flashes), spread up to 2.3 times in flashes over 0.9 s; continuing current 20 to 30 % for 40 to 300 ms in 15 to 75 % by kind; single-stroke in-cloud activity 12 to 18 %; in-cloud 0, 1 or 2 to 3 bright pulses (25 / 45 / 30 %), a 35 to 50 % swell without one, 12.5 ms stutters in the last half; crawlers steady at 25 to 35 %, never flickering; about half of all flashes do not flicker | `flashProfile`, `flashStroke`, `PROFILE` |
+| Leaders, return stroke, darts | Styled timing of procedural paths: cloud-to-ground leaders at 1 × 10^5 m/s (1.5 × 10^5 for a bolt from the blue), the slow bound of the observed speeds, at 12 % of the stroke, 50 to 150 ms (150 to 250 ms for a bolt; real 20 to 40 ms) and at most half the flicker; in-cloud trunks at 2 × 10^5 m/s (10 to 20 ms), fans at 8 × 10^4 m/s within 80 % of the flicker, crawlers at 1 × 10^5 m/s with a lit tip; pace 0.75 to 1.35 per flash; the first stroke fills the channel from the ground up over 33 ms, two frames (real: microseconds); darts down the trunk in 40 ms at 30 %; branches die first (60 ms) | `leaderSeconds`, `spreadSeconds`, `flashTiming`, `spread`, `ribbon.glsl.ts` |
+| Light drift within the footprint | Procedural, seeded: the light of in-cloud flashes drifts within 0.6 `r` of the observed position along the heading of their first drawn leader, and averages back to it | `cloudDrift`, `CHANNEL.drift` |
+| Channel path, cloud-to-ground | Procedural, seeded, within the footprint: origin 6 to 8 km over 0.5 `r`; negative: a feed of 0.3 to 0.8 `r` along the heading, a drop to a strike 2 to 8 km sideways inside `r`, within 30° of the vertical for 80 % (30 to 45° otherwise), 0.6 of the path roughness (about 15° per segment), 3 to 12 branches (1 to 3 for single-stroke) leaving it 1.5 to 5 km up on every side at 20 to 40° (70 %) or 45 to 75°, ending 0.3 to 2 km above the ground, a second ground contact in 40 % of multi-stroke flashes 1 to 4 km from the first foot; positive: origin 9 to 11 km, run 0.8 to 2.2 `r`, drop at 30 to 45°, strike 0.6 to 1 `r` from the position; bolt from the blue: a trunk from 7 to 8.4 km to 9 to 10 km, run 0.5 to 1 `r`, exit at 8 to 9 km, descent at 45 to 60° to a strike 5 to 12 km away inside `max(r, 8 km)` | `channelSkeleton`, `SKELETON`, `KIND` |
+| Channel path, in-cloud | Procedural, seeded, within the footprint: trunk and fan: an oblique trunk climbing 2 to 4 km at 15 to 40° from the vertical, then 1 to 3 fans within `min(2.2 r, 8 × 10^4 m/s × 0.8 × flicker)` (filament 20 %, branching 30 %, network 50 %); crawlers 1.76 to 2.2 `r` both ways; cloud-to-air: the first fan leaves the cloud over its outer 30 to 60 %, 1 to 3 km beyond the fan or up to 1 km over the top; deep paths in segments of at least 1.5 km | `channelSkeleton`, `SKELETON`, `KIND` |
+| Channel heights | Assumed: cloud from 7 to 11.5 km, fans 8.5 to 11.5 km, trunks from 6-8 to 9-11 km, crawlers 6 to 8 km. Styled for cloud-to-ground channels: drawn 1.5 times as tall about the ground, their stem kept under 11 km (so negative ones run from 9 to 11 km down to the ground); in-cloud heights 1.0×. Where the clouds are in relief the part above 7 km is compressed under the drawn top (to at least 30 %, ADR 0028, 0031) while a drop under it keeps its height | `SKELETON.cgHeightScale`, `SKELETON.maxOriginKm`, `reliefLift` |
+| Channel light through the cloud | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering: in the cloud a channel spreads over 0.5 km under the top to 4 km at the base, times the opacity, losing up to half its light, each short segment keeping its share of the spread (`max(length, core width) / spread width`). Styled: under the cloud a channel keeps at least 30 % of its light through any cloud; in-cloud trunks are a crisp trace, at most 2 core widths and at least 30 % (physics: 0 %, from orbit a channel shows only in clear air); over sunlit cloud channels keep 30 % (physics: none) | `veil.ts`: `VEIL`, `cloudVeil`, `veilOverlap`, `clearAirLight`; `CHANNEL.dayLevel` |
+| Channel cores and halo on screen | Styled: joints cross-faded in screen values, each segment's cross-fade adding up to its length and given back the light its overlaps used to add (channels keep 92 to 102 % of their former light), no core thinner than 1.25 device px, so threads never bead; a halo on clear-air main channels and trunk traces, 8 core widths at 30 % of the core, cool only | `RIBBON`, `lengthShare`, `overlapGain`, `overlapTone`, `vTint` |
+| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration, uncapped; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all of them at 1× and on quiet storms; bands 30 to 100, 12 to 30, 5 to 12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share, the share following the load over 0.5 s and set at once on a seek or a speed change; the others keep a point from afar (farness 0.7 to 1) and half a sprite where no cloud light shows, both among the 500 newest | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, `lightning.stats` |
+| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where no cloud light shows), 35 % of that over sunlit cloud (physics: none), easing back from 0.3 to 1 km per CSS px to the far view's 40 % to full ramp; in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; while a channel of the sample shows, it steps back to 40 % (10 % with a halo, and only as much as the cloud lets a ground channel through) or 25 % in cloud; bloom radius 0.4 at the floor | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `nearFloor`, `maxBlendShare`, `CHANNEL.glowDayLevel`, `CHANNEL.glowDip`, `BLOOM.nearRadius` |
+| Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10), the whole of it during the flash's pulses and 0.65 of it between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor) at `0.35 + 0.65 w` of its level; shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise, 1.8 times the flat layer's level), read sharpened by up to 1.25 near the floor, 35 % of it over sunlit cloud (physics: none); in storm views overlaps keep the brightest, never add up | `CLOUD_LIGHT`, `LIGHT_WINDOW`, `cloudPatch`, `flashBand`, `glowDepths` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
 | Cloud-top height | Observed IR matched to the GFS temperature profile (ADR 0028); 2 km, about 1 km median difference with GOES ACHA on opaque tops, thin cirrus placed too low | Height tiles, `volumeField` |
@@ -447,8 +456,6 @@ the south pole).
 | Cloud detail: swell, billows on rising or rough tops, streaks on thin and fraying edges, visible dips as depressions | Styled (ADR 0031), chosen from the observed neighbourhood: cover over 4 km blocks within 0.05 of the observed on average and 0.1 per block, saturated tops within 1 km | `styleFragmentShader`, checked by `cloudVolume.styleCheck()` |
 | Translucency, glow of flashes inside | Styled (ADR 0031): drawn as observed up to 0.5, eased to 0.95 at full cover; flashes under them veiled as if eased to 0.8, so they show through; brightness follows the real depth, sunlit tops kept below white by a highlight shoulder; the glow rises and fades in real time, outside the history | `capOpacity`, `veilOpacity`, `scatterGain`, `compositeFragmentShader` |
 | Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; under a high sun, large dense decks lit by the sun lowered to 40° with their observed 6 km shape drawn 6× steeper (styled); seen from afar, dense clouds shaded by their observed broad shape at the scale of the screen, slopes up to 6 to 12× steeper (styled), and by the shadows of taller clouds; the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `deckFragmentShader`, `marchFragmentShader`, `reliefFieldGlsl`, `cloudShadowAt`, `atmosphere.glsl.ts` |
-| Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering | `veil.ts` |
-| Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift (heading random until #401), drawn per flash (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10 of its mean; round where the splat floor sets the size), the whole of it during the flash's pulses, 0.65 of it where its light has drifted between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor); shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise), read sharpened by up to 1.25 near the floor, into the cloud's headroom, 35 % of it over sunlit cloud (physics: 0); in storm views overlaps keep the brightest, never add | `CLOUD_LIGHT`, `light-map.glsl.ts`, `cloudPatch`, `flashBand`, `glowDepths` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Clouds in relief
@@ -537,18 +544,27 @@ clouds, missing frames, absent positions, scrubbing) and the round trip test in
 
 ## Current renderer
 
-Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay:
+Audit of `main` at b1b35cf with the lightning look rework (#399 to #407, validated in #408):
 
 - Camera: orbit controls down to 0.2 Earth radius (1,274 km), then the surface camera
-  (`surface.ts`): 400 km floor (#126; 15 km before), tilt up to 80°. Zooming in stops at the floor
-  without changing the tilt; flights are lifted to the floor where their path would dip under it. Clip planes follow the closest
-  shell (`orbit.ts`).
-- Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and high).
-- Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, lit from inside by a
-  2048 × 1024 flash light map (1024 × 512 on `medium`).
-- Lightning: one instanced glow per flash in the display window (up to the 262,144 flash ring),
-  channels for flashes still flickering (at most 2,048), halos up to 512 channels, fading out from
-  1,500 to 6,000 km. Exposure 1.6 and bloom (strength 0.9) are constant at every altitude.
+  (`surface.ts`): 400 km floor (#126), free tilt from straight down to 90° (ADR 0032). Zooming in
+  stops at the floor without changing the tilt; flights are lifted to the floor where their path
+  would dip under it. Storms are framed at 45° (#406). Clip planes follow the closest shell
+  (`orbit.ts`).
+- Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and
+  high), with surface detail tiles near the floor (ADR 0022).
+- Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, in relief near the floor
+  (ADR 0028, 0031), lit from inside by a flash light map of 2048 × 1024 texels on `high`, 1024 × 512 on
+  `medium` and on phones, none on `low`.
+- Lightning: every flash in the display window (up to the 262,144 flash ring) keeps an instanced
+  glow and lights the cloud; in a storm view at replay speed, a seeded sample of about 50 / 20 / 8
+  flashes at once (60× / 600× / 3600×) is drawn in full ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
+  Each flash has one of seven kinds, drawn once on the CPU with its leader and spread times
+  (`flashLook`). Channels are CPU skeletons of up to 256 segments for the 384 newest flickering
+  flashes of the sample, at most 24 built per frame; a halo follows clear-air main channels and
+  trunk traces, fading out above 256 channels and from 1,500 to 6,000 km. Near the floor the glow
+  drops to 15 % and storm views keep the brightest overlapping glow below 1 km per CSS px. Exposure
+  1.6; bloom strength 0.9, tightening near the floor ([Lightning scale](#lightning-scale)).
 - Quality: `low` (2k, DPR 1, no cloud light, no bloom), `medium`, `high` (DPR 2, bloom); one step
   down after 5 s under 30 fps.
 
@@ -567,6 +583,9 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
    observed radius; the 4 times compensation is for distant views only.
 6. **Smooth exposure.** Exposure depends on camera height only, never on scene content, changes by
    at most one stop (2×) from `globe` to `iss`, and keeps brighter flashes brighter at every pose.
+   The share of flashes drawn in full at replay speed is not an exposure but a named, deterministic
+   sampling: it picks which flashes show their channel, never how bright the scene is drawn
+   ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
 7. **Heights.** In-cloud channels stay between 6 and 11.5 km (fans 8.5 to 11.5, trunks from 6-8 to
    9-11, crawlers 6 to 8), cloud-to-ground channels run from 6 to 11 km down to the ground, drawn 1.5
    times as tall with their stem kept under 11 km (`cgHeightScale`, so from about 9 to 11 km), and
@@ -692,6 +711,67 @@ Findings:
    buttons now let gestures through to the globe; the clock, layers and timeline blocks remain (#335).
 6. A real phone is not measured yet: the frame interval p95 ≤ 33 ms on a phone needs a device.
 
+## Lightning look validation
+
+Measured 2026-10-31 on the nine tickets of the lightning look rework merged together (#399 to #407,
+#408), against production data through a local dev server, with `main` (b1b35cf) measured the same
+evening on the same Mac. That Mac also ran another project, so frame costs are noisy: they are compared
+run against run, best of two interleaved runs.
+
+**Captures.** The matrix of #398 (C0 to C21 and its variants) with `capture.mjs --frames 4 --gap 700
+--settle 12 --stats` at 1,600 × 1,000 on `high`, the size of the baseline report so the metrics
+compare; the leader and reduced-motion frames with `--step 50`. One frame per capture is in
+[`immersive/lightning-look/matrix/`](immersive/lightning-look/matrix/) with every frame's metrics and
+`lightning.stats` in `measurements.json`; the before and after sheets against `main` are in
+[`immersive/lightning-look/408/`](immersive/lightning-look/408/); the baseline report of the rework and
+its research notes are in [`analysis/lightning-look/`](analysis/lightning-look/).
+
+| Target of #398 | Baseline report | `main`, same evening | Target | Measured |
+|---|---|---|---|---|
+| On-screen channel length steeper than 60°, tilt 45° / 20° (2,000 skeletons) | 4 % / 0.4 % | | ≥ 20 % / ≥ 8 % | 9.7 % / 1.2 % (cloud-to-ground 31.5 % / 5.0 %): not met |
+| Cloud-to-ground channels reaching down in C2 (noon, 60×, oblique) | 0 | | ≥ 6 per frame | 6 to 10 short steep drops per frame, 10 to 30 px, faint over the sunlit deck |
+| Leader visible over consecutive frames, C16L | never | | ≥ 3 frames | 4 frames 50 ms apart, the stroke on the fifth |
+| Flashes that do not flicker | about 0 | | 45 to 55 % | 52 % (`profile.test.ts`) |
+| `stats.drawn`, C2 / C5 / C8 | about 45 / 30 to 40 stubs / 0 | | 50 ± 15 / 20 ± 6 / 8 ± 3 | 46 to 61 / 13 to 26 / 5 to 11 (bands 30 to 100 / 12 to 30 / 5 to 12) |
+| Near white at night, 600× and 3600× (C13, C18, C19, C21) | 1.7 to 36 % | 0.9 to 13.4 % | ≤ 2 % | 0 to 0.01 % |
+| Near white at night, 60× (C17, C20) | 0.5 to 1.7 % | 0.55 to 1.79 % | ≤ 1 % | 0 to 0.01 % |
+| Near white by day at `iss`, C3 / C6 / C9 | 1.6 to 2.6 / 5 to 13 / 2.5 to 31 % | 2.0 to 2.7 / 5.7 to 7.9 / 0.1 to 30.6 % | ≤ 1.5 / ≤ 2 / ≤ 2 % | 0.02 to 0.05 / 0 to 0.02 / 0 % |
+| Lit radius of a lone flash, C15 | about 2 `r` | 2 `r` | 1.3 `r` ± 20 % | 1.09 `r` on its pulse, ending at 1.24 `r` (#404; the light map is unchanged by the merge) |
+| Separate lit cells along the line, C7 (noon) and C11 (15:30) | kept | kept (C7: a line of stubs and glows) | kept | C11 kept; C7 not met: at noon, 600× over a sunlit deck shows 2 or 3 marks |
+| 600× and 3600× told apart, C5 against C8 | | | by channels and front motion | 13 to 26 against 5 to 11 channels; the front moves 27 min against 2 h 40 min of scene over the four frames |
+| Replay start, C0 | 03:30:02 | 03:30:02 | 04:00:06 | 04:00:06 |
+
+<!-- BUDGETS -->
+
+What the pictures show:
+
+- **The ball is gone.** At night the cells read as soft lit cloud with a few channels at every speed;
+  no pixel reaches white where `main` whitens 1 to 13 % of the frame at speed. 600× is the breathing
+  storm, cells separate along the line (C21); 3600× the travelling field with rare strokes on it (C19).
+- **Speed changes the subject:** about 50, 20 and 8 flashes drawn in full at once; the same heroes on
+  two loads of a share URL (C2, C5 and C8 paused at 12:00: the same hashed list of hero flashes).
+- **Strokes unfold:** a leader comes down dim for four frames, the column whips white, branches die
+  first (`c16l-bolt.jpg`); reduced motion shows whole channels with one soft fade (C16R).
+- **Still mostly horizontal.** In-cloud fans, horizontal by nature and 55 to 60 % of the flashes, are
+  most of the drawn length; cloud-to-ground drops are steep (31.5 % steeper than 60° at 45°) but short
+  next to the fans. Reaching the targets would take shorter fans, more cloud-to-ground flashes or a
+  higher `cgHeightScale` than its bound of 1.5.
+- **Noon.** Over a sunlit deck, glows keep 35 % and channels 30 % of their light, the cloud light 35 %
+  of what the deck's headroom leaves, and most flashes now glow between few pulses: at noon the storm
+  is a few small marks at 60× and nearly nothing at 600× and 3600× (C5 to C9), where `main` showed the
+  line of cells (`noon-main-vs-408.jpg`). That is the honest picture #398 accepted, judged at 15:30
+  (C10, C11) and at night; raising the named day levels is the maintainer's call.
+- **The cloud light at speed** reads as overlapping elongated patches (C18, C19, C21): the shape #404
+  gives each flash. No value within the bands changes that (`tuning-variants.jpg`).
+- **Phones** (`--profile mobile`, tier `medium`): near white 0 % at night and at most 1.3 % by day
+  (`phone.jpg`). **`?quality=low`**: heroes with their sprite and every other flash as a half sprite,
+  nothing removed (`quality-low.jpg`).
+
+Tuning: none. Within their bands (sharpen 1 to 1.5, cloud light level 0.3 to 0.4, volume boost 1.5 to
+2.5, `VEIL.trace` 0.2 to 0.35), the variants only scaled the lit share (sharpen 1 doubled it at 600×,
+1.5 halved it) without changing the look, and `cgHeightScale` is already at its bound; every value stays
+at its design value ([ADR 0033](adr/0033-lightning-looks-and-density.md)).
+
 ## Benchmark
 
 `web/scripts/bench.mjs` opens each reference storm on the deployed site with Playwright, flies
@@ -718,8 +798,23 @@ it is read: `alive`, the detections within their flicker or fade; `drawn`, those
 sample (all of them when `share` is 1); `load`, the estimate of `alive` over the last 0.4 s of wall
 clock time the share is sized by; `share`, the applied share of the lots, and `target`, the flashes
 it aims at (Infinity at 1×); `channels`, the flashes holding a channel slot, which includes those
-fading out at the share's edge and merges a flash seen by two instruments. A capture tool reads it
-once per frame to check the targets.
+fading out at the share's edge and merges a flash seen by two instruments.
+
+`web/scripts/capture.mjs` captures a storm view while it plays, for looks rather than cost: a few
+frames of one storm, time, speed and view, with the share of near white (every channel over 235),
+lit (luminance over 90) and lit 8 × 8 blocks over the central 84 % × 76 % of the frame, and with
+`--stats`, `lightning.stats` on each frame. `--no-clouds` hides the cloud layer so day frames measure
+the lightning alone, `--reduced-motion` emulates `prefers-reduced-motion`, `--quality` sets the tier,
+`--profile mobile` emulates the phone, and `--step 50` freezes the page's wall clock and moves it
+50 ms per frame, so leader frames are exactly that far apart.
+
+```sh
+node web/scripts/capture.mjs --base http://localhost:4321 --storm 2026-10-27-basse-kotto \
+  --time 2026-10-27T12:00:00Z --speed 600 --view 4.3,19.9,500,45 --stats --out captures/ --prefix C5
+```
+
+The capture matrix of the lightning look (C0 to C21, [Lightning look validation](#lightning-look-validation))
+runs it against a dev server on production data.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the
