@@ -128,15 +128,15 @@ each other, they are one flash: both keep their glow, only the newest gets a cha
 **Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud. Their segments
 overlap half a width at each joint and cross-fade there in screen values, after the sRGB conversion, so
 the two at a joint add up to one (cross-faded in light, each half was converted on its own and the joint
-came out about 1.4 times as bright: a bead). A segment shorter than its width (a veiled channel, a
-foreshortened one, a growing tip) is drawn as a round stamp weighted by its length, so a chain of them
-makes one even thread. On screen each core keeps the light its overlapping segments used to add, evenly
-along it: `overlapGain`, the integral of the square root of a segment's cross-fade over the integral of
-the cross-fade (the sRGB conversion taken as a square root), 1 + 1 / (3 s) for a segment s widths long
-(unforeshortened), up to 3π/4 for the shortest; styled, so channels keep the brightness they had when
-they beaded. No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner
-one breaks into dashes on the pixel grid, so it widens to that floor and gives up light in proportion.
-While a channel shows, the
+came out about 1.4 times as bright: a bead). Each segment's cross-fade is scaled to add up to its length
+(`lengthShare`), so a chain of segments of uneven lengths, shorter than their width in a veiled or
+foreshortened channel, makes one even thread. On screen each core keeps the light its overlapping
+segments used to add, evenly along it: `overlapGain`, the integral of the square root of a segment's
+cross-fade over the integral of the cross-fade (the sRGB conversion taken as a square root),
+1 + 1 / (3 s) for a segment s widths long (unforeshortened), up to 3π/4 for the shortest; styled, so
+channels keep the brightness they had when they beaded. No core is drawn thinner than 1.25 device px
+(`RIBBON.hairlinePx`): a thinner one breaks into dashes on the pixel grid, so it widens to that floor
+and gives up light in proportion. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the

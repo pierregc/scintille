@@ -32,7 +32,7 @@ uniform vec3 sunDirection;
 
 varying vec2 vLocal;
 varying float vLength;
-varying float vGain;
+varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
 
@@ -144,16 +144,15 @@ void main() {
 	t = dot(t, t) > 1e-8 ? normalize(t) : vec2(1.0, 0.0);
 	vec4 c = corner.x > 0.5 ? cb : ca;
 	float w = width * (halo > 0.5 ? 8.0 : 1.0);
-	vLength = length(sb - sa) / w;
-	// Cores keep the light their overlapping segments used to add on screen, by the segment's unforeshortened span so
-	// that it stays even along the channel.
-	vGain = overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w);
-	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, and a core
-	// segment shorter than its width is drawn as a round stamp, so a chain of them makes one smooth thread.
-	float cap = halo > 0.5 ? 1.0 : max(0.5, 1.0 - 0.5 * vLength);
+	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, so they never bead.
+	float cap = halo > 0.5 ? 1.0 : 0.5;
 	float along = corner.x > 0.5 ? cap : -cap;
 	c.xy += (vec2(-t.y, t.x) * corner.y + t * along) * w / viewport * c.w;
 	gl_Position = c;
+	vLength = length(sb - sa) / w;
+	// Each segment's cross-fade adds up to its length; on screen, the core keeps the light its overlapping segments
+	// used to add, by the unforeshortened span so that it stays even along the channel.
+	vShare = vec2(lengthShare(vLength), overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w));
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
 	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
@@ -169,10 +168,9 @@ uniform float halo;
 
 varying vec2 vLocal;
 varying float vLength;
-varying float vGain;
+varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
-${ribbonGlsl}
 void main() {
 	float light;
 	float share = 1.0;
@@ -183,10 +181,10 @@ void main() {
 	} else {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
 		light = exp(-y2 * 3.0) * (1.0 - y2);
-		// The share splits the screen value, after the conversion below, so the quads at a joint add up to one; the
-		// overlap light is for the screen, not the bloom's linear buffer.
-		share = segmentWeight(vLocal.x, vLocal.y, vLength);
-		if (linearToOutputTexel(vec4(0.25)).r > 0.4) share *= vGain;
+		// The cross-fade splits the screen value, after the conversion below, so the two quads at a joint add up to one
+		// instead of beading; the overlap light is for the screen, not the bloom's linear buffer.
+		share = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0) * vShare.x;
+		if (linearToOutputTexel(vec4(0.25)).r > 0.4) share *= vShare.y;
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
