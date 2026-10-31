@@ -84,11 +84,14 @@ lightning look rework, #398):
 - The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
   by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a
   seek, a speed change or a new storm view.
-- Outside the sample, a flash keeps its sprite from afar only, rising from nothing at about 1 km
-  per px to its full point at 3 km per px (the far half of the [farness](immersive-view.md#lightning-scale)),
-  and half a sprite when the cloud light has no surface to show it (clouds hidden, no cloud frame,
-  `low` tier), so every flash stays a point ([visual rule 1](immersive-view.md#visual-rules)) and the
-  storm framing, at 0.5 to 0.7 km per px, shows the cloud light and the sample alone.
+- Outside the sample, a flash keeps its sprite from afar only, rising from nothing at about 1.3 km
+  per px to its full point at 3 km per px ([farness](immersive-view.md#lightning-scale) 0.7 to 1),
+  and half a sprite on the frames without a cloud light (clouds hidden or without a frame, a tier
+  without the light map), so every flash stays a point from afar
+  ([visual rule 1](immersive-view.md#visual-rules)) while the storm views up to the whole storm
+  framing (1.1 to 1.4 km per px on the reference storms) show the cloud light and the sample alone;
+  a ramp over farness 0.5 to 1 let the points of thousands of flashes at 3600× merge into one white
+  disc over that framing.
 
 The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
 of wall clock time) binds only while every flash is drawn, in practice at 1×; the cloud light never

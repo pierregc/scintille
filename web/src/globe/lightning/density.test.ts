@@ -69,8 +69,8 @@ describe('heroWeight', () => {
 describe('pointWeight', () => {
 	it('keeps a point from afar only, and half a sprite without cloud light', () => {
 		expect(pointWeight(0, 0)).toBe(0);
-		expect(pointWeight(0.5, 0)).toBe(0);
-		expect(pointWeight(0.75, 0)).toBe(0.5);
+		expect(pointWeight(0.7, 0)).toBe(0);
+		expect(pointWeight(0.85, 0)).toBeCloseTo(0.5, 9);
 		expect(pointWeight(1, 0)).toBe(1);
 		expect(pointWeight(0, 1)).toBe(DENSITY.weakGlow);
 		expect(pointWeight(1, 1)).toBe(1);

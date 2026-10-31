@@ -23,8 +23,8 @@ export const DENSITY = {
 	edge: 1.1,
 	/** Sprite kept by the flashes outside the sample when the cloud light has no surface to show them. */
 	weakGlow: 0.5,
-	/** Outside the sample a flash keeps its sprite from afar only, rising over this range of the farness (about 1 to 3 km per px), where flashes are points. */
-	pointFarness: [0.5, 1],
+	/** Outside the sample a flash keeps its sprite from afar only, rising over this range of the farness (about 1.3 to 3 km per px, past the whole storm framing), where flashes are points. */
+	pointFarness: [0.7, 1],
 	/** Newest flashes the cloud light keeps in a storm view; Infinity keeps every flash (the bench needed no ceiling). */
 	lightMapCeiling: Infinity,
 } as const;
