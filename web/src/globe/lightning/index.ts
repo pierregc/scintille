@@ -121,7 +121,7 @@ const HALO_FADE = 0.25;
 /** Beyond this zoom, km per CSS px, even the largest flash has no readable channel. */
 const CHANNEL_VIEW_KM_PER_PX = (CHANNEL.lengthScale * 25) / 6;
 
-/** A storm view drawing every flash shows at most this many at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
+/** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
 export const STORM_VIEW_FLASHES = 500;
 const BUDGET_FADE = 0.15;
 
@@ -199,10 +199,10 @@ export function createLightning(
 			viewportHeight: { value: 1 },
 			viewScale: scale,
 			nearGlowLevel: { value: ZOOM.nearGlowLevel * (phone ? PHONE.nearLevel : 1) },
-			heroShare: sample,
-			lightMapOff,
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
+			heroShare: sample,
+			lightMapOff,
 			sunDirection: { value: new Vector3(1, 0, 0) },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
@@ -290,14 +290,14 @@ export function createLightning(
 		instances.lookbackMs = ms;
 		material.uniforms.duration.value = ms / 1000;
 	};
-	let lastWall = Number.NaN;
-	let viewKmPerPx = 0;
 	let share = 1;
 	let load = 0;
 	let target = Infinity;
 	let sampled = false;
 	let lastTime = Number.NaN;
 	let lastDelays = NO_DELAY;
+	let lastWall = Number.NaN;
+	let viewKmPerPx = 0;
 
 	return {
 		mesh,

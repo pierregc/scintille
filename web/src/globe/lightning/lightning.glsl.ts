@@ -32,7 +32,6 @@ ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
 ${channelGlsl}
-${densityGlsl}
 ${cloudDriftGlsl}
 ${veilGlsl}
 #ifdef CLOUDS
@@ -41,6 +40,7 @@ ${cloudOpacityGlsl}
 #ifdef VOLUME
 ${volumeFieldGlsl}
 #endif
+${densityGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
@@ -59,14 +59,14 @@ void main() {
 	float distance = length(cameraPosition - center);
 	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
 	float viewKmPerPx = kmPerPx * viewScale;
-	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
-	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
 	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, which stay points from afar.
 	brightness *= max(heroWeight(heroLot(seed, flashShape.x), heroShare), pointWeight(farness(viewKmPerPx), lightMapOff));
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
 	}
+	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
+	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
