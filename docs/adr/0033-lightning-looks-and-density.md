@@ -97,8 +97,14 @@ motion keeps the single soft fade.
   `[0.19, 0.26, 0.29, 0.30]`, `CRAWLER` (600 ms, 1,500 km²) and `CLOUD_TO_AIR_SHARE` 0.03; the `KIND`
   table of bounds per kind; `leaderSeconds(kind, radiusKm, seed)` and
   `spreadSeconds(kind, radiusKm, flicker, seed)`; GLSL twins of each, the shaders passing the radius.
-- `profile.ts`: `flashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind)` dispatching
-  to `groundProfile` and `cloudProfile`; `skeleton.ts`:
+- `channel.ts` (#402): `flashTiming(kind, radiusKm, flicker, seed)` → `{ leader, spread }`, the leader
+  within half the flicker, and its GLSL twin.
+- `profile.ts`: `flashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind, timing,
+  activity?)` dispatching to `groundProfile` and `cloudProfile`; its GLSL twin
+  `timedFlashProfile(…, kind, timing, activity)`, and for the shaders `flashProfile(…, kind, radiusKm)`,
+  which takes the timing from the radius; `flashStroke(wallAge, flicker, seed, kind, leader)` → the
+  stroke a cloud-to-ground flash is in (−1 during the leader), its age and the time to the next, TS
+  and GLSL; `skeleton.ts`:
   `channelSkeleton(seed, radiusKm, kind, durationMs)`.
 - Channel segments: `level` 4 marks a second ground contact path, lit from a later stroke; the cloud
   flag is tri-state: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in
