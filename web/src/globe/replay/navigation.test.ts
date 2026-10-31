@@ -4,7 +4,7 @@ import type { StormDetail } from '../../contract/types';
 import { SceneClock } from '../clock';
 import { StormReplay } from './index';
 import { ReplayNavigation, type NavigationHost } from './navigation';
-import { REPLAY_FRAME } from './framing';
+import { frameStorm, REPLAY_FRAME } from './framing';
 
 function setup(search: string, initialView?: NavigationHost['initialView']) {
 	let url = new URL(`https://scintille.app/${search}`);
@@ -113,17 +113,28 @@ describe('replay browser navigation', () => {
 	});
 
 	it('restores a verified final-frame checkpoint only on the first load and keeps it out of the URL', async () => {
-		const view = { lat: 28.5, lon: -81.3, altitude: 432.4986, tilt: REPLAY_FRAME.tilt };
+		const { lat, lon, altitude, tilt } = frameStorm(fixture.bounds, 35, 1);
+		const view = { lat, lon, altitude, tilt };
 		const checkpoint = vi.fn(() => view);
 		const x = setup(`?storm=${fixture.storm.slug}`, checkpoint);
 		try {
 			await x.navigation.restore();
 			expect(checkpoint).toHaveBeenCalledWith(fixture.storm.slug);
-			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ ...view, lon: expect.closeTo(-81.3, 5), altitude: expect.closeTo(432.4986, 3), duration: 0 }));
+			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ ...view, duration: 0 }));
 			expect(x.url().searchParams.has('view')).toBe(false);
 			await x.navigation.restore();
 			expect(checkpoint).toHaveBeenCalledOnce();
 			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 2800 }));
+		} finally { x.dispose(); }
+	});
+
+	it('flies to the current frame when the checkpoint was saved at the previous 20° frame', async () => {
+		const frame = frameStorm(fixture.bounds, 35, 1);
+		const x = setup(`?storm=${fixture.storm.slug}`, () => ({ lat: frame.lat, lon: frame.lon, altitude: 432.4986, tilt: 20 }));
+		try {
+			await x.navigation.restore();
+			expect(x.controls.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ altitude: frame.altitude, tilt: REPLAY_FRAME.tilt, duration: REPLAY_FRAME.duration }));
+			expect(x.url().searchParams.has('view')).toBe(false);
 		} finally { x.dispose(); }
 	});
 

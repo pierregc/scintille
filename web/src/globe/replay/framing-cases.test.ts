@@ -4,27 +4,47 @@ import { atmosphereParameters } from '../atmosphere';
 import { cloudShellRadius } from '../clouds';
 import { createGlobeControls } from '../controls';
 import { CLOUD_TOP_KM } from '../lightning';
-import { CAMERA_FLOOR_KM, kmToWorld, worldToKm } from '../flight';
+import { CAMERA_FLOOR_KM, kmToWorld, poseAt, worldToKm } from '../flight';
 import { clipPlanes } from '../orbit';
 import { latLonToVector } from '../sun';
 import { framingFixtures, scatterDegrees, TRACK_STEP_MS, trackAt } from '../../../scripts/framing-fixtures';
 import { stormSource } from '../archive/storm';
 import { parseCatalogPage } from './catalog';
-import { frameStorm, GRAZE, grazeStorm, REPLAY_FRAME } from './framing';
+import { frameStorm, GRAZE, grazeStorm, REPLAY_FRAME, stormCap } from './framing';
 import cases from './framing-cases.json';
 import { trackGeometry } from './track';
 import { decodeChunk, CHUNK_SCALES } from '../live/decode';
 import { gunzipSync } from 'node:zlib';
 
-it('keeps five explicitly synthetic reproducible cases with desktop and portrait poses', () => {
+it('keeps five explicitly synthetic reproducible cases framed at the 45° tilt, above its floor range, inside the safe area', () => {
 	expect(cases).toHaveLength(5);
+	expect(REPLAY_FRAME.tilt).toBe(45);
 	for (const item of cases) {
+		const altitudes = new Map<number, number>();
 		for (const aspect of [16 / 9, 9 / 16]) {
 			const view = frameStorm(item.bounds, 35, aspect);
 			expect(view.duration).toBeLessThan(4000);
-			expect(view.tilt).toBeLessThanOrEqual(REPLAY_FRAME.tilt);
-			expect(view.altitude).toBeGreaterThanOrEqual(400);
+			expect(view.tilt).toBe(REPLAY_FRAME.tilt);
+			expect(view.altitude).toBeGreaterThanOrEqual(550);
+			altitudes.set(aspect, view.altitude);
+			const camera = new PerspectiveCamera(35, aspect, 1e-5, 1000);
+			const pose = poseAt(view.lat, view.lon, kmToWorld(view.altitude, 1), view.tilt, 1);
+			camera.position.copy(pose.position);
+			camera.quaternion.copy(pose.quaternion);
+			camera.updateMatrixWorld();
+			const cap = stormCap(item.bounds);
+			const { west, east, south, north } = item.bounds;
+			const width = east >= west ? east - west : east + 360 - west;
+			const points = [[cap.lat, cap.lon]];
+			for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) points.push([south + (north - south) * i / 10, west + width * j / 10]);
+			for (const [lat, lon] of points) {
+				const p = new Vector3(...latLonToVector(lat, lon)).project(camera);
+				expect(p.z).toBeGreaterThan(-1);
+				expect(p.z).toBeLessThan(1);
+				expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(REPLAY_FRAME.viewportFraction + 0.02);
+			}
 		}
+		expect(altitudes.get(9 / 16)).toBeLessThanOrEqual(3 * (altitudes.get(16 / 9) ?? 0));
 	}
 });
 

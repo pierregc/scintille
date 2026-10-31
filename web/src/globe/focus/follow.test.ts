@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FlyToOptions } from '../flight';
-import { ahead, GRAZE } from '../replay/framing';
+import { ahead, GRAZE, REPLAY_FRAME } from '../replay/framing';
 import { floorRange } from '../surface';
 import { dampStep, FOLLOW, followView, StormFollow } from './follow';
 
@@ -44,12 +44,12 @@ const view = () => ({ fov: 35, aspect: 16 / 9 });
 describe('follow framing', () => {
 	it('frames small footprints at the floor and backs off for large ones', () => {
 		const small = followView({ lat: -14, lon: -44, radiusKm: 20 }, 'frame', 0, 35, 16 / 9);
-		const large = followView({ lat: -14, lon: -44, radiusKm: 125 }, 'frame', 0, 35, 16 / 9);
-		const floor = floorRange(20 * RAD, 1) * 6371;
+		const large = followView({ lat: -14, lon: -44, radiusKm: 250 }, 'frame', 0, 35, 16 / 9);
+		const floor = floorRange(REPLAY_FRAME.tilt * RAD, 1) * 6371;
 		expect(small.altitude).toBeGreaterThanOrEqual(floor);
 		expect(small.altitude).toBeLessThan(floor * 1.03);
 		expect(large.altitude).toBeGreaterThan(small.altitude * 1.2);
-		expect(large).toMatchObject({ lat: -14, lon: -44, tilt: 20, leadKm: 0 });
+		expect(large).toMatchObject({ lat: -14, lon: -44, tilt: REPLAY_FRAME.tilt, leadKm: 0 });
 	});
 
 	it('keeps the horizon view at the floor, aimed ahead along the heading', () => {
