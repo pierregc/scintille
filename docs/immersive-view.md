@@ -51,7 +51,7 @@ raised by the difference ([free tilt](#free-tilt)).
 | Pose | View | Camera height | View width at target (16:9) | Purpose |
 |---|---|---|---|---|
 | `globe` | storm centre, 20,000 km, tilt 0 | 20,000 km | whole disc | Activity across the planet |
-| `regional` | M3 storm framing (`frameStorm`, tilt 20°, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
+| `regional` | M3 storm framing (`frameStorm`, tilt 45° since #406, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
 | `iss` | storm centre, range 400 km, tilt 1° | 400 km | 450 km | The floor, looking down |
 | `window` | storm centre, range 740 km, tilt 60° | 400 km | 830 km, horizon in view | The floor, looking toward the horizon |
 | `grazing` | storm centre, tilt 80° (range 1,439 km) | 400 km | 1,610 km, horizon at 44 % from the top | The most grazing orbit |
@@ -77,6 +77,45 @@ scene is not observed.
 Cost, `bench.mjs` desktop headless, 60×, afterglow 0, R1, R2, R5: frame cost p95 9.2 to 11.8 ms at the
 horizon view against 11.8 to 14.6 ms at `window` in the same run, no frame interval over 16.8 ms at p95.
 Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
+
+### Storm frame tilt
+
+The storm frame (`REPLAY_FRAME`, the `regional` pose, the `Follow` frame) tilts 45° from straight
+down since #406; it was 20°. A vertical channel projects at sin(tilt) of its length on screen, 0.34
+at 20° against 0.71 at 45°, while a horizontal one shows in full at either: the old frame flattened
+every flash by construction ("flashes are too horizontal", #398). `frameStorm` is unchanged: the
+footprint is fitted in the 62 % safe area by bisection, never nearer than the floor range of the tilt
+(`floorRange`: 424 km at 20°, 550 km at 45°), so a small storm sits at 561 km instead of 432 km and
+wide storms move by −15 to +6 % (table below). At the floor the camera is 408 km high and the
+bottom edge looks 24° from nadir: the nearest visible ground is 450 km away, between `iss` (400 km)
+and `window` (510 km), so a 1 km cloud texel stays under 4 px (visual rule 9). A 16:9 frame's top
+corners look 63° from nadir, under the horizon (70° from the floor), so small storms keep it out of
+the frame, while wide storms framed from higher (Basse-Kotto from 1,250 km, R2 from 970 km, where the
+horizon sits 57 to 60° from nadir) show the limb in the top corners. The horizon view (72°) and the
+floor poses are unchanged. A reload with a frame checkpoint saved at the old tilt flies to the new frame
+(`sameFrame` is false). The tilt is a tunable of [ADR 0020](adr/0020-immersive-storm-view.md)
+point 5, chosen by the maintainer on captures: the sweep below shows 20°, 35°, 42°, 45° and 50° on
+Basse-Kotto (2026-10-27, 12:00 UTC, 60×) and the five reference storms, desktop 1600 × 1000 and
+phone 390 × 844, in [`immersive/lightning-look/framing-tilt/`](immersive/lightning-look/framing-tilt/)
+(`<storm>-tilt-20-35-42-45-50.jpg`, the 45° phone frame in the last cell;
+`<storm>-phone-tilt-20-35-42-45-50.jpg`; `C1-tilt-20.jpg`, `C1-tilt-45.jpg`, `R1-tilt-20.jpg`,
+`R1-tilt-45.jpg` full size). Fitted range (km) per storm and tilt, desktop / phone:
+
+| Storm (bounds) | 20° | 35° | 42° | 45° | 50° |
+|---|---|---|---|---|---|
+| Basse-Kotto 2026-10-27 (863 × 690 km) | 1,827 / 4,972 | 1,724 / 5,056 | 1,635 / 5,091 | 1,639 / 5,106 | 1,661 / 5,128 |
+| R1 Minas Gerais (568 × 303 km) | 965 / 3,228 | 1,002 / 3,265 | 1,018 / 3,281 | 1,024 / 3,287 | 1,034 / 3,297 |
+| R2 Mato Grosso (680 × 550 km) | 1,471 / 3,891 | 1,382 / 3,958 | 1,308 / 3,986 | 1,289 / 3,998 | 1,307 / 4,015 |
+| R3 North Atlantic (295 × 256 km) | 677 / 1,722 | 628 / 1,753 | 591 / 1,765 | 575 / 1,771 | 610 / 1,778 |
+| R4 Ngaoundéré (88 × 66 km) | 432 / 510 | 491 / 517 | 536 / 536 | 561 / 561 | 610 / 610 |
+| R5 Ibiza (160 × 105 km) | 432 / 926 | 491 / 938 | 536 / 943 | 561 / 945 | 610 / 949 |
+
+Small storms sit on the floor range of the tilt (432 km at 20°, 561 km at 45°, 610 km at 50°). Storms
+bound by their north-south extent fit closer at a higher tilt, which foreshortens it: Basse-Kotto
+1,827 → 1,639 km, R2 1,471 → 1,289 km, R3 677 → 575 km; R1, bound by its east-west extent, backs off
+from 965 to 1,024 km.
+Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.2 to 3.3× at 20°); four storms pass
+3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1).
 
 ### Free tilt
 
@@ -138,7 +177,7 @@ back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
   and the hull of the current cell, solid. Replay, the catalog keeps one centroid and area per
   hourly window, not the outline: a dashed circle of that area. A thin light line over a 1 px dark
   shadow, so it reads over sunlit clouds and at night; changes fade over 500 ms.
-- **Framing.** The storm frame: tilt 20°, the footprint fitted in the safe area (`frameStorm`), never
+- **Framing.** The storm frame: tilt 45° ([storm frame tilt](#storm-frame-tilt)), the footprint fitted in the safe area (`frameStorm`), never
   below the floor, so it backs off as the storm grows. With `Horizon`, the horizon view along a fixed
   heading: the one the view had, or the motion between the last two positions when switched on
   while following. The heading never turns with the storm.
