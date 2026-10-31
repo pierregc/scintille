@@ -87,19 +87,21 @@ void main() {
 		}
 		// The least light a segment shows, whatever the glow: the dim leader, a dart down the trunk, the crawler's tip.
 		float least = 0.0;
+		// The first stroke lights the channel from the ground up; the leader holds the rest until it gets there.
+		float swept = 1.0;
 		if (ground) {
 			vec3 stroke = flashStroke(age, end, seed, kind, timing.x);
-			if (stroke.x < 0.0) least = ${f(PROFILE.leaderLevel)};
-			else if (stroke.x < 0.5) lit *= mix(${f(PROFILE.leaderLevel)}, 1.0, step(1.0 - segC.x, stroke.y / ${f(PROFILE.strokeSweep)}));
+			if (stroke.x < 0.0 || (stroke.x < 0.5 && stroke.y < ${f(PROFILE.strokeSweep)})) least = ${f(PROFILE.leaderLevel)};
+			if (stroke.x >= 0.0 && stroke.x < 0.5) swept = step(1.0 - segC.x, stroke.y / ${f(PROFILE.strokeSweep)});
 			if (!branch && stroke.x >= 0.0 && stroke.z < ${f(PROFILE.dart)}) {
 				float tip = 1.0 - stroke.z / ${f(PROFILE.dart)};
-				least = ${f(PROFILE.dartLevel)} * step(segC.x, tip) * smoothstep(tip - 0.3, tip, segC.y);
+				least = max(least, ${f(PROFILE.dartLevel)} * step(segC.x, tip) * smoothstep(tip - 0.3, tip, segC.y));
 			}
 			if (contact) lit *= step(pulseHash(seed, 96.0) < 0.2 ? 0.0 : 1.0 + floor(3.0 * pulseHash(seed, 97.0)), stroke.x);
 		} else if (kind == ${FlashKind.IcCrawler}) {
 			least = smoothstep(reached - ${f(PROFILE.crawlerTip)}, reached, segC.y) * (1.0 - smoothstep(0.95, 1.0, reached));
 		}
-		lit *= max(1.0, least / max(profile, 1e-4));
+		lit *= max(swept, least / max(profile, 1e-4));
 	}
 	float light = brightness * fade * lit * segB.w * channelReveal(flashShape.y, kmPerPx) * step(0.001, grown);
 	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
