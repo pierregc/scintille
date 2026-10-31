@@ -54,6 +54,22 @@ const flashes = (kind: FlashKind) => built.get(kind) ?? [];
 /** Whether a segment of a cloud-to-ground channel belongs to its in-cloud stem, run before the drop starts. */
 const inStem = (g: Segment) => g.level === 0 && g.from < SKELETON.stemArrival - 1e-6;
 
+/** Least and most a cloud-to-ground kind's heights are drawn up by: `cgHeightScale`, less where its stem would rise over `maxOriginKm`. */
+function heightScale(kind: FlashKind): [number, number] {
+	const k = KIND[kind];
+	const scale = (stemTop: number) => Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / stemTop);
+	return [scale(Math.max(k.originKm[1], k.topKm[1])), scale(Math.max(k.originKm[0], k.topKm[0]))];
+}
+
+/** Least and most drawn height of a cloud-to-ground kind's drop top: its origin (a bolt from the blue's exit) scaled with its stem. */
+function topRange(kind: FlashKind): [number, number] {
+	const k = KIND[kind];
+	const scaled = (z: number, stemTop: number) => z * Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / stemTop);
+	// A bolt from the blue's stem tops at its climb, the others' at their origin.
+	if (kind === FlashKind.BoltFromBlue) return [scaled(k.originKm[0], k.topKm[1]), scaled(k.originKm[1], k.topKm[0])];
+	return [scaled(k.originKm[0], k.originKm[0]), scaled(k.originKm[1], k.originKm[1])];
+}
+
 /** The drop of a cloud-to-ground channel: its main path after the stem, from its top to its strike. */
 function drop(parts: Segment[]) {
 	const main = parts.filter((g) => g.level === 0 && !inStem(g));
@@ -71,7 +87,8 @@ describe('channelSkeleton', () => {
 	it('stays within its budget with sane widths, lights and arrivals', () => {
 		for (const kind of ALL) {
 			for (const { parts } of flashes(kind)) {
-				expect(parts.length).toBeGreaterThan(10);
+				// Crawlers, deep in the cloud, are drawn in segments as long as the cloud spreads them wide.
+				expect(parts.length).toBeGreaterThan(kind === FlashKind.IcCrawler ? 3 : 10);
 				expect(parts.length).toBeLessThanOrEqual(MAX_SEGMENTS);
 				for (const g of parts) {
 					expect(g.width).toBeGreaterThanOrEqual(SKELETON.minWidth - 1e-6);
@@ -88,13 +105,14 @@ describe('channelSkeleton', () => {
 	it('drops cloud-to-ground kinds from their origin to a strike inside the footprint', () => {
 		for (const kind of GROUND) {
 			const k = KIND[kind];
+			const [low, high] = topRange(kind);
 			for (const { r, parts } of flashes(kind)) {
 				const { top, strike, last } = drop(parts);
 				expect(Math.min(...parts.flatMap((g) => [g.a[2], g.b[2]]))).toBe(0);
 				expect(strike[2]).toBe(0);
 				expect(last.to).toBeCloseTo(1, 6);
-				expect(top[2]).toBeGreaterThanOrEqual(k.originKm[0] - 1e-6);
-				expect(top[2]).toBeLessThanOrEqual(k.originKm[1] + 1e-6);
+				expect(top[2]).toBeGreaterThanOrEqual(low - 1e-4);
+				expect(top[2]).toBeLessThanOrEqual(high + 1e-4);
 				expect(Math.hypot(strike[0], strike[1])).toBeLessThanOrEqual(Math.max(r, k.reachKm) + 1e-4);
 				// The stem runs in the cloud whatever its height; under the cloud base the rest is in clear air.
 				const stem = parts.filter(inStem);
@@ -131,7 +149,7 @@ describe('channelSkeleton', () => {
 		expect(share(ring)).toBeGreaterThanOrEqual(0.95);
 	});
 
-	it('branches cloud-to-ground drops on both sides, below 5 km, ending in the air', () => {
+	it('branches cloud-to-ground drops on both sides, below 5 km (drawn up with the drop), ending in the air', () => {
 		const sides: boolean[] = [];
 		for (const { parts } of flashes(FlashKind.CgMulti)) {
 			const { top, strike } = drop(parts);
@@ -139,7 +157,7 @@ describe('channelSkeleton', () => {
 			for (const branch of runs(parts).filter((run) => run[0].level === 1)) {
 				const a = branch[0].a;
 				const b = branch[branch.length - 1].b;
-				expect(a[2]).toBeLessThanOrEqual(SKELETON.branchFromKm[1] + 1e-6);
+				expect(a[2]).toBeLessThanOrEqual(SKELETON.branchFromKm[1] * heightScale(FlashKind.CgMulti)[1] + 1e-4);
 				expect(Math.min(...branch.map((g) => g.b[2]))).toBeGreaterThanOrEqual(0.2 - 1e-6);
 				expect(b[2]).toBeLessThan(a[2]);
 				sides.push(course[0] * (b[1] - a[1]) - course[1] * (b[0] - a[0]) > 0);
@@ -159,8 +177,8 @@ describe('channelSkeleton', () => {
 			if (!contact.length) continue;
 			const foot = contact[contact.length - 1].b;
 			expect(foot[2]).toBe(0);
-			expect(contact[0].a[2]).toBeGreaterThanOrEqual(SKELETON.secondFromKm[0] - 1e-6);
-			expect(contact[0].a[2]).toBeLessThanOrEqual(SKELETON.secondFromKm[1] + 1e-6);
+			expect(contact[0].a[2]).toBeGreaterThanOrEqual(SKELETON.secondFromKm[0] * heightScale(FlashKind.CgMulti)[0] - 1e-4);
+			expect(contact[0].a[2]).toBeLessThanOrEqual(SKELETON.secondFromKm[1] * heightScale(FlashKind.CgMulti)[1] + 1e-4);
 			expect(Math.hypot(foot[0], foot[1])).toBeLessThanOrEqual(r + 1e-4);
 			expect(horizontal(foot, drop(parts).strike)).toBeLessThanOrEqual(SKELETON.secondAwayKm[1] + 1e-4);
 		}
@@ -250,9 +268,31 @@ describe('channelSkeleton', () => {
 		}
 	});
 
-	it('does not exaggerate heights', () => {
-		expect(SKELETON.cgHeightScale).toBe(1);
-		for (const kind of GROUND) for (const { parts } of flashes(kind)) expect(Math.max(...parts.flatMap((g) => [g.a[2], g.b[2]]))).toBeLessThanOrEqual(SKELETON.cloudTopKm);
+	it('draws cloud-to-ground heights up by at most 1.5, under the cloud top, and no other kind', () => {
+		expect(SKELETON.cgHeightScale).toBeLessThanOrEqual(1.5);
+		for (const kind of GROUND) for (const { parts } of flashes(kind)) expect(Math.max(...parts.flatMap((g) => [g.a[2], g.b[2]]))).toBeLessThanOrEqual(SKELETON.cloudTopKm + 1e-4);
+		for (const kind of [FlashKind.IcTrunkFan, FlashKind.IcCrawler]) for (const { parts } of flashes(kind)) expect(Math.max(...parts.flatMap((g) => [g.a[2], g.b[2]]))).toBeLessThanOrEqual(SKELETON.cloudTopKm + 1e-6);
+	});
+
+	it('drops mostly straight, turning about 16 degrees from one segment to the next', () => {
+		const turns: number[] = [];
+		const steep: number[] = [];
+		for (const { parts } of flashes(FlashKind.CgMulti)) {
+			const main = parts.filter((g) => g.level === 0 && !inStem(g));
+			main.forEach((g, i) => {
+				const d: Vec = [g.b[0] - g.a[0], g.b[1] - g.a[1], g.b[2] - g.a[2]];
+				steep.push(90 - fromVertical(g.a, g.b));
+				if (!i) return;
+				const p = main[i - 1];
+				const e: Vec = [p.b[0] - p.a[0], p.b[1] - p.a[1], p.b[2] - p.a[2]];
+				const c = (d[0] * e[0] + d[1] * e[1] + d[2] * e[2]) / (Math.hypot(...d) * Math.hypot(...e));
+				turns.push((Math.acos(Math.min(1, Math.max(-1, c))) * 180) / Math.PI);
+			});
+		}
+		expect(mean(turns)).toBeGreaterThanOrEqual(12);
+		expect(mean(turns)).toBeLessThanOrEqual(20);
+		steep.sort((a, b) => a - b);
+		expect(steep[Math.floor(steep.length / 2)]).toBeGreaterThanOrEqual(55);
 	});
 
 	it('varies its silhouette, from lone filaments to wide networks', () => {

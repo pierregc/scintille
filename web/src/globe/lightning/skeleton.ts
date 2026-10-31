@@ -68,8 +68,8 @@ export const SKELETON = {
 	airSegments: 16,
 	/** Path arrival by which the in-cloud stem is run. */
 	stemArrival: 0.15,
-	/** Cloud-to-ground heights scale about the ground by this (1: not exaggerated; at most 1.5, ADR 0033), the origin kept under `maxOriginKm`. */
-	cgHeightScale: 1,
+	/** Cloud-to-ground heights scale about the ground by this (at most 1.5, ADR 0033) so a bolt reads from orbit, the origin kept under `maxOriginKm`. */
+	cgHeightScale: 1.5,
 	maxOriginKm: 11,
 	/** Core width of a main channel, CSS px, and of the finest filaments. */
 	trunkWidth: 1.6,
@@ -79,6 +79,10 @@ export const SKELETON = {
 	/** Lateral offset of a midpoint over its segment length, at the coarsest level, then per level. */
 	roughness: [0.18, 0.34],
 	roughnessDecay: 0.88,
+	/** Share of that roughness kept by a cloud-to-ground drop, its branches and second contact, which fall mostly straight. */
+	dropRoughness: 0.6,
+	/** Shortest segment of a path deep in the cloud (crawlers, cloud-to-ground stems), km: about the width the cloud spreads it to. */
+	deepMinKm: 1.5,
 } as const;
 
 type Vec = [number, number, number];
@@ -280,6 +284,8 @@ interface Flash {
 }
 
 const style = (flash: Flash, extentKm: number): Style => ({ rng: flash.rng, minLength: extentKm * SKELETON.detail, tortuosity: flash.tortuosity });
+/** `s` drawn no finer than the width the cloud spreads a path deep in it to, so its segments do not pile up into a tube. */
+const deep = (s: Style): Style => ({ ...s, minLength: Math.max(s.minLength, SKELETON.deepMinKm) });
 
 /** A point drawn evenly over the disc of `radius` km around the position, at height `z`. */
 function disc(rng: () => number, radius: number, z: number): Vec {
@@ -415,21 +421,22 @@ function groundChannel(flash: Flash, seed: number, kind: FlashKind): Look {
 	const strike = strikeWithin(top, bearing, drop, limit, k.strikeR[0] * r);
 	const extent = pathLength(stem) + length(sub(strike, top)) * 1.3;
 	const s = style(flash, extent);
+	const fall: Style = { ...s, tortuosity: s.tortuosity * SKELETON.dropRoughness };
 	w.heightScale = Math.min(SKELETON.cgHeightScale, SKELETON.maxOriginKm / Math.max(...stem.map((p) => p[2])));
+	const inside = layer([0, SKELETON.cloudTopKm / w.heightScale]);
 	let feed: Vec[] = [stem[0]];
-	for (let i = 1; i < stem.length; i++) feed = feed.concat(wander(s, stem[i - 1], stem[i], i === 1 && bolt ? 1 : SKELETON.fanFlatten, 1).slice(1).map(layer([0, SKELETON.cloudTopKm])));
+	for (let i = 1; i < stem.length; i++) feed = feed.concat(wander(deep(s), stem[i - 1], stem[i], i === 1 && bolt ? 1 : SKELETON.fanFlatten, 1).slice(1).map(inside));
 	// The stem runs in the cloud whatever its height; under the base only the drop and its branches are in clear air.
 	const leader = w.path(feed, 0, [trunk * 0.8, trunk], [0.7, 1], 0, inCloud);
 	const stemKm = leader.from.at(-1) ?? 0;
-	const fall = wander(s, top, strike, 1, rng() < 0.6 ? 2 : 1).map(layer([0, SKELETON.cloudTopKm]));
-	const descent = w.path(fall, stemKm, [trunk, trunk], [1, 1], 0, bolt ? clearAir : underBase);
+	const descent = w.path(wander(fall, top, strike, 1, rng() < 0.6 ? 2 : 1).map(inside), stemKm, [trunk, trunk], [1, 1], 0, bolt ? clearAir : underBase);
 	const end = descent.from.at(-1) ?? stemKm;
 	const second = kind === FlashKind.CgMulti && channelHash(seed, 6) < SKELETON.secondShare;
 	// Room left for the second contact once the branches are written.
 	w.reserve = second ? SKELETON.secondSegments : 0;
-	const branches = groundBranches(flash, s, descent, count(k.branches, rng()), 1, length(sub(strike, top)), trunk * 0.6, 1, end);
+	const branches = groundBranches(flash, fall, descent, count(k.branches, rng()), 1, length(sub(strike, top)), trunk * 0.6, 1, end);
 	w.reserve = 0;
-	if (second) secondContact(flash, s, branches.length ? branches : [descent], descent, strike, end);
+	if (second) secondContact(flash, fall, branches.length ? branches : [descent], descent, strike, end);
 	w.arrive(stemKm, end);
 	return kind === FlashKind.CgSingle || positive ? 'filament' : 'branching';
 }
@@ -509,7 +516,7 @@ function crawler(flash: Flash): Look {
 	const k = KIND[FlashKind.IcCrawler];
 	const keep = layer(SKELETON.crawlerKm);
 	const start = disc(rng, SKELETON.originR * r, within(SKELETON.crawlerKm, rng()));
-	const s = style(flash, k.runR[1] * r * 1.25);
+	const s = deep(style(flash, k.runR[1] * r * 1.25));
 	const leaders = rng() < 0.5 ? 1 : 2;
 	const paths: Path[] = [];
 	for (let i = 0; i < leaders; i++) {
