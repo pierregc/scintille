@@ -114,7 +114,7 @@ describe('storm view', () => {
 		lightning.viewKmPerPx = 2;
 		expect(material.blendEquation).toBe(AddEquation);
 		expect([material.blendSrc, material.blendDst]).toEqual([OneFactor, OneMinusSrcColorFactor]);
-		lightning.viewKmPerPx = 0.5;
+		lightning.viewKmPerPx = ZOOM.floorKmPerPx * 0.9;
 		expect(material.blendEquation).toBe(MaxEquation);
 		lightning.stormView = false;
 		expect(material.blending).toBe(AdditiveBlending);
@@ -129,7 +129,7 @@ describe('storm view', () => {
 			return value;
 		};
 		expect(level({ lightMapWidth: 64 })).toBe(ZOOM.nearGlowLevel);
-		expect(level({ lightMapWidth: 0 })).toBe(ZOOM.nearGlowAlone);
+		expect(level({ lightMapWidth: 0 })).toBe(ZOOM.glowLevel);
 		expect(level({ lightMapWidth: 64, phone: true })).toBeCloseTo(ZOOM.nearGlowLevel * PHONE.nearLevel, 9);
 	});
 });

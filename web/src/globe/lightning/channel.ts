@@ -18,9 +18,9 @@ export const CHANNEL = {
 	/** In-cloud light drifts along the channel over the flash, this many observed radii either side of the position. */
 	drift: 0.6,
 	/** Share of the glow held back while the channel shows, so the cloud does not wash it out. */
-	glowDip: 0.8,
+	glowDip: 0.6,
 	haloGlowDip: 0.9,
-	cloudGlowDip: 0.85,
+	cloudGlowDip: 0.75,
 	/** Share of the glow left near the floor over sunlit clouds, where nothing of a flash shows from orbit. */
 	glowDayLevel: 0.35,
 	haloCapacity: 256,

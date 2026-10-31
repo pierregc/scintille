@@ -218,16 +218,19 @@ radius and `i` the intensity:
 
 - **Farness** `f = smoothstep(0, 1, ln(k / 0.3) / ln 10)`: 0 up to 0.3 km per px (the floor poses),
   1 from 3 km per px.
+- **Closeness** `c = 1 - smoothstep(0, 1, ln(k / 0.3) / ln(1 / 0.3))`: 1 up to 0.3 km per px, 0 from
+  1 km per px, where storm views screen-blend glows again. It weighs the rules of the floor, so the
+  whole-storm frame (about 1.1 km per px) and the globe are drawn as before them.
 - **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
   1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
-  point of 3 to 7 CSS px when that is larger. Level `mix(0.15, 1, f)` (0.4 near the floor on the
-  `low` tier, which has no cloud light), times `mix(1, 0.35, day × (1 - smoothstep(0, 0.5, f)))` over
-  sunlit cloud, with `day = smoothstep(-0.05, 0.25, n · sun)` as for channels: a rule of the floor,
-  gone by 1 km per px (`f` = 0.5), where glows screen-blend again and the points keep their day marks.
+  point of 3 to 7 CSS px when that is larger. Level `mix(mix(0.4, 1, f), 0.15, c)`: 15 % at the
+  floor, where the lit cloud and the channel carry the flash (40 % on the `low` tier, which has no
+  cloud light), the ramp from 40 % to full from 1 km per px. Times `mix(1, 0.35, day × c)` over
+  sunlit cloud, with `day = smoothstep(-0.05, 0.25, n · sun)` as for channels.
 - **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
 - **Halo**: 8 core widths at 30 % of the core, cool only, with the channel opacity, fading from
   1,500 to 6,000 km away.
-- **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius `mix(0.4, 0.55, f)`, with `k` taken from the camera height only.
+- **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius `mix(0.55, 0.4, c)`, with `k` taken from the camera height only.
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
   (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
   at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
@@ -358,7 +361,7 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
-| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level near the floor (40 % on the `low` tier, without cloud light), full from afar; 35 % of that over sunlit cloud near the floor, gone by 1 km per CSS px (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.nearGlowAlone`, `CHANNEL.glowDayLevel`, `MAX_BLEND_KM_PER_PX`, `vTint` |
+| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % on the `low` tier, without cloud light), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `nearFloor`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |

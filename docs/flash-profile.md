@@ -127,14 +127,15 @@ each other, they are one flash: both keep their glow, only the newest gets a cha
 
 **Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud; their segments
 overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
-round glow steps back: to 20 % for a ground flash (10 % with its halo), to 15 % for an in-cloud one,
+round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn
 at 15 % (styled), as the lit cloud and the channel carry the flash; on the `low` tier, which has no cloud
-light, it keeps 40 %. Over sunlit clouds it keeps 35 % of that near the floor (styled: from orbit,
-nothing of a flash shows by day), a rule of the floor that is gone by 1 km per CSS px, so the far
-view's points keep their day marks. In a storm view below 1 km per CSS px, overlapping glows keep the
-brightest, never add up.
+light, it keeps 40 %. Over sunlit clouds it keeps 35 % of that (styled: from orbit, nothing of a flash
+shows by day). These are rules of the floor: they ease out from 0.3 to 1 km per CSS px, and from there
+the glow climbs from 40 % to full as before, so the whole-storm frame and the globe keep their points
+and their day marks. In a storm view below 1 km per CSS px, overlapping glows keep the brightest,
+never add up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to

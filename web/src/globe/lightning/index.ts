@@ -102,9 +102,6 @@ const HALO_FADE = 0.25;
 /** Beyond this zoom, km per CSS px, even the largest flash has no readable channel. */
 const CHANNEL_VIEW_KM_PER_PX = (CHANNEL.lengthScale * 25) / 6;
 
-/** Below this zoom, km per CSS px, a storm view keeps the brightest glow at each pixel; from it, glows screen-blend. */
-const MAX_BLEND_KM_PER_PX = 1;
-
 /** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
 export const STORM_VIEW_FLASHES = 500;
 const BUDGET_FADE = 0.15;
@@ -112,7 +109,7 @@ const BUDGET_FADE = 0.15;
 /**
  * Overlapping flashes add up on the globe. A storm view shows a minute of flashes at once at 60×:
  * near the floor the brightest glow sets each pixel, so a cell never piles up into white; from
- * `MAX_BLEND_KM_PER_PX` glows screen-blend, so points still accumulate softly and show on sunlit
+ * `ZOOM.floorKmPerPx` glows screen-blend, so points still accumulate softly and show on sunlit
  * clouds. The cloud light keeps the brightest flash at each point.
  */
 function blendFlashes(material: ShaderMaterial, mode: 'add' | 'max' | 'screen'): void {
@@ -177,7 +174,7 @@ export function createLightning(
 			kmToWorld: { value: radius / EARTH_RADIUS_KM },
 			viewportHeight: { value: 1 },
 			viewScale: scale,
-			nearGlowLevel: { value: (lightMapWidth > 0 ? ZOOM.nearGlowLevel : ZOOM.nearGlowAlone) * (phone ? PHONE.nearLevel : 1) },
+			nearGlowLevel: { value: (lightMapWidth > 0 ? ZOOM.nearGlowLevel : ZOOM.glowLevel) * (phone ? PHONE.nearLevel : 1) },
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
 			sunDirection: { value: new Vector3(1, 0, 0) },
@@ -271,7 +268,7 @@ export function createLightning(
 	let viewKmPerPx = 0;
 	let blend: 'add' | 'max' | 'screen' = 'add';
 	const applyBlend = () => {
-		const mode = stormView ? (viewKmPerPx < MAX_BLEND_KM_PER_PX ? 'max' : 'screen') : 'add';
+		const mode = stormView ? (viewKmPerPx < ZOOM.floorKmPerPx ? 'max' : 'screen') : 'add';
 		if (mode === blend) return;
 		blend = mode;
 		blendFlashes(material, mode);
