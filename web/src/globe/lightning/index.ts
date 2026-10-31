@@ -296,6 +296,7 @@ export function createLightning(
 	let sampled = false;
 	let lastTime = Number.NaN;
 	let lastDelays = NO_DELAY;
+	let lightDrawn = false;
 	let lastWall = Number.NaN;
 	let viewKmPerPx = 0;
 
@@ -329,7 +330,9 @@ export function createLightning(
 			const lightFrom = stormView ? budgetStart(ring, utcMs, DENSITY.lightMapCeiling) : Number.NEGATIVE_INFINITY;
 			lightBudgetFrom.value = Number.isFinite(lightFrom) ? (lightFrom - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;
-			lightMapOff.value = lightMap && Number(clouds?.uniforms.cloudShown?.value ?? 0) > 0.5 ? 0 : 1;
+			// Without a cloud light last frame (no light map on this tier, clouds hidden or without a frame), flashes outside the sample keep half a sprite.
+			lightMapOff.value = lightDrawn ? 0 : 1;
+			lightDrawn = false;
 			channels.sync(utcMs, playback, delays, viewKmPerPx * scale.value < CHANNEL_VIEW_KM_PER_PX, share);
 			channelGeometry.instanceCount = channels.count;
 			poolShift.value = Number.isFinite(channels.origin) ? (channels.origin - instances.origin) / 1000 : 0;
@@ -375,6 +378,7 @@ export function createLightning(
 		light: lightMap?.light ?? null,
 		renderLightMap(renderer, camera) {
 			lightMap?.render(renderer, camera);
+			lightDrawn = lightMap !== null;
 		},
 		dispose() {
 			lightMap?.dispose();

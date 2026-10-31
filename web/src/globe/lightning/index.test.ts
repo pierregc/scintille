@@ -1,4 +1,4 @@
-import { AdditiveBlending, CustomBlending, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
+import { AdditiveBlending, CustomBlending, InstancedBufferGeometry, Mesh, PerspectiveCamera, ShaderMaterial, type WebGLRenderer } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
@@ -243,6 +243,35 @@ describe('storm view sample', () => {
 		lightning.setTime(340_000, undefined, 600);
 		expect(lightning.heroShare).toBeCloseTo(dense, 9);
 		lightning.dispose();
+	});
+
+	it('keeps half a sprite outside the sample on the frames without a cloud light', () => {
+		const ring = burst();
+		const fakeRenderer = {
+			getRenderTarget: () => null,
+			getClearColor: (c: unknown) => c,
+			getClearAlpha: () => 0,
+			setRenderTarget: () => {},
+			setClearColor: () => {},
+			clear: () => {},
+			render: () => {},
+		} as unknown as WebGLRenderer;
+		const camera = new PerspectiveCamera();
+		camera.position.set(0, 0, 3);
+		const off = (width: number, drawn: boolean[]) => {
+			const lightning = createLightning(ring, { storage: null, lightMapWidth: width });
+			const material = lightning.mesh.material as ShaderMaterial;
+			lightning.stormView = true;
+			const values = drawn.map((light) => {
+				if (light) lightning.renderLightMap(fakeRenderer, camera);
+				lightning.setTime(340_000, undefined, 600);
+				return material.uniforms.lightMapOff.value as number;
+			});
+			lightning.dispose();
+			return values;
+		};
+		expect(off(0, [false, true])).toEqual([1, 1]);
+		expect(off(64, [false, true, true, false])).toEqual([1, 0, 0, 1]);
 	});
 
 	it('settles within 5 s of play on a storm of 2,000 flashes per wall second at 600×', () => {
