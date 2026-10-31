@@ -83,8 +83,11 @@ every flash stays a point (ADR 0020 rule 1). The HUD rate stays the data rate; n
 | Cloud-to-air | 3 % | a trunk and fan whose longest branch leaves the cloud and stops 1-3 km beyond | as the trunk and fan |
 
 Cloud-to-ground kinds are 30 % of the seeds (observed band 15-40 %). Each flash runs its leaders at
-the kind's speed times a pace drawn once per flash, 0.75 to 1.35. Heights are drawn 1.0×; a
-`cgHeightScale` of at most 1.5 may lift cloud-to-ground channels only, and is named here if used.
+the kind's speed times a pace drawn once per flash, 0.75 to 1.35. In-cloud heights are drawn 1.0×.
+Cloud-to-ground heights are drawn 1.5× about the ground (`cgHeightScale` 1.5, the bound), the stem kept
+under 11 km (`maxOriginKm`), so the effective factor is 1.375 to 1.5 for negative flashes and 1.0 to 1.22
+for positive flashes and bolts from the blue: at 1.0× the captures at the oblique 45° pose (#401) show
+drops 10 to 30 px tall under fans of 50 to 300 px, stubs rather than bolts.
 Below the cloud base a channel keeps at least 30 % of its light through any cloud; in-cloud trunks are
 drawn as a crisp trace; fans keep the depth veil. About half of all flashes do not flicker. Reduced
 motion keeps the single soft fade.
@@ -106,7 +109,8 @@ motion keeps the single soft fade.
 
 **[Visual rules](../immersive-view.md#visual-rules) amended** (ADR 0020): rule 6 is about exposure; the
 share of flashes drawn in full is a named deterministic sampling, not an exposure. Rule 7: channels run
-6-11.5 km in the cloud and cloud-to-ground ones from 6-11 km to the ground, heights 1.0×. Rule 11: gaps
+6-11.5 km in the cloud and cloud-to-ground ones from 6-11 km to the ground, in-cloud heights 1.0×,
+cloud-to-ground heights 1.5× with the stem under 11 km. Rule 11: gaps
 10-400 ms, one stroke for 25 % of negative and 81 % of positive cloud-to-ground flashes, 0-3 bright
 pulses in cloud, flicker up to 2 s. The glow sprite is max-blended below 1 km/px in storm views and
 screen-blended from afar.

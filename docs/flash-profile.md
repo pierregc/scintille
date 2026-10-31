@@ -49,7 +49,8 @@ rendering choice.
 | In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
 | Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 15-40° | as the trunk and fan | 0-9 |
 
-Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %). Each flash runs its leaders at
+Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %); their heights in this table are
+drawn 1.5 times as tall, the stem kept under 11 km ([Channel](#channel)). Each flash runs its leaders at
 the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds` is the time down a
 cloud-to-ground drop (clamped to 50 to 150 ms) or up an in-cloud trunk (10 to 20 ms); for a bolt from
 the blue it covers the whole path, up its trunk, 0.75 r across the cloud and down (clamped to 150 to
@@ -102,8 +103,12 @@ of this shape is observed.
 
 **Silhouette.** The [flash kind](#flash-kinds) draws it, in km above the ground, around the observed
 position, within the bounds of the kinds table (`skeleton.ts`, `SKELETON`, `KIND`; r is the observed
-radius, at least 3 km). Heights are not exaggerated (`SKELETON.cgHeightScale` 1, bound 1.5, the origin
-kept under 11 km, `SKELETON.maxOriginKm`).
+radius, at least 3 km). The heights below are the assumed ones. Cloud-to-ground channels are drawn
+1.5 times as tall, about the ground (`SKELETON.cgHeightScale`, the bound of ADR 0033), their stem kept
+under 11 km (`SKELETON.maxOriginKm`): a negative channel starting 6 to 8 km up is drawn from 9 to 11 km,
+a positive one or a bolt from the blue up to 11 km. At 7 km a drop is only 10 to 30 px tall at the
+oblique 45° pose and reads as a stub under the fans; 1.5 times as tall, it reads as a bolt. In-cloud
+kinds keep their heights.
 
 - *Negative cloud-to-ground* (multi- and single-stroke): the flash starts 6 to 8 km up, anywhere over a
   disc of half the radius. A feed runs 0.3 to 0.8 r in the cloud along the flash's heading, ending
@@ -139,7 +144,12 @@ heading the light drifts on.
 
 **Path.** Each path has one or two broad bends (an elbow or an S), then its midpoints are displaced
 sideways at uneven places, by about the same share of their length at every scale (0.18 to 0.34 of a
-segment, 0.88 less at each finer level), down to segments of a 48th of the flash extent. Segment
+segment, 0.88 less at each finer level), down to segments of a 48th of the flash extent. A
+cloud-to-ground drop, its branches and its second contact keep 0.6 of that roughness
+(`SKELETON.dropRoughness`): they turn about 15° from one segment to the next, close to the 16° measured
+on photographed channels, and most of their segments are steeper than 60°. Paths deep in the cloud, crawlers and
+cloud-to-ground stems, are drawn in segments of at least 1.5 km (`SKELETON.deepMinKm`), about the width
+the cloud spreads them to: finer segments would pile their overlapping ends into a saturated tube. Segment
 lengths vary, turns are sharp or soft, and the path never zigzags regularly. Fans and crawlers keep to
 a layer (30 % and 15 % of their sideways offsets vertical). In-cloud branches leave at uneven places,
 mostly at 20 to 70 degrees, a few almost square, most of them on one side; some are short splinters,
