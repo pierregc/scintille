@@ -96,7 +96,7 @@ describe('channelSkeleton', () => {
 				expect(top[2]).toBeGreaterThanOrEqual(k.originKm[0] - 1e-6);
 				expect(top[2]).toBeLessThanOrEqual(k.originKm[1] + 1e-6);
 				expect(Math.hypot(strike[0], strike[1])).toBeLessThanOrEqual(Math.max(r, k.reachKm) + 1e-4);
-					// The stem runs in the cloud whatever its height; under the cloud base the rest is in clear air.
+				// The stem runs in the cloud whatever its height; under the cloud base the rest is in clear air.
 				const stem = parts.filter(inStem);
 				expect(stem.length).toBeGreaterThan(0);
 				for (const g of stem) expect(g.flag).toBe(1);
