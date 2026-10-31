@@ -86,15 +86,24 @@ lightning look rework, #398):
   the target on R1, whose flashes last longer). On a quiet storm the share is 1 and every flash is drawn.
 - The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
   by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a
-  seek, a speed change or a new storm view.
+  seek, a speed change or a new storm view. After a speed change during play, it is set to the
+  wanted share on every frame until the last 0.4 s hold only flashes played at the new speed: the
+  load then tracks the flashes alive frame by frame, while following it over 0.5 s drew up to 4
+  times the target for about a second after a speed-up, and a sixth of it after a slow-down.
 - Outside the sample, a flash keeps its sprite from afar only, rising from nothing at about 1.3 km
   per px to its full point at 3 km per px ([farness](immersive-view.md#lightning-scale) 0.7 to 1),
   and half a sprite on the frames without a cloud light (clouds hidden or without a frame, a tier
-  without the light map), within the 500 newest flashes (below), so flashes stay points from afar
+  without the light map; eased over 0.25 s when the cloud light comes or goes), within the 500
+  newest flashes (below), so flashes stay points from afar
   ([visual rule 1](immersive-view.md#visual-rules)) while the storm views up to the whole storm
   framing (1.1 to 1.4 km per px on the reference storms) show the cloud light and the sample alone;
   a ramp over farness 0.5 to 1 let the points of thousands of flashes at 3600× merge into one white
-  disc over that framing.
+  disc over that framing. The round glow steps back for a channel (below) only in the sample, so a
+  flash outside it keeps its full sprite. Limits: where no cloud light shows, a flash outside the
+  sample keeps its half sprite only while among the 500 newest (14 ms and a 150 ms fade at the
+  Basse-Kotto peak at 3600×); and the cloud light covers a window of three camera heights around what the
+  camera looks at, so in a grazing view a flash beyond it, outside the sample and not yet a point,
+  is not drawn.
 
 The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
 of wall clock time) binds every flash while all are drawn, in practice at 1×, and otherwise only the
