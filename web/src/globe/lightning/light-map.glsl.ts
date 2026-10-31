@@ -69,10 +69,10 @@ void main() {
 	gl_Position = vec4(center, 0.0, 1.0);
 	vScale = gl_PointSize * 0.5 / pixels;
 	vBrightness = brightness * level;
-	// An elongated, irregular patch along the drift, within the same radius; round where the splat floor sets the size.
+	// An elongated, irregular patch along the drift or the ground channel's feed, within the same radius; round where the splat floor sets the size.
 	float own = footprint / max(radiusKm, 1e-6);
 	vLobes = patchLobes(seed, own);
-	vPatch = cloudPatch(seed, isGround(kind), own, vLobes);
+	vPatch = cloudPatch(seed, own, vLobes);
 }
 `;
 

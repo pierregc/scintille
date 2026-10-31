@@ -3,12 +3,13 @@
 //   node scripts/capture.mjs --base http://localhost:4321 --storm 2026-10-27-basse-kotto --time 2026-10-27T12:00:00Z \
 //     --out <dir> [--prefix <name>] [--speed 60] [--view lat,lon,altitudeKm,tilt[,heading]] [--frames 4] [--gap 700]
 //     [--settle 12] [--play-before 1500] [--paused] [--width 1600] [--height 1000] [--profile desktop|mobile]
-//     [--afterglow 0] [--quality low|medium|high] [--step <ms>] [--stats] [--no-clouds] [--reduced-motion]
+//     [--afterglow 0] [--quality low|medium|high] [--step <ms> [--at <ISO>]] [--stats] [--no-clouds] [--reduced-motion]
 // Without --view the app frames the whole storm itself. A view with a negative latitude needs `--view=-7.4,...`.
 // --stats adds `window.__app.lightning.stats` to each frame; --no-clouds hides the cloud layer, so day metrics measure the
 // lightning alone; --reduced-motion emulates `prefers-reduced-motion`; --profile mobile emulates an iPhone 15.
 // --step freezes the page's wall clock after --play-before and moves it by exactly that many ms per frame, so frames are
-// that far apart in wall time whatever a screenshot costs (the leader frames, 50 ms apart); --gap is then unused.
+// that far apart in wall time whatever a screenshot costs (the leader frames, 50 ms apart); --gap is then unused. With
+// --at, frame 0 shows that scene time (ahead of the clock after --play-before), so a given flash can be followed.
 // Prints one JSON line per frame and writes <prefix>.json next to the PNGs. Metrics are taken on the central 84 % x 76 %
 // of the frame, away from the HUD: white, the share of pixels with every channel over 235; lit, the share with a luminance
 // over 90; blobs, the lit 8 x 8 blocks.
@@ -42,6 +43,7 @@ const { values: o } = parseArgs({
 		paused: { type: 'boolean', default: false },
 		'play-before': { type: 'string', default: '1500' },
 		step: { type: 'string' },
+		at: { type: 'string' },
 		stats: { type: 'boolean', default: false },
 		'no-clouds': { type: 'boolean', default: false },
 		'reduced-motion': { type: 'boolean', default: false },
@@ -145,7 +147,14 @@ if (!o.paused) {
 	await page.waitForTimeout(Number(o['play-before']));
 }
 const step = o.step === undefined ? null : Number(o.step);
-const frozenFrom = step === null ? null : await page.evaluate(() => (window.__frozen = window.__realNow()));
+const frozenFrom =
+	step === null
+		? null
+		: await page.evaluate((at) => {
+				const now = window.__realNow();
+				const clock = window.__app.clock;
+				return (window.__frozen = at === null ? now : now + (Date.parse(at) - clock.time()) / clock.speed);
+			}, o.at ?? null);
 for (let k = 0; k < Number(o.frames); k++) {
 	const file = join(o.out, `${o.prefix}-${k}.png`);
 	if (step !== null) {
