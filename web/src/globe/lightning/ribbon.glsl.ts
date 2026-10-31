@@ -1,6 +1,7 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { volumeFieldGlsl } from '../clouds/volume.glsl';
 import { CHANNEL, channelGlsl } from './channel';
+import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -37,6 +38,7 @@ ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
 ${channelGlsl}
+${densityGlsl}
 ${veilGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
@@ -66,8 +68,15 @@ void main() {
 	float facing = dot(normal, normalize(cameraPosition - base));
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
+	// Only the sample drawn in full at this replay speed gets a channel.
+	float hero = heroWeight(heroLot(seed, flashShape.x), heroShare);
+	if (hero <= 0.0) {
+		cull();
+		return;
+	}
 	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, ground)
 		* intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
+	brightness *= hero;
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 

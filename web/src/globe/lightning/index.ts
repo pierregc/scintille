@@ -34,6 +34,7 @@ import type { FlashRing, SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { CHANNEL } from './channel';
 import { ChannelPool, POOL_FLASHES, SEGMENT_STRIDE } from './channel-pool';
+import { DENSITY, followShare, heroShare, heroTarget } from './density';
 import { segmentGeometry } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
@@ -69,13 +70,30 @@ export interface FlashLight {
 	window: Vector4;
 }
 
+/**
+ * Sampling of a storm view this frame: `alive` flashes played in the last `DENSITY.aliveWindow` of wall clock
+ * time, `drawn` flashes of the sample within their flicker or fade (0 when the view is too far for channels),
+ * the applied `share` of the lots and its `target`, and `channels` holding a slot in the pool.
+ */
+export interface LightningStats {
+	alive: number;
+	drawn: number;
+	share: number;
+	target: number;
+	channels: number;
+}
+
 export interface Lightning {
 	mesh: Mesh;
 	/**
 	 * Uploads new flashes and sets the scene time (UTC ms) flashes are aged against, each source `delays`
-	 * behind; `speed` is the replay speed, which flickers never follow.
+	 * behind; `speed` is the replay speed, which flickers never follow and which sizes the sample of flashes
+	 * a storm view draws in full (`DENSITY`).
 	 */
 	setTime(utcMs: number, delays?: SourceDelays, speed?: number): void;
+	/** Share of the lots drawn in full this frame, 1 for every flash; the sound follows it. */
+	readonly heroShare: number;
+	readonly stats: LightningStats;
 	/** Afterglow chosen for the globe overview, minutes of scene time. */
 	readonly displayMinutes: number;
 	/** Changes the afterglow, from the data already loaded, and remembers the choice. */
@@ -102,7 +120,7 @@ const HALO_FADE = 0.25;
 /** Beyond this zoom, km per CSS px, even the largest flash has no readable channel. */
 const CHANNEL_VIEW_KM_PER_PX = (CHANNEL.lengthScale * 25) / 6;
 
-/** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
+/** A storm view drawing every flash shows at most this many at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
 export const STORM_VIEW_FLASHES = 500;
 const BUDGET_FADE = 0.15;
 
@@ -154,6 +172,12 @@ export function createLightning(
 	const pivotSpeed = new NumberUniform();
 	const budgetFrom = new NumberUniform();
 	const budgetFade = new NumberUniform();
+	const lightBudgetFrom = new NumberUniform();
+	lightBudgetFrom.value = -1e6;
+	const sample = new NumberUniform();
+	sample.value = 1;
+	const lightMapOff = new NumberUniform();
+	lightMapOff.value = 1;
 	const scale = new NumberUniform();
 	scale.value = 1;
 	const cloudDefines = clouds ? { ...clouds.defines, CLOUDS: '' } : {};
@@ -174,6 +198,8 @@ export function createLightning(
 			viewportHeight: { value: 1 },
 			viewScale: scale,
 			nearGlowLevel: { value: ZOOM.nearGlowLevel * (phone ? PHONE.nearLevel : 1) },
+			heroShare: sample,
+			lightMapOff,
 			flicker: { value: 1 },
 			haloStrength: { value: 1 },
 			sunDirection: { value: new Vector3(1, 0, 0) },
@@ -235,7 +261,7 @@ export function createLightning(
 	haloMesh.onBeforeRender = channelMesh.onBeforeRender;
 
 	const lightMap = lightMapWidth > 0
-		? createLightMap(geometry, material, lightMapWidth, radius, LIGHT_WINDOW.nearLevel * (phone ? PHONE.nearLevel : 1))
+		? createLightMap(geometry, material, lightBudgetFrom, lightMapWidth, radius, LIGHT_WINDOW.nearLevel * (phone ? PHONE.nearLevel : 1))
 		: null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
@@ -265,6 +291,10 @@ export function createLightning(
 	};
 	let lastWall = Number.NaN;
 	let viewKmPerPx = 0;
+	let share = 1;
+	let alive = 0;
+	let target = Infinity;
+	let sampled = false;
 
 	return {
 		mesh,
@@ -278,21 +308,38 @@ export function createLightning(
 			speed.value = playback.speed;
 			pivot.value = Number.isFinite(playback.pivot) ? (playback.pivot - instances.origin) / 1000 : -1e9;
 			pivotSpeed.value = playback.pivotSpeed;
-			// At high replay speeds a storm view would show thousands of flashes at once: keep the newest.
-			const from = stormView ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
+			const now = performance.now();
+			const first = !Number.isFinite(lastWall);
+			const dt = first ? 0 : (now - lastWall) / 1000;
+			lastWall = now;
+			// At replay speed a storm view would show thousands of flashes at once: a seeded sample of them is drawn in full, every flash lights the cloud.
+			target = stormView ? heroTarget(playback.speed) : Infinity;
+			alive = stormView ? aliveCount(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs)) : 0;
+			share = followShare(share, heroShare(target, alive), dt, playback.jumped || stormView !== sampled);
+			sampled = stormView;
+			sample.value = share;
+			// The sample is the budget: the cap on the newest flashes binds only while every flash is drawn.
+			const from = stormView && share === 1 ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
 			budgetFrom.value = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
+			const lightFrom = stormView ? budgetStart(ring, utcMs, DENSITY.lightMapCeiling) : Number.NEGATIVE_INFINITY;
+			lightBudgetFrom.value = Number.isFinite(lightFrom) ? (lightFrom - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;
-			channels.sync(utcMs, playback, delays, viewKmPerPx * scale.value < CHANNEL_VIEW_KM_PER_PX);
+			lightMapOff.value = lightMap && Number(clouds?.uniforms.cloudShown?.value ?? 0) > 0.5 ? 0 : 1;
+			channels.sync(utcMs, playback, delays, viewKmPerPx * scale.value < CHANNEL_VIEW_KM_PER_PX, share);
 			channelGeometry.instanceCount = channels.count;
 			poolShift.value = Number.isFinite(channels.origin) ? (channels.origin - instances.origin) / 1000 : 0;
-			const now = performance.now();
-			const step = Number.isFinite(lastWall) ? Math.min((now - lastWall) / 1000, HALO_FADE) : HALO_FADE;
-			lastWall = now;
+			const step = first ? HALO_FADE : Math.min(dt, HALO_FADE);
 			const haloTarget = channels.flashes <= CHANNEL.haloCapacity ? 1 : 0;
 			const halo = material.uniforms.haloStrength;
 			if (haloTarget > halo.value) halo.value = Math.min(1, halo.value + step / HALO_FADE);
 			else if (haloTarget < halo.value) halo.value = Math.max(0, halo.value - step / HALO_FADE);
 			haloMesh.visible = halo.value > 0;
+		},
+		get heroShare() {
+			return share;
+		},
+		get stats() {
+			return { alive, drawn: channels.flickering, share, target, channels: channels.flashes };
 		},
 		get viewKmPerPx() {
 			return viewKmPerPx;
@@ -346,16 +393,27 @@ export const LIGHT_WINDOW = {
 	nearLevel: 0.45,
 } as const;
 
-/** Scene time (UTC ms) of the `count`-th newest flash played by `now`, or -Infinity when fewer have played. */
-export function budgetStart(ring: FlashRing, now: number, count: number): number {
+/** Ring index (oldest = 0) after the last flash played by `time`. */
+function playedBy(ring: FlashRing, time: number): number {
 	let lo = 0;
 	let hi = ring.size;
 	while (lo < hi) {
 		const mid = (lo + hi) >> 1;
-		if (ring.time[ring.slot(mid)] <= now) lo = mid + 1;
+		if (ring.time[ring.slot(mid)] <= time) lo = mid + 1;
 		else hi = mid;
 	}
+	return lo;
+}
+
+/** Scene time (UTC ms) of the `count`-th newest flash played by `now`, or -Infinity when fewer have played. */
+export function budgetStart(ring: FlashRing, now: number, count: number): number {
+	const lo = playedBy(ring, now);
 	return lo > count ? ring.time[ring.slot(lo - count)] : Number.NEGATIVE_INFINITY;
+}
+
+/** Flashes played within the `spanMs` of scene time up to `now`. */
+export function aliveCount(ring: FlashRing, now: number, spanMs: number): number {
+	return playedBy(ring, now) - playedBy(ring, now - spanMs);
 }
 
 /** Light map window around `target` (radians) for a camera `heightKm` above the ground: centre longitude and latitude, half extents. */
@@ -369,13 +427,13 @@ export function lightWindow(target: { lat: number; lon: number }, heightKm: numb
 
 
 /** Renders the flashes into an equirectangular glow map around what the camera looks at, wrapped at the antimeridian. */
-function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, width: number, radius: number, nearLevel: number) {
+function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, budgetFrom: NumberUniform, width: number, radius: number, nearLevel: number) {
 	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, format: RedFormat, depthBuffer: false });
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
-	const { time, duration, flicker, speed, pivot, pivotSpeed, budgetFrom, budgetFade } = flashes.uniforms;
+	const { time, duration, flicker, speed, pivot, pivotSpeed, budgetFade } = flashes.uniforms;
 	const bounds = new Vector4(0, 0, Math.PI, Math.PI / 2);
 	const splat = { value: LIGHT_WINDOW.farSplat as number };
 	const level = { value: 1 };

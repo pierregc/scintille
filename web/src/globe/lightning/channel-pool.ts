@@ -1,5 +1,6 @@
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import { CHANNEL, flashSeed, isGround } from './channel';
+import { heroLot } from './density';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { channelSkeleton, MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
@@ -29,9 +30,14 @@ export class ChannelPool {
 	count = 0;
 	/** Flashes with a channel in the pool. */
 	flashes = 0;
+	/** Flashes of the sample still in their flicker or fade, what the pool wants a slot for; at most `capacity` are counted. */
+	flickering = 0;
 	readonly #slots: (string | undefined)[];
 	readonly #free: number[] = [];
 	readonly #byKey = new Map<string, number>();
+	/** Lot of each ring slot, keyed by the flash time it was computed for. */
+	readonly #lot: Float32Array;
+	readonly #lotTime: Float64Array;
 	#generation = -1;
 	#delays: SourceDelays | null = null;
 
@@ -39,11 +45,16 @@ export class ChannelPool {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
 		this.data = new Float32Array(capacity * MAX_SEGMENTS * SEGMENT_STRIDE);
 		this.#slots = new Array<string | undefined>(capacity);
+		this.#lot = new Float32Array(ring.capacity);
+		this.#lotTime = new Float64Array(ring.capacity);
 		for (let s = capacity - 1; s >= 0; s--) this.#free.push(s);
 	}
 
-	/** Keeps a slot for each flash still in its flicker phase at `sceneTime`; `enabled` false empties the pool. */
-	sync(sceneTime: number, playback = new FlashPlayback(), delays: SourceDelays = NO_DELAY, enabled = true): void {
+	/**
+	 * Keeps a slot for each flash of the sample still in its flicker phase at `sceneTime`: those whose lot is
+	 * under `share` (1 keeps every flash); `enabled` false empties the pool.
+	 */
+	sync(sceneTime: number, playback = new FlashPlayback(), delays: SourceDelays = NO_DELAY, enabled = true, share = 1): void {
 		const ring = this.ring;
 		if (ring.generation !== this.#generation || delays !== this.#delays || !(Math.abs(sceneTime - this.origin) < REBASE_MS)) {
 			this.#generation = ring.generation;
@@ -66,11 +77,13 @@ export class ChannelPool {
 				if (ring.time[s] > sceneTime - delays.min) continue;
 				const playsAt = ring.time[s] + delays.ms[ring.source[s]];
 				if (playsAt > sceneTime) continue;
+				if (share < 1 && this.#lotOf(s) >= share) continue;
 				if (playback.age(playsAt, sceneTime) >= flickerLength(ring.durationMs[s]) + CHANNEL.fade) continue;
 				if (this.#twin(wanted, s)) continue;
 				wanted.push(i);
 			}
 		}
+		this.flickering = wanted.length;
 		const keep = new Set<string>();
 		for (const i of wanted) keep.add(this.#key(i));
 		for (const [key, slot] of this.#byKey) {
@@ -111,6 +124,16 @@ export class ChannelPool {
 			this.#free.push(s);
 		}
 		this.count = 0;
+	}
+
+	#lotOf(s: number): number {
+		const ring = this.ring;
+		const time = ring.time[s];
+		if (this.#lotTime[s] !== time) {
+			this.#lot[s] = heroLot(flashSeed(time, ring.lat[s], ring.lon[s]), ring.intensity[s]);
+			this.#lotTime[s] = time;
+		}
+		return this.#lot[s];
 	}
 
 	/** Whether another instrument's detection of the same flash already has a channel among `wanted`, newest first. */

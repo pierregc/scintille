@@ -68,7 +68,7 @@ export interface GlobeApp {
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
 	readonly sound: Sound;
-	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView'>;
+	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView' | 'stats'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Time of the newest flashes drawn, for the selected storm's sources if any: ages are measured from it. */
@@ -374,7 +374,7 @@ export function createGlobeApp(
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
-		sound.update(now, delays);
+		sound.update(now, delays, lightning.heroShare);
 		if (!renderParams && fps.frame(time)) downgrade();
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {

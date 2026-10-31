@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
-import { budgetStart, createLightning, lightWindow } from './index';
+import { DENSITY, heroShare } from './density';
+import { aliveCount, budgetStart, createLightning, lightWindow } from './index';
 import { MAX_SEGMENTS } from './skeleton';
 
 afterEach(() => {
@@ -109,6 +110,92 @@ describe('storm view budget', () => {
 		expect(budgetStart(ring, 100_350, 2)).toBe(100_200);
 		expect(budgetStart(ring, 100_350, 4)).toBe(Number.NEGATIVE_INFINITY);
 		expect(budgetStart(ring, 100_400, 4)).toBe(100_100);
+		expect(budgetStart(ring, 100_400, Infinity)).toBe(Number.NEGATIVE_INFINITY);
+	});
+
+	it('counts the flashes played within a span of scene time', () => {
+		const ring = new FlashRing(16);
+		ring.push(decodeChunk(encodeChunk(100, [0, 100, 200, 300, 400].map((offsetMs) => ({ offsetMs, lat: 0, lon: 0 }))).buffer));
+		expect(aliveCount(ring, 100_400, 250)).toBe(3);
+		expect(aliveCount(ring, 100_350, 51)).toBe(1);
+		expect(aliveCount(ring, 100_350, 50)).toBe(0);
+		expect(aliveCount(ring, 99_000, 1000)).toBe(0);
+		expect(aliveCount(ring, 200_000, 1e6)).toBe(5);
+	});
+});
+
+describe('storm view sample', () => {
+	/** 2,000 flashes over 240 s of scene time, then 200 over the next 240 s. */
+	const burst = () => {
+		const ring = new FlashRing(4096);
+		const flashes = [
+			...Array.from({ length: 2000 }, (_, i) => ({ offsetMs: i * 120, lat: (i % 50) * 0.1, lon: Math.floor(i / 50) * 0.1 })),
+			...Array.from({ length: 200 }, (_, i) => ({ offsetMs: 240_000 + i * 1200, lat: (i % 50) * 0.1, lon: 5 + Math.floor(i / 50) * 0.1 })),
+		];
+		ring.push(decodeChunk(encodeChunk(100, flashes).buffer));
+		return ring;
+	};
+
+	it('draws a share of the flashes sized for the replay speed and lifts the newest-flashes cap', () => {
+		const ring = burst();
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		lightning.stormView = true;
+		lightning.setTime(340_000, undefined, 600);
+		const wanted = heroShare(20, 2000);
+		expect(lightning.stats.alive).toBe(2000);
+		expect(lightning.stats.target).toBe(20);
+		expect(lightning.heroShare).toBeCloseTo(wanted, 9);
+		expect(material.uniforms.heroShare.value).toBe(lightning.heroShare);
+		expect(material.uniforms.budgetFrom.value).toBe(-1e6);
+		expect(lightning.stats.drawn).toBeGreaterThan(0);
+		expect(lightning.stats.drawn).toBeLessThan(200);
+		lightning.setTime(340_000, undefined, 600);
+		expect(lightning.stats.channels).toBe(lightning.stats.drawn);
+		lightning.dispose();
+	});
+
+	it('draws every flash at 1× and outside storm views, where the newest-flashes cap applies', () => {
+		const ring = burst();
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		const material = lightning.mesh.material as ShaderMaterial;
+		lightning.setTime(340_000, undefined, 600);
+		expect(lightning.heroShare).toBe(1);
+		expect(material.uniforms.budgetFrom.value).toBe(-1e6);
+		lightning.stormView = true;
+		lightning.setTime(340_000, undefined, 1);
+		expect(lightning.heroShare).toBe(1);
+		expect(lightning.stats.target).toBe(Infinity);
+		expect(material.uniforms.budgetFrom.value).toBeCloseTo((budgetStart(ring, 340_000, 500) - 340_000) / 1000, 6);
+		lightning.dispose();
+	});
+
+	it('follows a changing rate over the smoothing time and jumps on a seek', () => {
+		const ring = burst();
+		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+		let wall = 0;
+		vi.spyOn(performance, 'now').mockImplementation(() => wall);
+		lightning.stormView = true;
+		lightning.setTime(340_000, undefined, 600);
+		const dense = lightning.heroShare;
+		const shares: number[] = [];
+		for (let frame = 1; frame <= 120; frame++) {
+			wall += 1000 / 60;
+			lightning.setTime(340_000 + frame * 10_000, undefined, 600);
+			shares.push(lightning.heroShare);
+		}
+		const sparse = heroShare(20, lightning.stats.alive);
+		expect(lightning.stats.alive).toBeLessThan(2000);
+		for (let i = 1; i < shares.length; i++) {
+			expect(shares[i]).toBeGreaterThanOrEqual(shares[i - 1]);
+			expect(shares[i] / shares[i - 1]).toBeLessThanOrEqual((sparse / dense) ** (1 / 60 / DENSITY.smoothing) + 1e-9);
+		}
+		expect(shares[shares.length - 1]).toBeGreaterThan(dense);
+		expect(shares[shares.length - 1]).toBeLessThan(sparse);
+		wall += 1000 / 60;
+		lightning.setTime(340_000, undefined, 600);
+		expect(lightning.heroShare).toBeCloseTo(dense, 9);
+		lightning.dispose();
 	});
 });
 

@@ -1,3 +1,5 @@
+import { flashSeed } from '../lightning/channel';
+import { heroLot } from '../lightning/density';
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import type { Vec3 } from '../sun';
 import { distanceKm, facesCamera, type Voicing, voicing } from './spatial';
@@ -78,8 +80,11 @@ export class CrackleScheduler {
 		this.#next = Number.NEGATIVE_INFINITY;
 	}
 
-	/** Returns the crackle to start for flashes played since the previous call, at most one per call. */
-	update(sceneTime: number, audioTime: number, listener: Listener, delays: SourceDelays = NO_DELAY): Trigger | null {
+	/**
+	 * Returns the crackle to start for flashes played since the previous call, at most one per call. Only the
+	 * sample drawn in full sounds: the flashes whose lot is under `heroShare` (1 voices every flash).
+	 */
+	update(sceneTime: number, audioTime: number, listener: Listener, delays: SourceDelays = NO_DELAY, heroShare = 1): Trigger | null {
 		const from = this.#last;
 		this.#last = sceneTime;
 		const step = sceneTime - from;
@@ -100,6 +105,7 @@ export class CrackleScheduler {
 				const s = ring.slot(i);
 				if (ring.time[s] > sceneTime - delay) break;
 				if (delays.ms[ring.source[s]] !== delay) continue;
+				if (heroShare < 1 && heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) >= heroShare) continue;
 				const lat = ring.lat[s] * DEG;
 				const lon = ring.lon[s] * DEG;
 				const cosLat = Math.cos(lat);
