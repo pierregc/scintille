@@ -53,6 +53,7 @@ describe('published storm extracts', () => {
 			{ ...fixture, replay: { ...fixture.replay, chunks: [{ path: null }] } },
 			{ ...fixture, bounds: { ...fixture.bounds, south: -91 } },
 			{ ...fixture, replay: { ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], path: 'https://other.test/chunk.bin.gz' }] } },
+			{ ...fixture, replay: { ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], event_min: '2026-07-15T18:05:00Z' }] } },
 		];
 		for (const metadata of variants) {
 			const fetchFn: typeof fetch = async () => Response.json(metadata);
@@ -72,7 +73,7 @@ describe('published storm extracts', () => {
 		}
 	});
 
-	it('starts at the first flash the chunks hold, which may be after the catalog start', async () => {
+	it('starts at the first flash the chunks hold, which may be after the catalog start and never before it', async () => {
 		const chunk = fixture.replay.chunks[0];
 		const early = { ...fixture, storm: { ...fixture.storm, t_start: '2026-07-15T17:30:01Z' } };
 		const empty = { ...chunk, path: `storms/chunks/${'0'.repeat(64)}.bin.gz`, start: '2026-07-15T17:00:00Z', end: '2026-07-15T18:00:00Z', flash_count: 0, event_min: null, event_max: null };
@@ -81,6 +82,7 @@ describe('published storm extracts', () => {
 			[{ ...early, replay: { ...early.replay, chunks: [{ ...chunk, event_min: null }] } }, chunk.start],
 			[{ ...early, replay: { ...early.replay, chunks: [empty, chunk] } }, chunk.event_min],
 			[{ ...early, replay: { ...early.replay, chunks: [], flash_count: 0 } }, early.storm.t_start],
+			[{ ...fixture, storm: { ...fixture.storm, t_start: '2026-07-15T18:00:30Z' } }, '2026-07-15T18:00:30Z'],
 		];
 		for (const [metadata, expected] of cases) {
 			const fetchFn: typeof fetch = async () => Response.json(metadata);

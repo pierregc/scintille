@@ -1,3 +1,4 @@
+import { replayStart } from '../archive/storm';
 import type { SceneClock } from '../clock';
 import type { GlobeControls } from '../controls';
 import type { StormReplay } from './index';
@@ -39,7 +40,7 @@ export class ReplayNavigation {
 		const detail = this.replay.state.selected;
 		if (!detail || this.clock.mode !== 'replay') return null;
 		return { slug: detail.storm.slug,
-			time: Math.min(Math.max(this.clock.time(), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)),
+			time: Math.min(Math.max(this.clock.time(), replayStart(detail)), Date.parse(detail.storm.t_end)),
 			speed: this.clock.speed, paused, view };
 	}
 
