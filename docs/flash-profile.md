@@ -145,12 +145,21 @@ it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 cha
 
 ## Cloud light
 
-Flashes also light the clouds from inside, through a light map: a 1024 × 512 equirectangular window
-around the point the camera looks at, 3 times the camera height in half height, up to the whole globe
-from about 3,300 km. Near the floor its texels are 4.7 km and each flash lights about 2 radii around it;
-from afar, 150 km at least, as on the globe; near the floor it is drawn at 45 %, so channels read over
-it. In-cloud flashes light it where their light has drifted.
-The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
+Flashes also light the clouds from inside, through a light map: an equirectangular window around the
+point the camera looks at, 3 times the camera height in half height, up to the whole globe from about
+3,300 km; 2048 × 1024 texels on `high` (2.3 km at 400 km), 1024 × 512 on `medium` and on phones. Each
+flash lights a disc that ends at 1.3 `r` and keeps 4 % of its centre at `r`, the observed footprint
+(`CLOUD_LIGHT`): the whole disc during its pulses (its profile from 0.35, whole from 0.7, whatever its
+energy, which sets the level), a patch of 0.65 of it between them, where its light has drifted; at
+least 2 texels, and 150 km from afar, as on the globe. Near the floor it is drawn at 35 %, so channels
+read over it; in a storm view the map keeps the brightest flash at each point, never their sum. The
+cloud reads the map sharpened (`pow(light, 1.25)`) and adds `1 - exp(-5 × light)` of the flash colour
+into its headroom only, in the flat layer and in the volume alike, and keeps 35 % of it over sunlit
+cloud, a styled trace like the channel's (physics: nothing of a flash shows by day). Where the clouds
+are in relief, the volume lights each column in a band 3.5 km wide centred 3 km under the column's own
+top where that top rises above 11.5 km and at the assumed flash height of 8.5 km otherwise, at 1.8
+times the flat layer's level: towers glow near their crown, thin anvils veil, low cloud stays dark, so
+the lit area takes the cloud's shape (ADR 0031). Reduced motion keeps the whole disc.
 
 ## Reduced motion
 

@@ -38,6 +38,7 @@ import {
 	styleFragmentShader,
 	sunFragmentShader,
 } from './volume.glsl';
+import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { lookedAt } from '../surface';
 
 export { volumeFieldGlsl } from './field.glsl';
@@ -635,7 +636,7 @@ export function createCloudVolume({
 			marchUniforms.subPixel.value.set(halton(Math.floor(frame / 4) + 1, 2) - 0.5, halton(Math.floor(frame / 4) + 1, 3) - 0.5);
 			marchUniforms.flashLight.value = view.light?.map ?? null;
 			if (view.light) marchUniforms.flashWindow.value = view.light.window;
-			marchUniforms.flashGain.value = view.light ? 5 : 0;
+			marchUniforms.flashGain.value = view.light ? CLOUD_LIGHT.gain : 0;
 			// Earth frame (km) to clip space, and its inverse for the rays.
 			toEarth.copy(view.earth.matrixWorld).scale(new Vector3(1 / kmPerUnit, 1 / kmPerUnit, 1 / kmPerUnit));
 			viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(toEarth);

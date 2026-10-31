@@ -338,12 +338,12 @@ export function createLightning(
 export const LIGHT_WINDOW = {
 	/** Half height of the window over the camera height. */
 	heightScale: 3,
-	/** Splat radius over the observed radius, near and far, and the splat floor far away, km. */
-	nearSplat: 2,
+	/** Splat radius over the observed radius: the disc ends at the footprint near the floor, wider from afar; and the splat floor far away, km. */
+	nearSplat: 1.3,
 	farSplat: 3,
 	farSpreadKm: 150,
 	/** Cloud light level near the floor, so channels still read over the lit cloud. */
-	nearLevel: 0.45,
+	nearLevel: 0.35,
 } as const;
 
 /** Scene time (UTC ms) of the `count`-th newest flash played by `now`, or -Infinity when fewer have played. */

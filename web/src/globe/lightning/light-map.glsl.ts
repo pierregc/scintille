@@ -1,4 +1,5 @@
 import { channelGlsl, cloudDriftGlsl } from './channel';
+import { CLOUD_LIGHT } from './cloud-light';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -45,15 +46,19 @@ void main() {
 	// Flashes near the antimeridian of the window are drawn a second time on the other side.
 	relative += wrap * (relative > 0.0 ? -6.28318531 : 6.28318531);
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
+	float pulse = 0.0;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground) * intensityBrightness(flashShape.x) * onScreen(flash.w);
+		pulse = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground);
+		brightness = pulse * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
 	}
-	float radius = max(max(flashShape.y * splat, spreadKm), minSplatKm) / 6371.0;
+	// The whole footprint lights on the flash's pulses, whatever its energy, a smaller patch between them, where the light has drifted; reduced motion keeps the footprint.
+	float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse), flicker);
+	float radius = max(max(flashShape.y * splat * mix(${f(CLOUD_LIGHT.dimSplat)}, 1.0, full), spreadKm), minSplatKm) / 6371.0;
 	vec2 pixels = vec2(radius / max(cos(lat), 0.05), radius) / window.zw * mapSize * 0.5;
 	gl_PointSize = 2.0 * max(pixels.x, pixels.y);
 	gl_Position = vec4(center, 0.0, 1.0);
@@ -74,7 +79,7 @@ void main() {
 }
 `;
 
-/** Reads the light map at an Earth UV, zero outside its window, fading over the window's last tenth. */
+/** Reads the light map at an Earth UV, sharpened, zero outside its window, fading over the window's last tenth. */
 export const flashLightGlsl = /* glsl */ `
 uniform sampler2D flashLight;
 uniform vec4 flashWindow;
@@ -82,13 +87,13 @@ float flashLightAt(vec2 uv) {
 	vec2 angle = vec2((uv.x - 0.5) * 6.28318531, (uv.y - 0.5) * 3.14159265);
 	vec2 local = vec2(mod(angle.x - flashWindow.x + 3.14159265, 6.28318531) - 3.14159265, angle.y - flashWindow.y) / flashWindow.zw;
 	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
-	return texture2D(flashLight, local * 0.5 + 0.5).r * edge.x * edge.y;
+	return pow(texture2D(flashLight, local * 0.5 + 0.5).r, ${f(CLOUD_LIGHT.sharpen)}) * edge.x * edge.y;
 }
 // The same, without implicit gradients, for use inside loops.
 float flashLightAtLod(vec2 uv) {
 	vec2 angle = vec2((uv.x - 0.5) * 6.28318531, (uv.y - 0.5) * 3.14159265);
 	vec2 local = vec2(mod(angle.x - flashWindow.x + 3.14159265, 6.28318531) - 3.14159265, angle.y - flashWindow.y) / flashWindow.zw;
 	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
-	return textureLod(flashLight, local * 0.5 + 0.5, 0.0).r * edge.x * edge.y;
+	return pow(textureLod(flashLight, local * 0.5 + 0.5, 0.0).r, ${f(CLOUD_LIGHT.sharpen)}) * edge.x * edge.y;
 }
 `;

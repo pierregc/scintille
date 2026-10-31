@@ -1,4 +1,6 @@
+import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { flashLightGlsl } from '../lightning/light-map.glsl';
+import { glslFloat as f } from '../lightning/profile';
 import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
 export const cloudsVertexShader = /* glsl */ `
@@ -222,8 +224,8 @@ void main() {
 #ifdef VOLUME
 	color = reliefTone(color, relief);
 #endif
-	// Flashes light the cloud from inside, barely visible on sunlit tops; clear sky has no alpha, so it never glows.
-	color += flashColor * (1.0 - exp(-flashGain * flashLightAt(vUv))) * max(1.0 - color, 0.0);
+	// Flashes light the cloud from inside, into its headroom and as a trace by day; clear sky has no alpha, so it never glows.
+	color += flashColor * (1.0 - exp(-flashGain * flashLightAt(vUv))) * max(1.0 - color, 0.0) * mix(1.0, ${f(CLOUD_LIGHT.dayLevel)}, smoothstep(-0.05, 0.25, s));
 
 #ifdef VOLUME
 	// Near the ground, the flat layer eases dense clouds like the volume, so a storm looks as dense
