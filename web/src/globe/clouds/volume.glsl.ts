@@ -747,12 +747,14 @@ void main() {
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
 				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
 				L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
-				// Flashes light the cloud from inside, in a band under each column's own top, so the lit
-				// area takes the cloud's shape, as a trace by day. Kept apart from the history, so each flash rises and fades in real time.
-				float hm = 0.5 * (length(ro + rd * ta) + length(ro + rd * tb)) - R;
+				// Flashes light the cloud from inside, in a band under each column's own top, read at two depths that
+				// share the crossing's light however the steps cut it: the lit area takes the cloud's shape, as a trace
+				// by day. Kept apart from the history, so each flash rises and fades in real time.
 				vec2 geo = vec2(ll.y / 6.283185307 + 0.5, ll.x / 3.141592654 + 0.5);
-				float glow = flashLightAtLod(geo) * flashBand(hm, col.y);
-				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * mix(1.0, ${f(CLOUD_LIGHT.dayLevel)}, smoothstep(-0.05, 0.25, s));
+				vec2 glowAt = ta + glowDepths(max(sigma, 1e-3), len);
+				float inBand = 0.5 * (flashBand(length(ro + rd * glowAt.x) - R, col.y) + flashBand(length(ro + rd * glowAt.y) - R, col.y));
+				float glow = flashLightAtLod(geo) * inBand;
+				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * cloudLightDay(s);
 				depthSum += T * alpha * tv;
 				heightSum += T * alpha * h;
 				depthWeight += T * alpha;

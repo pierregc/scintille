@@ -79,21 +79,25 @@ void main() {
 }
 `;
 
-/** Reads the light map at an Earth UV, sharpened, zero outside its window, fading over the window's last tenth. */
+/** Reads the light map at an Earth UV, sharpened near the floor, zero outside its window, fading over the window's last tenth. */
 export const flashLightGlsl = /* glsl */ `
 uniform sampler2D flashLight;
 uniform vec4 flashWindow;
+// Sharper near the floor; the globe overview keeps its broad glow.
+float sharpenFlashLight(float light) {
+	return pow(light, mix(${f(CLOUD_LIGHT.sharpen)}, 1.0, clamp(flashWindow.w / 1.57079633, 0.0, 1.0)));
+}
 float flashLightAt(vec2 uv) {
 	vec2 angle = vec2((uv.x - 0.5) * 6.28318531, (uv.y - 0.5) * 3.14159265);
 	vec2 local = vec2(mod(angle.x - flashWindow.x + 3.14159265, 6.28318531) - 3.14159265, angle.y - flashWindow.y) / flashWindow.zw;
 	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
-	return pow(texture2D(flashLight, local * 0.5 + 0.5).r, ${f(CLOUD_LIGHT.sharpen)}) * edge.x * edge.y;
+	return sharpenFlashLight(texture2D(flashLight, local * 0.5 + 0.5).r) * edge.x * edge.y;
 }
 // The same, without implicit gradients, for use inside loops.
 float flashLightAtLod(vec2 uv) {
 	vec2 angle = vec2((uv.x - 0.5) * 6.28318531, (uv.y - 0.5) * 3.14159265);
 	vec2 local = vec2(mod(angle.x - flashWindow.x + 3.14159265, 6.28318531) - 3.14159265, angle.y - flashWindow.y) / flashWindow.zw;
 	vec2 edge = 1.0 - smoothstep(0.9, 1.0, abs(local));
-	return pow(textureLod(flashLight, local * 0.5 + 0.5, 0.0).r, ${f(CLOUD_LIGHT.sharpen)}) * edge.x * edge.y;
+	return sharpenFlashLight(textureLod(flashLight, local * 0.5 + 0.5, 0.0).r) * edge.x * edge.y;
 }
 `;
