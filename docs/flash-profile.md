@@ -136,11 +136,11 @@ screen it follows the tone (`overlapTone`): nothing where the sRGB conversion is
 from a width on and about 0.39 / s below in mid tones. It is exact from a width on, within 5 % below in
 mid and bright tones, up to 16 % over for the dimmest tones of the shortest segments, and stops growing
 below s = 1/16 (`RIBBON.minSpan`). Against the old drawing, on paused captures at 1440 × 900, channels
-add 93 to 102 % of their old light (C1 to C4 lightning alone, C14, C15, and the whole storm and a window
+add 92 to 102 % of their old light (C1 to C4 lightning alone, C14, C15, and the whole storm and a window
 pose at night; least at the window poses) and trunks keep theirs within 1 % (C20 and C14 at 2400 × 1500).
 A segment foreshortened on screen adds light for its screen length only. A chain of uneven segments
-shorter than their width still varies along it, less than before (within 22 % of its mean, against 25
-to 30 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
+shorter than their width still varies along it, less than before (within 23 % of its mean, against up
+to 35 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
 dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
 of 1 this also widens the thinnest stretches of main channels, 1.1 to 1.25 px wide (the start of ground
 leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
