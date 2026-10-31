@@ -247,7 +247,7 @@ describe('storm view sample', () => {
 		lightning.dispose();
 	});
 
-	it('keeps half a sprite outside the sample on the frames without a cloud light', () => {
+	it('eases the flashes outside the sample to half a sprite while no cloud light is drawn', () => {
 		const ring = burst();
 		const fakeRenderer = {
 			getRenderTarget: () => null,
@@ -260,11 +260,14 @@ describe('storm view sample', () => {
 		} as unknown as WebGLRenderer;
 		const camera = new PerspectiveCamera();
 		camera.position.set(0, 0, 3);
+		let wall = 0;
+		vi.spyOn(performance, 'now').mockImplementation(() => wall);
 		const off = (width: number, drawn: boolean[]) => {
 			const lightning = createLightning(ring, { storage: null, lightMapWidth: width });
 			const material = lightning.mesh.material as ShaderMaterial;
 			lightning.stormView = true;
 			const values = drawn.map((light) => {
+				wall += 1000 / 60;
 				if (light) lightning.renderLightMap(fakeRenderer, camera);
 				lightning.setTime(340_000, undefined, 600);
 				return material.uniforms.lightMapOff.value as number;
@@ -273,7 +276,10 @@ describe('storm view sample', () => {
 			return values;
 		};
 		expect(off(0, [false, true])).toEqual([1, 1]);
-		expect(off(64, [false, true, true, false])).toEqual([1, 0, 0, 1]);
+		// 15 frames of 1/60 s make the 0.25 s fade.
+		const values = off(64, [false, ...Array<boolean>(16).fill(true), false, false]);
+		const expected = [1, ...Array.from({ length: 16 }, (_, k) => Math.max(0, 1 - (k + 1) / 15)), 1 / 15, 2 / 15];
+		values.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 9));
 	});
 
 	it('settles within 5 s of play on a storm of 2,000 flashes per wall second at 600×', () => {
@@ -306,6 +312,36 @@ describe('storm view sample', () => {
 		expect(settled).toBeLessThan(5);
 		expect(Math.abs(lightning.heroShare / wanted - 1)).toBeLessThan(0.1);
 		lightning.dispose();
+	});
+
+	it('keeps the drawn count on target through a speed change during play', () => {
+		// One flash every 300 ms of scene time, each lit 0.4 s: 80 alive at once at 60×, 800 at 600×.
+		const ring = new FlashRing(8192);
+		ring.push(decodeChunk(encodeChunk(100, Array.from({ length: 8000 }, (_, i) => ({ offsetMs: i * 300, lat: (i % 100) * 0.05, lon: Math.floor(i / 100) * 0.05, source: 0 }))).buffer));
+		expect(flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade).toBeCloseTo(DENSITY.aliveWindow, 9);
+		let wall = 0;
+		vi.spyOn(performance, 'now').mockImplementation(() => wall);
+		/** Expected drawn count over the target, `1.5 × share × alive / target`, on each frame of the 2 s after switching from `before` to `after`. */
+		const through = (before: number, after: number) => {
+			const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
+			lightning.stormView = true;
+			let scene = 160_000;
+			const frame = (speed: number) => {
+				wall += 1000 / 60;
+				scene += (speed * 1000) / 60;
+				lightning.setTime(scene, undefined, speed);
+				const { share, alive, target } = lightning.stats;
+				return (DENSITY.meanWeight * share * alive) / target;
+			};
+			for (let f = 0; f < 3 * 60; f++) frame(before);
+			const ratios = Array.from({ length: 2 * 60 }, () => frame(after));
+			lightning.dispose();
+			return ratios;
+		};
+		for (const ratios of [through(60, 600), through(600, 60)]) {
+			expect(Math.max(...ratios)).toBeLessThanOrEqual(1.1);
+			expect(Math.min(...ratios)).toBeGreaterThanOrEqual(0.9);
+		}
 	});
 });
 

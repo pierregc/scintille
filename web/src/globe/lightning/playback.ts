@@ -36,9 +36,13 @@ export class FlashPlayback {
 	/** Scene ms before `now` holding every flash started less than `seconds` of wall clock time ago. */
 	span(seconds: number, now: number): number {
 		const wall = seconds * 1000;
-		const back = wall * this.speed;
-		if (now < this.pivot || now - back >= this.pivot) return back;
+		if (!this.straddles(seconds, now)) return wall * this.speed;
 		return now - this.pivot + (wall - (now - this.pivot) / this.speed) * this.pivotSpeed;
+	}
+
+	/** Whether the `seconds` of wall clock time up to `now` reach back past the last speed change during play. */
+	straddles(seconds: number, now: number): boolean {
+		return now >= this.pivot && now - seconds * 1000 * this.speed < this.pivot;
 	}
 }
 

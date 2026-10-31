@@ -115,13 +115,13 @@ class NumberUniform {
 	value = 0.5;
 }
 
-/** Seconds for the channel halo to fade in or out when the channel count crosses its budget. */
+/** Seconds for the channel halo to fade in or out when the channel count crosses its budget, and for the half sprite of the flashes outside the sample when the cloud light comes or goes. */
 const HALO_FADE = 0.25;
 
 /** Beyond this zoom, km per CSS px, even the largest flash has no readable channel. */
 const CHANNEL_VIEW_KM_PER_PX = (CHANNEL.lengthScale * 25) / 6;
 
-/** A storm view shows at most this many flashes at once, the newest; older ones fade within `BUDGET_FADE` wall clock seconds. */
+/** A storm view shows the newest this many flashes while every flash is drawn in full (share 1), older ones fading within `BUDGET_FADE` wall clock seconds; otherwise it caps only the points outside the sample (`pointBudgetFrom`). */
 export const STORM_VIEW_FLASHES = 500;
 const BUDGET_FADE = 0.15;
 
@@ -297,6 +297,7 @@ export function createLightning(
 	let load = 0;
 	let target = Infinity;
 	let sampled = false;
+	let straddled = false;
 	let lastTime = Number.NaN;
 	let lastDelays = NO_DELAY;
 	let lightDrawn = false;
@@ -321,10 +322,14 @@ export function createLightning(
 			const first = !Number.isFinite(lastWall);
 			const dt = first ? 0 : (now - lastWall) / 1000;
 			lastWall = now;
+			const step = first ? HALO_FADE : Math.min(dt, HALO_FADE);
 			// At replay speed a storm view would show thousands of flashes at once: a seeded sample of them is drawn in full, every flash lights the cloud.
 			target = stormView ? heroTarget(playback.speed) : Infinity;
 			load = stormView ? aliveLoad(ring, utcMs, playback.span(DENSITY.aliveWindow, utcMs), DENSITY.aliveWindow) : 0;
-			share = followShare(share, heroShare(target, load), dt, playback.jumped || stormView !== sampled);
+			// While the alive window holds flashes from before a speed change, and on the frame it leaves them, the load tracks the flashes alive frame by frame: so does the share.
+			const straddling = playback.straddles(DENSITY.aliveWindow, utcMs);
+			share = followShare(share, heroShare(target, load), dt, playback.jumped || straddling || straddled || stormView !== sampled);
+			straddled = straddling;
 			sampled = stormView;
 			sample.value = share;
 			// The sample is the budget: the cap on the newest flashes binds every flash while all are drawn, and only the points outside the sample otherwise.
@@ -335,13 +340,13 @@ export function createLightning(
 			const lightFrom = stormView ? budgetStart(ring, utcMs, DENSITY.lightMapCeiling) : Number.NEGATIVE_INFINITY;
 			lightBudgetFrom.value = Number.isFinite(lightFrom) ? (lightFrom - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;
-			// Without a cloud light last frame (no light map on this tier, clouds hidden or without a frame), flashes outside the sample keep half a sprite.
-			lightMapOff.value = lightDrawn ? 0 : 1;
+			// Without a cloud light last frame (no light map on this tier, clouds hidden or without a frame), flashes outside the sample ease to half a sprite.
+			const off = lightDrawn ? 0 : 1;
+			lightMapOff.value = off > lightMapOff.value ? Math.min(off, lightMapOff.value + step / HALO_FADE) : Math.max(off, lightMapOff.value - step / HALO_FADE);
 			lightDrawn = false;
 			channels.sync(utcMs, playback, delays, viewKmPerPx * scale.value < CHANNEL_VIEW_KM_PER_PX, share);
 			channelGeometry.instanceCount = channels.count;
 			poolShift.value = Number.isFinite(channels.origin) ? (channels.origin - instances.origin) / 1000 : 0;
-			const step = first ? HALO_FADE : Math.min(dt, HALO_FADE);
 			const haloTarget = channels.flashes <= CHANNEL.haloCapacity ? 1 : 0;
 			const halo = material.uniforms.haloStrength;
 			if (haloTarget > halo.value) halo.value = Math.min(1, halo.value + step / HALO_FADE);
