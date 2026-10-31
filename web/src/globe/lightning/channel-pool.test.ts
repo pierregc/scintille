@@ -74,6 +74,24 @@ describe('ChannelPool', () => {
 		expect(pool.flashes).toBe(Math.min(60, sample.length + BUILDS_PER_FRAME));
 	});
 
+	it('draws the lot of the flash a ring slot holds now, though it has the time of the one before', () => {
+		const { ring, pool } = setup([0], 4);
+		const s = ring.slot(0);
+		const lotAt = (lat: number) => heroLot(flashSeed(ring.time[s], lat, ring.lon[s]), ring.intensity[s]);
+		const share = 0.3;
+		const lats = Array.from({ length: 100 }, (_, i) => Math.fround(10 + i * 0.37));
+		const inside = lats.find((lat) => lotAt(lat) < share);
+		const outside = lats.find((lat) => lotAt(lat) >= share * DENSITY.edge);
+		expect(inside).toBeDefined();
+		expect(outside).toBeDefined();
+		ring.lat[s] = inside ?? 0;
+		pool.sync(100_050, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(1);
+		ring.lat[s] = outside ?? 0;
+		pool.sync(100_050, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(0);
+	});
+
 	it('gives one channel to a flash seen by two instruments', () => {
 		const ring = new FlashRing(16);
 		ring.push(decodeChunk(encodeChunk(100, [

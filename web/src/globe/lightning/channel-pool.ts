@@ -33,9 +33,8 @@ export class ChannelPool {
 	readonly #slots: (string | undefined)[];
 	readonly #free: number[] = [];
 	readonly #byKey = new Map<string, number>();
-	/** Lot of each ring slot, keyed by the flash time it was computed for. */
-	readonly #lot: Float64Array;
-	readonly #lotTime: Float64Array;
+	/** Lot of each ring slot, keyed by the flash time and latitude it was computed for; allocated once a share samples the flashes. */
+	#lots: { lot: Float32Array; time: Float64Array; lat: Float32Array } | null = null;
 	#generation = -1;
 	#delays: SourceDelays | null = null;
 
@@ -43,8 +42,6 @@ export class ChannelPool {
 		if (!Number.isInteger(capacity) || capacity <= 0) throw new RangeError(`bad capacity ${capacity}`);
 		this.data = new Float32Array(capacity * MAX_SEGMENTS * SEGMENT_STRIDE);
 		this.#slots = new Array<string | undefined>(capacity);
-		this.#lot = new Float64Array(ring.capacity);
-		this.#lotTime = new Float64Array(ring.capacity);
 		for (let s = capacity - 1; s >= 0; s--) this.#free.push(s);
 	}
 
@@ -125,12 +122,16 @@ export class ChannelPool {
 
 	#lotOf(s: number): number {
 		const ring = this.ring;
+		const n = ring.capacity;
+		const lots = (this.#lots ??= { lot: new Float32Array(n), time: new Float64Array(n).fill(Number.NaN), lat: new Float32Array(n) });
 		const time = ring.time[s];
-		if (this.#lotTime[s] !== time) {
-			this.#lot[s] = heroLot(flashSeed(time, ring.lat[s], ring.lon[s]), ring.intensity[s]);
-			this.#lotTime[s] = time;
+		const lat = ring.lat[s];
+		if (lots.time[s] !== time || lots.lat[s] !== lat) {
+			lots.lot[s] = heroLot(flashSeed(time, lat, ring.lon[s]), ring.intensity[s]);
+			lots.time[s] = time;
+			lots.lat[s] = lat;
 		}
-		return this.#lot[s];
+		return lots.lot[s];
 	}
 
 	/** Whether another instrument's detection of the same flash already has a channel among `wanted`, newest first. */
