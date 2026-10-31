@@ -173,7 +173,7 @@ describe('storm view sample', () => {
 		return ring;
 	};
 
-	it('draws a share of the flashes sized for the replay speed and lifts the newest-flashes cap', () => {
+	it('draws a share of the flashes sized for the replay speed and keeps the newest-flashes cap for the points outside it', () => {
 		const ring = burst();
 		const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
 		const material = lightning.mesh.material as ShaderMaterial;
@@ -188,6 +188,7 @@ describe('storm view sample', () => {
 		expect(lightning.heroShare).toBeCloseTo(wanted, 9);
 		expect(material.uniforms.heroShare.value).toBe(lightning.heroShare);
 		expect(material.uniforms.budgetFrom.value).toBe(-1e6);
+		expect(material.uniforms.pointBudgetFrom.value).toBeCloseTo((budgetStart(ring, 340_000, 500) - 340_000) / 1000, 6);
 		const { alive: all, drawn } = lightning.stats;
 		expect(all).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, 1).alive);
 		expect(drawn).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, lightning.heroShare).drawn);
@@ -213,6 +214,7 @@ describe('storm view sample', () => {
 		expect(lightning.stats.drawn).toBe(lightning.stats.alive);
 		expect(lightning.stats.alive).toBeGreaterThan(0);
 		expect(material.uniforms.budgetFrom.value).toBeCloseTo((budgetStart(ring, 340_000, 500) - 340_000) / 1000, 6);
+		expect(material.uniforms.pointBudgetFrom.value).toBe(-1e6);
 		lightning.dispose();
 	});
 

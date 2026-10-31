@@ -179,6 +179,8 @@ export function createLightning(
 	sample.value = 1;
 	const lightMapOff = new NumberUniform();
 	lightMapOff.value = 1;
+	const pointBudgetFrom = new NumberUniform();
+	pointBudgetFrom.value = -1e6;
 	const scale = new NumberUniform();
 	scale.value = 1;
 	const cloudDefines = clouds ? { ...clouds.defines, CLOUDS: '' } : {};
@@ -203,6 +205,7 @@ export function createLightning(
 			haloStrength: { value: 1 },
 			heroShare: sample,
 			lightMapOff,
+			pointBudgetFrom,
 			sunDirection: { value: new Vector3(1, 0, 0) },
 			exposure: { value: 1.6 },
 			color: { value: new Color('#e4ebff') },
@@ -324,9 +327,11 @@ export function createLightning(
 			share = followShare(share, heroShare(target, load), dt, playback.jumped || stormView !== sampled);
 			sampled = stormView;
 			sample.value = share;
-			// The sample is the budget: the cap on the newest flashes binds only while every flash is drawn.
-			const from = stormView && share === 1 ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
-			budgetFrom.value = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
+			// The sample is the budget: the cap on the newest flashes binds every flash while all are drawn, and only the points outside the sample otherwise.
+			const from = stormView ? budgetStart(ring, utcMs, STORM_VIEW_FLASHES) : Number.NEGATIVE_INFINITY;
+			const fromS = Number.isFinite(from) ? (from - instances.origin) / 1000 : -1e6;
+			budgetFrom.value = share === 1 ? fromS : -1e6;
+			pointBudgetFrom.value = share === 1 ? -1e6 : fromS;
 			const lightFrom = stormView ? budgetStart(ring, utcMs, DENSITY.lightMapCeiling) : Number.NEGATIVE_INFINITY;
 			lightBudgetFrom.value = Number.isFinite(lightFrom) ? (lightFrom - instances.origin) / 1000 : -1e6;
 			budgetFade.value = BUDGET_FADE * playback.speed;

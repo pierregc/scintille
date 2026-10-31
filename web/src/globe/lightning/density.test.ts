@@ -121,5 +121,6 @@ describe('densityGlsl', () => {
 		expect(densityGlsl).toContain(`seed * mix(1.0, ${DENSITY.energyWeight}, clamp(intensity, 0.0, 1.0))`);
 		expect(densityGlsl).toContain(`1.0 - smoothstep(share, share * ${DENSITY.edge}, lot)`);
 		expect(densityGlsl).toContain(`max(smoothstep(${DENSITY.pointFarness[0]}, ${DENSITY.pointFarness[1]}.0, farness), lightMapOff * ${DENSITY.weakGlow})`);
+		expect(densityGlsl).toContain('smoothstep(pointBudgetFrom - budgetFade, pointBudgetFrom, at)');
 	});
 });

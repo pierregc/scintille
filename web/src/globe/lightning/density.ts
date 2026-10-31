@@ -80,10 +80,15 @@ export function followShare(current: number, wanted: number, dt: number, jump = 
 	return Math.abs(next - wanted) <= 1e-3 * wanted ? wanted : next;
 }
 
-/** GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `zoomGlsl`. `heroShare` is the applied share, `lightMapOff` 1 when no cloud light shows. */
+/**
+ * GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `zoomGlsl` and `playbackGlsl`. `heroShare` is
+ * the applied share, `lightMapOff` 1 when no cloud light shows, `pointBudgetFrom` the newest-flashes cap on the
+ * points outside the sample (`onScreen`).
+ */
 export const densityGlsl = /* glsl */ `
 uniform float heroShare;
 uniform float lightMapOff;
+uniform float pointBudgetFrom;
 float heroLot(float seed, float intensity) {
 	return seed * mix(1.0, ${f(DENSITY.energyWeight)}, clamp(intensity, 0.0, 1.0));
 }
@@ -92,5 +97,8 @@ float heroWeight(float lot, float share) {
 }
 float pointWeight(float farness, float lightMapOff) {
 	return max(smoothstep(${f(DENSITY.pointFarness[0])}, ${f(DENSITY.pointFarness[1])}, farness), lightMapOff * ${f(DENSITY.weakGlow)});
+}
+float pointBudget(float at) {
+	return smoothstep(pointBudgetFrom - budgetFade, pointBudgetFrom, at);
 }
 `;

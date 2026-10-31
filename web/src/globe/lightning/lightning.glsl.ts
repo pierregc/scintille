@@ -59,8 +59,8 @@ void main() {
 	float distance = length(cameraPosition - center);
 	float kmPerPx = 2.0 * distance / (projectionMatrix[1][1] * viewportHeight) / kmToWorld;
 	float viewKmPerPx = kmPerPx * viewScale;
-	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, which stay points from afar.
-	brightness *= max(heroWeight(heroLot(seed, flashShape.x), heroShare), pointWeight(farness(viewKmPerPx), lightMapOff));
+	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, the newest of which stay points from afar.
+	brightness *= max(heroWeight(heroLot(seed, flashShape.x), heroShare), pointWeight(farness(viewKmPerPx), lightMapOff) * pointBudget(flash.w));
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
