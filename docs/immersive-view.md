@@ -117,6 +117,12 @@ from 965 to 1,024 km.
 Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.2 to 3.3× at 20°); four storms pass
 3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1).
 
+The `regional` pose of `bench.mjs` (`"framed"` in `immersive/references.json`) moves with the
+constant: benches before #406 measured the 20° frame. Against it, same evening, R1, R2 and R5 at
+60×, five alternated rounds on a Mac shared with other GPU jobs: median frame cost p95 +0.6, +0.5
+and −1.0 ms (+1.4, +2.2 and −2.5 ms over the three quietest rounds), near white 0.2 to 0.5 %, no
+flight frame over 50 ms.
+
 ### Free tilt
 
 A vertical drag tilts the surface camera from straight down to 90° in one gesture (#394,
