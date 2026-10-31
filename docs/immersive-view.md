@@ -226,8 +226,11 @@ radius and `i` the intensity:
   6,000 km away.
 - **Bloom** strength `0.9 × (0.15 + 0.85 f)`, with `k` taken from the camera height only.
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
-  (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
-  at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
+  (2.3 km texels at 400 km on `high`, 4.7 km on `medium`, the whole globe from about 3,300 km);
+  each flash lights `(1.3 + 1.7 w) r` on its bright pulses and 0.65 of that between them, at least
+  2 texels and `150 w²` km, `w` being the share of the globe the window covers; 35 % near the floor.
+  Where the clouds are in relief, each column is lit in a band under its own top
+  ([flash profile](flash-profile.md#cloud-light)).
 - **Phones** draw these sizes as a 1080 CSS px tall view would, shrunk to their height (`k` and
   channel widths times `h / 1080`), so a phone shows the middle of the desktop picture; the point
   floor stays in CSS px. Their glow and cloud light near the floor drop to 0.6 of the desktop level
@@ -248,7 +251,7 @@ at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 
 
 The glow profile has a hot core: its light falls to half at about 0.3 of the glow radius and to a
 tenth at half of it, so near the floor a glow of 1 to 2 `r` reads as a disc of 0.5 to 1 `r`, and
-the cloud light around it spreads over about 2 `r`.
+the cloud light under it ends at 1.3 `r`, with 4 % of its centre left at `r`.
 
 Physical scale and compensation:
 
@@ -363,6 +366,7 @@ the south pole).
 | Translucency, glow of flashes inside | Styled (ADR 0031): drawn as observed up to 0.5, eased to 0.95 at full cover; flashes under them veiled as if eased to 0.8, so they show through; brightness follows the real depth, sunlit tops kept below white by a highlight shoulder; the glow rises and fades in real time, outside the history | `capOpacity`, `veilOpacity`, `scatterGain`, `compositeFragmentShader` |
 | Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; under a high sun, large dense decks lit by the sun lowered to 40° with their observed 6 km shape drawn 6× steeper (styled); seen from afar, dense clouds shaded by their observed broad shape at the scale of the screen, slopes up to 6 to 12× steeper (styled), and by the shadows of taller clouds; the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `deckFragmentShader`, `marchFragmentShader`, `reliefFieldGlsl`, `cloudShadowAt`, `atmosphere.glsl.ts` |
 | Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering | `veil.ts` |
+| Cloud light shape | Styled within the observed footprint and energy: the whole footprint during bright pulses, a patch of 0.65 of it along the drifted light between them, ending at 1.3 `r`; shaped by the styled columns (a 3.5 km band 3 km under each top above 11.5 km, at 8.5 km otherwise), read sharpened 1.25; overlaps keep the brightest, never add | `CLOUD_LIGHT`, `light-map.glsl.ts`, `flashBand` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Clouds in relief
@@ -459,7 +463,7 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
   shell (`orbit.ts`).
 - Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and high).
 - Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, lit from inside by a
-  1024 × 512 flash light map.
+  2048 × 1024 flash light map (1024 × 512 on `medium`).
 - Lightning: one instanced glow per flash in the display window (up to the 262,144 flash ring),
   channels for flashes still flickering (at most 2,048), halos up to 512 channels, fading out from
   1,500 to 6,000 km. Exposure 1.6 and bloom (strength 0.9) are constant at every altitude.
