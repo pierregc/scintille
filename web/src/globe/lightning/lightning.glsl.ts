@@ -48,7 +48,9 @@ void main() {
 	int kind = int(flashLook.x + 0.5);
 	bool ground = isGround(kind);
 	float age = wallAge(time, flash.w);
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
+	// Flashes facing away or past the storm view's budget skip the profile.
+	float shown = smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
+	float brightness = shown > 0.0 ? flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * shown : 0.0;
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

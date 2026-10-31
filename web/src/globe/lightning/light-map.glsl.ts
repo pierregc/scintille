@@ -46,10 +46,9 @@ void main() {
 	// Flashes near the antimeridian of the window are drawn a second time on the other side.
 	relative += wrap * (relative > 0.0 ? -6.28318531 : 6.28318531);
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
-	float brightness = 0.0;
-	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * onScreen(flash.w);
-	}
+	// Flashes outside the window or past the storm view's budget skip the profile.
+	float shown = abs(center.x) < 1.2 && abs(center.y) < 1.2 ? onScreen(flash.w) : 0.0;
+	float brightness = shown > 0.0 ? flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * shown : 0.0;
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

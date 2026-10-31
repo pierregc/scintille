@@ -78,10 +78,14 @@ void main() {
 	float facing = dot(normal, normalize(cameraPosition - base));
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
+	// Channels facing away, past the storm view's budget, faded out or too small to read skip the profile.
+	float shown = smoothstep(0.0, 0.1, facing) * onScreen(at) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age)) * channelReveal(flashShape.y, kmPerPx);
+	if (shown <= 0.0) {
+		cull();
+		return;
+	}
 	// The channel of a single stroke below the cloud leaves the in-cloud activity after it to the glow.
 	vec4 profile = flashProfileStroke(age, time - at, duration, flashShape.z, seed, flicker, kind, timing, kind != ${FlashKind.CgSingle} || inCloud);
-	float brightness = profile.x * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
-	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 
 	bool contact = segC.z > 3.5;
 	float lit = 1.0;
@@ -113,7 +117,7 @@ void main() {
 		}
 		lit *= max(swept, least / max(profile.x, 1e-4));
 	}
-	float light = brightness * fade * lit * segB.w * channelReveal(flashShape.y, kmPerPx);
+	float light = profile.x * intensityBrightness(flashShape.x) * shown * lit * segB.w;
 	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	light *= mix(1.0, ${f(CHANNEL.dayLevel)}, smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection))));
 	if (light < 0.002) {
