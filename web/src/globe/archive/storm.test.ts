@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
-import { REPLAY_LIMITS, REPLAY_RETENTION_DAYS, ReplayExpiredError, stormSource } from './storm';
+import type { StormDetail } from '../../contract/types';
+import { REPLAY_LIMITS, REPLAY_RETENTION_DAYS, ReplayExpiredError, replayStart, stormSource } from './storm';
 
 async function fixtureFetch() {
 	const requests: string[] = [];
@@ -24,6 +25,7 @@ describe('published storm extracts', () => {
 		const chunks = await source.load(signal);
 		expect(detail.replay.selection).toBe('track-bounds');
 		expect(source.start).toBe(Date.parse(fixture.storm.t_start));
+		expect(source.start).toBe(Date.parse(fixture.replay.chunks[0].event_min));
 		expect(chunks[0].count).toBe(3);
 		expect(requests[1]).toBe(`https://feed.test/data/${fixture.replay.chunks[0].path}`);
 	});
@@ -51,6 +53,7 @@ describe('published storm extracts', () => {
 			{ ...fixture, replay: { ...fixture.replay, chunks: [{ path: null }] } },
 			{ ...fixture, bounds: { ...fixture.bounds, south: -91 } },
 			{ ...fixture, replay: { ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], path: 'https://other.test/chunk.bin.gz' }] } },
+			{ ...fixture, replay: { ...fixture.replay, chunks: [{ ...fixture.replay.chunks[0], event_min: '2026-07-15T18:05:00Z' }] } },
 		];
 		for (const metadata of variants) {
 			const fetchFn: typeof fetch = async () => Response.json(metadata);
@@ -68,6 +71,26 @@ describe('published storm extracts', () => {
 			await expect(stormSource('https://feed.test/', fixture.storm.slug, new AbortController().signal, fetchFn)).rejects.toThrow('too large');
 			expect(requests).toBe(1);
 		}
+	});
+
+	it('starts at the first flash the chunks hold, which may be after the catalog start and never before it', async () => {
+		const chunk = fixture.replay.chunks[0];
+		const early = { ...fixture, storm: { ...fixture.storm, t_start: '2026-07-15T17:30:01Z' } };
+		const empty = { ...chunk, path: `storms/chunks/${'0'.repeat(64)}.bin.gz`, start: '2026-07-15T17:00:00Z', end: '2026-07-15T18:00:00Z', flash_count: 0, event_min: null, event_max: null };
+		const cases: [object, string][] = [
+			[early, chunk.event_min],
+			[{ ...early, replay: { ...early.replay, chunks: [{ ...chunk, event_min: null }] } }, chunk.start],
+			[{ ...early, replay: { ...early.replay, chunks: [empty, chunk] } }, chunk.event_min],
+			[{ ...early, replay: { ...early.replay, chunks: [], flash_count: 0 } }, early.storm.t_start],
+			[{ ...fixture, storm: { ...fixture.storm, t_start: '2026-07-15T18:00:30Z' } }, '2026-07-15T18:00:30Z'],
+		];
+		for (const [metadata, expected] of cases) {
+			const fetchFn: typeof fetch = async () => Response.json(metadata);
+			const { source } = await stormSource('https://feed.test/', fixture.storm.slug, new AbortController().signal, fetchFn);
+			expect(source.start).toBe(Date.parse(expected));
+			expect(replayStart(metadata as StormDetail)).toBe(Date.parse(expected));
+		}
+		expect(replayStart(early as StormDetail)).toBeGreaterThan(Date.parse(early.storm.t_start));
 	});
 
 	it('rejects invalid slugs before fetching', async () => {

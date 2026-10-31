@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
 import type { StormDetail } from '../../contract/types';
 import { SceneData } from '../archive';
-import { ReplayExpiredError } from '../archive/storm';
+import { ReplayExpiredError, replayStart } from '../archive/storm';
 import { SceneClock } from '../clock';
 import { kmToWorld, poseAt } from '../flight';
 import type { LiveFeed } from '../live';
@@ -16,6 +16,8 @@ import { END_GRACE_MS, StormReplay } from './index';
 import { frameStorm, GRAZE, REPLAY_FRAME, stormCap } from './framing';
 
 const detail = fixture as StormDetail;
+/** The same storm with a catalog start half an hour before its first replay flash. */
+const early = { ...detail, storm: { ...detail.storm, t_start: '2026-07-15T17:30:01Z' } } as StormDetail;
 
 describe('storm framing', () => {
 	it.each([16 / 9, 9 / 16])('fits small, large, dateline, polar and offshore bounds at aspect %s', (aspect) => {
@@ -60,14 +62,16 @@ describe('production replay entry', () => {
 		const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
 		const data = new SceneData(clock, startLive(new FlashRing(8)), startLive);
 		const chunk = new Uint8Array(await readFile(new URL(`../../../../fixtures/${fixture.replay.chunks[0].path}`, import.meta.url)));
-		const fetchFn: typeof fetch = async (input) => String(input).endsWith('.json') ? Response.json(fixture) : new Response(chunk);
+		const fetchFn: typeof fetch = async (input) => String(input).endsWith('.json') ? Response.json(early) : new Response(chunk);
 		const controls = { flyTo: vi.fn().mockResolvedValue(true), cancelFlight: vi.fn(), isAt: () => false };
 		const replay = new StormReplay({ live: () => data.live(), openStorm: (base, slug, speed) => data.openStorm(base, slug, speed, fetchFn) }, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 16 / 9 }));
 		try {
 			await data.liveClient.idle();
 			expect(await replay.open(fixture.storm.slug)).toBe(true);
 			expect(clock.mode).toBe('replay');
-			expect(clock.time()).toBe(Date.parse(fixture.storm.t_start));
+			expect(clock.time()).toBe(replayStart(early));
+			expect(clock.time()).toBe(Date.parse(fixture.replay.chunks[0].event_min));
+			expect(clock.time()).toBeGreaterThan(Date.parse(early.storm.t_start));
 			expect(clock.playing).toBe(true);
 			expect(clock.speed).toBe(60);
 			expect(data.ring.size).toBe(3);
@@ -134,10 +138,10 @@ it('flies to the horizon view of the open storm and back to its frame', async ()
 it('holds the start instant during the camera flight before autoplay so a short storm is not skipped', async () => {
 	let wall = Date.UTC(2027, 0, 1);
 	const clock = new SceneClock(() => wall);
-	const start = Date.parse(fixture.storm.t_start);
+	const start = replayStart(early);
 	let finish!: (arrived: boolean) => void;
 	const controls = { cancelFlight: vi.fn(), isAt: () => false, flyTo: vi.fn().mockImplementation(() => new Promise<boolean>((done) => { finish = done; })) };
-	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return detail; }), live: vi.fn().mockResolvedValue(undefined) };
+	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return early; }), live: vi.fn().mockResolvedValue(undefined) };
 	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
 	const opening = replay.open(fixture.storm.slug);
 	await Promise.resolve();
@@ -153,12 +157,35 @@ it('holds the start instant during the camera flight before autoplay so a short 
 	replay.dispose();
 });
 
+it('restores at the first flash when the shared time is earlier, and never past the storm end', async () => {
+	const clock = new SceneClock(() => Date.UTC(2027, 0, 1));
+	const start = replayStart(early);
+	const end = Date.parse(early.storm.t_end);
+	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return early; }), live: vi.fn().mockResolvedValue(undefined) };
+	const controls = { flyTo: vi.fn().mockResolvedValue(true), cancelFlight: vi.fn(), isAt: () => false };
+	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
+	const location = { slug: early.storm.slug, speed: 60, paused: true };
+	try {
+		expect(await replay.open(early.storm.slug, 60, { ...location, time: Date.parse(early.storm.t_start) })).toBe(true);
+		expect(clock.time()).toBe(start);
+		expect(clock.playing).toBe(false);
+		await replay.restore({ ...location, time: start - 1 });
+		expect(clock.time()).toBe(start);
+		await replay.restore({ ...location, time: start + 30_000 });
+		expect(clock.time()).toBe(start + 30_000);
+		await replay.restore({ ...location, time: end + 1 });
+		expect(clock.time()).toBe(end);
+		await replay.restore(location);
+		expect(clock.time()).toBe(start);
+	} finally { replay.dispose(); }
+});
+
 it('restarts an ended replay in place and returns to live once it has played past the end', async () => {
 	let wall = Date.UTC(2027, 0, 1);
 	const clock = new SceneClock(() => wall);
-	const start = Date.parse(detail.storm.t_start);
-	const end = Date.parse(detail.storm.t_end);
-	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return detail; }), live: vi.fn().mockImplementation(async () => clock.live()) };
+	const start = replayStart(early);
+	const end = Date.parse(early.storm.t_end);
+	const data = { openStorm: vi.fn().mockImplementation(async () => { clock.replay(start, 60); return early; }), live: vi.fn().mockImplementation(async () => clock.live()) };
 	const controls = { flyTo: vi.fn().mockResolvedValue(true), cancelFlight: vi.fn(), isAt: () => false };
 	const replay = new StormReplay(data, clock, controls, 'https://feed.test/', () => ({ fov: 35, aspect: 1 }));
 	try {
@@ -176,6 +203,7 @@ it('restarts an ended replay in place and returns to live once it has played pas
 		expect(clock.mode).toBe('replay');
 		replay.restart();
 		expect(clock.time()).toBe(start);
+		expect(clock.time()).toBeGreaterThan(Date.parse(early.storm.t_start));
 		expect(clock.playing).toBe(true);
 		expect(replay.ended).toBe(false);
 		expect(controls.flyTo).toHaveBeenCalledTimes(1);

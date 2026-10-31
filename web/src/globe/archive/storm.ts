@@ -12,6 +12,18 @@ export class ReplayExpiredError extends Error {
 	constructor() { super('storm replay expired'); }
 }
 
+/** The first flash of the storm its chunks hold: the later of the catalog start and the earliest chunk flash. */
+export function replayStart(detail: StormDetail): number {
+	let earliest = Infinity;
+	for (const chunk of detail.replay.chunks) {
+		if (chunk.flash_count === 0) continue;
+		const time = Date.parse(chunk.event_min ?? chunk.start);
+		if (time < earliest) earliest = time;
+	}
+	const catalog = Date.parse(detail.storm.t_start);
+	return Number.isFinite(earliest) ? Math.max(earliest, catalog) : catalog;
+}
+
 /** Fetches metadata once; its replay paths resolve against the public data root. */
 export async function stormSource(
 	baseUrl: string,
@@ -49,10 +61,12 @@ export async function stormSource(
 	}
 	if (storedBytes > REPLAY_LIMITS.storedBytes) throw new Error('storm replay is too large');
 	if (flashes !== detail.replay.flash_count) throw new Error('invalid storm replay count');
+	const first = replayStart(detail);
+	if (first > end) throw new Error('invalid storm replay metadata');
 	return {
 		detail,
 		source: {
-			start,
+			start: first,
 			end,
 			async load(abort) {
 				let chunks;

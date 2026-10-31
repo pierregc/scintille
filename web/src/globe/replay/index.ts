@@ -6,7 +6,7 @@ import type { FlyToOptions } from '../flight';
 import { frameStorm, grazeStorm } from './framing';
 import type { ReplayLocation } from './url';
 import { sameFrame } from './checkpoint';
-import { ReplayExpiredError, REPLAY_RETENTION_DAYS } from '../archive/storm';
+import { ReplayExpiredError, REPLAY_RETENTION_DAYS, replayStart } from '../archive/storm';
 
 type Origin = 'user' | 'navigation';
 
@@ -89,7 +89,8 @@ export class StormReplay {
 	async #place(detail: StormDetail, revision: number, restore?: ReplayLocation, checkpoint?: ReplayLocation['view']): Promise<void> {
 		this.clock.pause();
 		if (restore) {
-			this.clock.seek(Math.min(Math.max(restore.time ?? Date.parse(detail.storm.t_start), Date.parse(detail.storm.t_start)), Date.parse(detail.storm.t_end)));
+			const start = replayStart(detail);
+			this.clock.seek(Math.min(Math.max(restore.time ?? start, start), Date.parse(detail.storm.t_end)));
 		}
 		const { fov, aspect } = this.view();
 		if (restore?.view) await this.controls.flyTo({ ...restore.view, duration: 0 }, { preserveRange: true });
@@ -130,7 +131,7 @@ export class StormReplay {
 	restart(): void {
 		const detail = this.#state.selected;
 		if (!detail || this.#state.loading || this.clock.mode !== 'replay') return;
-		this.clock.seek(Date.parse(detail.storm.t_start));
+		this.clock.seek(replayStart(detail));
 		this.clock.play();
 	}
 
