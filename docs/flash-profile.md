@@ -102,35 +102,37 @@ of this shape is observed.
 
 **Silhouette.** The [flash kind](#flash-kinds) draws it, in km above the ground, around the observed
 position, within the bounds of the kinds table (`skeleton.ts`, `SKELETON`, `KIND`; r is the observed
-radius, at least 3 km). Heights are not exaggerated (`SKELETON.cgHeightScale` 1, bound 1.5).
+radius, at least 3 km). Heights are not exaggerated (`SKELETON.cgHeightScale` 1, bound 1.5, the origin
+kept under 11 km, `SKELETON.maxOriginKm`).
 
 - *Negative cloud-to-ground* (multi- and single-stroke): the flash starts 6 to 8 km up, anywhere over a
   disc of half the radius. A feed runs 0.3 to 0.8 r in the cloud along the flash's heading, ending
-  within 0.8 r of the position; the channel then drops to a strike within the footprint (r of the
-  position), its straight line within 30° of the vertical for 80 % of flashes and 30 to 45° for the
-  rest, heading within 60° of the feed when the footprint allows (otherwise it turns or steepens to stay
-  inside). It bends broadly once or twice. Its branches leave the drop between 1.5 and 5 km up, on every
-  side, down and out at 20 to 40° from it (70 %) or 45 to 75°, most of them short and a few half as
+  within 0.8 r of the position; the channel then drops to a strike 2 to 8 km sideways from the drop's
+  top (`KIND.strikeKm`) and within the footprint (r of the position), its straight line within 30° of
+  the vertical for 80 % of flashes and 30 to 45° for the rest (never under 14 to 18°, the strike being
+  at least 2 km out), heading within 60° of the feed when the footprint allows (otherwise it turns, or
+  in the smallest footprints shortens, to stay inside). It bends broadly once or twice. Its branches
+  leave the drop between 1.5 and 5 km up, on every side, down and out at 20 to 40° from it (70 %) or 45 to 75°, most of them short and a few half as
   long as the drop (0.1 to 0.5 of it), end 0.3 to 2 km above the ground and branch again down to three
   levels: 3 to 12 of them for multi-stroke flashes, 1 to 3 for single-stroke ones, at 30 to 100 % of
   the trunk's light. 40 % of multi-stroke flashes get a second ground contact: a path from a branch 1
   to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit by a later stroke
   once #402 lands; until then it shows like a branch).
 - *Positive cloud-to-ground*: from 9 to 11 km a run of 0.8 to 2.2 r along the heading, kept within the
-  footprint, then an oblique drop at 30 to 45° from the vertical aimed at 0.6 to 1 r from the position,
-  inside r; 0 to 3 branches.
+  footprint, then an oblique drop at 30 to 45° from the vertical (5 to 11 km sideways, shorter in the
+  smallest footprints) to a strike 0.6 to 1 r from the position (`KIND.strikeR`); 0 to 3 branches.
 - *Bolt from the blue*: a trunk climbs from 7 to 8.4 km to 9 to 10 km at 15 to 40° from the vertical,
   crosses 0.5 to 1 r of the cloud and leaves it at 8 to 9 km, then descends 5 to 12 km sideways to a
   strike inside max(r, 8 km); unbranched above 5 km, 3 to 8 branches below.
 - *In-cloud trunk and fan*: an oblique trunk climbs 2 to 4 km, from 6-8 km to 9-11 km, at 15 to 40°
   from the vertical; one to three leaders then spread both ways from its top at 8.5 to 11.5 km, like
   the roots of a tree, as far as `min(2.2 r, 8 × 10^4 m/s × 0.8 × flicker)` allows: a fan of a short
-  flash stays small and branches less, in proportion. It is a filament (20 %), branched (30 %) or a
-  wide network without a dominant leader (50 %).
+  flash stays small. It is a filament (20 %), branched (30 %) or a wide network without a dominant
+  leader (50 %).
 - *Cloud-to-air*: a trunk and fan whose first leader leaves the cloud over its outer 30 to 60 % and
   ends 1 to 3 km beyond the fan, at its height or up to 1 km over the 11.5 km top.
 - *Crawler*: no trunk; one or two leaders run 1.76 to 2.2 r both ways along the cloud base at 6 to
-  8 km, with 0 to 3 branches, at half a fan's light, seen through the whole cloud.
+  8 km, with 0 to 3 branches, seen through the whole cloud.
 
 The first leader (the feed, a bolt's trunk, the first fan, a crawler's first leader) runs along the
 heading the light drifts on.
@@ -164,9 +166,10 @@ its middle up to the camera and reads the cloud opacity where it leaves the 10 k
 channel under the edge of a storm can show beside it. Each segment carries a cloud flag from its kind
 and stage, not from its height alone:
 
-- *In the cloud* (fans, crawlers, the part of a cloud-to-ground stem or drop above the base): light
-  scatters around the channel. It spreads over 0.5 km just under the 11.5 km top to 4 km at the base,
-  times the opacity, keeps the same light over that width and loses up to half of it, with no halo.
+- *In the cloud* (fans, crawlers, a cloud-to-ground stem whatever its height, the part of a drop above
+  the base): light scatters around the channel. It spreads over 0.5 km just under the 11.5 km top to
+  4 km at the base, times the opacity, keeps the same light over that width and loses up to half of it,
+  with no halo.
   Crawlers, along the base, are the most veiled.
 - *A trace in the cloud* (in-cloud trunks): the channel spreads at most to twice its core width and
   keeps at least 30 % of its light, with a halo, so a trunk reads as a crisp, dim stroke inside the
@@ -199,15 +202,17 @@ channel carry the flash.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
-256 segments. All flashes keep their glow and cloud light.
+256 segments (24 kept for a second ground contact and 16 for a cloud-to-air leader's way out,
+`SKELETON.secondSegments` and `airSegments`; a path that would not fit is drawn coarser). All flashes
+keep their glow and cloud light.
 
 ## Channel halo
 
 A second, soft ribbon follows the main channel of ground flashes in clear air, and the trunks of
-in-cloud flashes, drawn as traces: eight times wider, at
-30 % of the core level, sharing its opacity, profile, growth and fade, keeping the brightest light where
-it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
-250 ms, which bounds its cost during bursts.
+in-cloud flashes, drawn as traces: eight times wider than the core (for a trace, than its core width,
+not the width the cloud spreads it to), at 30 % of the core level, sharing its opacity, profile, growth
+and fade, keeping the brightest light where it overlaps. It fades with camera distance from 1,500 to
+6,000 km. Above 256 channels it fades out over 250 ms, which bounds its cost during bursts.
 
 ## Cloud light
 
