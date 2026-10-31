@@ -142,7 +142,7 @@ A segment foreshortened on screen adds light for its screen length only. A chain
 shorter than their width still varies along it, less than before (within 23 % of its mean, against up
 to 35 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
 dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
-of 1 this also widens the thinnest stretches of main channels, 1.1 to 1.25 px wide (the start of ground
+of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide (the start of ground
 leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
 floor is finer than the old 0.75 CSS px. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
