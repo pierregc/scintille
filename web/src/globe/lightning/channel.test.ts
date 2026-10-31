@@ -5,6 +5,7 @@ import {
 	channelHash,
 	CLOUD_TO_AIR_SHARE,
 	cloudDrift,
+	cloudDriftGlsl,
 	CRAWLER,
 	flashKind,
 	flashSeed,
@@ -15,7 +16,7 @@ import {
 	spreadSeconds,
 } from './channel';
 import { FlashKind, isGround } from './kind';
-import { glslFloat, PROFILE } from './profile';
+import { flashProfileGlsl, flickerLength, glslFloat, PROFILE } from './profile';
 import { glslAsJs } from './testing';
 
 const seeds = Array.from({ length: 40_000 }, (_, i) => (i + 0.5) / 40_000);
@@ -155,6 +156,24 @@ describe('flash kinds', () => {
 		expect(cloudDrift(crawl, 0.4, 10, seed, FlashKind.IcCrawler)).toEqual(cloudDrift(1, 0.4, 10, seed, FlashKind.IcCrawler));
 		for (const kind of [FlashKind.CgMulti, FlashKind.CgSingle, FlashKind.CgPositive, FlashKind.BoltFromBlue]) {
 			expect(cloudDrift(0.2, 0.4, 10, seed, kind)).toEqual([0, 0]);
+		}
+	});
+
+	it('drifts in the GLSL twin as in the TypeScript, for every kind', () => {
+		const glsl = glslAsJs<{ cloudDrift(age: number, len: number, radiusKm: number, seed: number, kind: FlashKind): { x: number; y: number } }>(
+			channelGlsl + flashProfileGlsl + cloudDriftGlsl,
+			['cloudDrift'],
+		);
+		for (let i = 0; i < 4000; i++) {
+			const kind = (i % 7) as FlashKind;
+			const seed = seeds[(i * 7919) % seeds.length];
+			const flicker = flickerLength(20 + ((i * 0.618) % 1) * 2500);
+			const radius = 3 + ((i * 0.414) % 1) * 30;
+			const age = ((i * 0.732) % 1) * (flicker + 0.3) - 0.02;
+			const [x, y] = cloudDrift(age, flicker, radius, seed, kind);
+			const twin = glsl.cloudDrift(age, flicker, radius, seed, kind);
+			expect(twin.x).toBeCloseTo(x, 9);
+			expect(twin.y).toBeCloseTo(y, 9);
 		}
 	});
 });

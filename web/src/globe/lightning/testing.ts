@@ -20,6 +20,7 @@ export function glslAsJs<T>(source: string, names: string[]): T {
 	const builtins: Record<string, (...x: never[]) => unknown> = {
 		fract: (x: number) => x - Math.floor(x),
 		sin: Math.sin,
+		cos: Math.cos,
 		exp: Math.exp,
 		pow: Math.pow,
 		sqrt: Math.sqrt,

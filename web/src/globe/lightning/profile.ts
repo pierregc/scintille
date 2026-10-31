@@ -29,9 +29,10 @@ export const PROFILE = {
 	leaderLevel: 0.12,
 	leaderShare: 0.5,
 	strokeSweep: 0.033,
-	/** A dart leader runs down the trunk in `dart` seconds before each later stroke, at `dartLevel`. */
+	/** A dart leader runs down the trunk in `dart` seconds before each later stroke, at `dartLevel`, lighting `dartTrail` of the path behind its tip. */
 	dart: 0.04,
 	dartLevel: 0.3,
+	dartTrail: 0.3,
 	/** Positive flashes strike once in `positiveSingle` of them, otherwise twice; bolts from the blue strike 1, 2 or 3 times in these shares. */
 	positiveSingle: 0.81,
 	boltStrokes: [0.25, 0.4, 0.35],
@@ -39,12 +40,13 @@ export const PROFILE = {
 	currentShare: [0.4, 0.15, 0.75, 0.3],
 	currentLevel: [0.2, 0.3],
 	currentDuration: [0.04, 0.3],
-	/** A single-stroke flash keeps this level of in-cloud activity after its stroke, to the end of its flicker. */
+	/** A single-stroke flash keeps this level of in-cloud activity after its stroke, to the end of its flicker: in its glow, not along its channel below the cloud. */
 	singleActivity: [0.12, 0.18],
-	/** In-cloud flashes glow at `icGlow` while their leaders spread. Shares with no bright pulse (they swell to `icDimPeak`), one, or two to three at least `icGap` apart, later ones at `icLevel`. */
+	/** In-cloud flashes glow at `icGlow` while their leaders spread. Shares with no bright pulse (they swell once to `icDimPeak`, rising and decaying over `icSwell` seconds), one, or two to three at least `icGap` apart, later ones at `icLevel`. */
 	icGlow: [0.15, 0.25],
 	icPulses: [0.25, 0.45, 0.3],
 	icDimPeak: [0.35, 0.5],
+	icSwell: [0.04, 0.12],
 	icLevel: [0.75, 0.9],
 	icGap: 0.06,
 	/** The first bright pulse comes after the trunk and before this share of the flicker. */
@@ -233,11 +235,12 @@ export function groundProfile(wallAge: number, length: number, seed: number, kin
 		// Held past the stroke's own tail (two decay times), within the flicker.
 		b = Math.max(b, currentLight(wallAge - s.start, current.level, Math.min(current.duration + 2 * s.tau, length - s.start)));
 	}
-	if (kind === FlashKind.CgSingle) {
-		const activity = lerp(PROFILE.singleActivity, pulseHash(seed, 95));
-		b = Math.max(b, activity * smoothstep(leader, leader + PROFILE.shutter, wallAge) * (1 - smoothstep(length, length + PROFILE.cloudFade, wallAge)));
-	}
 	return b;
+}
+
+/** In-cloud activity after the stroke of a single-stroke flash, to the end of its flicker. */
+export function singleActivity(wallAge: number, length: number, seed: number, leader: number): number {
+	return lerp(PROFILE.singleActivity, pulseHash(seed, 95)) * smoothstep(leader, leader + PROFILE.shutter, wallAge) * (1 - smoothstep(length, length + PROFILE.cloudFade, wallAge));
 }
 
 /** When the first bright pulse (or the swell of a flash without one) comes: after the trunk, mostly early in the flicker. */
@@ -285,7 +288,8 @@ export function cloudProfile(wallAge: number, length: number, seed: number, kind
 	let b = 0;
 	if (pulses.length === 0) {
 		const start = firstPulse(length, seed, timing.leader);
-		b = lerp(PROFILE.icDimPeak, pulseHash(seed, 103)) * smoothstep(start - 0.04, start, wallAge) * Math.exp(-Math.max(wallAge - start, 0) / 0.12) * fade;
+		const [rise, decay] = PROFILE.icSwell;
+		b = lerp(PROFILE.icDimPeak, pulseHash(seed, 103)) * smoothstep(Math.max(start - rise, 0), start, wallAge) * Math.exp(-Math.max(wallAge - start, 0) / decay) * fade;
 	}
 	for (const p of pulses) b = Math.max(b, p.level * shutterPulse(wallAge - p.start, p.tau));
 	const stutter = pulses.length === 1 ? 0 : stutterLight(wallAge, length, seed);
@@ -296,7 +300,8 @@ export function cloudProfile(wallAge: number, length: number, seed: number, kind
  * Brightness in [0, 1] of a flash `wallAge` seconds of wall clock time after it started, `sceneAge`
  * seconds of scene time, with an afterglow of `display` seconds of scene time (0 for none).
  * `flicker` false gives the soft single fade used for reduced motion. Cloud-to-ground kinds come
- * down as a dim leader, then strike; in-cloud kinds glow, with bright pulses or not.
+ * down as a dim leader, then strike; in-cloud kinds glow, with bright pulses or not. `activity`
+ * false leaves out the in-cloud activity after a single stroke, for its channel below the cloud.
  */
 export function flashProfile(
 	wallAge: number,
@@ -307,6 +312,7 @@ export function flashProfile(
 	flicker: boolean,
 	kind: FlashKind,
 	timing: FlashTiming,
+	activity = true,
 ): number {
 	if (sceneAge < 0 || wallAge < 0) return 0;
 	const length = flickerLength(durationMs);
@@ -315,7 +321,8 @@ export function flashProfile(
 	if (wallAge > life) return glow;
 	glow = Math.max(glow, PROFILE.afterglow * glowDecay(wallAge / life));
 	if (!flicker) return smoothstep(0, PROFILE.softRise, wallAge) * Math.max(Math.exp(-wallAge / PROFILE.softFall), glow);
-	const b = isGround(kind) ? groundProfile(wallAge, length, seed, kind, timing.leader) : cloudProfile(wallAge, length, seed, kind, timing);
+	let b = isGround(kind) ? groundProfile(wallAge, length, seed, kind, timing.leader) : cloudProfile(wallAge, length, seed, kind, timing);
+	if (activity && kind === FlashKind.CgSingle) b = Math.max(b, singleActivity(wallAge, length, seed, timing.leader));
 	return Math.max(b, glow * smoothstep(0, length, wallAge));
 }
 
@@ -327,7 +334,7 @@ const P = PROFILE;
 const mix = ([lo, hi]: Range, t: string): string => `mix(${f(lo)}, ${f(hi)}, ${t})`;
 const logMix = ([lo, hi]: Range, t: string): string => `${f(lo)} * pow(${f(hi)} / ${f(lo)}, ${t})`;
 
-/** GLSL twins of `spread`, `flashStroke` and `flashProfile`; need `channelGlsl` (`isGround`, `flashTiming`). The shaders pass the radius, from which `flashProfile` takes the timing. */
+/** GLSL twins of `spread`, `flashStroke` and `flashProfile` (`timedFlashProfile`); need `channelGlsl` (`isGround`, `flashTiming`). The shaders call `flashProfile` with the radius, from which it takes the timing. */
 export const flashProfileGlsl = /* glsl */ `
 float pulseHash(float seed, float k) {
 	return fract(sin(seed * 91.345 + k * 47.853) * 43758.5453);
@@ -418,10 +425,10 @@ float groundProfile(float wallAge, float len, float seed, int kind, float leader
 		float duration = min(${mix(P.currentDuration, 'pulseHash(seed, 93.0)')} + 2.0 * strokeTau(seed, current.y), len - current.x);
 		b = max(b, currentLight(wallAge - current.x, ${mix(P.currentLevel, 'pulseHash(seed, 92.0)')}, duration));
 	}
-	if (kind == ${FlashKind.CgSingle}) {
-		b = max(b, ${mix(P.singleActivity, 'pulseHash(seed, 95.0)')} * smoothstep(leader, leader + ${f(P.shutter)}, wallAge) * (1.0 - smoothstep(len, len + ${f(P.cloudFade)}, wallAge)));
-	}
 	return b;
+}
+float singleActivity(float wallAge, float len, float seed, float leader) {
+	return ${mix(P.singleActivity, 'pulseHash(seed, 95.0)')} * smoothstep(leader, leader + ${f(P.shutter)}, wallAge) * (1.0 - smoothstep(len, len + ${f(P.cloudFade)}, wallAge));
 }
 float stutterLight(float wallAge, float len, float seed) {
 	float from = 0.5 * len;
@@ -446,7 +453,7 @@ float cloudProfile(float wallAge, float len, float seed, int kind, vec2 timing) 
 	float b = 0.0;
 	float pulses = 0.0;
 	if (u < ${f(P.icPulses[0])}) {
-		b = ${mix(P.icDimPeak, 'pulseHash(seed, 103.0)')} * smoothstep(start - 0.04, start, wallAge) * exp(-max(wallAge - start, 0.0) / 0.12) * fade;
+		b = ${mix(P.icDimPeak, 'pulseHash(seed, 103.0)')} * smoothstep(max(start - ${f(P.icSwell[0])}, 0.0), start, wallAge) * exp(-max(wallAge - start, 0.0) / ${f(P.icSwell[1])}) * fade;
 	} else {
 		float count = u < ${f(P.icPulses[0] + P.icPulses[1])} ? 1.0 : pulseHash(seed, 101.0) < 0.5 ? 2.0 : 3.0;
 		for (int i = 0; i < 3; i++) {
@@ -462,7 +469,7 @@ float cloudProfile(float wallAge, float len, float seed, int kind, vec2 timing) 
 	float stutter = pulses == 1.0 ? 0.0 : stutterLight(wallAge, len, seed);
 	return max(b, min(glow + stutter, ${f(P.icDimPeak[1])}));
 }
-float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, float radiusKm) {
+float timedFlashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity) {
 	if (sceneAge < 0.0 || wallAge < 0.0) return 0.0;
 	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
 	float life = max(${f(P.life)}, len + ${f(P.tail)});
@@ -472,8 +479,14 @@ float flashProfile(float wallAge, float sceneAge, float display, float durationM
 	if (wallAge > life) return glow;
 	glow = max(glow, ${f(P.afterglow)} * glowDecay(wallAge / life));
 	if (flicker < 0.5) return smoothstep(0.0, ${f(P.softRise)}, wallAge) * max(exp(-wallAge / ${f(P.softFall)}), glow);
-	vec2 timing = flashTiming(kind, radiusKm, len, seed);
 	float b = isGround(kind) ? groundProfile(wallAge, len, seed, kind, timing.x) : cloudProfile(wallAge, len, seed, kind, timing);
+	if (activity && kind == ${FlashKind.CgSingle}) b = max(b, singleActivity(wallAge, len, seed, timing.x));
 	return max(b, glow * smoothstep(0.0, len, wallAge));
+}
+float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, float radiusKm) {
+	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
+	// The timing only matters while the flash is alive and flickers.
+	vec2 timing = flicker > 0.5 && wallAge >= 0.0 && wallAge <= ${f(MAX_LIFE)} ? flashTiming(kind, radiusKm, len, seed) : vec2(1.0);
+	return timedFlashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind, timing, true);
 }
 `;

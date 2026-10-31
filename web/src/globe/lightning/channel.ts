@@ -7,10 +7,10 @@ export const CHANNEL = {
 	lengthScale: 2.2,
 	/** The channel fades out this long after the flicker phase, seconds. */
 	fade: 0.15,
-	/** Branches light once, when reached: their decay constant for ground and in-cloud flashes, seconds. */
+	/** Decay of branches after the first stroke (cloud-to-ground) or after the leader reaches them (in-cloud), seconds. */
 	branchTau: 0.06,
 	cloudBranchTau: 0.12,
-	/** Share of an in-cloud path lit at the first pulse; the leaders then cover the rest. */
+	/** Kept for the frozen web/spike shaders; no longer read by the renderer. */
 	cloudStart: 0.2,
 	/** Share of a channel's light left over sunlit clouds, which outshine a thin channel seen from orbit. */
 	dayLevel: 0.3,
@@ -265,7 +265,9 @@ vec2 flashTiming(int kind, float radiusKm, float flicker, float seed) {
 /** Offset in km, east and north, of the light of an in-cloud flash `age` seconds in: it follows its leaders across the footprint. */
 export function cloudDrift(age: number, flicker: number, radiusKm: number, seed: number, kind: FlashKind): [number, number] {
 	if (isGround(kind)) return [0, 0];
-	const along = (2 * spread(age, flashTiming(kind, radiusKm, flicker, seed), kind) - 1) * CHANNEL.drift * radiusKm;
+	// The leaders have covered their path by the end of the flicker.
+	const reached = age >= flicker ? 1 : spread(age, flashTiming(kind, radiusKm, flicker, seed), kind);
+	const along = (2 * reached - 1) * CHANNEL.drift * radiusKm;
 	const heading = channelHash(seed, 1) * 2 * Math.PI;
 	return [Math.cos(heading) * along, Math.sin(heading) * along];
 }
@@ -274,7 +276,9 @@ export function cloudDrift(age: number, flicker: number, radiusKm: number, seed:
 export const cloudDriftGlsl = /* glsl */ `
 vec2 cloudDrift(float age, float len, float radiusKm, float seed, int kind) {
 	if (isGround(kind)) return vec2(0.0);
-	float heading = channelHash(seed, 1.0) * 6.2831853;
-	return vec2(cos(heading), sin(heading)) * (2.0 * spread(age, flashTiming(kind, radiusKm, len, seed), kind) - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
+	float reached = age >= len ? 1.0 : spread(age, flashTiming(kind, radiusKm, len, seed), kind);
+	float along = (2.0 * reached - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
+	float heading = channelHash(seed, 1.0) * ${f(2 * Math.PI)};
+	return vec2(cos(heading) * along, sin(heading) * along);
 }
 `;

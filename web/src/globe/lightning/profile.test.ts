@@ -15,6 +15,7 @@ import {
 	MAX_LIFE,
 	PROFILE,
 	pulseGap,
+	singleActivity,
 	spread,
 	strokeTrain,
 	stutterLight,
@@ -51,8 +52,9 @@ interface ProfileTwins {
 	spread(age: number, timing: Vec, kind: FlashKind): number;
 	flashStroke(wallAge: number, len: number, seed: number, kind: FlashKind, leader: number): Vec;
 	flashProfile(wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, radiusKm: number): number;
+	timedFlashProfile(wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, timing: Vec, activity: boolean): number;
 }
-const glsl = glslAsJs<ProfileTwins>(channelGlsl + flashProfileGlsl, ['flashTiming', 'spread', 'flashStroke', 'flashProfile']);
+const glsl = glslAsJs<ProfileTwins>(channelGlsl + flashProfileGlsl, ['flashTiming', 'spread', 'flashStroke', 'flashProfile', 'timedFlashProfile']);
 
 /** Deterministic generator in [0, 1). */
 function generator(state: number): () => number {
@@ -61,15 +63,50 @@ function generator(state: number): () => number {
 		return (state + 0.5) / 4294967296;
 	};
 }
+const geometricMean = (values: number[]) => Math.exp(values.reduce((s, x) => s + Math.log(x), 0) / values.length);
+
+/** Flashes with durations and areas log-normal like GLM's (median 240 ms and 291 km², 90th percentiles 626 ms and 965 km²). */
+function glmLike(count: number): { seed: number; durationMs: number; areaKm2: number }[] {
+	const next = generator(0x9e3779b9);
+	const normal = () => Math.sqrt(-2 * Math.log(next())) * Math.cos(2 * Math.PI * next());
+	return Array.from({ length: count }, () => ({ seed: next(), durationMs: 240 * Math.exp(0.748 * normal()), areaKm2: 291 * Math.exp(0.935 * normal()) }));
+}
 
 describe('strokes', () => {
-	it('are spaced like return strokes, 57 ms apart in geometric mean within 10 to 400 ms', () => {
+	it('are drawn like return strokes, 57 ms apart in geometric mean within 10 to 400 ms', () => {
 		const gaps = seeds.flatMap((seed) => [1, 2, 3, 4, 5, 6].map((k) => pulseGap(seed, k)));
-		const mean = Math.exp(gaps.reduce((s, g) => s + Math.log(g), 0) / gaps.length);
-		expect(mean).toBeGreaterThan(0.053);
-		expect(mean).toBeLessThan(0.061);
+		expect(geometricMean(gaps)).toBeGreaterThan(0.053);
+		expect(geometricMean(gaps)).toBeLessThan(0.061);
 		expect(Math.min(...gaps)).toBeGreaterThanOrEqual(PROFILE.minGap);
 		expect(Math.max(...gaps)).toBeLessThanOrEqual(PROFILE.maxGap);
+	});
+
+	it('keep 57 ms between the strokes shown, closer in brief flashes and spread in long ones', () => {
+		const brief: number[] = [];
+		const middle: number[] = [];
+		const long: number[] = [];
+		const all: number[] = [];
+		for (const { seed, durationMs, areaKm2 } of glmLike(8000)) {
+			const length = flickerLength(durationMs);
+			const train = strokeTrain(FlashKind.CgMulti, length, seed, flashTiming(FlashKind.CgMulti, Math.sqrt(areaKm2 / Math.PI), length, seed).leader);
+			for (let k = 1; k < train.length; k++) {
+				const gap = train[k].start - train[k - 1].start;
+				all.push(gap);
+				if (length < 0.4) brief.push(gap);
+				else if (length >= 0.6 && length <= 1) middle.push(gap);
+				else if (length >= 1.8) long.push(gap);
+			}
+		}
+		expect(Math.min(...all)).toBeGreaterThanOrEqual(PROFILE.minGap - 1e-12);
+		expect(Math.max(...all)).toBeLessThanOrEqual(PROFILE.maxGap + 1e-12);
+		expect(geometricMean(middle)).toBeGreaterThan(0.053);
+		expect(geometricMean(middle)).toBeLessThan(0.061);
+		// A brief flicker only holds the shorter gaps; twelve strokes spread over a long one.
+		expect(geometricMean(brief)).toBeLessThan(0.05);
+		expect(geometricMean(long)).toBeGreaterThan(0.1);
+		expect(geometricMean(long)).toBeLessThan(PROFILE.pulseGap * ((PROFILE.maxFlicker - 0.05) / PROFILE.trainSpan));
+		expect(geometricMean(all)).toBeGreaterThan(0.048);
+		expect(geometricMean(all)).toBeLessThan(0.055);
 	});
 
 	it('fill the observed duration, so longer multi-stroke flashes flicker more', () => {
@@ -174,6 +211,21 @@ describe('cloud-to-ground kinds', () => {
 		}
 	});
 
+	it('keep the in-cloud activity after a single stroke off its channel', () => {
+		for (const seed of seeds.slice(0, 100)) {
+			const timing = timingOf(FlashKind.CgSingle, 800, seed);
+			const [stroke] = strokeTrain(FlashKind.CgSingle, 0.8, seed, timing.leader);
+			const current = continuingCurrent(FlashKind.CgSingle, seed);
+			for (let t = stroke.start + 0.12; t < 0.8; t += 0.01) {
+				const glow = flashProfile(t, t, 0, 800, seed, true, FlashKind.CgSingle, timing);
+				const channel = flashProfile(t, t, 0, 800, seed, true, FlashKind.CgSingle, timing, false);
+				expect(glow).toBeGreaterThanOrEqual(PROFILE.singleActivity[0] * (1 - 1e-9));
+				expect(glow).toBe(Math.max(channel, singleActivity(t, 0.8, seed, timing.leader)));
+				if (!current) expect(channel).toBeLessThan(PROFILE.afterglow);
+			}
+		}
+	});
+
 	it('strike once in four positive flashes out of five, most of them holding a long continuing current', () => {
 		const traces = seeds.map((seed) => samples(FlashKind.CgPositive, 500, seed));
 		expect(share(traces.map((v) => peaks(v, 0.15) === 1))).toBeGreaterThan(0.76);
@@ -222,7 +274,9 @@ describe('in-cloud kinds', () => {
 	});
 
 	it('glow from the rise of their trunk to their fade', () => {
-		for (const seed of seeds.slice(0, 80)) {
+		for (const seed of seeds) {
+			for (const kind of [FlashKind.IcTrunkFan, FlashKind.CloudToAir]) expect(at(0.001, 400, seed, 0, 0.001, true, kind)).toBeLessThan(0.05);
+			if (seed > 0.2) continue;
 			const { leader } = timingOf(FlashKind.IcTrunkFan, 400, seed);
 			for (let t = leader; t < 0.4; t += 0.005) expect(at(t, 400, seed)).toBeGreaterThanOrEqual(PROFILE.icGlow[0] - 1e-9);
 			expect(at(0.4 + PROFILE.cloudFade + 0.05, 400, seed)).toBeLessThan(PROFILE.afterglow);
@@ -314,13 +368,7 @@ describe('flashProfile', () => {
 	});
 
 	it('leaves about half of all flashes without flicker, with the shares of the kinds', () => {
-		// Durations and areas log-normal like GLM flashes (median 240 ms and 291 km², 90th percentiles 626 ms and 965 km²).
-		const next = generator(0x9e3779b9);
-		const normal = () => Math.sqrt(-2 * Math.log(next())) * Math.cos(2 * Math.PI * next());
-		const calm = Array.from({ length: 4000 }, () => {
-			const seed = next();
-			const durationMs = 240 * Math.exp(0.748 * normal());
-			const areaKm2 = 291 * Math.exp(0.935 * normal());
+		const calm = glmLike(4000).map(({ seed, durationMs, areaKm2 }) => {
 			const kind = flashKind(seed, durationMs, areaKm2);
 			const length = flickerLength(durationMs);
 			const { leader } = flashTiming(kind, Math.sqrt(areaKm2 / Math.PI), length, seed);
@@ -371,20 +419,37 @@ describe('GLSL twins', () => {
 			expect(glsl.spread(wall, twin, kind)).toBeCloseTo(spread(wall, timing, kind), 12);
 			const expected = flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing);
 			expect(glsl.flashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, radius)).toBeCloseTo(expected, 12);
+			const activity = next() < 0.5;
+			const timed = glsl.timedFlashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, twin, activity);
+			expect(timed).toBeCloseTo(flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing, activity), 12);
 		}
 	});
 
 	it('carry the bounds of the profile', () => {
 		const P = PROFILE;
+		const f = glslFloat;
 		const profile = [
 			P.maxFlicker, P.pulseGap, P.positiveGap, P.minGap, P.maxGap, P.fit, P.trainSpan, ...P.firstTau, P.minTau, P.maxTau, ...P.cloudTau, P.leaderLevel,
 			P.positiveSingle, P.boltStrokes[0], P.boltStrokes[0] + P.boltStrokes[1], ...P.currentShare, ...P.currentLevel, ...P.currentDuration,
 			...P.singleActivity, ...P.icGlow, P.icPulses[0], P.icPulses[0] + P.icPulses[1], ...P.icDimPeak, ...P.icLevel, P.icGap, P.icFirstBy,
-			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade,
+			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade, ...P.icSwell, MAX_LIFE,
 		];
 		for (const x of profile) expect(flashProfileGlsl).toContain(glslFloat(x));
-		for (const x of [P.leaderLevel, P.strokeSweep, P.dart, P.dartLevel, P.crawlerTip]) expect(ribbonVertex).toContain(glslFloat(x));
+		// The ribbon's own uses, not the profile it includes.
+		const main = ribbonVertex.slice(ribbonVertex.indexOf('void main()'));
+		for (const expression of [
+			`least = ${f(P.leaderLevel)}`,
+			`stroke.y / ${f(P.strokeSweep)}`,
+			`stroke.z < ${f(P.dart)}`,
+			`stroke.z / ${f(P.dart)}`,
+			`${f(P.dartLevel)} * step(segC.x, tip)`,
+			`tip - ${f(P.dartTrail)}`,
+			`reached - ${f(P.crawlerTip)}`,
+		]) {
+			expect(main).toContain(expression);
+		}
 		expect(flashProfileGlsl).toContain('float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, float radiusKm)');
+		expect(flashProfileGlsl).toContain('float timedFlashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind, vec2 timing, bool activity)');
 		expect(flashProfileGlsl).toContain('vec3 flashStroke(float wallAge, float len, float seed, int kind, float leader)');
 		expect(flashProfileGlsl).toContain('float spread(float age, vec2 timing, int kind)');
 	});
