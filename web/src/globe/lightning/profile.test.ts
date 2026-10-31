@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashKind, flashTiming } from './channel';
+import { channelGlsl, flashKind, flashTiming } from './channel';
 import { FlashKind, isGround } from './kind';
 import {
 	cloudPulses,
@@ -20,6 +20,7 @@ import {
 	stutterLight,
 } from './profile';
 import { ribbonVertex } from './ribbon.glsl';
+import { glslAsJs } from './testing';
 
 const seeds = Array.from({ length: 400 }, (_, i) => (i * 0.6180339887) % 1);
 const GROUND = [FlashKind.CgMulti, FlashKind.CgSingle, FlashKind.CgPositive, FlashKind.BoltFromBlue];
@@ -39,6 +40,27 @@ function peaks(values: number[], level: number): number {
 	return n;
 }
 const share = (values: boolean[]) => values.filter(Boolean).length / values.length;
+
+interface Vec {
+	x: number;
+	y: number;
+	z: number;
+}
+interface ProfileTwins {
+	flashTiming(kind: FlashKind, radiusKm: number, flicker: number, seed: number): Vec;
+	spread(age: number, timing: Vec, kind: FlashKind): number;
+	flashStroke(wallAge: number, len: number, seed: number, kind: FlashKind, leader: number): Vec;
+	flashProfile(wallAge: number, sceneAge: number, display: number, durationMs: number, seed: number, flicker: number, kind: FlashKind, radiusKm: number): number;
+}
+const glsl = glslAsJs<ProfileTwins>(channelGlsl + flashProfileGlsl, ['flashTiming', 'spread', 'flashStroke', 'flashProfile']);
+
+/** Deterministic generator in [0, 1). */
+function generator(state: number): () => number {
+	return () => {
+		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+		return (state + 0.5) / 4294967296;
+	};
+}
 
 describe('strokes', () => {
 	it('are spaced like return strokes, 57 ms apart in geometric mean within 10 to 400 ms', () => {
@@ -94,12 +116,8 @@ describe('strokes', () => {
 		}
 	});
 
-	it('equal the loop of the profile when read one at a time, on 10,000 inputs', () => {
-		let state = 0x2545f491;
-		const next = () => {
-			state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-			return state / 4294967296;
-		};
+	it('equal the loop of the profile when read one at a time, in TypeScript and GLSL, on 10,000 inputs', () => {
+		const next = generator(0x2545f491);
 		for (let i = 0; i < 10_000; i++) {
 			const kind = GROUND[Math.floor(next() * 4)];
 			const seed = next();
@@ -113,6 +131,9 @@ describe('strokes', () => {
 			expect(stroke.age).toBeCloseTo(index < 0 ? wall : wall - train[index].start, 9);
 			const upcoming = train[index + 1];
 			expect(stroke.next).toBeCloseTo(upcoming ? upcoming.start - wall : index < 0 ? leader - wall : Infinity, 9);
+			const twin = glsl.flashStroke(wall, length, seed, kind, leader);
+			expect([twin.x, twin.y]).toEqual([stroke.index, stroke.age]);
+			expect(twin.z).toBe(Number.isFinite(stroke.next) ? stroke.next : 1e6);
 		}
 	});
 });
@@ -294,11 +315,7 @@ describe('flashProfile', () => {
 
 	it('leaves about half of all flashes without flicker, with the shares of the kinds', () => {
 		// Durations and areas log-normal like GLM flashes (median 240 ms and 291 km², 90th percentiles 626 ms and 965 km²).
-		let state = 0x9e3779b9;
-		const next = () => {
-			state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-			return (state + 0.5) / 4294967296;
-		};
+		const next = generator(0x9e3779b9);
 		const normal = () => Math.sqrt(-2 * Math.log(next())) * Math.cos(2 * Math.PI * next());
 		const calm = Array.from({ length: 4000 }, () => {
 			const seed = next();
@@ -334,6 +351,27 @@ describe('GLSL twins', () => {
 	it('print float literals', () => {
 		expect(glslFloat(1)).toBe('1.0');
 		expect(glslFloat(0.04)).toBe('0.04');
+	});
+
+	it('run as the TypeScript functions on 5,000 inputs', () => {
+		const next = generator(0x6c078965);
+		for (let i = 0; i < 5000; i++) {
+			const kind = Math.floor(next() * 7) as FlashKind;
+			const seed = next();
+			const durationMs = 20 + next() * 2500;
+			const radius = 3 + next() * 30;
+			const wall = next() * 2.7 - 0.05;
+			const sceneAge = wall * [1, 60, 600][Math.floor(next() * 3)];
+			const display = [0, 0, 60, 1800][Math.floor(next() * 4)];
+			const flicker = next() < 0.85;
+			const timing = flashTiming(kind, radius, flickerLength(durationMs), seed);
+			const twin = glsl.flashTiming(kind, radius, flickerLength(durationMs), seed);
+			expect(twin.x).toBeCloseTo(timing.leader, 12);
+			expect(twin.y).toBeCloseTo(timing.spread, 12);
+			expect(glsl.spread(wall, twin, kind)).toBeCloseTo(spread(wall, timing, kind), 12);
+			const expected = flashProfile(wall, sceneAge, display, durationMs, seed, flicker, kind, timing);
+			expect(glsl.flashProfile(wall, sceneAge, display, durationMs, seed, flicker ? 1 : 0, kind, radius)).toBeCloseTo(expected, 12);
+		}
 	});
 
 	it('carry the bounds of the profile', () => {
