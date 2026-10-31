@@ -173,7 +173,10 @@ record.
 - To watch: near-white ≤ 2 % at night, p95 frame cost relative to a same-evening `main`, the `low` tier
   (no light map: heroes plus half sprites), real phones (only emulated so far). Not reached in this
   set: the share of channel length steeper than 60° on screen (9.7 % at 45°, 1.2 % at 20°, against
-  targets of 20 and 8 %), since in-cloud fans, horizontal by nature, are most of the drawn length; and
-  the noon picture at speed, where little of a flash shows over a sunlit deck by design.
+  targets of 20 and 8 %), since in-cloud fans, horizontal by nature, are most of the drawn length; the
+  noon picture at speed, where little of a flash shows over a sunlit deck by design; and GPU memory,
+  over its budget by 2 to 13 MB (desktop 386 MB at 60×, 397 MB at speed; phone 259 MB at speed), of
+  which this set adds 7.4 MB on desktop (the 2048 × 1024 light map, the `flashLook` buffers) and 4.3 MB
+  on phones, the rest being cloud frames that `main` also loads at speed.
 - ADR 0013-bis no longer describes the code (vertex-shader paths, 2,048 channels): the CPU skeletons of
   256 segments for 384 flashes and the kinds are recorded here.

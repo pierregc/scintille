@@ -741,7 +741,72 @@ its research notes are in [`analysis/lightning-look/`](analysis/lightning-look/)
 | 600× and 3600× told apart, C5 against C8 | | | by channels and front motion | 13 to 26 against 5 to 11 channels; the front moves 27 min against 2 h 40 min of scene over the four frames |
 | Replay start, C0 | 03:30:02 | 03:30:02 | 04:00:06 | 04:00:06 |
 
-<!-- BUDGETS -->
+**Budgets.** `bench.mjs --afterglow 0 --seconds 6` with clouds on, headless Chromium on the GPU (the
+page runs at 60 Hz), desktop (1920 × 1080 at DPR 2) and `--profile mobile` (iPhone 15 emulation), on
+R1, R2, R3, R5 and Basse-Kotto (12:00Z, added to a copy of `references.json`) at 60×, 600× and 3600×,
+six poses each. This branch and `main` interleaved in two rounds on desktop (round A branch first,
+round B `main` first), best of the two per pose; on mobile two rounds of the branch and one of
+`main`. Frame cost p95 is GPU-synchronized; flights count the intervals over 50 ms that show in both
+rounds; near white is the bench's paused screenshot after each flight.
+
+Desktop:
+
+| Storm | Speed | p95 frame cost, worst pose (ms), this branch / `main` | Poses over 10 ms | Flights: worst interval (ms), intervals over 50 ms | Tier | GPU MB, this branch / `main` | Near-white, worst pose |
+|---|---|---|---|---|---|---|---|
+| R1 | 60× | 12.5 / 12.9 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
+| R1 | 600× | 12.5 / 14.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
+| R1 | 3600× | 12.2 / 15 | 4 of 6 | 133.3, 6 (`main` 133.2, 7) | high | 397.4 / 389.9 | 0.0 % |
+| R2 | 60× | 12.2 / 12.1 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
+| R2 | 600× | 12.4 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
+| R2 | 3600× | 11.9 / 14 | 3 of 6 | 83.4, 8 (`main` 116.7, 8) | high | 397.4 / 389.9 | 0.0 % |
+| R3 | 60× | 12.7 / 12.2 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
+| R3 | 600× | 12.1 / 13.9 | 6 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
+| R3 | 3600× | 12.3 / 15.1 | 6 of 6 | 133.2, 7 (`main` 133.4, 7) | high | 397.4 / 389.9 | 0.0 % |
+| R5 | 60× | 12.1 / 11.5 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.0 % |
+| R5 | 600× | 12.2 / 11.8 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
+| R5 | 3600× | 11.4 / 12.5 | 5 of 6 | 83.3, 7 (`main` 83.3, 8) | high | 397.4 / 389.9 | 0.0 % |
+| BK | 60× | 12.8 / 13.6 | 5 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 386.2 / 378.7 | 0.1 % |
+| BK | 600× | 13.2 / 13.6 | 4 of 6 | 16.8, 0 (`main` 16.8, 0) | high | 397.4 / 389.9 | 0.0 % |
+| BK | 3600× | 13.6 / 16.7 | 5 of 6 | 83.4, 10 (`main` 83.3, 10) | high | 397.4 / 389.9 | 0.0 % |
+
+Mobile emulation:
+
+| Storm | Speed | p95 frame cost, worst pose (ms), this branch / `main` | Poses over 10 ms | Flights: worst interval (ms), intervals over 50 ms | Tier | GPU MB, this branch / `main` | Near-white, worst pose |
+|---|---|---|---|---|---|---|---|
+| R1 | 60× | 9.4 / 11.1 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 248.1 / 243.8 | 0.4 % |
+| R1 | 600× | 8.5 / 13.2 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 259.3 / 255.0 | 1.0 % |
+| R1 | 3600× | 11.6 / 14.7 | 1 of 6 | 133.3, 5 (`main` 133.4, 6) | medium | 259.3 / 255.0 | 1.7 % |
+| R2 | 60× | 7.4 / 7 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 248.1 / 243.8 | 0.3 % |
+| R2 | 600× | 7.8 / 12.7 | 0 of 6 | 16.8, 0 (`main` 33.2, 0) | medium | 259.3 / 255.0 | 1.5 % |
+| R2 | 3600× | 8.3 / 11 | 0 of 6 | 133.3, 5 (`main` 133.4, 6) | medium | 259.3 / 255.0 | 2.4 % |
+| R3 | 60× | 8.3 / 6.9 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 248.1 / 243.8 | 0.0 % |
+| R3 | 600× | 7 / 11.6 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 259.3 / 255.0 | 0.0 % |
+| R3 | 3600× | 7.3 / 14.5 | 0 of 6 | 133.4, 4 (`main` 133.4, 5) | medium | 259.3 / 255.0 | 0.0 % |
+| R5 | 60× | 6 / 5.9 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 248.1 / 243.8 | 0.0 % |
+| R5 | 600× | 6.3 / 11.7 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 259.3 / 255.0 | 0.0 % |
+| R5 | 3600× | 5.3 / 5.9 | 0 of 6 | 116.6, 5 (`main` 133.4, 7) | medium | 259.3 / 255.0 | 0.0 % |
+| BK | 60× | 9.5 / 12.7 | 0 of 6 | 16.8, 0 (`main` 16.8, 0) | medium | 248.1 / 243.8 | 0.5 % |
+| BK | 600× | 7.9 / 12.1 | 0 of 6 | 16.8, 0 (`main` 33.4, 0) | medium | 259.3 / 255.0 | 1.1 % |
+| BK | 3600× | 9.6 / 15 | 0 of 6 | 83.3, 8 (`main` 83.3, 9) | medium | 259.3 / 255.0 | 1.6 % |
+
+- **Frame cost.** On desktop neither build holds p95 ≤ 10 ms this evening (11.4 to 13.6 ms here, 11.5
+  to 16.7 ms on `main`, against 7.4 to 9.6 ms in the headed runs of [Final validation](#final-validation)):
+  the shared Mac and the headless page. Against `main` the branch stays within +0.6 ms at 60× and is
+  0.4 to 3.1 ms cheaper at 600× and 3600×, where the sample skips the profile of flashes it does not
+  draw. On mobile emulation p95 ≤ 10 ms everywhere but one pose of R1 at 3600× (11.6 ms; `main` 14.7).
+- **Tier** kept: `high` on desktop, `medium` on mobile, at every storm, speed and pose.
+- **Flights.** No interval over 50 ms at 60× and 600×. At 3600× both builds hitch, 83 to 133 ms, 4 to
+  10 intervals per storm: an hour of scene a second loads cloud frames during the flights.
+- **GPU memory.** Over budget: desktop 386.2 MB at 60× and 397.4 MB at speed (`main` 378.7 and 389.9),
+  mobile 248.1 and 259.3 MB (`main` 243.8 and 255.0). The branch adds 3.1 MB of textures, the
+  2048 × 1024 light map on `high` (#404, kept by ADR 0033 only within 384 MB), and 4.3 MB of buffers, the
+  three `flashLook` floats per flash of the ring and per channel segment (#402); the 11 MB more at
+  speed are cloud frames, on both builds. MSAA renderbuffers (8.3 MB) are not counted, as in every
+  earlier figure.
+- **Near white** on the paused screenshots: at most 0.1 % on desktop; on mobile at most 1.7 % but
+  2.4 % at R2's `regional` frame at 3600× (`main` 3.5 %), where the far-view points of the 500 newest
+  flashes merge on a phone's whole-storm frame (rule 1, unchanged by the rework). The capture matrix
+  above measures the lightning while it plays.
 
 What the pictures show:
 
