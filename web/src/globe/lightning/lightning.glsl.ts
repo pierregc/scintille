@@ -74,7 +74,7 @@ void main() {
 		float known = cloudKnownAt(normal);
 		if (known > 0.0) opacity = mix(opacity, veilOpacity(volumeSample(volumeField, volumeLatLon(normal)).r), known);
 #endif
-		vDip *= cloudTransmission(opacity, 1.0);
+		vDip *= clearAirLight(opacity, 1.0);
 	}
 #endif
 	vec2 drift = cloudDrift(age, end, flashShape.y, seed, kind) * kmToWorld * flicker;

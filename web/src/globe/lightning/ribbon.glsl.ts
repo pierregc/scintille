@@ -55,8 +55,9 @@ void main() {
 	bool ground = isGround(kind);
 	bool branch = segC.z > 0.5;
 	bool inCloud = segC.w > 0.5;
-	// Halos follow the main channel of ground flashes in clear air only; fainter paths keep a bare core.
-	if (segA.w <= 0.0 || (halo > 0.5 && (!ground || branch || inCloud))) {
+	bool trace = segC.w > 1.5;
+	// Halos follow the main channel of ground flashes in clear air and the traces of in-cloud trunks; fainter paths keep a bare core.
+	if (segA.w <= 0.0 || (halo > 0.5 && !trace && (!ground || branch || inCloud))) {
 		cull();
 		return;
 	}
@@ -93,14 +94,15 @@ void main() {
 	vec3 north = cross(normal, east);
 	mat3 frame = mat3(east, north, normal) * kmToWorld;
 	float width = segA.w;
-	// Channels stay under the observed top where the clouds are in relief (ADR 0028).
-	vec3 lift = vec3(1.0);
+	// Channels stay under the observed top where the clouds are in relief (ADR 0028): their part in the cloud
+	// compresses toward it while a drop under the base keeps its height.
+	vec3 lift = vec3(${f(SKELETON.cloudBaseKm)}, 1.0, 1.0);
 #ifdef VOLUME
 	float top = cloudTopAt(flash.xyz);
-	if (top > 0.0) lift.z = clamp((top - 0.5) / ${f(SKELETON.cloudTopKm)}, 0.3, 1.0);
+	if (top > 0.0) lift = reliefLift(top);
 #endif
-	vec3 mid = 0.5 * (segA.xyz + segB.xyz) * lift;
-	// The cloud where the line of sight leaves it veils a channel inside it and hides one below it.
+	vec3 mid = liftPoint(0.5 * (segA.xyz + segB.xyz), lift);
+	// The cloud where the line of sight leaves it veils a channel inside it and dims one below it to a trace.
 	float opacity = inCloud ? ${f(VEIL.fallback)} : 0.0;
 	float slant = 1.0;
 #ifdef CLOUDS
@@ -116,11 +118,11 @@ void main() {
 	}
 #endif
 	if (inCloud) {
-		vec2 veiled = cloudVeil(opacity, mid.z, kmPerPx, width);
+		vec2 veiled = cloudVeil(opacity, 0.5 * (segA.z + segB.z), kmPerPx, width, segC.w);
 		width = veiled.x;
 		light *= veiled.y;
 	} else {
-		light *= cloudTransmission(opacity, slant);
+		light *= clearAirLight(opacity, slant);
 	}
 	// Hairlines draw a pixel wide and give up light instead, so they never break into dashes.
 	if (width < 0.75) {
@@ -131,8 +133,8 @@ void main() {
 		cull();
 		return;
 	}
-	vec3 a = segA.xyz * lift;
-	vec3 b = mix(a, segB.xyz * lift, grown);
+	vec3 a = liftPoint(segA.xyz, lift);
+	vec3 b = mix(a, liftPoint(segB.xyz, lift), grown);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);
 	vec4 cb = projectionMatrix * viewMatrix * vec4(base + frame * b, 1.0);
 	vec2 sa = ca.xy / ca.w * viewport;
