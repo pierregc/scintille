@@ -140,7 +140,7 @@ export class ChannelPool {
 		const seed = flashSeed(ring.time[s], ring.lat[s], ring.lon[s]);
 		const radius = Math.max(3, Math.sqrt(ring.areaKm2[s] / Math.PI));
 		const kind = flashKind(seed, ring.durationMs[s], ring.areaKm2[s]);
-		const skeleton = channelSkeleton(seed, radius, kind);
+		const skeleton = channelSkeleton(seed, radius, kind, ring.durationMs[s]);
 		const flash = [
 			Math.cos(lat) * Math.cos(lon),
 			Math.sin(lat),

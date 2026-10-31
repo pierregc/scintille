@@ -56,19 +56,20 @@ rendering choice.
 |---|---|---|---|---|---|---|
 | Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.3-0.8 r, strike 2-8 km away inside r | 0-30° for 80 %, 30-45° otherwise | 1 × 10^5 | 3-12 |
 | Negative cloud-to-ground, single-stroke (`CgSingle`) | 7 % | 6-8 km | as above | as above | 1 × 10^5 | 1-3 |
-| Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, strike 6-10 km away inside r | 30-45° | 1 × 10^5 | 0-3 |
-| Bolt from the blue (`BoltFromBlue`) | 1 % | exit 8-9 km, trunk top 9-10 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
+| Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, drop 5-11 km across, strike at 0.6-1.0 r from the position, inside r | 30-45° | 1 × 10^5 | 0-3 |
+| Bolt from the blue (`BoltFromBlue`) | 1 % | trunk from 7.0-8.4 km to 9-10 km, exit 8-9 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
 | In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 6-8 km to 9-11 km | fans 0.8-2.2 r | 15-40° | 2 × 10^5, fans 8 × 10^4 | 0-9 |
 | In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
 | Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 15-40° | as the trunk and fan | 0-9 |
 
 Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %). Each flash runs its leaders at
 the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds` is the time down a
-cloud-to-ground drop (clamped to 50 to 150 ms; 150 to 250 ms for a bolt from the blue) or up an
-in-cloud trunk (10 to 20 ms), `spreadSeconds` the time the fans take to cover 2.2 r (within 80 % of the
-flicker; the whole flicker for crawlers). The table is the contract of the geometry (#401) and timing
-(#402) tickets; until #401 lands, the four cloud-to-ground kinds are drawn with the cloud-to-ground
-silhouette below, and the three in-cloud kinds with the in-cloud one.
+cloud-to-ground drop (clamped to 50 to 150 ms) or up an in-cloud trunk (10 to 20 ms); for a bolt from
+the blue it covers the whole path, up its trunk, 0.75 r across the cloud and down (clamped to 150 to
+250 ms, so most bolts under 10 km of radius sit at 150 ms). `spreadSeconds` is the time the fans take to
+cover 2.2 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
+the geometry (#401) and timing (#402) tickets; until #401 lands, the four cloud-to-ground kinds are drawn
+with the cloud-to-ground silhouette below, and the three in-cloud kinds with the in-cloud one.
 
 Each kind keeps its own timing within the observed duration (`flashProfile`, see
 [flicker](#flicker-then-fade)); the leader of a cloud-to-ground flash takes at most half its flicker:

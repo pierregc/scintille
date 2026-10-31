@@ -2,8 +2,8 @@
 
 - Status: proposed
 - Date: 2026-10-31
-- Supersedes [0013 · 3D lightning ribbons](0013-bis-3d-lightning-ribbons.md); amends visual rules 6,
-  7 and 11 of [ADR 0020](0020-immersive-storm-view.md)
+- Supersedes [0013 · 3D lightning ribbons](0013-bis-3d-lightning-ribbons.md); amends
+  [visual rules](../immersive-view.md#visual-rules) 6, 7 and 11, the bounds that ADR 0020 specifies
 
 ## Context
 
@@ -76,8 +76,8 @@ every flash stays a point (ADR 0020 rule 1). The HUD rate stays the data rate; n
 |---|---|---|---|
 | Negative cloud-to-ground, multi-stroke | 19 % | origin 6-8 km over 0.5 r, feed 0.3-0.8 r, drop within 30° of vertical (80 %) or 30-45°, strike 2-8 km away inside r, 3-12 branches below 5 km on both sides, a second contact in 40 % | leader 1 × 10^5 m/s (52-95 ms for 7 km, ≤ 150 ms), 2-12 strokes 10-400 ms apart, continuing current in 40 % |
 | Negative cloud-to-ground, single-stroke | 7 % | as above, 1-3 branches | one stroke, then a faint activity to the end |
-| Positive cloud-to-ground | 3 % | origin 9-11 km, run 0.8-2.2 r, drop at 30-45°, strike at 0.6-1.0 r, 0-3 branches | 1 stroke (81 %) or 2, long continuing current (75 %) |
-| Bolt from the blue | 1 % | exit at 8-9 km, descent 45-60°, strike 5-12 km from the exit inside max(r, 8 km) | leader 1.5 × 10^5 m/s, first stroke at 150-250 ms |
+| Positive cloud-to-ground | 3 % | origin 9-11 km, run 0.8-2.2 r, drop at 30-45° (5-11 km across), strike at 0.6-1.0 r from the position, inside r, 0-3 branches | 1 stroke (81 %) or 2, long continuing current (75 %) |
+| Bolt from the blue | 1 % | trunk from 7.0-8.4 km up to 9-10 km, run 0.5-1 r, exit at 8-9 km, descent 45-60°, strike 5-12 km from the exit inside max(r, 8 km) | leader 1.5 × 10^5 m/s over the whole path from the trunk foot, first stroke at 150-250 ms |
 | In-cloud trunk and fan | the rest (55-60 %) | oblique trunk from 6-8 km to 9-11 km at 15-40° from vertical, then 1-3 fans at 8.5-11.5 km within min(2.2 r, 8 × 10^4 m/s × 0.8 × duration) | trunk 2 × 10^5 m/s (10-20 ms), fans 8 × 10^4 m/s, 0 / 1 / 2-3 bright pulses in 25 / 45 / 30 %, 12.5 ms stutters in the final half |
 | In-cloud crawler | flashes observed ≥ 600 ms or ≥ 1,500 km² (7-12 % per storm) | 1-2 leaders at 6-8 km to 1.76-2.2 r | a steady 0.3 with a lit tip walking at 1 × 10^5 m/s, never flickering |
 | Cloud-to-air | 3 % | a trunk and fan whose longest branch leaves the cloud and stops 1-3 km beyond | as the trunk and fan |
@@ -98,16 +98,18 @@ motion keeps the single soft fade.
   table of bounds per kind; `leaderSeconds(kind, radiusKm, seed)` and
   `spreadSeconds(kind, radiusKm, flicker, seed)`; GLSL twins of each, the shaders passing the radius.
 - `profile.ts`: `flashProfile(wallAge, sceneAge, display, durationMs, seed, flicker, kind)` dispatching
-  to `groundProfile` and `cloudProfile`; `skeleton.ts`: `channelSkeleton(seed, radiusKm, kind)`.
+  to `groundProfile` and `cloudProfile`; `skeleton.ts`:
+  `channelSkeleton(seed, radiusKm, kind, durationMs)`.
 - Channel segments: `level` 4 marks a second ground contact path, lit from a later stroke; the cloud
   flag is tri-state: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in
   the cloud (crisp, at least 30 % of its light).
 
-**Visual rules amended** (ADR 0020): rule 6 is about exposure; the share of flashes drawn in full is a
-named deterministic sampling, not an exposure. Rule 7: channels run 6-11.5 km in the cloud and
-cloud-to-ground ones from 6-11 km to the ground, heights 1.0×. Rule 11: gaps 10-400 ms, one stroke for
-25 % of negative and 81 % of positive cloud-to-ground flashes, 0-3 bright pulses in cloud, flicker up
-to 2 s. The glow sprite is max-blended below 1 km/px in storm views and screen-blended from afar.
+**[Visual rules](../immersive-view.md#visual-rules) amended** (ADR 0020): rule 6 is about exposure; the
+share of flashes drawn in full is a named deterministic sampling, not an exposure. Rule 7: channels run
+6-11.5 km in the cloud and cloud-to-ground ones from 6-11 km to the ground, heights 1.0×. Rule 11: gaps
+10-400 ms, one stroke for 25 % of negative and 81 % of positive cloud-to-ground flashes, 0-3 bright
+pulses in cloud, flicker up to 2 s. The glow sprite is max-blended below 1 km/px in storm views and
+screen-blended from afar.
 
 Delivery: #400 introduces the kinds and the contracts with the picture unchanged, #399 the density
 budget, #401 the geometry, #402 the timing, #403 the glow, #404 the cloud light, #408 validates and
@@ -118,7 +120,15 @@ turns this record to accepted.
 - The picture at speed becomes a sample over a field, measurable through `lightning.stats`; the same
   heroes on a revisit or a shared URL; the sound follows the sample.
 - Four hand-mirrored GLSL twins (`flashKind`, `flashProfile`, `spread`, `shown`), guarded by
-  string-containment tests of their constants and by GPU captures only.
+  string-containment tests of their constants and by GPU captures; the twins of `channel.ts` are also
+  run as JavaScript against the TypeScript in the tests.
+- The kind is drawn twice from the same seed: on the CPU for the skeleton, on the GPU for the profile,
+  the drift and the halo. The GPU reads the seed as a float32 and hashes it in float32, so the two draws
+  disagree for about 21 % of flashes on the kind and 12 % on cloud-to-ground against in-cloud, as the
+  25 % split of `b1b35cf` already did (float32 emulation over 200,000 Basse-Kotto seeds; rounding the
+  seed alone gives 10 % and 4.4 %). Harmless while the kinds of each family draw alike. Before the kinds
+  look different, either the CPU computes the kind once and carries it to the GPU, or both twins hash
+  a quantised seed with an integer hash exact in float32.
 - The sample drifts for about two seconds after a lightning jump (named). A storm's predecessor cell
   before its first replay chunk stays out of the replay until the pipeline scans from `t_start`.
 - To watch: near-white ≤ 2 % at night, p95 frame cost relative to a same-evening `main`, the `low` tier

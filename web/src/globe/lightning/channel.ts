@@ -35,32 +35,40 @@ const cloudToAirBelow = Number((KIND_SHARES[3] + CLOUD_TO_AIR_SHARE).toFixed(4))
 /** Pace of a flash's leaders, drawn once per flash: the kind's speeds times this. */
 export const PACE = [0.75, 1.35] as const;
 
-/** Bounds of a kind's procedural geometry and propagation, from the literature (ADR 0033): km above ground, r = observed radius, degrees, m/s, wall seconds. #401 draws the geometry, #402 the timing. */
+type Range = readonly [number, number];
+
+/** Bounds of a kind's procedural geometry and propagation, from the literature (ADR 0033): km above ground, r = observed radius, degrees, m/s, wall seconds. */
 export interface KindShape {
-	/** Where the visible leader starts: the top of a cloud-to-ground drop, the foot of an in-cloud trunk. */
-	originKm: [number, number];
+	/** Top of a cloud-to-ground drop (a bolt's exit from the cloud side), foot of an in-cloud trunk. */
+	readonly originKm: Range;
+	/** Where the leader starts: the origin, or the foot of a bolt's trunk below its exit. */
+	readonly footKm: Range;
 	/** Top of the in-cloud trunk; the origin itself for kinds without one. */
-	topKm: [number, number];
-	/** In-cloud run over r: the feed of a cloud-to-ground kind, the fans of an in-cloud one. */
-	runR: [number, number];
-	/** Horizontal distance from the origin to the strike, km; the strike also stays within `max(r, reachKm)` of the position. */
-	strikeKm: [number, number];
-	reachKm: number;
+	readonly topKm: Range;
+	/** In-cloud run over r: the feed of a cloud-to-ground kind, a bolt's crossing, the fans of an in-cloud kind. */
+	readonly runR: Range;
+	/** Horizontal distance from the drop's top to the strike, km. */
+	readonly strikeKm: Range;
+	/** Distance of the strike from the observed position over r ([0, 1]: anywhere inside r); a kind with `reachKm` may strike up to `max(r, reachKm)` away. */
+	readonly strikeR: Range;
+	readonly reachKm: number;
 	/** Inclination of the drop or trunk from the vertical: the steep band, the shallow band, and the share of flashes in the steep one. */
-	inclinationDeg: [[number, number], [number, number]];
-	steepShare: number;
+	readonly inclinationDeg: readonly [Range, Range];
+	readonly steepShare: number;
 	/** Leader speed down the drop or up the trunk, fan speed across the cloud; the leader time on screen is clamped to `leaderBounds`. */
-	leaderSpeed: number;
-	spreadSpeed: number;
-	leaderBounds: [number, number];
-	branches: [number, number];
+	readonly leaderSpeed: number;
+	readonly spreadSpeed: number;
+	readonly leaderBounds: Range;
+	readonly branches: Range;
 }
 
 const cgMulti: KindShape = {
 	originKm: [6, 8],
+	footKm: [6, 8],
 	topKm: [6, 8],
 	runR: [0.3, 0.8],
 	strikeKm: [2, 8],
+	strikeR: [0, 1],
 	reachKm: 0,
 	inclinationDeg: [[0, 30], [30, 45]],
 	steepShare: 0.8,
@@ -71,9 +79,11 @@ const cgMulti: KindShape = {
 };
 const icTrunkFan: KindShape = {
 	originKm: [6, 8],
+	footKm: [6, 8],
 	topKm: [9, 11],
 	runR: [0.8, 2.2],
 	strikeKm: [0, 0],
+	strikeR: [0, 0],
 	reachKm: 0,
 	inclinationDeg: [[15, 40], [15, 40]],
 	steepShare: 1,
@@ -83,15 +93,16 @@ const icTrunkFan: KindShape = {
 	branches: [0, 9],
 };
 
-/** Per-kind bounds, indexed by `FlashKind`. */
-export const KIND: readonly KindShape[] = [
+const rows = [
 	cgMulti,
 	{ ...cgMulti, branches: [1, 3] },
 	{
 		originKm: [9, 11],
+		footKm: [9, 11],
 		topKm: [9, 11],
 		runR: [0.8, 2.2],
-		strikeKm: [6, 10],
+		strikeKm: [5, 11],
+		strikeR: [0.6, 1],
 		reachKm: 0,
 		inclinationDeg: [[30, 45], [30, 45]],
 		steepShare: 1,
@@ -102,9 +113,11 @@ export const KIND: readonly KindShape[] = [
 	},
 	{
 		originKm: [8, 9],
+		footKm: [7, 8.4],
 		topKm: [9, 10],
 		runR: [0.5, 1],
 		strikeKm: [5, 12],
+		strikeR: [0, 1],
 		reachKm: 8,
 		inclinationDeg: [[45, 60], [45, 60]],
 		steepShare: 1,
@@ -116,9 +129,11 @@ export const KIND: readonly KindShape[] = [
 	icTrunkFan,
 	{
 		originKm: [6, 8],
+		footKm: [6, 8],
 		topKm: [6, 8],
 		runR: [1.76, 2.2],
 		strikeKm: [0, 0],
+		strikeR: [0, 0],
 		reachKm: 0,
 		inclinationDeg: [[90, 90], [90, 90]],
 		steepShare: 1,
@@ -128,7 +143,9 @@ export const KIND: readonly KindShape[] = [
 		branches: [0, 3],
 	},
 	icTrunkFan,
-];
+] satisfies KindShape[];
+/** Per-kind bounds, indexed by `FlashKind`. */
+export const KIND: readonly KindShape[] = Object.freeze(rows.map((k) => Object.freeze(k)));
 
 /** Per-flash seed in [0, 1) from its event time (UTC ms) and position, stable across rebases and revisits. */
 export function flashSeed(timeMs: number, lat: number, lon: number): number {
@@ -154,24 +171,30 @@ export function flashKind(seed: number, durationMs: number, areaKm2: number): Fl
 }
 
 const DEG = Math.PI / 180;
-const mean = (range: readonly [number, number]): number => (range[0] + range[1]) / 2;
+const mean = (range: Range): number => (range[0] + range[1]) / 2;
 
 function pace(seed: number): number {
 	return PACE[0] + (PACE[1] - PACE[0]) * channelHash(seed, 4);
 }
 
-/** Mean climb of a kind's leader, km (the drop of a cloud-to-ground kind), and its horizontal run before the footprint bounds it. */
-function leaderMeans(kind: FlashKind): [number, number] {
+/** Mean leader path of a kind, km: a bolt first climbs its trunk and crosses `cloudR` × r of the cloud; then the climb of the drop or trunk, with its horizontal run before the footprint bounds it. */
+function leaderLegs(kind: FlashKind): { cloudKm: number; cloudR: number; climbKm: number; runKm: number } {
 	const k = KIND[kind];
-	const climb = isGround(kind) ? mean(k.originKm) : mean(k.topKm) - mean(k.originKm);
-	return [climb, climb * Math.tan(mean(k.inclinationDeg[0]) * DEG)];
+	const bolt = kind === FlashKind.BoltFromBlue;
+	const climbKm = isGround(kind) ? mean(k.originKm) : mean(k.topKm) - mean(k.originKm);
+	return {
+		cloudKm: bolt ? mean(k.topKm) - mean(k.footKm) : 0,
+		cloudR: bolt ? mean(k.runR) : 0,
+		climbKm,
+		runKm: climbKm * Math.tan(mean(k.inclinationDeg[0]) * DEG),
+	};
 }
 
-/** Wall seconds the leader takes down a cloud-to-ground drop or up an in-cloud trunk, at the kind's speed and the flash's pace, within the kind's bounds. */
+/** Wall seconds the leader takes down a cloud-to-ground drop (a bolt's whole path from its trunk foot) or up an in-cloud trunk, at the kind's speed and the flash's pace, within the kind's bounds. */
 export function leaderSeconds(kind: FlashKind, radiusKm: number, seed: number): number {
 	const k = KIND[kind];
-	const [climb, run] = leaderMeans(kind);
-	const pathKm = Math.hypot(climb, Math.min(run, Math.max(radiusKm, k.reachKm)));
+	const { cloudKm, cloudR, climbKm, runKm } = leaderLegs(kind);
+	const pathKm = cloudKm + cloudR * radiusKm + Math.hypot(climbKm, Math.min(runKm, Math.max(radiusKm, k.reachKm)));
 	const seconds = (pathKm * 1000) / (k.leaderSpeed * pace(seed));
 	return Math.min(k.leaderBounds[1], Math.max(k.leaderBounds[0], seconds));
 }
@@ -217,8 +240,10 @@ float pace(float seed) {
 }
 float leaderSeconds(int kind, float radiusKm, float seed) {
 ${kindLines((k, kind) => {
-	const [climb, run] = leaderMeans(kind);
-	return `\tif (kind == ${kind}) return clamp(length(vec2(${f(climb)}, min(${f(run)}, max(radiusKm, ${f(k.reachKm)})))) / (${f(k.leaderSpeed)} * pace(seed)), ${f(k.leaderBounds[0])}, ${f(k.leaderBounds[1])});`;
+	const { cloudKm, cloudR, climbKm, runKm } = leaderLegs(kind);
+	const cloud = cloudKm + cloudR > 0 ? `${f(cloudKm)} + ${f(cloudR)} * radiusKm + ` : '';
+	const pathKm = `${cloud}length(vec2(${f(climbKm)}, min(${f(runKm)}, max(radiusKm, ${f(k.reachKm)}))))`;
+	return `\tif (kind == ${kind}) return clamp((${pathKm}) * 1000.0 / (${f(k.leaderSpeed)} * pace(seed)), ${f(k.leaderBounds[0])}, ${f(k.leaderBounds[1])});`;
 })}
 	return 0.0;
 }
