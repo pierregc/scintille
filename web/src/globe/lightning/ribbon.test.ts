@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crossfade, crossfadeArea, crossfadeScreenArea, hairline, lengthShare, overlapGain, RIBBON, ribbonGlsl } from './ribbon';
+import { crossfade, crossfadeArea, crossfadeScreenArea, hairline, lengthShare, overlapGain, overlapTone, overlapToneGlsl, RIBBON, ribbonGlsl } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 
 /** Lateral profile of a core, `y` in half-widths, as the fragment shader draws it. */
@@ -26,8 +26,13 @@ const chain = (lengths: number[], x: number, value: (fade: number, len: number) 
 	}
 	return sum;
 };
+/** Screen gain of a segment `span` widths long at the linear value `v`, as the fragment shader mixes it. */
+const screenGain = (span: number, v: number) => {
+	const gain = overlapGain(span);
+	return gain.linear + (gain.screen - gain.linear) * overlapTone(v);
+};
 /** Screen value of a quad as the shaders draw it now, and as they did before: cross-faded in light, converted on its own. */
-const drawn = (level: number) => (fade: number, len: number) => srgb(level) * fade * lengthShare(len) * overlapGain(len).screen;
+const drawn = (level: number) => (fade: number, len: number) => srgb(level) * fade * lengthShare(len) * screenGain(len, level);
 const before = (level: number) => (fade: number) => srgb(level * fade);
 const stats = (values: number[]) => {
 	const mean = values.reduce((s, v) => s + v, 0) / values.length;
@@ -89,8 +94,8 @@ describe('cross-fades', () => {
 		for (const level of [0.05, 0.1, 0.3]) {
 			const now = stats(along.map((x) => chain(lengths, x, drawn(level))));
 			const old = stats(along.map((x) => chain(lengths, x, before(level))));
-			expect(now.mean / old.mean).toBeGreaterThan(0.9);
-			expect(now.mean / old.mean).toBeLessThan(1.1);
+			expect(now.mean / old.mean).toBeGreaterThan(0.97);
+			expect(now.mean / old.mean).toBeLessThan(1.03);
 			expect(now.max).toBeLessThan(Math.min(1.25, old.max));
 			expect(now.min).toBeGreaterThan(Math.max(0.8, old.min));
 		}
@@ -103,7 +108,7 @@ describe('overlapGain', () => {
 		expect(overlapGain(1).screen).toBeCloseTo(4 / 3, 10);
 		expect(overlapGain(1 - 1e-6).screen).toBeCloseTo(4 / 3, 4);
 		expect(overlapGain(1 - 1e-6).linear).toBeCloseTo(1, 4);
-		for (let span = 0.15; span < 4; span += 0.05) {
+		for (let span = 0.1; span < 4; span += 0.05) {
 			expect(overlapGain(span).screen).toBeLessThan(overlapGain(span - 0.05).screen);
 			expect(overlapGain(span).linear).toBeLessThanOrEqual(overlapGain(span - 0.05).linear);
 		}
@@ -116,14 +121,29 @@ describe('overlapGain', () => {
 		expect(least.screen).toBeCloseTo(crossfadeScreenArea(RIBBON.minSpan) / RIBBON.minSpan, 10);
 		expect(least.linear).toBeCloseTo(1 / lengthShare(RIBBON.minSpan), 10);
 	});
+});
 
-	it('is what overlapping cross-fades added per unit length, once converted to screen values, within 10 % for mid tones', () => {
-		for (const level of [0.05, 0.1, 0.3]) {
-			for (const span of [0.3, 0.6, 1, 2, 4]) {
-				const added = integral((x) => srgb(level * crossfade(x, span)), -0.5, span + 0.5) / span;
-				expect(overlapGain(span).screen / (added / srgb(level))).toBeGreaterThan(0.9);
-				expect(overlapGain(span).screen / (added / srgb(level))).toBeLessThan(1.1);
-				expect(overlapGain(span).linear).toBeCloseTo(crossfadeArea(span) / span, 10);
+describe('overlapTone', () => {
+	it('is 0 where the sRGB conversion is linear, close to 1 in mid tones, a little more in bright ones', () => {
+		expect(overlapTone(0)).toBeCloseTo(0, 5);
+		expect(overlapTone(0.003)).toBeCloseTo(0, 5);
+		expect(overlapTone(0.1)).toBeGreaterThan(0.9);
+		expect(overlapTone(0.1)).toBeLessThan(1);
+		expect(overlapTone(1)).toBeGreaterThan(1.1);
+		expect(overlapTone(1)).toBeLessThan(1.2);
+		for (const v of [0.004, 0.01, 0.05, 0.2, 1]) {
+			const mean = integral((u) => srgb(v * u), 0, 1) / srgb(v);
+			expect(overlapTone(v)).toBeCloseTo(3 * (2 * mean - 1), 5);
+		}
+	});
+
+	it('gives back what overlapping cross-fades added once converted, exactly from a width on, within 5 to 16 % below', () => {
+		for (const level of [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.3, 0.6, 1]) {
+			for (const span of [0.0625, 0.125, 0.2, 0.3, 0.5, 0.75, 1, 2, 4]) {
+				const added = integral((x) => srgb(level * crossfade(x, span)), -0.5, span + 0.5) / span / srgb(level);
+				const ratio = screenGain(span, level) / added;
+				expect(ratio).toBeGreaterThan(span >= 1 ? 0.999 : 0.99);
+				expect(ratio).toBeLessThan(span >= 1 ? 1.001 : level >= 0.05 ? 1.05 : 1.16);
 			}
 		}
 	});
@@ -136,12 +156,14 @@ describe('ribbon shaders', () => {
 		expect(ribbonGlsl).toContain(`max(span, ${RIBBON.minSpan})`);
 		expect(ribbonVertex).toContain('vShare = lengthShare(vLength) * overlapGain(');
 		expect(ribbonFragment).toContain('exp(-y2 * 3.0) * (1.0 - y2)');
-		expect(ribbonFragment).toContain('linearToOutputTexel(vec4(0.25)).r > 0.4 ? vShare.x : vShare.y');
+		expect(ribbonFragment).toContain(overlapToneGlsl);
+		expect(ribbonFragment).toContain('mix(vec3(vShare.y), vec3(vShare.x), overlapTone(value))');
 	});
 
 	it('split the screen value at the joints, after the colour space conversion', () => {
 		const converted = ribbonFragment.indexOf('#include <colorspace_fragment>');
 		expect(converted).toBeGreaterThan(0);
-		expect(ribbonFragment.indexOf('gl_FragColor.rgb *= share;')).toBeGreaterThan(converted);
+		expect(ribbonFragment.indexOf('vec3 value = gl_FragColor.rgb;')).toBeLessThan(converted);
+		expect(ribbonFragment.indexOf('gl_FragColor.rgb *= fade * (')).toBeGreaterThan(converted);
 	});
 });

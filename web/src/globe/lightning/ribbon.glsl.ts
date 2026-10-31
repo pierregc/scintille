@@ -4,7 +4,7 @@ import { CHANNEL, channelGlsl } from './channel';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
-import { ribbonGlsl } from './ribbon';
+import { overlapToneGlsl, ribbonGlsl } from './ribbon';
 import { SKELETON } from './skeleton';
 import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
@@ -171,9 +171,10 @@ varying float vLength;
 varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
+${overlapToneGlsl}
 void main() {
 	float light;
-	float share = 1.0;
+	float fade = 1.0;
 	if (halo > 0.5) {
 		vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
 		float x2 = min(dot(d, d), 1.0);
@@ -183,13 +184,17 @@ void main() {
 		light = exp(-y2 * 3.0) * (1.0 - y2);
 		// The cross-fade splits the screen value, after the conversion below, so the two quads at a joint add up to one
 		// instead of beading.
-		share = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0);
-		share *= linearToOutputTexel(vec4(0.25)).r > 0.4 ? vShare.x : vShare.y;
+		fade = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0);
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
+	vec3 value = gl_FragColor.rgb;
 	#include <colorspace_fragment>
-	gl_FragColor.rgb *= share;
+	// On screen the overlap light follows the tone, as the old conversion of each quad did; the bloom's buffer is linear.
+	if (halo < 0.5) {
+		bool screen = linearToOutputTexel(vec4(0.25)).r > 0.4;
+		gl_FragColor.rgb *= fade * (screen ? mix(vec3(vShare.y), vec3(vShare.x), overlapTone(value)) : vec3(vShare.y));
+	}
 }
 `;
