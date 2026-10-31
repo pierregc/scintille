@@ -82,16 +82,21 @@ Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
 
 The storm frame (`REPLAY_FRAME`, the `regional` pose, the `Follow` frame) tilts 45° from straight
 down since #406; it was 20°. A vertical channel projects at sin(tilt) of its length on screen, 0.34
-at 20° against 0.71 at 45°, while a horizontal one shows in full at either: the old frame flattened
-every flash by construction ("flashes are too horizontal", #398). `frameStorm` is unchanged: the
+at 20° against 0.71 at 45°; a horizontal one across the line of sight shows in full, and one along it
+at cos(tilt) (0.94 at 20°, 0.71 at 45°), so verticals go from about a third of the along-sight
+horizontals to par: the old frame flattened every flash by construction ("flashes are too
+horizontal", #398). `frameStorm` is unchanged: the
 footprint is fitted in the 62 % safe area by bisection, never nearer than the floor range of the tilt
 (`floorRange`: 424 km at 20°, 550 km at 45°), so a small storm sits at 561 km instead of 432 km and
 wide storms move by −15 to +6 % (table below). At the floor the camera is 408 km high and the
 bottom edge looks 24° from nadir: the nearest visible ground is 450 km away, between `iss` (400 km)
 and `window` (510 km), so a 1 km cloud texel stays under 4 px (visual rule 9). A 16:9 frame's top
-corners look 63° from nadir, under the horizon (70° from the floor), so small storms keep it out of
-the frame, while wide storms framed from higher (Basse-Kotto from 1,250 km, R2 from 970 km, where the
-horizon sits 57 to 60° from nadir) show the limb in the top corners. The horizon view (72°) and the
+corners look 63° from nadir at the floor, under the 70° horizon. Of the storms below, only
+Basse-Kotto (camera 1,250 km high, horizon 57° from nadir, top corners 58 to 59°) shows the limb in
+the desktop top corners; R2 (970 km, horizon 60°) stays just under it. On a 390 × 844 phone, wide
+storms are framed from 2,600 to 4,200 km high, and the limb with black sky fills the top of the
+screen: about 16 % of its height for Basse-Kotto, 11 % for R2 and 7 % for R1, against none at 20°.
+The horizon view (72°) and the
 floor poses are unchanged. A reload with a frame checkpoint saved at the old tilt flies to the new frame
 (`sameFrame` is false). The tilt is a tunable of [ADR 0020](adr/0020-immersive-storm-view.md)
 point 5, chosen by the maintainer on captures: the sweep below shows 20°, 35°, 42°, 45° and 50° on
@@ -210,7 +215,7 @@ back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
 
 Measured on the five storms with a local production build against production data, 60× from
 12 minutes before the reference hour, following, then the horizon view
-([`measurements.json`](immersive/follow/measurements.json)):
+([`measurements.json`](immersive/follow/measurements.json)), at the 20° frame, before #406:
 
 | | R1 | R2 | R3 | R4 | R5 |
 |---|---|---|---|---|---|

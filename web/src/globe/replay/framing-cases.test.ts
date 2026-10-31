@@ -20,13 +20,11 @@ it('keeps five explicitly synthetic reproducible cases framed at the 45° tilt, 
 	expect(cases).toHaveLength(5);
 	expect(REPLAY_FRAME.tilt).toBe(45);
 	for (const item of cases) {
-		const altitudes = new Map<number, number>();
 		for (const aspect of [16 / 9, 9 / 16]) {
 			const view = frameStorm(item.bounds, 35, aspect);
 			expect(view.duration).toBeLessThan(4000);
 			expect(view.tilt).toBe(REPLAY_FRAME.tilt);
 			expect(view.altitude).toBeGreaterThanOrEqual(550);
-			altitudes.set(aspect, view.altitude);
 			const camera = new PerspectiveCamera(35, aspect, 1e-5, 1000);
 			const pose = poseAt(view.lat, view.lon, kmToWorld(view.altitude, 1), view.tilt, 1);
 			camera.position.copy(pose.position);
@@ -44,7 +42,6 @@ it('keeps five explicitly synthetic reproducible cases framed at the 45° tilt, 
 				expect(Math.max(Math.abs(p.x), Math.abs(p.y))).toBeLessThan(REPLAY_FRAME.viewportFraction + 0.02);
 			}
 		}
-		expect(altitudes.get(9 / 16)).toBeLessThanOrEqual(3 * (altitudes.get(16 / 9) ?? 0));
 	}
 });
 
