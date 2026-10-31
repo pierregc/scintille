@@ -5,6 +5,7 @@ import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { overlapToneGlsl, ribbonGlsl } from './ribbon';
 import { SKELETON } from './skeleton';
 import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
@@ -24,12 +25,15 @@ uniform float flicker;
 uniform float radius;
 uniform float kmToWorld;
 uniform vec2 viewport;
+uniform float viewScale;
+uniform float pixelRatio;
 uniform float halo;
 uniform float haloStrength;
 uniform vec3 sunDirection;
 
 varying vec2 vLocal;
 varying float vLength;
+varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
 
@@ -39,6 +43,7 @@ ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
 ${veilGlsl}
+${ribbonGlsl}
 #ifdef CLOUDS
 ${cloudOpacityGlsl}
 #endif
@@ -131,11 +136,10 @@ void main() {
 	} else {
 		light *= cloudTransmission(opacity, slant);
 	}
-	// Hairlines draw a pixel wide and give up light instead, so they never break into dashes.
-	if (width < 0.75) {
-		light *= width / 0.75;
-		width = 0.75;
-	}
+	// Hairlines draw no thinner than the pixel grid renders evenly and give up light instead, so they never break into dashes.
+	vec2 thin = hairline(width, pixelRatio * viewScale);
+	width = thin.x;
+	light *= thin.y;
 	if (light < 0.002) {
 		cull();
 		return;
@@ -156,6 +160,9 @@ void main() {
 	c.xy += (vec2(-t.y, t.x) * corner.y + t * along) * w / viewport * c.w;
 	gl_Position = c;
 	vLength = length(sb - sa) / w;
+	// Each segment's cross-fade adds up to its length, then gets back the light overlapping segments used to add, by its
+	// unforeshortened span: on screen and in the bloom's linear buffer.
+	vShare = lengthShare(vLength) * overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w);
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
 	// The light around a channel leans cool; its core stays white. Rose and warm tints are dust and distance, seen from the ground.
@@ -170,22 +177,33 @@ uniform float halo;
 
 varying vec2 vLocal;
 varying float vLength;
+varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
+${overlapToneGlsl}
 void main() {
 	float light;
+	float fade = 1.0;
 	if (halo > 0.5) {
 		vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
 		float x2 = min(dot(d, d), 1.0);
 		light = 0.3 * exp(-x2 * 5.0) * (1.0 - x2);
 	} else {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
-		float ends = clamp((vLocal.x + 0.5), 0.0, 1.0) * clamp((vLength + 0.5 - vLocal.x), 0.0, 1.0);
-		light = exp(-y2 * 3.0) * (1.0 - y2) * ends;
+		light = exp(-y2 * 3.0) * (1.0 - y2);
+		// The cross-fade splits the screen value, after the conversion below, so the two quads at a joint add up to one
+		// instead of beading.
+		fade = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0);
 	}
 	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
 	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
 	#include <tonemapping_fragment>
+	vec3 value = gl_FragColor.rgb;
 	#include <colorspace_fragment>
+	// On screen the overlap light follows the tone, as the old conversion of each quad did; the bloom's buffer is linear.
+	if (halo < 0.5) {
+		bool screen = linearToOutputTexel(vec4(0.25)).r > 0.4;
+		gl_FragColor.rgb *= fade * (screen ? mix(vec3(vShare.y), vec3(vShare.x), overlapTone(value)) : vec3(vShare.y));
+	}
 }
 `;
