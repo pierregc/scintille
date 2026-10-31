@@ -60,12 +60,12 @@ describe('ChannelPool', () => {
 
 	it('builds channels for the flashes under the share, or fading out past it, only', () => {
 		const { ring, pool } = setup(Array.from({ length: 60 }, (_, i) => i * 3), 64);
-		const share = 0.3;
+		const share = 0.1;
 		const sample = Array.from({ length: ring.size }, (_, i) => ring.slot(i)).filter(
 			(s) => heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share * DENSITY.edge,
 		);
 		expect(sample.length).toBeGreaterThan(5);
-		expect(sample.length).toBeLessThan(55);
+		expect(sample.length).toBeLessThan(40);
 		pool.sync(100_200, undefined, undefined, true, share);
 		expect(pool.flashes).toBe(Math.min(sample.length, BUILDS_PER_FRAME));
 		pool.sync(100_200, undefined, undefined, true, share);

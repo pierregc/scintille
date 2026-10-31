@@ -1,4 +1,3 @@
-import { channelHash } from './channel';
 import { glslFloat as f } from './profile';
 
 /**
@@ -51,9 +50,12 @@ export function heroTarget(speed: number): number {
 	return Math.exp(Math.log(ta) + t * (Math.log(tb) - Math.log(ta)));
 }
 
-/** Per-flash lot in [0, 1): a flash is in the sample while its lot is under the share. */
+/**
+ * Per-flash lot in [0, 1): a flash is in the sample while its lot is under the share. The seed is already
+ * a uniform hash; hashing it again would not survive float32 on the GPU, which must pick the same flashes.
+ */
 export function heroLot(seed: number, intensity: number): number {
-	return channelHash(seed, 3) * (1 + (DENSITY.energyWeight - 1) * clamp01(intensity));
+	return seed * (1 + (DENSITY.energyWeight - 1) * clamp01(intensity));
 }
 
 /** Share of the lots under which `target` of the `alive` flashes are drawn in full. */
@@ -78,12 +80,12 @@ export function followShare(current: number, wanted: number, dt: number, jump = 
 	return Math.abs(next - wanted) <= 1e-3 * wanted ? wanted : next;
 }
 
-/** GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `channelGlsl`. `heroShare` is the applied share, `lightMapOff` 1 when no cloud light shows. */
+/** GLSL twins of `heroLot`, `heroWeight` and `pointWeight`; needs `zoomGlsl`. `heroShare` is the applied share, `lightMapOff` 1 when no cloud light shows. */
 export const densityGlsl = /* glsl */ `
 uniform float heroShare;
 uniform float lightMapOff;
 float heroLot(float seed, float intensity) {
-	return channelHash(seed, 3.0) * mix(1.0, ${f(DENSITY.energyWeight)}, clamp(intensity, 0.0, 1.0));
+	return seed * mix(1.0, ${f(DENSITY.energyWeight)}, clamp(intensity, 0.0, 1.0));
 }
 float heroWeight(float lot, float share) {
 	return 1.0 - smoothstep(share, share * ${f(DENSITY.edge)}, lot);

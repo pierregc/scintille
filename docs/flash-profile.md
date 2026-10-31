@@ -71,9 +71,10 @@ speed. What a storm view draws in full, with its channel, its near-floor sprite,
 crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
 lightning look rework, #398):
 
-- Each flash holds a fixed lot `channelHash(seed, 3) × mix(1, 0.4, intensity)`: a revisit or a
-  shared URL shows the same flashes, and the strongest flash is 2.5 times likelier than the weakest
-  to be drawn. A flash is drawn while its lot is under the applied share, fading out over the next
+- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity)`, its seed being already a uniform
+  hash of its time and place (hashing it again would not survive the GPU's float32, which must pick
+  the same flashes as the channel pool and the sound): a revisit or a shared URL shows the same
+  flashes, and the strongest flash is 2.5 times likelier than the weakest to be drawn. A flash is drawn while its lot is under the applied share, fading out over the next
   10 % of the share rather than popping at its edge.
 - The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
   600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;

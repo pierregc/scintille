@@ -1,31 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { channelHash } from './channel';
+import { channelHash, flashSeed } from './channel';
 import { DENSITY, densityGlsl, followShare, heroLot, heroShare, heroTarget, heroWeight, pointWeight } from './density';
 
-const SEEDS = 50_000;
-const seeds = Array.from({ length: SEEDS }, (_, i) => (i + 0.5) / SEEDS);
+const SEEDS = 200_000;
+/** Seeds of flashes spread over a day and a storm-sized box, with intensities uniform and independent of them. */
+const flashes = Array.from({ length: SEEDS }, (_, i) => ({
+	seed: flashSeed(1_793_000_000_000 + i * 431.7, 3 + (i % 97) * 0.013, 19 + (i % 89) * 0.017),
+	intensity: (i * 0.6180339887) % 1,
+}));
 
 describe('heroLot', () => {
 	it('draws about meanWeight times the share with uniform intensities', () => {
-		for (const s of [0.05, 0.1, 0.2, 0.3]) {
-			const under = seeds.filter((seed) => heroLot(seed, channelHash(seed, 7)) < s).length / SEEDS;
-			expect(Math.abs(under - DENSITY.meanWeight * s)).toBeLessThan(0.02);
+		for (const s of [0.001, 0.01, 0.05, 0.1, 0.2, 0.3]) {
+			const under = flashes.filter((f) => heroLot(f.seed, f.intensity) < s).length / SEEDS;
+			expect(Math.abs(under - DENSITY.meanWeight * s)).toBeLessThan(Math.min(0.02, 0.15 * DENSITY.meanWeight * s));
 		}
 	});
 
 	it('makes the strongest flash 2.5 times likelier than the weakest', () => {
-		const strong = seeds.filter((seed) => heroLot(seed, 1) < 0.1).length;
-		const weak = seeds.filter((seed) => heroLot(seed, 0) < 0.1).length;
+		const strong = flashes.filter((f) => heroLot(f.seed, 1) < 0.1).length;
+		const weak = flashes.filter((f) => heroLot(f.seed, 0) < 0.1).length;
 		expect(Math.abs(strong / weak - 2.5)).toBeLessThan(0.1);
 	});
 
 	it('is stable per flash and stays in [0, 1)', () => {
 		expect(heroLot(0.37, 0.5)).toBe(heroLot(0.37, 0.5));
-		for (const seed of seeds.slice(0, 1000)) {
+		for (const { seed } of flashes.slice(0, 1000)) {
 			const lot = heroLot(seed, 2);
 			expect(lot).toBeGreaterThanOrEqual(0);
 			expect(lot).toBeLessThan(1);
 		}
+	});
+
+	it('survives the float32 seed of the GPU, where a second hash would not', () => {
+		const f32 = flashes.slice(0, 10_000).map(({ seed, intensity }) => ({ seed, intensity, gpu: Math.fround(seed) }));
+		for (const { seed, intensity, gpu } of f32) expect(Math.abs(heroLot(gpu, Math.fround(intensity)) - heroLot(seed, intensity))).toBeLessThan(1e-6);
+		const rehashed = f32.filter(({ seed, gpu }) => Math.abs(channelHash(gpu, 3) - channelHash(seed, 3)) > 0.01).length;
+		expect(rehashed / f32.length).toBeGreaterThan(0.1);
 	});
 });
 
@@ -107,7 +118,7 @@ describe('followShare', () => {
 
 describe('densityGlsl', () => {
 	it('uses the same constants as the TypeScript lot and weight', () => {
-		expect(densityGlsl).toContain(`channelHash(seed, 3.0) * mix(1.0, ${DENSITY.energyWeight}, clamp(intensity, 0.0, 1.0))`);
+		expect(densityGlsl).toContain(`seed * mix(1.0, ${DENSITY.energyWeight}, clamp(intensity, 0.0, 1.0))`);
 		expect(densityGlsl).toContain(`1.0 - smoothstep(share, share * ${DENSITY.edge}, lot)`);
 		expect(densityGlsl).toContain(`max(smoothstep(${DENSITY.pointFarness[0]}, ${DENSITY.pointFarness[1]}.0, farness), lightMapOff * ${DENSITY.weakGlow})`);
 	});
