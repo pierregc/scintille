@@ -110,7 +110,8 @@ describe('ribbon shaders', () => {
 		expect(ribbonFragment).toContain(ribbonGlsl);
 		expect(ribbonFragment).toContain('segmentWeight(vLocal.x, vLocal.y, vLength)');
 		expect(ribbonFragment).toContain('exp(-y2 * 3.0) * (1.0 - y2)');
-		expect(ribbonFragment).toContain('share *= overlapGain(vSpan)');
+		expect(ribbonVertex).toContain('vGain = overlapGain(');
+		expect(ribbonFragment).toContain('share *= vGain');
 	});
 
 	it('split the screen value at the joints, after the colour space conversion', () => {
