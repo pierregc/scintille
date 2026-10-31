@@ -95,10 +95,9 @@ them on one side; some are short splinters, some as long as the trunk, and they 
 three levels, coarser as they get finer.
 
 **Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
-the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines,
-and they dim and thin towards their tips. No core is drawn narrower than 1.25 device px (`RIBBON.hairlinePx`):
-a thinner one would break into dashes on the pixel grid, so it is widened to that floor and dimmed in
-proportion, keeping its light. A branch in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
+the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
+(drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
+in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
 sometimes lavender-rose or warm.
 
 **Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
@@ -127,11 +126,17 @@ seen from orbit, channels keep 30 % of their light.
 each other, they are one flash: both keep their glow, only the newest gets a channel.
 
 **Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud. Their segments
-overlap half a width at each joint and cross-fade there; the cross-fade splits the screen value of the
-core, after the colour space conversion, so the two quads at a joint add up to exactly one. A segment
-shorter than its width (a veiled channel, a foreshortened one, a growing tip) is drawn as a round stamp
-weighted by its length instead of a ribbon, so a chain of them makes one smooth thread of the same
-light; a segment of no length adds none. While a channel shows, the
+overlap half a width at each joint and cross-fade there in screen values, after the sRGB conversion, so
+the two at a joint add up to one (cross-faded in light, each half was converted on its own and the joint
+came out about 1.4 times as bright: a bead). A segment shorter than its width (a veiled channel, a
+foreshortened one, a growing tip) is drawn as a round stamp weighted by its length, so a chain of them
+makes one even thread. On screen each core keeps the light its overlapping segments used to add, evenly
+along it: `overlapGain`, the integral of the square root of a segment's cross-fade over the integral of
+the cross-fade (the sRGB conversion taken as a square root), 1 + 1 / (3 s) for a segment s widths long
+(unforeshortened), up to 3π/4 for the shortest; styled, so channels keep the brightness they had when
+they beaded. No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner
+one breaks into dashes on the pixel grid, so it widens to that floor and gives up light in proportion.
+While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
