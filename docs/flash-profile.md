@@ -149,10 +149,14 @@ Flashes also light the clouds from inside, through a light map: an equirectangul
 point the camera looks at, 3 times the camera height in half height, up to the whole globe from about
 3,300 km; 2048 × 1024 texels on `high` (2.3 km at 400 km), 1024 × 512 on `medium` and on phones.
 `w` is the share of the globe the window covers (0.12 at the 400 km floor, 1 from about 3,300 km).
-Each flash lights a disc of `(1.3 + 1.7 w) r` around its observed footprint (`CLOUD_LIGHT`): 1.5 `r`
+Each flash lights a patch reaching `(1.3 + 1.7 w) r` around its observed footprint (`CLOUD_LIGHT`): 1.5 `r`
 at the floor, with about 9 % of its centre left at `r` (1.3 `r` and 4 % as `w` tends to 0). The
-whole disc lights during its pulses (its profile from 0.35, whole from 0.7, whatever its energy,
-which sets the level), a patch of 0.65 of it between them, where its light has drifted; at least 2
+patch is styled, elongated and irregular, drawn per flash: its long axis over its short one from
+1.4 to 2.2, its edge lobed by 0.18 (two lobes) and 0.10 (three lobes) of its mean, lying along the
+flash's drift (a drawn heading for ground flashes, which do not drift), and scaled so its farthest
+point is at that radius; it is round where the splat floor, not the footprint, sets the size. The
+whole patch lights during the flash's pulses (its profile from 0.35, whole from 0.7, whatever its
+energy, which sets the level), 0.65 of it between them, where its light has drifted; at least 2
 texels, and `150 w²` km from afar, as on the globe. It is drawn at `0.35 + 0.65 w` of its level
 (43 % at the floor), so channels read over it; in a storm view the map keeps the brightest flash at
 each point, never their sum. The cloud reads the map sharpened, `pow(light, 1.25 - 0.25 w)` (1.22 at
@@ -165,7 +169,7 @@ band of 3.5 km half width (1/e) centred 3 km under the column's own top where th
 light each crossing sends back into quarters (so a column looks the same whether the march takes it
 in one piece or in many), at 1.8 times the flat layer's level: towers glow near their crown, thin
 anvils veil, low cloud stays dark, so the lit area takes the cloud's shape (ADR 0031). Reduced motion
-keeps the whole disc.
+keeps the whole patch, its heading set by the seed.
 
 ## Reduced motion
 

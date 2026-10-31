@@ -2,8 +2,21 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { cloudsFragmentShader } from '../clouds/clouds.glsl';
 import { compositeFragmentShader, marchFragmentShader } from '../clouds/volume.glsl';
-import { bandCentre, CLOUD_LIGHT, cloudLightDay, cloudLightGlsl, flashBand, glowDepths, sharpenExponent } from './cloud-light';
-import { flashLightGlsl, lightMapVertexShader } from './light-map.glsl';
+import { cloudDrift, cloudDriftGlsl, isGround } from './channel';
+import {
+	bandCentre,
+	CLOUD_LIGHT,
+	cloudLightDay,
+	cloudLightGlsl,
+	cloudPatch,
+	cloudPatchGlsl,
+	flashBand,
+	glowDepths,
+	patchEdge,
+	patchEdgeGlsl,
+	sharpenExponent,
+} from './cloud-light';
+import { flashLightGlsl, lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { glslFloat as f } from './profile';
 
 /** Glow the march gathers through a tower (flat Earth), cut in pieces as the march cuts a ray `deg` off the vertical. */
@@ -60,6 +73,51 @@ describe('glowDepths', () => {
 	});
 });
 
+/** Farthest point of a flash's fitted patch, in splat radii, over `n` directions. */
+function patchFarthest(seed: number, own = 1, n = 3600): number {
+	const { aspect, fit } = cloudPatch(seed, own);
+	let far = 0;
+	for (let k = 0; k < n; k++) {
+		const t = (k * 2 * Math.PI) / n;
+		far = Math.max(far, patchEdge(t, seed, own) * fit * Math.hypot(Math.cos(t), Math.sin(t) / aspect));
+	}
+	return far;
+}
+
+describe('cloudPatch', () => {
+	const seeds = Array.from({ length: 500 }, (_, i) => (i + 0.5) / 500);
+
+	it('draws an elongated, irregular patch whose farthest point is the splat radius', () => {
+		for (const seed of seeds) {
+			const { aspect } = cloudPatch(seed);
+			expect(aspect).toBeGreaterThanOrEqual(CLOUD_LIGHT.aspectMin);
+			expect(aspect).toBeLessThanOrEqual(CLOUD_LIGHT.aspectMax);
+			expect(patchFarthest(seed)).toBeGreaterThanOrEqual(1 - 1e-9);
+			expect(patchFarthest(seed)).toBeLessThan(1.02);
+		}
+		const edges = seeds.map((seed) => patchEdge(seed * 7, seed));
+		expect(Math.max(...edges) - Math.min(...edges)).toBeGreaterThan(0.3);
+	});
+
+	it('lies along the drift of in-cloud flashes', () => {
+		for (const seed of seeds.filter((s) => !isGround(s))) {
+			const { heading } = cloudPatch(seed);
+			const [east, north] = cloudDrift(0.05, 0.3, 10, seed);
+			expect(Math.abs(east * Math.sin(heading) - north * Math.cos(heading))).toBeLessThan(1e-9);
+		}
+		expect(cloudDriftGlsl).toContain('channelHash(seed, 1.0)');
+		expect(cloudPatchGlsl).toContain('channelHash(seed, ground ? 3.0 : 1.0)');
+	});
+
+	it('is round where the splat floor, not the footprint, sets the size', () => {
+		for (const seed of seeds.slice(0, 20)) {
+			expect(cloudPatch(seed, 0)).toMatchObject({ aspect: 1, fit: 1 });
+			expect(patchEdge(1, seed, 0)).toBe(1);
+			expect(patchFarthest(seed, 0.5)).toBeLessThan(1.02);
+		}
+	});
+});
+
 describe('cloud light shares', () => {
 	it('keeps all of it at night and a trace over sunlit cloud', () => {
 		expect(cloudLightDay(-0.2)).toBe(1);
@@ -79,6 +137,19 @@ describe('the GLSL consumers share the cloud light numbers', () => {
 	it('splats the whole footprint on bright pulses and a patch between them, the whole footprint under reduced motion', () => {
 		expect(lightMapVertexShader).toContain(`float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse), flicker)`);
 		expect(lightMapVertexShader).toContain(`mix(${f(CLOUD_LIGHT.dimSplat)}, 1.0, full)`);
+	});
+
+	it('splats the same seeded patch, its lobes and aspect, inside the splat radius', () => {
+		expect(cloudPatchGlsl).toContain(`mix(1.0, mix(${f(CLOUD_LIGHT.aspectMin)}, ${f(CLOUD_LIGHT.aspectMax)}, channelHash(seed, 4.0)), own)`);
+		expect(cloudPatchGlsl).toContain(`vec2(${f(CLOUD_LIGHT.lobe2)}, ${f(CLOUD_LIGHT.lobe3)}) * own`);
+		expect(cloudPatchGlsl).toContain('vec2(channelHash(seed, 5.0), channelHash(seed, 6.0)) * 6.28318531');
+		expect(patchEdgeGlsl).toContain('1.0 + lobes.z * sin(2.0 * theta + lobes.x) + lobes.w * sin(3.0 * theta + lobes.y)');
+		expect(lightMapVertexShader).toContain(patchEdgeGlsl);
+		expect(lightMapVertexShader).toContain(cloudPatchGlsl);
+		expect(lightMapVertexShader).toContain('float own = footprint / max(radiusKm, 1e-6);');
+		expect(lightMapFragmentShader).toContain(patchEdgeGlsl);
+		expect(lightMapFragmentShader).toContain('float edge = patchEdge(atan(p.y, p.x), vLobes) * vPatch.w;');
+		expect(lightMapFragmentShader).toContain('exp(-r2 * 4.0) * (1.0 - r2)');
 	});
 
 	it('sharpens every read of the light map, by the window', () => {

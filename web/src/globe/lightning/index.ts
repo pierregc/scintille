@@ -338,7 +338,7 @@ export function createLightning(
 export const LIGHT_WINDOW = {
 	/** Half height of the window over the camera height. */
 	heightScale: 3,
-	/** Splat radius over the observed radius: the disc ends at the footprint near the floor, wider from afar; and the splat floor far away, km. */
+	/** Splat radius over the observed radius: the patch ends at the footprint near the floor, wider from afar; and the splat floor far away, km. */
 	nearSplat: 1.3,
 	farSplat: 3,
 	farSpreadKm: 150,

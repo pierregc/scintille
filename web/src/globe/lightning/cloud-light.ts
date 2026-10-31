@@ -1,3 +1,4 @@
+import { channelHash, isGround } from './channel';
 import { glslFloat as f } from './profile';
 
 /**
@@ -10,6 +11,11 @@ export const CLOUD_LIGHT = {
 	fullTo: 0.7,
 	/** Splat radius between bright pulses over the full one: a smaller patch where the light has drifted [0.5 to 0.8]. */
 	dimSplat: 0.65,
+	/** Lit patch, styled: long over short axis, drawn per flash [1.2 to 2.5], and the amplitudes of its two- and three-lobed edge [0 to 0.25]. */
+	aspectMin: 1.4,
+	aspectMax: 2.2,
+	lobe2: 0.18,
+	lobe3: 0.1,
 	/** Cloud brightness from the light map, `1 - exp(-gain × light)` [4 to 6]. */
 	gain: 5,
 	/** Share kept over sunlit cloud, a styled trace like the channel's (physics: none) [0.25 to 0.5]. */
@@ -60,6 +66,61 @@ export function cloudLightDay(s: number): number {
 export function sharpenExponent(halfLat: number): number {
 	return CLOUD_LIGHT.sharpen + (1 - CLOUD_LIGHT.sharpen) * Math.min(Math.max(halfLat / (Math.PI / 2), 0), 1);
 }
+
+/** Directions sampled to fit a patch inside its splat radius. */
+const PATCH_SAMPLES = 24;
+
+/** Phases and amplitudes of a patch's two- and three-lobed edge; `own` (0 to 1) is how much the footprint, not the splat floor, sets its size. */
+function patchLobes(seed: number, own: number): [number, number, number, number] {
+	return [channelHash(seed, 5) * 2 * Math.PI, channelHash(seed, 6) * 2 * Math.PI, CLOUD_LIGHT.lobe2 * own, CLOUD_LIGHT.lobe3 * own];
+}
+
+/** Edge of a flash's lit patch at angle `theta` from its long axis (after the aspect stretch), over its mean. */
+export function patchEdge(theta: number, seed: number, own = 1): number {
+	const [phase2, phase3, lobe2, lobe3] = patchLobes(seed, own);
+	return 1 + lobe2 * Math.sin(2 * theta + phase2) + lobe3 * Math.sin(3 * theta + phase3);
+}
+
+/**
+ * Seeded shape of a flash's lit patch: heading (radians from east toward north) along its drift, or
+ * drawn for ground flashes, which do not drift; aspect; and the scale that brings its farthest point
+ * to the splat radius. Round where the splat floor sets the size (`own` 0).
+ */
+export function cloudPatch(seed: number, own = 1): { heading: number; aspect: number; fit: number } {
+	const heading = channelHash(seed, isGround(seed) ? 3 : 1) * 2 * Math.PI;
+	const drawn = CLOUD_LIGHT.aspectMin + (CLOUD_LIGHT.aspectMax - CLOUD_LIGHT.aspectMin) * channelHash(seed, 4);
+	const aspect = 1 + (drawn - 1) * own;
+	let reach = 0;
+	for (let k = 0; k < PATCH_SAMPLES; k++) {
+		const t = (k * 2 * Math.PI) / PATCH_SAMPLES;
+		reach = Math.max(reach, patchEdge(t, seed, own) * Math.hypot(Math.cos(t), Math.sin(t) / aspect));
+	}
+	return { heading, aspect, fit: 1 / reach };
+}
+
+/** GLSL twin of `patchEdge`, from the lobes `patchLobes` returns. */
+export const patchEdgeGlsl = /* glsl */ `
+float patchEdge(float theta, vec4 lobes) {
+	return 1.0 + lobes.z * sin(2.0 * theta + lobes.x) + lobes.w * sin(3.0 * theta + lobes.y);
+}
+`;
+
+/** GLSL twins of `patchLobes` and `cloudPatch` (heading as cos and sin, aspect, fit); need `channelGlsl` and `patchEdgeGlsl`. */
+export const cloudPatchGlsl = /* glsl */ `
+vec4 patchLobes(float seed, float own) {
+	return vec4(vec2(channelHash(seed, 5.0), channelHash(seed, 6.0)) * 6.28318531, vec2(${f(CLOUD_LIGHT.lobe2)}, ${f(CLOUD_LIGHT.lobe3)}) * own);
+}
+vec4 cloudPatch(float seed, bool ground, float own, vec4 lobes) {
+	float heading = channelHash(seed, ground ? 3.0 : 1.0) * 6.28318531;
+	float aspect = mix(1.0, mix(${f(CLOUD_LIGHT.aspectMin)}, ${f(CLOUD_LIGHT.aspectMax)}, channelHash(seed, 4.0)), own);
+	float reach = 0.0;
+	for (int k = 0; k < ${PATCH_SAMPLES}; k++) {
+		float t = float(k) * ${f((2 * Math.PI) / PATCH_SAMPLES)};
+		reach = max(reach, patchEdge(t, lobes) * length(vec2(cos(t), sin(t) / aspect)));
+	}
+	return vec4(cos(heading), sin(heading), aspect, 1.0 / reach);
+}
+`;
 
 /** GLSL twins of `flashBand`, `glowDepths` and `cloudLightDay`. */
 export const cloudLightGlsl = /* glsl */ `
