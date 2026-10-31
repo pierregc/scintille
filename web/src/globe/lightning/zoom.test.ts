@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { intensityScale } from './intensity';
-import { bloomStrength, channelReveal, farness, glowRadiusKm, glowShare, PHONE, viewScale, ZOOM } from './zoom';
+import { bloomRadius, bloomStrength, channelReveal, farness, glowRadiusKm, glowShare, PHONE, viewScale, ZOOM } from './zoom';
 
 const POSES = { globe: 11.7, mid: 1.2, regional: 0.51, window: 0.3, iss: 0.23 };
 
@@ -49,9 +49,12 @@ describe('flash size with zoom', () => {
 		expect(glowShare(POSES.iss, ZOOM.nearGlowAlone)).toBe(0.4);
 	});
 
-	it('keeps a tenth of the bloom near the floor and the far sizes unchanged', () => {
+	it('keeps a tenth of the bloom, tightened, near the floor and the far sizes unchanged', () => {
 		expect(bloomStrength(POSES.iss, 0.9)).toBeCloseTo(0.09, 9);
 		expect(bloomStrength(POSES.globe, 0.9)).toBeCloseTo(0.9, 9);
+		expect(bloomRadius(POSES.iss, 0.4, 0.55)).toBe(0.4);
+		expect(bloomRadius(POSES.globe, 0.4, 0.55)).toBe(0.55);
+		expect(bloomRadius(POSES.mid, 0.4, 0.55)).toBeGreaterThan(0.4);
 		for (const i of [0, 0.5, 1]) {
 			expect(glowRadiusKm(8, i, ZOOM.farKmPerPx)).toBeCloseTo(Math.max(8 * ZOOM.farGlow, ZOOM.pointPx * ZOOM.farKmPerPx) * intensityScale(i), 6);
 		}

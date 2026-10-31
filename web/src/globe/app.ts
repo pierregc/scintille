@@ -23,7 +23,7 @@ import { StormFocus } from './focus';
 import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
-import { bloomStrength } from './lightning/zoom';
+import { bloomRadius, bloomStrength } from './lightning/zoom';
 import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
@@ -397,7 +397,7 @@ export function createGlobeApp(
 			clouds.setFlatShown(1);
 		}
 		if (post) {
-			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength));
+			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength), bloomRadius(kmPerPx, BLOOM.nearRadius, BLOOM.radius));
 			post.render();
 		} else renderer.render(scene, camera);
 	};

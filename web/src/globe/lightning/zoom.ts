@@ -46,6 +46,11 @@ export function bloomStrength(kmPerPx: number, strength: number): number {
 	return strength * (ZOOM.nearBloom + (1 - ZOOM.nearBloom) * farness(kmPerPx));
 }
 
+/** Bloom radius for a view of `kmPerPx`: `near` at the floor, `far` from afar. */
+export function bloomRadius(kmPerPx: number, near: number, far: number): number {
+	return near + (far - near) * farness(kmPerPx);
+}
+
 /** Level of the round glow, out of its full brightness. */
 export function glowShare(kmPerPx: number, nearLevel: number = ZOOM.nearGlowLevel): number {
 	return nearLevel + (1 - nearLevel) * farness(kmPerPx);

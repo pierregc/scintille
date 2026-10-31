@@ -227,7 +227,7 @@ radius and `i` the intensity:
 - **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
 - **Halo**: 8 core widths at 30 % of the core, cool only, with the channel opacity, fading from
   1,500 to 6,000 km away.
-- **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius 0.4, with `k` taken from the camera height only.
+- **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius `mix(0.4, 0.55, f)`, with `k` taken from the camera height only.
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
   (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
   at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
