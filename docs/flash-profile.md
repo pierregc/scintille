@@ -96,9 +96,9 @@ three levels, coarser as they get finer.
 
 **Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
 the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
-(drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
-in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
-sometimes lavender-rose or warm.
+(drawn no thinner than 1.25 device px, their light scaled down; see Drawing), and they dim and thin
+towards their tips. A branch in seven is as bright as the trunk. The core is white; the halo around
+ground channels is pale blue, sometimes lavender-rose or warm.
 
 **Timing.** Leaders light the path as they go: in-cloud ones crawl over 80 % of the flicker, ground ones
 reach the ground within 20 ms. Branches light once, when the leader reaches them, then fade (60 ms for
@@ -129,14 +129,22 @@ each other, they are one flash: both keep their glow, only the newest gets a cha
 overlap half a width at each joint and cross-fade there in screen values, after the sRGB conversion, so
 the two at a joint add up to one (cross-faded in light, each half was converted on its own and the joint
 came out about 1.4 times as bright: a bead). Each segment's cross-fade is scaled to add up to its length
-(`lengthShare`), so a chain of segments of uneven lengths, shorter than their width in a veiled or
-foreshortened channel, makes one even thread. On screen each core keeps the light its overlapping
-segments used to add, evenly along it: `overlapGain`, the integral of the square root of a segment's
-cross-fade over the integral of the cross-fade (the sRGB conversion taken as a square root),
-1 + 1 / (3 s) for a segment s widths long (unforeshortened), up to 3π/4 for the shortest; styled, so
-channels keep the brightness they had when they beaded. No core is drawn thinner than 1.25 device px
-(`RIBBON.hairlinePx`): a thinner one breaks into dashes on the pixel grid, so it widens to that floor
-and gives up light in proportion. While a channel shows, the
+(`lengthShare`), then given back the light its overlaps used to add per unit length (`overlapGain`;
+styled, so channels keep the brightness they had when they beaded). For a segment s widths long
+(unforeshortened), that is 1 from a width on and about 1 / (6 s) below in the bloom's linear buffer; on
+screen it follows the tone (`overlapTone`): nothing where the sRGB conversion is linear, 1 + 1 / (3 s)
+from a width on and about 0.39 / s below in mid tones. It is exact from a width on, within 5 % below in
+mid and bright tones, up to 16 % over for the dimmest tones of the shortest segments, and stops growing
+below s = 1/16 (`RIBBON.minSpan`). Against the old drawing, on paused captures at 1440 × 900, channels
+add 93 to 102 % of their old light (C1 to C4 lightning alone, C14, C15, and the whole storm and a window
+pose at night; least at the window poses) and trunks keep theirs within 1 % (C20 and C14 at 2400 × 1500).
+A segment foreshortened on screen adds light for its screen length only. A chain of uneven segments
+shorter than their width still varies along it, less than before (within 22 % of its mean, against 25
+to 30 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
+dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
+of 1 this also widens the thinnest stretches of main channels, 1.1 to 1.25 px wide (the start of ground
+leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
+floor is finer than the old 0.75 CSS px. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
 channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
