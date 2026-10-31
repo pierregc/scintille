@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../sun';
 import { SKELETON } from './skeleton';
 import { glslFloat } from './profile';
-import { clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, liftHeight, reliefLift, VEIL, veilGlsl } from './veil';
+import { clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, liftHeight, reliefLift, VEIL, veilGlsl, veilOverlap } from './veil';
 
 const R = 6371;
 const SHELL = R + 10;
@@ -78,6 +78,22 @@ describe('cloud veil', () => {
 		expect(cloudVeil(0, 9, 0.23, 1.6, 2)).toEqual({ width: 1.6, light: 1 });
 	});
 
+	it('shares the light of segments shorter than the width the cloud spreads them to', () => {
+		// Unspread, or longer than the spread, a segment keeps its light.
+		expect(veilOverlap(0.5, 1.6, 1.6)).toBe(1);
+		expect(veilOverlap(12, 1.6, 8)).toBe(1);
+		// Shorter, it keeps its share of that width, never less than its core width's.
+		expect(veilOverlap(4, 1.6, 8)).toBeCloseTo(0.5, 9);
+		expect(veilOverlap(0.5, 1.6, 8)).toBeCloseTo(0.2, 9);
+		let previous = 0;
+		for (let length = 0; length <= 10; length += 0.5) {
+			const share = veilOverlap(length, 1.6, 8);
+			expect(share).toBeGreaterThanOrEqual(previous);
+			expect(share).toBeLessThanOrEqual(1);
+			previous = share;
+		}
+	});
+
 	it('lifts channels under a low drawn top without moving a drop under the base', () => {
 		expect(reliefLift(14)).toEqual([SKELETON.cloudBaseKm, 1, 1]);
 		for (const top of [4, 6, 8, 8.9, 9, 10, 11, 12, 14]) {
@@ -102,5 +118,6 @@ describe('cloud veil', () => {
 		expect(veilGlsl).toContain('float clearAirLight(float opacity, float slant)');
 		expect(veilGlsl).toContain('vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float flag)');
 		expect(veilGlsl).toContain('vec3 liftPoint(vec3 p, vec3 lift)');
+		expect(veilGlsl).toContain('float veilOverlap(float lengthPx, float width, float veiled)');
 	});
 });

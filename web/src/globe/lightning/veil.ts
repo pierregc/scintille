@@ -63,6 +63,15 @@ export function cloudVeil(opacity: number, heightKm: number, kmPerPx: number, wi
 	return { width: veiled, light: flag > 1.5 ? Math.max(light, VEIL.trace) : light };
 }
 
+/**
+ * Share of its light a segment `lengthPx` long keeps once the cloud spreads it from `width` to `veiled` px: a segment
+ * shorter than that width overlaps its neighbours over it, so they share their light and a path does not add up to a
+ * saturated tube.
+ */
+export function veilOverlap(lengthPx: number, width: number, veiled: number): number {
+	return Math.min(1, Math.max(lengthPx, width) / veiled);
+}
+
 /** Relief lift under a cloud drawn with its top at `topKm`: the base heights are kept, the share the part in the cloud is compressed to, and a scale lowering everything when even that would rise over the top. */
 export function reliefLift(topKm: number): [number, number, number] {
 	const base = SKELETON.cloudBaseKm;
@@ -76,7 +85,7 @@ export function liftHeight(z: number, lift: [number, number, number]): number {
 	return (z <= lift[0] ? z : lift[0] + (z - lift[0]) * lift[1]) * lift[2];
 }
 
-/** GLSL twins of `cloudCrossing`, `cloudTransmission`, `clearAirLight`, `cloudVeil`, `reliefLift` and `liftHeight` (on a point), with the shell radius as a uniform. */
+/** GLSL twins of `cloudCrossing`, `cloudTransmission`, `clearAirLight`, `cloudVeil`, `veilOverlap`, `reliefLift` and `liftHeight` (on a point), with the shell radius as a uniform. */
 export const veilGlsl = /* glsl */ `
 uniform float cloudShell;
 vec3 cloudCrossing(vec3 point, vec3 eye) {
@@ -101,6 +110,9 @@ vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float 
 	float veiled = flag > 1.5 ? min(spread, ${f(VEIL.traceWidth)} * width) : spread;
 	float light = mix(1.0, ${f(VEIL.level)}, opacity) * width / veiled;
 	return vec2(veiled, flag > 1.5 ? max(light, ${f(VEIL.trace)}) : light);
+}
+float veilOverlap(float lengthPx, float width, float veiled) {
+	return min(1.0, max(lengthPx, width) / veiled);
 }
 vec3 reliefLift(float topKm) {
 	float ceiling = topKm - ${f(VEIL.reliefMargin)};
