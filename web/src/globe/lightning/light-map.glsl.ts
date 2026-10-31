@@ -47,7 +47,7 @@ void main() {
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind) * intensityBrightness(flashShape.x) * onScreen(flash.w);
+		brightness = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashShape.y) * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

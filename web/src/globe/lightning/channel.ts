@@ -1,5 +1,5 @@
 import { FlashKind, isGround } from './kind';
-import { glslFloat, PROFILE, spread } from './profile';
+import { type FlashTiming, glslFloat, PROFILE, spread } from './profile';
 
 /** Thin lightning channel drawn over the glow while a flash flickers; see docs/flash-profile.md. */
 export const CHANNEL = {
@@ -184,11 +184,17 @@ export function spreadSeconds(kind: FlashKind, radiusKm: number, flicker: number
 	return Math.min((k.runR[1] * radiusKm * 1000) / (k.spreadSpeed * pace(seed)), share * flicker);
 }
 
+/** Wall seconds a flash takes to propagate: its leader within `PROFILE.leaderShare` of the flicker, then the spread of its leaders (the leader itself for cloud-to-ground kinds). */
+export function flashTiming(kind: FlashKind, radiusKm: number, flicker: number, seed: number): FlashTiming {
+	const leader = Math.min(leaderSeconds(kind, radiusKm, seed), PROFILE.leaderShare * flicker);
+	return { leader, spread: isGround(kind) ? leader : spreadSeconds(kind, radiusKm, flicker, seed) };
+}
+
 const f = glslFloat;
 const kindLines = (line: (k: KindShape, kind: FlashKind) => string | null): string =>
 	KIND.map((k, i) => line(k, i as FlashKind)).filter((l) => l !== null).join('\n');
 
-/** GLSL twins of `channelHash`, `flashKind`, `isGround`, `leaderSeconds` and `spreadSeconds`; the shaders pass the radius, so the area is `π r²`. */
+/** GLSL twins of `channelHash`, `flashKind`, `isGround`, `leaderSeconds`, `spreadSeconds` and `flashTiming` (leader, spread); the shaders pass the radius, so the area is `π r²`. */
 export const channelGlsl = /* glsl */ `
 float channelHash(float seed, float k) {
 	return fract(sin(seed * 78.233 + k * 12.9898) * 43758.5453);
@@ -225,12 +231,16 @@ ${kindLines((k, kind) => {
 })}
 	return 0.0;
 }
+vec2 flashTiming(int kind, float radiusKm, float flicker, float seed) {
+	float leader = min(leaderSeconds(kind, radiusKm, seed), ${f(PROFILE.leaderShare)} * flicker);
+	return vec2(leader, isGround(kind) ? leader : spreadSeconds(kind, radiusKm, flicker, seed));
+}
 `;
 
 /** Offset in km, east and north, of the light of an in-cloud flash `age` seconds in: it follows its leaders across the footprint. */
 export function cloudDrift(age: number, flicker: number, radiusKm: number, seed: number, kind: FlashKind): [number, number] {
 	if (isGround(kind)) return [0, 0];
-	const along = (2 * spread(age, flicker, false) - 1) * CHANNEL.drift * radiusKm;
+	const along = (2 * spread(age, flashTiming(kind, radiusKm, flicker, seed), kind) - 1) * CHANNEL.drift * radiusKm;
 	const heading = channelHash(seed, 1) * 2 * Math.PI;
 	return [Math.cos(heading) * along, Math.sin(heading) * along];
 }
@@ -240,6 +250,6 @@ export const cloudDriftGlsl = /* glsl */ `
 vec2 cloudDrift(float age, float len, float radiusKm, float seed, int kind) {
 	if (isGround(kind)) return vec2(0.0);
 	float heading = channelHash(seed, 1.0) * 6.2831853;
-	return vec2(cos(heading), sin(heading)) * (2.0 * spread(age, len, false) - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
+	return vec2(cos(heading), sin(heading)) * (2.0 * spread(age, flashTiming(kind, radiusKm, len, seed), kind) - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
 }
 `;

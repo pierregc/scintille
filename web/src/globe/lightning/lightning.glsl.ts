@@ -47,7 +47,7 @@ void main() {
 	int kind = flashKind(seed, flashShape.z, flashShape.y);
 	bool ground = isGround(kind);
 	float age = wallAge(time, flash.w);
-	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
+	float brightness = flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashShape.y) * intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;

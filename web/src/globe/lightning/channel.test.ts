@@ -8,6 +8,7 @@ import {
 	CRAWLER,
 	flashKind,
 	flashSeed,
+	flashTiming,
 	KIND,
 	KIND_SHARES,
 	leaderSeconds,
@@ -119,7 +120,11 @@ describe('flash kinds', () => {
 		expect(Math.hypot(x0, y0)).toBeCloseTo(CHANNEL.drift * 10, 6);
 		expect(x0 + x1).toBeCloseTo(0, 6);
 		expect(y0 + y1).toBeCloseTo(0, 6);
-		expect(cloudDrift(0.2, 0.4, 10, seed, FlashKind.IcCrawler)).toEqual(cloudDrift(0.2, 0.4, 10, seed, FlashKind.IcTrunkFan));
+		// Crawlers walk at a steady pace, so their light moves by equal steps until their leaders stop.
+		const crawl = flashTiming(FlashKind.IcCrawler, 10, 0.4, seed).spread;
+		const [a, b, c] = [0.2, 0.4, 0.6].map((t) => cloudDrift(t * crawl, 0.4, 10, seed, FlashKind.IcCrawler)[0]);
+		expect(b - a).toBeCloseTo(c - b, 6);
+		expect(cloudDrift(crawl, 0.4, 10, seed, FlashKind.IcCrawler)).toEqual(cloudDrift(1, 0.4, 10, seed, FlashKind.IcCrawler));
 		for (const kind of [FlashKind.CgMulti, FlashKind.CgSingle, FlashKind.CgPositive, FlashKind.BoltFromBlue]) {
 			expect(cloudDrift(0.2, 0.4, 10, seed, kind)).toEqual([0, 0]);
 		}
