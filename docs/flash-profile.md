@@ -122,18 +122,21 @@ duration, at every replay speed (where it cannot show, see the limits below). Wh
 crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
 lightning look rework, #398):
 
-- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity)`, its seed being already a uniform
+- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity) × k`, `k` being 0.4 for a
+  cloud-to-ground kind and 1 otherwise (`DENSITY.groundWeight`), its seed being already a uniform
   hash of its time and place (hashing it again would not survive the GPU's float32, which must pick
   the same flashes as the channel pool and the sound): a revisit or a shared URL shows the same
-  flashes, and the strongest flash is 2.5 times likelier than the weakest to be drawn. A flash is
+  flashes, the strongest flash is 2.5 times likelier than the weakest to be drawn, and a ground
+  strike 2.5 times likelier than an in-cloud flash, whose channel the cloud mostly hides. About half
+  the sample is then cloud-to-ground; every flash keeps its cloud light either way. A flash is
   drawn while its lot is under the applied share, fading out over the next 10 % of the share rather
   than popping at its edge.
 - The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
   600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
-  between the speeds the target follows a power law). `share = target / (1.5 × load)`, `load`
+  between the speeds the target follows a power law). `share = target / (2.175 × load)`, `load`
   being the flashes within their flicker or fade at once, estimated from those played in the last
-  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (1.5 is the
-  mean of the lot weights; a plain count of the flashes played in the last 0.4 s drew 1.5 times
+  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (2.175 is the
+  mean of the inverse lot weights, 1.5 for the energy times 1.45 for the kind; a plain count of the flashes played in the last 0.4 s drew 1.5 times
   the target on R1, whose flashes last longer). On a quiet storm the share is 1 and every flash is drawn.
 - The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
   by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a

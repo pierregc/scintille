@@ -26,7 +26,7 @@ describe('glow shader', () => {
 
 	it('keeps a sprite near the floor for the sample only, and from afar or without a cloud light for the newest flashes', () => {
 		expect(lightningVertexShader).toContain(densityGlsl);
-		expect(lightningVertexShader).toContain('float hero = heroWeight(heroLot(flashShape.w, flashShape.x), heroShare);');
+		expect(lightningVertexShader).toContain('float hero = heroWeight(heroLot(flashShape.w, flashShape.x, isGround(int(flashLook.x + 0.5))), heroShare);');
 		expect(lightningVertexShader).toContain('float keep = max(hero, pointWeight(farness(pointKm), lightMapOff) * pointBudget(flash.w));');
 		expect(lightningVertexShader).toContain('brightness *= keep;');
 	});
@@ -40,7 +40,7 @@ describe('glow shader', () => {
 describe('channel shader', () => {
 	it('draws channels for the sample only, culled before the profile', () => {
 		expect(ribbonVertex).toContain(densityGlsl);
-		expect(ribbonVertex).toContain('float hero = heroWeight(heroLot(seed, flashShape.x), heroShare);');
+		expect(ribbonVertex).toContain('float hero = heroWeight(heroLot(seed, flashShape.x, ground), heroShare);');
 		expect(ribbonVertex).toContain('float shown = hero * smoothstep(0.0, 0.1, facing) * onScreen(at)');
 		expect(ribbonVertex.indexOf('float hero = heroWeight(')).toBeLessThan(ribbonVertex.indexOf('vec4 profile = flashProfileStroke('));
 	});

@@ -1,6 +1,6 @@
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import { CHANNEL, flashLook, flashSeed } from './channel';
-import { DENSITY, heroLot } from './density';
+import { DENSITY, flashLot } from './density';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { channelSkeleton, MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
@@ -127,7 +127,7 @@ export class ChannelPool {
 		const time = ring.time[s];
 		const lat = ring.lat[s];
 		if (lots.time[s] !== time || lots.lat[s] !== lat) {
-			lots.lot[s] = heroLot(flashSeed(time, lat, ring.lon[s]), ring.intensity[s]);
+			lots.lot[s] = flashLot(flashSeed(time, lat, ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]);
 			lots.time[s] = time;
 			lots.lat[s] = lat;
 		}

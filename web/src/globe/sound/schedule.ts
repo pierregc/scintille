@@ -1,5 +1,5 @@
 import { flashSeed } from '../lightning/channel';
-import { heroLot } from '../lightning/density';
+import { flashLot } from '../lightning/density';
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import type { Vec3 } from '../sun';
 import { distanceKm, facesCamera, type Voicing, voicing } from './spatial';
@@ -105,7 +105,7 @@ export class CrackleScheduler {
 				const s = ring.slot(i);
 				if (ring.time[s] > sceneTime - delay) break;
 				if (delays.ms[ring.source[s]] !== delay) continue;
-				if (heroShare < 1 && heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) >= heroShare) continue;
+				if (heroShare < 1 && flashLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]) >= heroShare) continue;
 				const lat = ring.lat[s] * DEG;
 				const lon = ring.lon[s] * DEG;
 				const cosLat = Math.cos(lat);

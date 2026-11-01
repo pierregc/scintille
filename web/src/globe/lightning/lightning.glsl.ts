@@ -50,7 +50,7 @@ void main() {
 	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
 	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, the newest of which stay points from afar.
-	float hero = heroWeight(heroLot(flashShape.w, flashShape.x), heroShare);
+	float hero = heroWeight(heroLot(flashShape.w, flashShape.x, isGround(int(flashLook.x + 0.5))), heroShare);
 	float pointKm = 2.0 * length(cameraPosition - center) / (projectionMatrix[1][1] * viewportHeight) / kmToWorld * viewScale;
 	float keep = max(hero, pointWeight(farness(pointKm), lightMapOff) * pointBudget(flash.w));
 	if (keep <= 0.0) {

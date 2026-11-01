@@ -62,9 +62,12 @@ footprint, energy and duration, with its real-time profile and light drift, unca
 The 500-newest cap binds only when every flash is drawn in full.
 
 **The heroes.** Channels, the near-floor sprite, the halo and the sound are drawn for a sample:
-`lot = seed × mix(1.0, 0.4, intensity) < share`, the seed being already a uniform hash of the flash's
-time and place (hashing it again would not survive the GPU's float32), so the strongest flash is up to
-2.5× likelier than the weakest; `share = target / (1.5 × load)` with `load` the flashes within their
+`lot = seed × mix(1.0, 0.4, intensity) × (0.4 for a cloud-to-ground kind, else 1) < share`, the seed being
+already a uniform hash of the flash's time and place (hashing it again would not survive the GPU's
+float32), so the strongest flash is up to 2.5× likelier than the weakest, and a ground strike 2.5×
+likelier than an in-cloud flash, whose channel the cloud mostly hides (about half the sample is then
+cloud-to-ground, and 24 % of the drawn channel length is steeper than 60° on screen at the 45° framing);
+`share = target / (2.175 × load)` (2.175 the mean of the inverse lot weights) with `load` the flashes within their
 flicker or fade, estimated from those played in the last 0.4 s of wall time; `target` 50 / 20 / 8
 flashes within their flicker at once at 60× / 600× / 3600× (a power law between them), all of them at
 1×, in a named band of 30-100 / 12-30 / 5-12; a flash fades out over the next 10 % of the share

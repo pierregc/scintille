@@ -4,7 +4,7 @@ import { NO_DELAY, SourceDelays } from '../live/delay';
 import { FlashRing } from '../live/ring';
 import { encodeChunk, type FakeFlash } from '../live/testing';
 import { flashSeed } from '../lightning/channel';
-import { heroLot } from '../lightning/density';
+import { flashLot } from '../lightning/density';
 import type { Vec3 } from '../sun';
 import { CrackleScheduler, JITTER_S, type Listener, MAX_STEP_MS, MAX_VOICES, MIN_GAP_S, type Trigger } from './schedule';
 
@@ -108,7 +108,7 @@ describe('CrackleScheduler', () => {
 
 	it('voices only the sample drawn in full', () => {
 		const ring = ringWith([{ offsetMs: 500, lat: 0, lon: 0 }]);
-		const lot = heroLot(flashSeed(ring.time[0], ring.lat[0], ring.lon[0]), ring.intensity[0]);
+		const lot = flashLot(flashSeed(ring.time[0], ring.lat[0], ring.lon[0]), ring.intensity[0], ring.durationMs[0], ring.areaKm2[0]);
 		const crackles = (heroShare: number) =>
 			play(new CrackleScheduler(ringWith([{ offsetMs: 500, lat: 0, lon: 0 }]), { voiceSeconds: VOICE_S, random: () => 0 }), listenerAt([1.3, 0, 0]), 1, undefined, undefined, heroShare).triggers.length;
 		expect(crackles(lot * 0.9)).toBe(0);

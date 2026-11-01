@@ -4,7 +4,7 @@ import { decodeChunk } from '../live/decode';
 import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { NO_DELAY } from '../live/delay';
-import { DENSITY, heroLot, heroShare } from './density';
+import { DENSITY, flashLot, heroShare } from './density';
 import { CHANNEL, flashSeed } from './channel';
 import { aliveCount, aliveLoad, budgetStart, createLightning, LIGHT_WINDOW, lightWindow, sampleCount } from './index';
 import { FlashPlayback } from './playback';
@@ -258,7 +258,7 @@ describe('sampleCount', () => {
 		expect(sampleCount(ring, 100_000 + life(100) + 50, playbackAt(0, 1), NO_DELAY, 1)).toEqual({ alive: 3, drawn: 3 });
 		expect(sampleCount(ring, 100_200 + life(900) - 1, playbackAt(0, 1), NO_DELAY, 1)).toEqual({ alive: 1, drawn: 1 });
 		expect(sampleCount(ring, 100_400, playbackAt(0, 600), NO_DELAY, 1)).toEqual({ alive: 5, drawn: 5 });
-		const lots = Array.from({ length: 5 }, (_, i) => { const s = ring.slot(i); return heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]); });
+		const lots = Array.from({ length: 5 }, (_, i) => { const s = ring.slot(i); return flashLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]); });
 		const share = [...lots].sort((a, b) => a - b)[2];
 		expect(sampleCount(ring, 100_400, playbackAt(0, 600), NO_DELAY, share)).toEqual({ alive: 5, drawn: 2 });
 	});
@@ -402,7 +402,7 @@ describe('storm view sample', () => {
 		let scene = 1_000_000;
 		lightning.setTime(scene, undefined, 600);
 		const sparse = lightning.heroShare;
-		const wanted = 20 / (1.5 * 2000 * 0.4 * (600 / 600));
+		const wanted = 20 / (DENSITY.meanWeight * 2000 * 0.4 * (600 / 600));
 		expect(sparse).toBeGreaterThan(wanted * 10);
 		let settled = Number.NaN;
 		for (let frame = 1; frame <= 6 * 60; frame++) {
@@ -424,7 +424,7 @@ describe('storm view sample', () => {
 		expect(flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade).toBeCloseTo(DENSITY.aliveWindow, 9);
 		let wall = 0;
 		vi.spyOn(performance, 'now').mockImplementation(() => wall);
-		/** Expected drawn count over the target, `1.5 × share × alive / target`, on each frame of the 2 s after switching from `before` to `after`. */
+		/** Expected drawn count over the target, `meanWeight × share × alive / target`, on each frame of the 2 s after switching from `before` to `after`. */
 		const through = (before: number, after: number) => {
 			const lightning = createLightning(ring, { storage: null, lightMapWidth: 0 });
 			lightning.stormView = true;

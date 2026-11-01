@@ -34,7 +34,7 @@ import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
 import { assertDisplayMinutes, displayMs, readDisplayMinutes, writeDisplayMinutes } from './display';
 import { CHANNEL, flashSeed } from './channel';
 import { ChannelPool, POOL_FLASHES, SEGMENT_STRIDE } from './channel-pool';
-import { DENSITY, followShare, heroLot, heroShare, heroTarget } from './density';
+import { DENSITY, flashLot, followShare, heroShare, heroTarget } from './density';
 import { segmentGeometry } from './ribbon';
 import { ribbonFragment, ribbonVertex } from './ribbon.glsl';
 import { FLASH_STRIDE, FlashInstances } from './instances';
@@ -513,7 +513,7 @@ export function sampleCount(ring: FlashRing, now: number, playback: FlashPlaybac
 		const at = ring.time[s] + delays.ms[ring.source[s]];
 		if (at > now || playback.age(at, now) >= flickerLength(ring.durationMs[s]) + CHANNEL.fade) continue;
 		alive++;
-		if (share >= 1 || heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share) drawn++;
+		if (share >= 1 || flashLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]) < share) drawn++;
 	}
 	return { alive, drawn };
 }
