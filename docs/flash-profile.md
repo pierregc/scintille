@@ -41,13 +41,13 @@ rendering choice.
 
 | Kind | Share | Origin, trunk top | Run, strike | Inclination from the vertical | Leader, fan speed (m/s) | Branches |
 |---|---|---|---|---|---|---|
-| Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.3-0.8 r, strike 2-8 km away inside r | 0-30° for 80 %, 30-45° otherwise | 1 × 10^5 | 3-12 |
+| Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.2-0.5 r, strike 2-8 km away inside r | 0-25° for 85 %, 25-40° otherwise | 1 × 10^5 | 3-12 |
 | Negative cloud-to-ground, single-stroke (`CgSingle`) | 7 % | 6-8 km | as above | as above | 1 × 10^5 | 1-3 |
 | Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, drop 5-11 km across, strike at 0.6-1.0 r from the position, inside r | 30-45° | 1 × 10^5 | 0-3 |
 | Bolt from the blue (`BoltFromBlue`) | 1 % | trunk from 7.0-8.4 km to 9-10 km, exit 8-9 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
-| In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 6-8 km to 9-11 km | fans 0.8-2.2 r | 15-40° | 2 × 10^5, fans 8 × 10^4 | 0-9 |
+| In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 5-7 km to 9-11 km | fans 0.6-1.4 r | 5-25° | 2 × 10^5, fans 8 × 10^4 | 0-5 |
 | In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
-| Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 15-40° | as the trunk and fan | 0-9 |
+| Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 5-25° | as the trunk and fan | 0-5 |
 
 Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %); their heights in this table are
 drawn 1.5 times as tall, the stem kept under 11 km ([Channel](#channel)). Each flash runs its leaders at
@@ -55,7 +55,7 @@ the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds
 cloud-to-ground drop (clamped to 50 to 150 ms) or up an in-cloud trunk (10 to 20 ms); for a bolt from
 the blue it covers the whole path, up its trunk, 0.75 r across the cloud and down (clamped to 150 to
 250 ms, so most bolts under 10 km of radius sit at 150 ms). `spreadSeconds` is the time the fans take to
-cover 2.2 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
+cover 1.4 r, a crawler's leaders 2.2 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
 the geometry ([Channel](#channel)) and timing (#402) tickets; until the timing lands, the four
 cloud-to-ground kinds flash with the cloud-to-ground profile below and the three in-cloud kinds with the
 in-cloud one.
@@ -111,13 +111,13 @@ oblique 45° pose and reads as a stub under the fans; 1.5 times as tall, it read
 kinds keep their heights.
 
 - *Negative cloud-to-ground* (multi- and single-stroke): the flash starts 6 to 8 km up, anywhere over a
-  disc of half the radius. A feed runs 0.3 to 0.8 r in the cloud along the flash's heading, ending
+  disc of half the radius. A feed runs 0.2 to 0.5 r in the cloud along the flash's heading, ending
   within 0.8 r of the position; the channel then drops to a strike 2 to 8 km sideways from the drop's
-  top (`KIND.strikeKm`) and within the footprint (r of the position), its straight line within 30° of
-  the vertical for 80 % of flashes and 30 to 45° for the rest (never under 14 to 18°, the strike being
+  top (`KIND.strikeKm`) and within the footprint (r of the position), its straight line within 25° of
+  the vertical for 85 % of flashes and 25 to 40° for the rest (never under 14 to 18°, the strike being
   at least 2 km out), heading within 60° of the feed when the footprint allows (otherwise it turns, or
   in the smallest footprints shortens, to stay inside). It bends broadly once or twice. Its branches
-  leave the drop between 1.5 and 5 km up, on every side, down and out at 20 to 40° from it (70 %) or 45 to 75°, most of them short and a few half as
+  leave the drop between 1.5 and 5 km up, on every side, down and out at 15 to 35° from it (80 %) or 40 to 65°, and at least 35° below the horizontal (`SKELETON.branchDipDeg`), most of them short and a few half as
   long as the drop (0.1 to 0.5 of it), end 0.3 to 2 km above the ground and branch again down to three
   levels: 3 to 12 of them for multi-stroke flashes, 1 to 3 for single-stroke ones, at 30 to 100 % of
   the trunk's light. 40 % of multi-stroke flashes get a second ground contact: a path from a branch 1
@@ -126,14 +126,15 @@ kinds keep their heights.
 - *Positive cloud-to-ground*: from 9 to 11 km a run of 0.8 to 2.2 r along the heading, kept within the
   footprint, then an oblique drop at 30 to 45° from the vertical (5 to 11 km sideways, shorter in the
   smallest footprints) to a strike 0.6 to 1 r from the position (`KIND.strikeR`); 0 to 3 branches.
-- *Bolt from the blue*: a trunk climbs from 7 to 8.4 km to 9 to 10 km at 15 to 40° from the vertical,
+- *Bolt from the blue*: a trunk climbs from 7 to 8.4 km to 9 to 10 km at 5 to 25° from the vertical,
   crosses 0.5 to 1 r of the cloud and leaves it at 8 to 9 km, then descends 5 to 12 km sideways to a
   strike inside max(r, 8 km); unbranched above 5 km, 3 to 8 branches below.
-- *In-cloud trunk and fan*: an oblique trunk climbs 2 to 4 km, from 6-8 km to 9-11 km, at 15 to 40°
-  from the vertical; one to three leaders then spread both ways from its top at 8.5 to 11.5 km, like
-  the roots of a tree, as far as `min(2.2 r, 8 × 10^4 m/s × 0.8 × flicker)` allows: a fan of a short
-  flash stays small. It is a filament (20 %), branched (30 %) or a wide network without a dominant
-  leader (50 %).
+- *In-cloud trunk and fan*: a steep trunk climbs 3 to 5.5 km, from 5-7 km to 9-11 km (the main negative charge to the upper
+  positive one), at 5 to 25° from the vertical and 0.6 of the path roughness, as a ground drop; one to three leaders then spread both ways from its top at 8.5 to 11.5 km, like
+  the roots of a tree, as far as `min(1.4 r, 8 × 10^4 m/s × 0.8 × flicker)` allows, near the observed footprint: a fan
+  of a short flash stays small. It is a filament (20 %), branched (30 %) or a wide network without a
+  dominant leader (50 %), with 0 to 1, 1 to 3 or 2 to 5 branches reaching up to half the fan
+  (`SKELETON.fanBranches`, `fanBranchReach`).
 - *Cloud-to-air*: a trunk and fan whose first leader leaves the cloud over its outer 30 to 60 % and
   ends 1 to 3 km beyond the fan, at its height or up to 1 km over the 11.5 km top.
 - *Crawler*: no trunk; one or two leaders run 1.76 to 2.2 r both ways along the cloud base at 6 to

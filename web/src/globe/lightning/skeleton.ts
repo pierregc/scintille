@@ -1,4 +1,4 @@
-import { CHANNEL, channelHash, KIND } from './channel';
+import { channelHash, KIND } from './channel';
 import { FlashKind, isGround } from './kind';
 import { flickerLength, PROFILE } from './profile';
 
@@ -36,8 +36,15 @@ export const SKELETON = {
 	/** Vertical share of the sideways offsets of fans and of crawlers, which keep to a layer. */
 	fanFlatten: 0.3,
 	crawlerFlatten: 0.15,
-	/** In-cloud trunks climb this much, km. */
-	trunkClimbKm: [2, 4],
+	/** In-cloud trunks climb this much, km: from the main negative charge to the upper positive one. */
+	trunkClimbKm: [3, 5.5],
+	/** Branches of in-cloud fans by silhouette (filament, branching, network), reaching up to this share of the fan. */
+	fanBranches: [
+		[0, 1],
+		[1, 3],
+		[2, 5],
+	],
+	fanBranchReach: 0.5,
 	/** Cloud-to-ground origins, trunk feet and crawler starts spread over this disc around the position, r. */
 	originR: 0.5,
 	/** A negative feed ends within this of the position, r, leaving its drop room in the footprint. */
@@ -49,10 +56,12 @@ export const SKELETON = {
 	branchEndKm: [0.3, 2],
 	/** Branch deflection from its parent, degrees: narrow for `narrowShare` of branches, wide otherwise; length over its parent. */
 	deflectionDeg: [
-		[20, 40],
-		[45, 75],
+		[15, 35],
+		[40, 65],
 	],
-	narrowShare: 0.7,
+	narrowShare: 0.8,
+	/** Least dip of a ground branch below the horizontal, degrees. */
+	branchDipDeg: 35,
 	branchLength: [0.1, 0.5],
 	/** Second ground contact: share of multi-stroke flashes; height it leaves a branch at and distance from the first foot, km. */
 	secondShare: 0.4,
@@ -79,7 +88,7 @@ export const SKELETON = {
 	/** Lateral offset of a midpoint over its segment length, at the coarsest level, then per level. */
 	roughness: [0.18, 0.34],
 	roughnessDecay: 0.88,
-	/** Share of that roughness kept by a cloud-to-ground drop, its branches and second contact, which fall mostly straight. */
+	/** Share of that roughness kept by a cloud-to-ground drop, its branches and second contact, and an in-cloud trunk, which run mostly straight. */
 	dropRoughness: 0.6,
 	/** Shortest segment of a path deep in the cloud (crawlers, cloud-to-ground stems), km: about the width the cloud spreads it to. */
 	deepMinKm: 1.5,
@@ -334,7 +343,7 @@ function groundBranches(flash: Flash, s: Style, parent: Path, n: number, level: 
 		const angle = within(SKELETON.deflectionDeg[rng() < SKELETON.narrowShare ? 0 : 1], rng()) * DEG;
 		const dir = add([t[0] * Math.cos(angle), t[1] * Math.cos(angle), t[2] * Math.cos(angle)], across(t, rng, 1), Math.sin(angle));
 		// Down and out, never rising nor flat.
-		dir[2] = Math.min(dir[2], -0.25);
+		dir[2] = Math.min(dir[2], -Math.hypot(dir[0], dir[1]) * Math.tan(SKELETON.branchDipDeg * DEG));
 		// Most branches are short, a few reach half their parent.
 		const span = size * within(SKELETON.branchLength, rng() ** 2);
 		const tip = add(start, unit(dir), span);
@@ -468,9 +477,9 @@ function trunkAndFans(flash: Flash, kind: FlashKind, durationMs: number): Look {
 	const climb = within([Math.max(SKELETON.trunkClimbKm[0], k.topKm[0] - foot[2]), Math.min(SKELETON.trunkClimbKm[1], k.topKm[1] - foot[2])], rng());
 	const lean = within(k.inclinationDeg[0], rng()) * DEG;
 	const top = toward(foot, rng() * 2 * Math.PI, climb * Math.tan(lean), foot[2] + climb);
-	const reach = Math.min(CHANNEL.lengthScale * r, (k.spreadSpeed * PROFILE.cloudSpread * flickerLength(durationMs)) / 1000);
+	const reach = Math.min(k.runR[1] * r, (k.spreadSpeed * PROFILE.cloudSpread * flickerLength(durationMs)) / 1000);
 	const s = style(flash, climb / Math.cos(lean) + reach * 1.25);
-	const stem = w.path(wander(s, foot, top, 1, rng() < 0.5 ? 1 : 0), 0, [trunk * 0.9, trunk], [0.8, 1], 0, trace);
+	const stem = w.path(wander({ ...s, tortuosity: s.tortuosity * SKELETON.dropRoughness }, foot, top, 1, rng() < 0.5 ? 1 : 0), 0, [trunk * 0.9, trunk], [0.8, 1], 0, trace);
 	const trunkKm = stem.from.at(-1) ?? 0;
 	// Leaders spread both ways from the top of the trunk, like the roots of a tree.
 	const leaders = look === 'filament' ? 1 : look === 'branching' ? 2 : 2 + Math.floor(rng() * 2);
@@ -487,8 +496,8 @@ function trunkAndFans(flash: Flash, kind: FlashKind, durationMs: number): Look {
 		paths.push(w.path(wander(s, top, tip, SKELETON.fanFlatten, rng() < 0.5 ? 2 : 1).map(keep), trunkKm, [trunk, trunk * 0.6], [strength, strength * 0.55], 0, inCloud));
 	}
 	const firstFan = paths[0].points.length - 1;
-	const branches = look === 'filament' ? Math.floor(rng() * 2) : look === 'branching' ? 2 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 6);
-	for (const path of paths) cloudBranches(flash, s, path, Math.ceil(branches / leaders), 1, reach * 0.7, trunk * 0.6, 0.7, SKELETON.fanKm, SKELETON.fanFlatten);
+	const branches = count(SKELETON.fanBranches[look === 'filament' ? 0 : look === 'branching' ? 1 : 2], rng());
+	for (const path of paths) cloudBranches(flash, s, path, Math.ceil(branches / leaders), 1, reach * SKELETON.fanBranchReach, trunk * 0.6, 0.7, SKELETON.fanKm, SKELETON.fanFlatten);
 	w.fit(fans, top, reach);
 	w.reserve = 0;
 	if (kind === FlashKind.CloudToAir) leaveCloud(flash, s, fans, fans + firstFan, top);
