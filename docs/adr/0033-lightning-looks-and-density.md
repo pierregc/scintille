@@ -79,11 +79,11 @@ caption.
 
 | Kind | Share | Geometry (km above ground, r = observed radius) | Timing (wall clock, within the observed duration) |
 |---|---|---|---|
-| Negative cloud-to-ground, multi-stroke | 19 % | origin 6-8 km over 0.5 r, feed 0.3-0.8 r, drop within 30° of vertical (80 %) or 30-45°, strike 2-8 km away inside r, 3-12 branches below 5 km on both sides, a second contact in 40 % | leader 1 × 10^5 m/s (52-95 ms for 7 km, ≤ 150 ms), 2-12 strokes 10-400 ms apart, continuing current in 40 % |
+| Negative cloud-to-ground, multi-stroke | 19 % | origin 6-8 km over 0.5 r, feed 0.2-0.5 r, drop within 25° of vertical (85 %) or 25-40°, strike 2-8 km away inside r, 3-12 branches below 5 km on both sides, a second contact in 40 % | leader 1 × 10^5 m/s (52-95 ms for 7 km, ≤ 150 ms), 2-12 strokes 10-400 ms apart, continuing current in 40 % |
 | Negative cloud-to-ground, single-stroke | 7 % | as above, 1-3 branches | one stroke, then a faint activity to the end |
 | Positive cloud-to-ground | 3 % | origin 9-11 km, run 0.8-2.2 r, drop at 30-45° (5-11 km across), strike at 0.6-1.0 r from the position, inside r, 0-3 branches | 1 stroke (81 %) or 2, long continuing current (75 %) |
 | Bolt from the blue | 1 % | trunk from 7.0-8.4 km up to 9-10 km, run 0.5-1 r, exit at 8-9 km, descent 45-60°, strike 5-12 km from the exit inside max(r, 8 km) | leader 1.5 × 10^5 m/s over the whole path from the trunk foot, first stroke at 150-250 ms |
-| In-cloud trunk and fan | the rest (55-60 %) | oblique trunk from 6-8 km to 9-11 km at 15-40° from vertical, then 1-3 fans at 8.5-11.5 km within min(2.2 r, 8 × 10^4 m/s × 0.8 × duration) | trunk 2 × 10^5 m/s (10-20 ms), fans 8 × 10^4 m/s, 0 / 1 / 2-3 bright pulses in 25 / 45 / 30 %, 12.5 ms stutters in the final half |
+| In-cloud trunk and fan | the rest (55-60 %) | steep trunk from 5-7 km to 9-11 km at 5-25° from vertical, then 1-3 fans at 8.5-11.5 km within min(1.4 r, 8 × 10^4 m/s × 0.8 × duration) | trunk 2 × 10^5 m/s (10-20 ms), fans 8 × 10^4 m/s, 0 / 1 / 2-3 bright pulses in 25 / 45 / 30 %, 12.5 ms stutters in the final half |
 | In-cloud crawler | flashes observed ≥ 600 ms or ≥ 1,500 km² (7-12 % per storm) | 1-2 leaders at 6-8 km to 1.76-2.2 r | a steady 0.3 with a lit tip walking at 1 × 10^5 m/s, never flickering |
 | Cloud-to-air | 3 % | a trunk and fan whose longest branch leaves the cloud and stops 1-3 km beyond | as the trunk and fan |
 

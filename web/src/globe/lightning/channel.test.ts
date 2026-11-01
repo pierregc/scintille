@@ -105,7 +105,7 @@ describe('flash kinds', () => {
 	it('spreads fans within the flicker and crawlers over it', () => {
 		for (const seed of seeds.slice(0, 1000)) {
 			expect(spreadSeconds(FlashKind.IcTrunkFan, 6, 0.3, seed)).toBeLessThanOrEqual(0.24);
-			expect(spreadSeconds(FlashKind.IcTrunkFan, 6, 0.3, seed)).toBeGreaterThan(0.1);
+			expect(spreadSeconds(FlashKind.IcTrunkFan, 6, 0.3, seed)).toBeGreaterThan(0.07);
 			expect(spreadSeconds(FlashKind.IcTrunkFan, 20, 0.3, seed)).toBeCloseTo(PROFILE.cloudSpread * 0.3, 6);
 			expect(spreadSeconds(FlashKind.IcCrawler, 20, 0.3, seed)).toBeCloseTo(0.3, 6);
 			expect(spreadSeconds(FlashKind.CgMulti, 6, 0.3, seed)).toBe(leaderSeconds(FlashKind.CgMulti, 6, seed));

@@ -295,6 +295,25 @@ describe('channelSkeleton', () => {
 		expect(steep[Math.floor(steep.length / 2)]).toBeGreaterThanOrEqual(55);
 	});
 
+	it('draws ground channels and in-cloud trunks mostly steeper than 60 degrees on screen at the 45 degree framing', () => {
+		// Length seen at a 45° tilt: heights by sin 45°, horizontal runs by the mean of 1 and cos 45° over the headings.
+		const steepShare = (parts: Segment[]) => {
+			let all = 0;
+			let steep = 0;
+			for (const g of parts) {
+				const v = Math.abs(g.b[2] - g.a[2]) * Math.SQRT1_2;
+				const h = (horizontal(g.a, g.b) * (1 + Math.SQRT1_2)) / 2;
+				all += Math.hypot(v, h);
+				if (Math.atan2(v, h) > Math.PI / 3) steep += Math.hypot(v, h);
+			}
+			return steep / all;
+		};
+		const ground = [FlashKind.CgMulti, FlashKind.CgSingle].flatMap((kind) => flashes(kind).flatMap(({ parts }) => parts));
+		const trunks = flashes(FlashKind.IcTrunkFan).flatMap(({ parts }) => parts.filter((g) => g.flag === 2));
+		expect(steepShare(ground)).toBeGreaterThanOrEqual(0.4);
+		expect(steepShare(trunks)).toBeGreaterThanOrEqual(0.45);
+	});
+
 	it('varies its silhouette, from lone filaments to wide networks', () => {
 		const looks = (kind: FlashKind) => seeds.map((seed) => channelSkeleton(seed, 10, kind, 300));
 		const shareOf = (all: Skeleton[], look: string) => all.filter((s) => s.look === look).length / all.length;
