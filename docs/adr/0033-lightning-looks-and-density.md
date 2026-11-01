@@ -66,7 +66,8 @@ The 500-newest cap binds only when every flash is drawn in full.
 already a uniform hash of the flash's time and place (hashing it again would not survive the GPU's
 float32), so the strongest flash is up to 2.5× likelier than the weakest, and a ground strike 2.5×
 likelier than an in-cloud flash, whose channel the cloud mostly hides (about half the sample is then
-cloud-to-ground, and 24 % of the drawn channel length is steeper than 60° on screen at the 45° framing);
+cloud-to-ground, and about a quarter of the drawn channel length is steeper than 60° on screen at the
+45° framing: 26 % on Basse-Kotto, 19 % on the wider flashes of Amazonas);
 `share = target / (2.175 × load)` (2.175 the mean of the inverse lot weights) with `load` the flashes within their
 flicker or fade, estimated from those played in the last 0.4 s of wall time; `target` 50 / 20 / 8
 flashes within their flicker at once at 60× / 600× / 3600× (a power law between them), all of them at
