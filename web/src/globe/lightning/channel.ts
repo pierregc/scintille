@@ -133,7 +133,7 @@ const rows = [
 		originKm: [6, 8],
 		footKm: [6, 8],
 		topKm: [6, 8],
-		runR: [1.76, 2.2],
+		runR: [0.8, 1.1],
 		strikeKm: [0, 0],
 		strikeR: [0, 0],
 		reachKm: 0,

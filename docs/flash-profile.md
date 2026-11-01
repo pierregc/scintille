@@ -65,7 +65,7 @@ rendering choice.
 | Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, drop 5-11 km across, strike at 0.6-1.0 r from the position, inside r | 30-45° | 1 × 10^5 | 0-3 |
 | Bolt from the blue (`BoltFromBlue`) | 1 % | trunk from 7.0-8.4 km to 9-10 km, exit 8-9 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
 | In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 5-7 km to 9-11 km | fans 0.6-1.4 r | 5-25° | 2 × 10^5, fans 8 × 10^4 | 0-5 |
-| In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
+| In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 0.8-1.1 r each way | horizontal | 1 × 10^5 | 0-3 |
 | Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 5-25° | as the trunk and fan | 0-5 |
 
 Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %); their heights in this table are
@@ -74,7 +74,7 @@ the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds
 cloud-to-ground drop (clamped to 50 to 150 ms) or up an in-cloud trunk (10 to 20 ms); for a bolt from
 the blue it covers the whole path, up its trunk, 0.75 r across the cloud and down (clamped to 150 to
 250 ms, so most bolts under 10 km of radius sit at 150 ms). `spreadSeconds` is the time the fans take to
-cover 1.4 r, a crawler's leaders 2.2 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
+cover 1.4 r, a crawler's leaders 1.1 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
 the geometry ([Channel](#channel)) and the timing (the table below) of each kind.
 
 Each kind keeps its own timing within the observed duration (`flashProfile`, see
@@ -212,7 +212,7 @@ kinds keep their heights.
   (`SKELETON.fanBranches`, `fanBranchReach`).
 - *Cloud-to-air*: a trunk and fan whose first leader leaves the cloud over its outer 30 to 60 % and
   ends 1 to 3 km beyond the fan, at its height or up to 1 km over the 11.5 km top.
-- *Crawler*: no trunk; one or two leaders run 1.76 to 2.2 r both ways along the cloud base at 6 to
+- *Crawler*: no trunk; one or two leaders run 0.8 to 1.1 r both ways along the cloud base, across the observed footprint at 6 to
   8 km, with 0 to 3 branches, seen through the whole cloud.
 
 The first leader (the feed, a bolt's trunk, the first fan, a crawler's first leader) runs along the
