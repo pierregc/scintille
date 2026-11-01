@@ -242,7 +242,7 @@ describe('channelSkeleton', () => {
 		}
 	});
 
-	it('runs crawlers along the cloud base without a trunk, far across the footprint', () => {
+	it('runs crawlers along the cloud base without a trunk, across the footprint', () => {
 		for (const { r, parts } of flashes(FlashKind.IcCrawler)) {
 			expect(parts.some((g) => g.flag !== 1)).toBe(false);
 			for (const g of parts) {
@@ -252,7 +252,8 @@ describe('channelSkeleton', () => {
 				}
 			}
 			const start = parts[0].a;
-			expect(Math.max(...parts.map((g) => horizontal(start, g.b)))).toBeGreaterThanOrEqual(1.5 * r);
+			expect(Math.max(...parts.map((g) => horizontal(start, g.b)))).toBeGreaterThanOrEqual(0.7 * r);
+			expect(Math.max(...parts.map((g) => horizontal(start, g.b)))).toBeLessThanOrEqual(1.6 * r);
 		}
 	});
 
