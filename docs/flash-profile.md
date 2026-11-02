@@ -60,22 +60,22 @@ rendering choice.
 
 | Kind | Share | Origin, trunk top | Run, strike | Inclination from the vertical | Leader, fan speed (m/s) | Branches |
 |---|---|---|---|---|---|---|
-| Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.3-0.8 r, strike 2-8 km away inside r | 0-30° for 80 %, 30-45° otherwise | 1 × 10^5 | 3-12 |
+| Negative cloud-to-ground, multi-stroke (`CgMulti`) | 19 % | 6-8 km | feed 0.2-0.5 r, strike 2-8 km away inside r | 0-25° for 85 %, 25-40° otherwise | 1 × 10^5 | 3-12 |
 | Negative cloud-to-ground, single-stroke (`CgSingle`) | 7 % | 6-8 km | as above | as above | 1 × 10^5 | 1-3 |
 | Positive cloud-to-ground (`CgPositive`) | 3 % | 9-11 km | run 0.8-2.2 r, drop 5-11 km across, strike at 0.6-1.0 r from the position, inside r | 30-45° | 1 × 10^5 | 0-3 |
 | Bolt from the blue (`BoltFromBlue`) | 1 % | trunk from 7.0-8.4 km to 9-10 km, exit 8-9 km | run 0.5-1 r, strike 5-12 km from the exit inside max(r, 8 km) | 45-60° | 1.5 × 10^5 | 3-8 |
-| In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 6-8 km to 9-11 km | fans 0.8-2.2 r | 15-40° | 2 × 10^5, fans 8 × 10^4 | 0-9 |
-| In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 1.76-2.2 r | horizontal | 1 × 10^5 | 0-3 |
-| Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 15-40° | as the trunk and fan | 0-9 |
+| In-cloud trunk and fan (`IcTrunkFan`) | the rest, 55-60 % | 5-7 km to 9-11 km | fans 0.6-1.4 r | 5-25° | 2 × 10^5, fans 8 × 10^4 | 0-5 |
+| In-cloud crawler (`IcCrawler`) | flashes observed ≥ 600 ms or ≥ 1,500 km² | 6-8 km, no trunk | 0.8-1.1 r each way | horizontal | 1 × 10^5 | 0-3 |
+| Cloud-to-air (`CloudToAir`) | 3 % | as the trunk and fan | as the trunk and fan, one branch leaving the cloud | 5-25° | as the trunk and fan | 0-5 |
 
-Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %). Each flash runs its leaders at
+Cloud-to-ground kinds are 30 % of the seeds (observed band 15 to 40 %); their heights in this table are
+drawn 1.5 times as tall, the stem kept under 11 km ([Channel](#channel)). Each flash runs its leaders at
 the kind's speed times a pace drawn once per flash, 0.75 to 1.35: `leaderSeconds` is the time down a
 cloud-to-ground drop (clamped to 50 to 150 ms) or up an in-cloud trunk (10 to 20 ms); for a bolt from
 the blue it covers the whole path, up its trunk, 0.75 r across the cloud and down (clamped to 150 to
 250 ms, so most bolts under 10 km of radius sit at 150 ms). `spreadSeconds` is the time the fans take to
-cover 2.2 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
-the geometry (#401) and timing (#402) tickets; until #401 lands, the four cloud-to-ground kinds are drawn
-with the cloud-to-ground silhouette below, and the three in-cloud kinds with the in-cloud one.
+cover 1.4 r, a crawler's leaders 1.1 r (within 80 % of the flicker; the whole flicker for crawlers). The table is the contract of
+the geometry ([Channel](#channel)) and the timing (the table below) of each kind.
 
 Each kind keeps its own timing within the observed duration (`flashProfile`, see
 [flicker](#flicker-then-fade)); the leader of a cloud-to-ground flash takes at most half its flicker:
@@ -91,8 +91,9 @@ Each kind keeps its own timing within the observed duration (`flashProfile`, see
 
 Leaders light the channel as they go (`spread`): cloud-to-ground ones come down over their leader time
 and in-cloud ones cover their path over `spreadSeconds`, both slowing down (`1 - (1 - t)²`); crawlers walk
-at a steady pace. The light of in-cloud flashes drifts along the channel from 0.6 radius on one side of
-the observed position to 0.6 radius on the other, so it stays within the observed footprint and averages
+at a steady pace. The light of in-cloud flashes drifts from 0.6 radius on one side of the observed
+position to 0.6 radius on the other along the heading of their first drawn leader
+(`channelHash(seed, 1)`), so it follows the leaders, stays within the observed footprint and averages
 back to the observed position.
 
 ## Afterglow
@@ -107,15 +108,61 @@ HUD shows 0 and greys the other choices. The 1 and 30 minute afterglows stay for
 
 ## Overlaps in a storm view
 
-At 60×, a storm view shows about a minute of flashes at once. Glows there use screen blending
-(`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white, and a flash still
-shows over sunlit clouds without whitening them. The cloud light keeps the brightest flash at each point.
-On the globe overview, flashes keep adding up, so active regions glow brighter.
+At 60×, a storm view shows about a minute of flashes at once. Below 1 km per CSS px, glows there keep
+the brightest at each pixel, so a cell never piles up into a white ball; from 1 km per CSS px they use
+screen blending (`1 - (1 - a)(1 - b)`): neighbours brighten each other without piling up into white,
+and a flash still shows over sunlit clouds without whitening them. From 0.7 to 1 km per CSS px a
+screen-blended copy of the glows, weighted from 0 to 1, is drawn under the max-blended ones, so zooming
+across never pops and a lone glow keeps its light. The cloud light keeps the brightest flash at each
+point. On the globe overview, flashes keep adding up, so active regions glow brighter.
 
-A storm view shows at most the 500 newest flashes; older ones fade out within 150 ms of wall clock
-time. At 60× this hardly applies (about 360 at once in the busiest reference storm). At 600× it
-shortens each flash to its first pulses, at 3600× to a frame or two: the cost stays bounded, but near
-the floor the image still whitens at those speeds.
+**Replay speed never removes a flash.** Every flash lights the cloud at its observed time, place,
+footprint and energy, with its full profile and drift, for its observed duration, at every replay
+speed. What a storm view draws in full, with its channel, its near-floor sprite, its halo and its
+crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
+lightning look rework, #398):
+
+- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity)`, its seed being already a uniform
+  hash of its time and place (hashing it again would not survive the GPU's float32, which must pick
+  the same flashes as the channel pool and the sound): a revisit or a shared URL shows the same
+  flashes, and the strongest flash is 2.5 times likelier than the weakest to be drawn. A flash is
+  drawn while its lot is under the applied share, fading out over the next 10 % of the share rather
+  than popping at its edge.
+- The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
+  600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
+  between the speeds the target follows a power law). `share = target / (1.5 × load)`, `load`
+  being the flashes within their flicker or fade at once, estimated from those played in the last
+  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (1.5 is the
+  mean of the lot weights; a plain count of the flashes played in the last 0.4 s drew 1.5 times
+  the target on R1, whose flashes last longer). On a quiet storm the share is 1 and every flash is drawn.
+- The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
+  by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a
+  seek, a speed change or a new storm view. After a speed change during play, it is set to the
+  wanted share on every frame until the last 0.4 s hold only flashes played at the new speed: the
+  load then tracks the flashes alive frame by frame, while following it over 0.5 s drew up to 4
+  times the target for about a second after a speed-up, and a sixth of it after a slow-down.
+- Outside the sample, a flash keeps its sprite from afar only, rising from nothing at about 1.3 km
+  per px to its full point at 3 km per px ([farness](immersive-view.md#lightning-scale) 0.7 to 1),
+  and half a sprite on the frames without a cloud light (clouds hidden or without a frame, a tier
+  without the light map; eased over 0.25 s when the cloud light comes or goes), within the 500
+  newest flashes (below), so flashes stay points from afar
+  ([visual rule 1](immersive-view.md#visual-rules)) while the storm views up to the whole storm
+  framing (1.1 to 1.4 km per px on the reference storms) show the cloud light and the sample alone;
+  a ramp over farness 0.5 to 1 let the points of thousands of flashes at 3600× merge into one white
+  disc over that framing. The round glow steps back for a channel (below) only in the sample, so a
+  flash outside it keeps its full sprite. Limits: where no cloud light shows, a flash outside the
+  sample keeps its half sprite only while among the 500 newest (14 ms and a 150 ms fade at the
+  Basse-Kotto peak at 3600×); and the cloud light covers a window of three camera heights around what the
+  camera looks at, so in a grazing view a flash beyond it, outside the sample and not yet a point,
+  is not drawn.
+
+The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
+of wall clock time) binds every flash while all are drawn, in practice at 1×, and otherwise only the
+points outside the sample: without it, the points of the 15,000 flashes alive at 3600× cost 2.4 ms
+more at p95 than `main` from the `globe` pose of R1. The sample and the cloud light never have a cap
+(`DENSITY.lightMapCeiling` is Infinity: the bench needed none). The channel pool builds
+channels for the sample only, and the sound voices it only. The HUD rate stays the data rate:
+`lightning.stats` ([benchmark](immersive-view.md#benchmark)) tells how many flashes are drawn.
 
 ## Channel
 
@@ -124,32 +171,70 @@ While a flash flickers, its channel shows: a skeleton of segments built once per
 event time and position, so a flash keeps its shape when revisited. Satellites only see the light: none
 of this shape is observed.
 
-**Silhouette.** The [flash kind](#flash-kinds) picks it: the four cloud-to-ground kinds (30 %) are drawn
-as *Ground*, the three in-cloud kinds as *In-cloud*.
+**Silhouette.** The [flash kind](#flash-kinds) draws it, in km above the ground, around the observed
+position, within the bounds of the kinds table (`skeleton.ts`, `SKELETON`, `KIND`; r is the observed
+radius, at least 3 km). The heights below are the assumed ones. Cloud-to-ground channels are drawn
+1.5 times as tall, about the ground (`SKELETON.cgHeightScale`, the bound of ADR 0033), their stem kept
+under 11 km (`SKELETON.maxOriginKm`): a negative channel starting 6 to 8 km up is drawn from 9 to 11 km,
+a positive one or a bolt from the blue up to 11 km. At 7 km a drop is only 10 to 30 px tall at the
+oblique 45° pose and reads as a stub under the fans; 1.5 times as tall, it reads as a bolt. In-cloud
+kinds keep their heights.
 
-- *Ground*: a short leader in the cloud, at 8 to 11.5 km, feeds a channel that drops to the ground
-  2 to 9 km away horizontally, mostly vertical, heights not exaggerated. It is a lone filament (30 %),
-  branched (40 %), forked into two comparable channels (20 %), or strikes the ground at two points (10 %).
-  Its branches go down and out and end in the air.
-- *In-cloud*: one to three leaders spread both ways from where the flash starts, at 8 to 11.5 km, like
-  the roots of a tree, up to 2.2 flash radii away. It is a filament (20 %), branched (30 %) or a wide
-  network without a dominant trunk (50 %).
+- *Negative cloud-to-ground* (multi- and single-stroke): the flash starts 6 to 8 km up, anywhere over a
+  disc of half the radius. A feed runs 0.2 to 0.5 r in the cloud along the flash's heading, ending
+  within 0.8 r of the position; the channel then drops to a strike 2 to 8 km sideways from the drop's
+  top (`KIND.strikeKm`) and within the footprint (r of the position), its straight line within 25° of
+  the vertical for 85 % of flashes and 25 to 40° for the rest (never under 14 to 18°, the strike being
+  at least 2 km out), heading within 60° of the feed when the footprint allows (otherwise it turns, or
+  in the smallest footprints shortens, to stay inside). It bends broadly once or twice. Its branches
+  leave the drop between 1.5 and 5 km up, on every side, down and out at 15 to 35° from it (80 %) or 40 to 65°, and at least 35° below the horizontal (`SKELETON.branchDipDeg`), most of them short and a few half as
+  long as the drop (0.1 to 0.5 of it), end 0.3 to 2 km above the ground and branch again down to three
+  levels: 3 to 12 of them for multi-stroke flashes, 1 to 3 for single-stroke ones, at 30 to 100 % of
+  the trunk's light. 40 % of multi-stroke flashes get a second ground contact: a path from a branch 1
+  to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit by a later stroke
+  once #402 lands; until then it shows like a branch).
+- *Positive cloud-to-ground*: from 9 to 11 km a run of 0.8 to 2.2 r along the heading, kept within the
+  footprint, then an oblique drop at 30 to 45° from the vertical (5 to 11 km sideways, shorter in the
+  smallest footprints) to a strike 0.6 to 1 r from the position (`KIND.strikeR`); 0 to 3 branches.
+- *Bolt from the blue*: a trunk climbs from 7 to 8.4 km to 9 to 10 km at 5 to 25° from the vertical,
+  crosses 0.5 to 1 r of the cloud and leaves it at 8 to 9 km, then descends 5 to 12 km sideways to a
+  strike inside max(r, 8 km); unbranched above 5 km, 3 to 8 branches below.
+- *In-cloud trunk and fan*: a steep trunk climbs 3 to 5.5 km, from 5-7 km to 9-11 km (the main negative charge to the upper
+  positive one), at 5 to 25° from the vertical and 0.6 of the path roughness, as a ground drop; one to three leaders then spread both ways from its top at 8.5 to 11.5 km, like
+  the roots of a tree, as far as `min(1.4 r, 8 × 10^4 m/s × 0.8 × flicker)` allows, near the observed footprint: a fan
+  of a short flash stays small. It is a filament (20 %), branched (30 %) or a wide network without a
+  dominant leader (50 %), with 0 to 1, 1 to 3 or 2 to 5 branches reaching up to half the fan
+  (`SKELETON.fanBranches`, `fanBranchReach`).
+- *Cloud-to-air*: a trunk and fan whose first leader leaves the cloud over its outer 30 to 60 % and
+  ends 1 to 3 km beyond the fan, at its height or up to 1 km over the 11.5 km top.
+- *Crawler*: no trunk; one or two leaders run 0.8 to 1.1 r both ways along the cloud base, across the observed footprint at 6 to
+  8 km, with 0 to 3 branches, seen through the whole cloud.
+
+The first leader (the feed, a bolt's trunk, the first fan, a crawler's first leader) runs along the
+heading the light drifts on.
 
 **Path.** Each path has one or two broad bends (an elbow or an S), then its midpoints are displaced
-sideways at uneven places, by about the same share of their length at every scale, down to segments of
-a 48th of the flash extent. Segment lengths vary, turns are sharp or soft, and the path never zigzags
-regularly. Branches leave at uneven places, mostly at 20 to 70 degrees, a few almost square, most of
-them on one side; some are short splinters, some as long as the trunk, and they branch again down to
-three levels, coarser as they get finer.
+sideways at uneven places, by about the same share of their length at every scale (0.18 to 0.34 of a
+segment, 0.88 less at each finer level), down to segments of a 48th of the flash extent. A
+cloud-to-ground drop, its branches and its second contact keep 0.6 of that roughness
+(`SKELETON.dropRoughness`): they turn about 15° from one segment to the next, close to the 16° measured
+on photographed channels, and most of their segments are steeper than 60°. Paths deep in the cloud, crawlers and
+cloud-to-ground stems, are drawn in segments of at least 1.5 km (`SKELETON.deepMinKm`), about the width
+the cloud spreads them to: finer segments would pile their overlapping ends into a saturated tube. Segment
+lengths vary, turns are sharp or soft, and the path never zigzags regularly. Fans and crawlers keep to
+a layer (30 % and 15 % of their sideways offsets vertical). In-cloud branches leave at uneven places,
+mostly at 20 to 70 degrees, a few almost square, most of them on one side; some are short splinters,
+some as long as the leader, and they branch again down to three levels, coarser as they get finer.
 
 **Thickness and light.** The main channel is 1.4 to 2 CSS px wide and keeps its width and light down to
 the ground. Branches are about 60 % as wide and fainter, sub-branches thinner still, down to hairlines
-(drawn a pixel wide with their light scaled down), and they dim and thin towards their tips. A branch
-in seven is as bright as the trunk. The core is white; the halo around ground channels is pale blue,
-sometimes lavender-rose or warm.
+(drawn no thinner than 1.25 device px, their light scaled down; see Drawing), and they dim and thin
+towards their tips. A branch in seven is as bright as the trunk. The core is white; the halo around
+ground channels is pale blue.
 
 **Timing.** Leaders light the path as they go. A cloud-to-ground channel grows down with its leader at
-12 %, its branches lit as it passes; the first stroke then fills it from the ground up to 11.5 km in
+12 %, its branches lit as it passes (the stem, a cloud-to-ground feed or an in-cloud trunk, is lit
+first, by 15 % of the path's arrival; a drop reaches its strike last, its branches no later than it); the first stroke then fills it from the ground up to 11.5 km in
 33 ms, two frames (a real return stroke takes microseconds). Branches die first, over 60 ms from the
 first stroke, while the trunk lingers; before each later stroke a dart leader runs down the trunk in
 40 ms at 30 %, lighting the 30 % of the path behind its tip, and the stroke lights the trunk again, as
@@ -162,51 +247,116 @@ of the leader shines at full over the last tenth of its path while the rest hold
 channel fades over 150 ms after the flicker, leaving the round glow. A channel appears as it gets
 readable: its opacity rises while its half length grows from 6 to 18 CSS px.
 
-**Through the cloud.** The observed cloud layer decides what of a channel shows (`veil.ts`). For each
-segment, the renderer follows the line of sight from its middle up to the camera and reads the cloud
-opacity where it leaves the 10 km cloud shell: seen at a slant, a channel under the edge of a storm can
-show beside it.
+**Through the cloud.** The cloud is assumed from 7 km (its base) to 11.5 km. The observed cloud layer
+decides how a channel shows (`veil.ts`): for each segment, the renderer follows the line of sight from
+its middle up to the camera and reads the cloud opacity where it leaves the 10 km cloud shell, so a
+channel under the edge of a storm can show beside it. Each segment carries a cloud flag from its kind
+and stage, not from its height alone:
 
-- *In the cloud* (segments above the 7 km base): light scatters around the channel. It spreads over
-  0.5 km just under the 11.5 km top to 4 km at the base, times the opacity, keeps the same light over
-  that width and loses up to half of it, with no halo. In clear air it stays crisp.
-- *Below the cloud*: the cloud hides it. `(1 - opacity)^2` of its light comes through from straight
-  above, less at a slant, as the cloud layer thickens towards the limb: a thick storm (opacity 0.92)
-  lets through less than 1 %, a thin veil (0.3) about half.
+- *In the cloud* (fans, crawlers, a cloud-to-ground stem whatever its height, the part of a drop above
+  the base): light scatters around the channel. It spreads over 0.5 km just under the 11.5 km top to
+  4 km at the base, times the opacity, keeps the same light over that width and loses up to half of it,
+  with no halo. A segment shorter on screen than that width overlaps its neighbours over it, so it keeps
+  only its share, `max(length, core width) / spread width` (`veilOverlap`, styled): without it the
+  overlapping ends of a path deep in the cloud add up to a saturated white tube.
+  Crawlers, along the base, are the most veiled.
+- *A trace in the cloud* (in-cloud trunks): the channel spreads at most to twice its core width and
+  keeps at least 30 % of its light, with a halo, so a trunk reads as a crisp, dim stroke inside the
+  cloud.
+- *In clear air* (a drop under the base, a bolt's descent, the outer part of a cloud-to-air leader):
+  `(1 - opacity)^2` of its light comes through the cloud from straight above, less at a slant, as the
+  cloud layer thickens towards the limb, but never less than 30 % (`VEIL.trace`): a bolt under a thick
+  storm shows as a 30 % trace with its halo. This is styled: from orbit a channel under a storm is not
+  seen at all, only in clear air.
 
 While the cloud layer is hidden or has no frame for the scene, channels in the cloud are veiled as if
 by an opacity of 0.6 and those below it stay crisp. Over sunlit clouds, which outshine a thin channel
 seen from orbit, channels keep 30 % of their light.
 
+**Under clouds in relief.** Where the clouds are drawn in relief (ADR 0028, 0031), channels stay half a
+kilometre under the observed top: the part of a channel above the 7 km base is compressed toward that
+top, to no less than 30 % of its height, while a drop under the base keeps its height. Under a top
+lower than 8.85 km even that compressed channel would rise over the top, so the whole channel is lowered
+with it (to no less than 30 %). The veil reads the channel's own heights, not the lowered ones.
+
 **One flash, two instruments.** Where GLM and MTG LI detections fall within 400 ms and 0.15 degree of
 each other, they are one flash: both keep their glow, only the newest gets a channel.
 
-**Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud; their segments
-overlap half a width at each joint and cross-fade there, so they never bead. While a channel shows, the
+**Drawing.** Cores add to what is behind them, so they stay visible over a lit cloud. Their segments
+overlap half a width at each joint and cross-fade there in screen values, after the sRGB conversion, so
+the two at a joint add up to one (cross-faded in light, each half was converted on its own and the joint
+came out about 1.4 times as bright: a bead). Each segment's cross-fade is scaled to add up to its length
+(`lengthShare`), then given back the light its overlaps used to add per unit length (`overlapGain`;
+styled, so channels keep the brightness they had when they beaded). For a segment s widths long
+(unforeshortened), that is 1 from a width on and about 1 / (6 s) below in the bloom's linear buffer; on
+screen it follows the tone (`overlapTone`): nothing where the sRGB conversion is linear, 1 + 1 / (3 s)
+from a width on and about 0.39 / s below in mid tones. It is exact from a width on, within 5 % below in
+mid and bright tones, up to 16 % over for the dimmest tones of the shortest segments, and stops growing
+below s = 1/16 (`RIBBON.minSpan`). Against the old drawing, on paused captures at 1440 × 900, channels
+add 92 to 102 % of their old light (C1 to C4 lightning alone, C14, C15, and the whole storm and a window
+pose at night; least at the window poses) and trunks keep theirs within 1 % (C20 and C14 at 2400 × 1500).
+A segment foreshortened on screen adds light for its screen length only. A chain of uneven segments
+shorter than their width still varies along it, less than before (within 23 % of its mean, against up
+to 35 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
+dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
+of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide (the start of ground
+leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
+floor is finer than the old 0.75 CSS px. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
-channel through, so a flash hidden under a storm keeps its glow. Near the floor the round glow is drawn at 40 %, as the lit cloud and the
-channel carry the flash.
+channel through (at least its 30 % trace), so a flash dimmed under a storm keeps most of its glow. Near the floor the round glow is drawn
+at 15 % (styled), as the lit cloud and the channel carry the flash; where the cloud light does not show
+(the `low` tier, clouds hidden or not loaded yet), it keeps 40 %. Over sunlit clouds it keeps 35 % of
+that (styled: from orbit, nothing of a flash shows by day). These are rules of the floor: they ease out
+from 0.3 to 1 km per CSS px, and from there the glow climbs from 40 % to full as before, so views from
+1 km per CSS px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) keep their points
+and their day marks; smaller storms frame closer and get the rules of the floor. Phones scale both 15 %
+and 40 % by 0.6. In a storm view below 1 km per CSS px, overlapping glows keep the brightest, never add
+up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
 9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
-256 segments. All flashes keep their glow and cloud light.
+256 segments (24 kept for a second ground contact and 16 for a cloud-to-air leader's way out,
+`SKELETON.secondSegments` and `airSegments`; a path that would not fit is drawn coarser). All flashes
+keep their glow and cloud light.
 
 ## Channel halo
 
-A second, soft ribbon follows the main channel of ground flashes in clear air: eight times wider, at
-30 % of the core level, sharing its opacity, profile, growth and fade, keeping the brightest light where
-it overlaps. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
+A second, soft ribbon follows the main channel of ground flashes in clear air, and the trunks of
+in-cloud flashes, drawn as traces: eight times wider than the core (for a trace, than its core width,
+not the width the cloud spreads it to), at 30 % of the core level, sharing its opacity, profile, growth
+and fade, keeping the brightest light where it overlaps. Its tint is cool only (`vec3(0.86, 0.9, 1.0)`
+on the pale blue halo colour): the rose and warm halos of photographs are dust and distance seen from
+the ground. It fades with camera distance from 1,500 to 6,000 km. Above 256 channels it fades out over
 250 ms, which bounds its cost during bursts.
 
 ## Cloud light
 
-Flashes also light the clouds from inside, through a light map: a 1024 × 512 equirectangular window
-around the point the camera looks at, 3 times the camera height in half height, up to the whole globe
-from about 3,300 km. Near the floor its texels are 4.7 km and each flash lights about 2 radii around it;
-from afar, 150 km at least, as on the globe; near the floor it is drawn at 45 %, so channels read over
-it. In-cloud flashes light it where their light has drifted.
-The cloud adds the light scaled by how dark it is, so sunlit tops barely change.
+Flashes also light the clouds from inside, through a light map: an equirectangular window around the
+point the camera looks at, 3 times the camera height in half height, up to the whole globe from about
+3,300 km; 2048 × 1024 texels on `high` (2.3 km at 400 km), 1024 × 512 on `medium` and on phones.
+`w` is the share of the globe the window covers (0.12 at the 400 km floor, 1 from about 3,300 km).
+Each flash lights a patch reaching `(1.3 + 1.7 w) r` around its observed footprint (`CLOUD_LIGHT`): 1.5 `r`
+at the floor, with about 9 % of its centre left at `r` (1.3 `r` and 4 % as `w` tends to 0). The
+patch is styled, elongated and irregular, drawn per flash: its long axis over its short one from
+1.4 to 2.2, its edge lobed by 0.18 (two lobes) and 0.10 (three lobes) of its mean, lying along the
+flash's drift (a drawn heading for ground flashes, which do not drift), and scaled so its farthest
+point is at that radius; it is round where the splat floor, not the footprint, sets the size. The
+whole patch lights during the flash's pulses (its profile from 0.35, whole from 0.7, whatever its
+energy, which sets the level), 0.65 of it between them, where its light has drifted; at least 2
+texels, and `150 w²` km from afar, as on the globe. It is drawn at `0.35 + 0.65 w` of its level
+(43 % at the floor), so channels read over it; in a storm view the map keeps the brightest flash at
+each point, never their sum. The cloud reads the map sharpened, `pow(light, 1.25 - 0.25 w)` (1.22 at
+the floor, none over the whole globe), adds `1 - exp(-5 × light)` of the flash colour into its
+headroom only, in the flat layer and in the volume alike, and keeps 35 % of it over sunlit cloud (from
+a local sun 3° below the horizon to 14.5° above it), a styled trace like the channel's (physics:
+nothing of a flash shows by day). Where the clouds are in relief, the volume lights each column in a
+band of 3.5 km half width (1/e) centred 3 km under the column's own top where that top rises above
+11.5 km and at the assumed flash height of 8.5 km otherwise, read at the two depths that split the
+light each crossing sends back into quarters (so a column looks the same whether the march takes it
+in one piece or in many), at 1.8 times the flat layer's level: towers glow near their crown, thin
+anvils veil, low cloud stays dark, so the lit area takes the cloud's shape (ADR 0031). Reduced motion
+keeps the whole patch, its heading set by the seed.
 
 ## Reduced motion
 
