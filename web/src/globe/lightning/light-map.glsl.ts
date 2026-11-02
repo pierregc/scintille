@@ -26,9 +26,9 @@ varying vec4 vPatch;
 varying vec4 vLobes;
 
 ${playbackGlsl}
+${channelGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
-${channelGlsl}
 ${cloudDriftGlsl}
 ${patchEdgeGlsl}
 ${cloudPatchGlsl}
@@ -40,10 +40,11 @@ void main() {
 	}
 	vec3 d = normalize(flash.xyz);
 	float seed = flashShape.w;
-	bool ground = isGround(seed);
+	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	bool ground = isGround(kind);
 	float age = wallAge(time, flash.w);
 	float lat = asin(clamp(d.y, -1.0, 1.0));
-	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, ground) / 6371.0 * flicker;
+	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, kind) / 6371.0 * flicker;
 	lat += drift.y;
 	float lon = atan(-d.z, d.x) + drift.x / max(cos(lat), 0.05);
 	float relative = mod(lon - window.x + 3.14159265, 6.28318531) - 3.14159265;
@@ -53,7 +54,7 @@ void main() {
 	float pulse = 0.0;
 	float brightness = 0.0;
 	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		pulse = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, ground);
+		pulse = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind);
 		brightness = pulse * intensityBrightness(flashShape.x) * onScreen(flash.w);
 	}
 	if (brightness <= 0.0) {
