@@ -127,7 +127,8 @@ export async function handleNearby(url: URL, db: SearchDatabase | undefined, now
 	if (!db) return failure(503, 'unavailable', ['Search is not configured.']);
 	const key = new Request(`${url.origin}/api/storms/nearby?${nearbyKey(parsed.value)}&v=${encodeURIComponent(version)}`);
 	const cached = await cache?.match(key);
-	if (cached) return cached;
+	// Served from the edge cache, the zone would stretch the browser TTL to 4 hours.
+	if (cached) return new Response(cached.body, { status: cached.status, headers: PUBLIC_HEADERS });
 	let response: Response;
 	try {
 		response = await searchNearby(db, parsed.value, nowSeconds);

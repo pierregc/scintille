@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { SearchError, StormsNearby, StormSummary } from '../contract/types';
 import { pathDistanceKm, queryTiles } from './geo';
 import { rankNearby } from './nearby';
-import { CANDIDATES, EXACT, handleNearby, MAX_CANDIDATES, queryKeys, type SearchDatabase, type SearchStatement, searchNearby } from './search';
+import { CANDIDATES, EXACT, handleNearby, MAX_CANDIDATES, PUBLIC_HEADERS, queryKeys, type SearchDatabase, type SearchStatement, searchNearby } from './search';
 
 const SCHEMA = readFileSync(new URL('../../../data/packages/scintille-pipelines/src/scintille_pipelines/sql/storm_search_schema.sql', import.meta.url), 'utf8');
 const NOW = Date.parse('2026-10-29T18:00:00Z') / 1000;
@@ -145,6 +145,14 @@ describe('nearby search', () => {
 		await ask('lat=45.78&lon=4.81', 'b');
 		expect(d1.queries).toBeGreaterThan(queries);
 		expect([...store.keys()].every((key) => key.includes('lat=45.8&lon=4.8'))).toBe(true);
+	});
+
+	it('answers from the edge cache with the browser TTL of a fresh response', async () => {
+		const stretched = new Response('{}', { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=14400' } });
+		const cache = { match: async () => stretched } as unknown as Cache;
+		const response = await handleNearby(new URL('https://scintille.app/api/storms/nearby?lat=1&lon=1'), catalog(), NOW, 'a', cache);
+		expect(response.headers.get('Cache-Control')).toBe(PUBLIC_HEADERS['Cache-Control']);
+		expect(await response.text()).toBe('{}');
 	});
 
 	it('reads one key per day and tile of the window', () => {
