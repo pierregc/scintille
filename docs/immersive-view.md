@@ -51,7 +51,7 @@ raised by the difference ([free tilt](#free-tilt)).
 | Pose | View | Camera height | View width at target (16:9) | Purpose |
 |---|---|---|---|---|
 | `globe` | storm centre, 20,000 km, tilt 0 | 20,000 km | whole disc | Activity across the planet |
-| `regional` | M3 storm framing (`frameStorm`, tilt 20°, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
+| `regional` | M3 storm framing (`frameStorm`, tilt 45° since #406, camera at least 400 km high) | 400 to 6,000 km | the storm bounds | Choose and read one storm |
 | `iss` | storm centre, range 400 km, tilt 1° | 400 km | 450 km | The floor, looking down |
 | `window` | storm centre, range 740 km, tilt 60° | 400 km | 830 km, horizon in view | The floor, looking toward the horizon |
 | `grazing` | storm centre, tilt 80° (range 1,439 km) | 400 km | 1,610 km, horizon at 44 % from the top | The most grazing orbit |
@@ -77,6 +77,59 @@ scene is not observed.
 Cost, `bench.mjs` desktop headless, 60×, afterglow 0, R1, R2, R5: frame cost p95 9.2 to 11.8 ms at the
 horizon view against 11.8 to 14.6 ms at `window` in the same run, no frame interval over 16.8 ms at p95.
 Other GPU jobs shared the Mac: compare the two poses, not the absolute values.
+
+### Storm frame tilt
+
+The storm frame (`REPLAY_FRAME`, the `regional` pose, the `Follow` frame) tilts 45° from straight
+down since #406; it was 20°. A vertical channel projects at sin(tilt) of its length on screen, 0.34
+at 20° against 0.71 at 45°; a horizontal one across the line of sight shows in full, and one along it
+at cos(tilt) (0.94 at 20°, 0.71 at 45°), so verticals go from about a third of the along-sight
+horizontals to par: the old frame flattened every flash by construction ("flashes are too
+horizontal", #398). `frameStorm` is unchanged: the
+footprint is fitted in the 62 % safe area by bisection, never nearer than the floor range of the tilt
+(`floorRange`: 424 km at 20°, 550 km at 45°), so a small storm sits at 561 km instead of 432 km and
+wide storms move by −15 to +6 % (table below). At the floor the camera is 408 km high and the
+bottom edge looks 24° from nadir: the nearest visible ground is 450 km away, between `iss` (400 km)
+and `window` (510 km), so a 1 km cloud texel stays under 4 px (visual rule 9). A 16:9 frame's top
+corners look 63° from nadir at the floor, under the 70° horizon. Of the storms below, only
+Basse-Kotto (camera 1,250 km high, horizon 57° from nadir, top corners 58 to 59°) shows the limb in
+the desktop top corners; R2 (970 km, horizon 60°) stays just under it. On a 390 × 844 phone, wide
+storms are framed from 2,600 to 4,200 km high, and the limb with black sky fills the top of the
+screen: about 16 % of its height for Basse-Kotto, 11 % for R2 and 7 % for R1, against none at 20°.
+The horizon view (72°) and the
+floor poses are unchanged. A reload with a frame checkpoint saved at the old tilt flies to the new frame
+(`sameFrame` is false). The tilt is a tunable of [ADR 0020](adr/0020-immersive-storm-view.md)
+point 5, chosen by the maintainer on captures: the sweep below shows 20°, 35°, 42°, 45° and 50° on
+Basse-Kotto (2026-10-27, 12:00 UTC, 60×) and the five reference storms, desktop 1600 × 1000 and
+phone 390 × 844, in [`immersive/lightning-look/framing-tilt/`](immersive/lightning-look/framing-tilt/)
+(`<storm>-tilt-20-35-42-45-50.jpg`, the 45° phone frame in the last cell;
+`<storm>-phone-tilt-20-35-42-45-50.jpg`; `C1-tilt-20.jpg`, `C1-tilt-45.jpg`, `R1-tilt-20.jpg`,
+`R1-tilt-45.jpg` full size). Fitted range (km) per storm and tilt, desktop / phone:
+
+| Storm (bounds) | 20° | 35° | 42° | 45° | 50° |
+|---|---|---|---|---|---|
+| Basse-Kotto 2026-10-27 (863 × 690 km) | 1,827 / 4,972 | 1,724 / 5,056 | 1,635 / 5,091 | 1,639 / 5,106 | 1,661 / 5,128 |
+| R1 Minas Gerais (568 × 303 km) | 965 / 3,228 | 1,002 / 3,265 | 1,018 / 3,281 | 1,024 / 3,287 | 1,034 / 3,297 |
+| R2 Mato Grosso (680 × 550 km) | 1,471 / 3,891 | 1,382 / 3,958 | 1,308 / 3,986 | 1,289 / 3,998 | 1,307 / 4,015 |
+| R3 North Atlantic (295 × 256 km) | 677 / 1,722 | 628 / 1,753 | 591 / 1,765 | 575 / 1,771 | 610 / 1,778 |
+| R4 Ngaoundéré (88 × 66 km) | 432 / 510 | 491 / 517 | 536 / 536 | 561 / 561 | 610 / 610 |
+| R5 Ibiza (160 × 105 km) | 432 / 926 | 491 / 938 | 536 / 943 | 561 / 945 | 610 / 949 |
+
+Small storms sit on the floor range of the tilt (432 km at 20°, 561 km at 45°, 610 km at 50°). Storms
+bound by their north-south extent fit closer at a higher tilt, which foreshortens it: Basse-Kotto
+1,827 → 1,639 km, R2 1,471 → 1,289 km, R3 677 → 575 km; R1, bound by its east-west extent, backs off
+from 965 to 1,024 km.
+Phone frames are 1.0 to 3.2× farther than desktop ones at 45° (1.2 to 3.3× at 20°); four storms pass
+3× at 45° (Basse-Kotto, R1, R2, R3) against one at 20° (R1). The phone ranges barely move
+(+1.8 to +2.8 %, R4 +10 % onto the floor range): the crossing comes from the desktop frames of the
+storms bound north-south coming 10 to 15 % closer. At 35° only R1 passes 3× (3.26, against 3.35 at
+20°).
+
+The `regional` pose of `bench.mjs` (`"framed"` in `immersive/references.json`) moves with the
+constant: benches before #406 measured the 20° frame. Against it, same evening, R1, R2 and R5 at
+60×, five alternated rounds on a Mac shared with other GPU jobs: median frame cost p95 +0.6, +0.5
+and −1.0 ms (+1.4, +2.2 and −2.5 ms over the three quietest rounds), near white 0.2 to 0.5 %, no
+flight frame over 50 ms.
 
 ### Free tilt
 
@@ -138,7 +191,7 @@ back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
   and the hull of the current cell, solid. Replay, the catalog keeps one centroid and area per
   hourly window, not the outline: a dashed circle of that area. A thin light line over a 1 px dark
   shadow, so it reads over sunlit clouds and at night; changes fade over 500 ms.
-- **Framing.** The storm frame: tilt 20°, the footprint fitted in the safe area (`frameStorm`), never
+- **Framing.** The storm frame: tilt 45° ([storm frame tilt](#storm-frame-tilt)), the footprint fitted in the safe area (`frameStorm`), never
   below the floor, so it backs off as the storm grows. With `Horizon`, the horizon view along a fixed
   heading: the one the view had, or the motion between the last two positions when switched on
   while following. The heading never turns with the storm.
@@ -161,11 +214,15 @@ back ends on the starting view), `R2-limb.jpg` and `R5-limb.jpg` (89.8°).
 - **End of a replay.** Past the storm's last flash, `Replay from start` plays it again from its first
   flash, the camera where it is. After 10 s playing past the end the globe goes back to live with
   every flash and flies out, as `Back to live` does. Captures in
-  [`immersive/replay-end/`](immersive/replay-end/).
+  [`immersive/replay-end/`](immersive/replay-end/). A replay opens, restores and restarts at the
+  first flash its chunks hold (the later of the catalog's `t_start` and the earliest `event_min` of
+  its chunks), which can be later than the catalog's `t_start`: Basse-Kotto (2026-10-27) opens at
+  04:00:06 UTC while its catalog entry starts at 03:30. Captures in
+  [`immersive/lightning-look/405/`](immersive/lightning-look/405/).
 
 Measured on the five storms with a local production build against production data, 60× from
 12 minutes before the reference hour, following, then the horizon view
-([`measurements.json`](immersive/follow/measurements.json)):
+([`measurements.json`](immersive/follow/measurements.json)), at the 20° frame, before #406:
 
 | | R1 | R2 | R3 | R4 | R5 |
 |---|---|---|---|---|---|
@@ -218,20 +275,34 @@ radius and `i` the intensity:
 
 - **Farness** `f = smoothstep(0, 1, ln(k / 0.3) / ln 10)`: 0 up to 0.3 km per px (the floor poses),
   1 from 3 km per px.
+- **Closeness** `c = 1 - smoothstep(0, 1, ln(k / 0.3) / ln(1 / 0.3))`: 1 up to 0.3 km per px, 0 from
+  1 km per px, where storm views screen-blend glows again. It weighs the rules of the floor, so views
+  from 1 km per px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) are drawn as
+  before them; smaller storms frame closer and get the rules of the floor (`regional` is 0.51 km per
+  px for R1, 0.18 for R4 and R5, table below).
 - **Round glow** radius `r × mix(1 + i, 4 × (0.6 + 0.8 i), f)`, at least `5 × (0.6 + 0.8 i)` CSS px:
   1 to 2 `r` near the floor, the former 4 times compensation (2.4 to 5.6 `r`) from afar, and a
-  point of 3 to 7 CSS px when that is larger.
+  point of 3 to 7 CSS px when that is larger. Level `mix(mix(0.4, 1, f), 0.15, c)`: 15 % at the
+  floor, where the lit cloud and the channel carry the flash (40 % where the cloud light does not
+  show: the `low` tier, clouds hidden or not loaded yet), the ramp from 40 % to full from 1 km per px.
+  The level steps between 15 and 40 % in the frame the cloud light turns on or off, as the picture
+  itself does then. Times `mix(1, 0.35, day × c)` over
+  sunlit cloud, with `day = smoothstep(-0.05, 0.25, n · sun)` as for channels.
 - **Channel** half length 2.2 `r`, always physical. Opacity `smoothstep(6, 18, 2.2 r / k)`.
-- **Halo**: 8 core widths at 30 % of the core, with the channel opacity, fading from 1,500 to
-  6,000 km away.
-- **Bloom** strength `0.9 × (0.15 + 0.85 f)`, with `k` taken from the camera height only.
+- **Halo**: 8 core widths at 30 % of the core, cool only, with the channel opacity, fading from
+  1,500 to 6,000 km away.
+- **Bloom** strength `0.9 × (0.1 + 0.9 f)`, radius `mix(0.55, 0.4, c)`, with `k` taken from the camera height only.
 - **Cloud light**: a window 3 times the camera height in half height around the point looked at
-  (4.7 km texels at 400 km, the whole globe from about 3,300 km); each flash lights `(2 + w) r`,
-  at least 2 texels and `150 w²` km, `w` being the share of the globe the window covers.
+  (2.3 km texels at 400 km on `high`, 4.7 km on `medium`, the whole globe from about 3,300 km);
+  each flash lights an elongated, irregular patch reaching `(1.3 + 1.7 w) r` on its pulses and 0.65 of that between them, at least
+  2 texels and `150 w²` km, `w` being the share of the globe the window covers, at `0.35 + 0.65 w`
+  of its level (1.5 `r` at 43 % at the 400 km floor), read sharpened by `1.25 - 0.25 w`.
+  Where the clouds are in relief, each column is lit in a band under its own top
+  ([flash profile](flash-profile.md#cloud-light)).
 - **Phones** draw these sizes as a 1080 CSS px tall view would, shrunk to their height (`k` and
   channel widths times `h / 1080`), so a phone shows the middle of the desktop picture; the point
-  floor stays in CSS px. Their glow and cloud light near the floor drop to 0.6 of the desktop level
-  (#333).
+  floor stays in CSS px. Their glow (at the floor and at the start of its ramp from afar) and their
+  cloud light near the floor drop to 0.6 of the desktop level (#333).
 
 1 world unit is 6,371 km: a world length is `km / 6371`, a CSS px is `k` km. Representative values
 at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 5, 10.5 and 18.6 km):
@@ -239,16 +310,16 @@ at mid intensity, for the 5th, 50th and 95th percentile footprints of R1 (`r` = 
 | Pose | km per CSS px | `f` | Glow, r = 5 km | Glow, r = 10.5 km | Glow, r = 18.6 km | Glow, r = 10.5 km, world units | Channel half length, r = 10.5 km, opacity | Channel opacity, r = 5 km | Bloom |
 |---|---|---|---|---|---|---|---|---|---|
 | `globe` | 11.7 | 1 | 58 km, 5 px | 58 km, 5 px | 74 km, 6 px | 0.0092 | 2 px, 0 | 0 | 0.90 |
-| mid zoom (camera 2,000 km) | 1.17 | 0.63 | 15 km, 13 px | 32 km, 28 px | 57 km, 49 px | 0.0051 | 20 px, 1 | 0.20 | 0.62 |
-| `regional`, R1 (873 km) | 0.51 | 0.13 | 9 km, 18 px | 19 km, 38 px | 34 km, 67 px | 0.0030 | 45 px, 1 | 1 | 0.24 |
-| `regional`, R4 and R5 (306 km) | 0.18 | 0 | 8 km, 42 px | 16 km, 88 px | 28 km, 156 px | 0.0025 | 129 px, 1 | 1 | 0.14 |
-| `iss` | 0.23 | 0 | 8 km, 32 px | 16 km, 67 px | 28 km, 119 px | 0.0025 | 99 px, 1 | 1 | 0.14 |
-| `window`, nearest ground | 0.30 | 0 | 8 km, 25 px | 16 km, 53 px | 28 km, 94 px | 0.0025 | 78 px, 1 | 1 | 0.14 |
-| `window`, target | 0.43 | 0.07 | 8 km, 19 px | 18 km, 41 px | 31 km, 72 px | 0.0028 | 53 px, 1 | 1 | 0.14 |
+| mid zoom (camera 2,000 km) | 1.17 | 0.63 | 15 km, 13 px | 32 km, 28 px | 57 km, 49 px | 0.0051 | 20 px, 1 | 0.20 | 0.60 |
+| `regional`, R1 (873 km) | 0.51 | 0.13 | 9 km, 18 px | 19 km, 38 px | 34 km, 67 px | 0.0030 | 45 px, 1 | 1 | 0.20 |
+| `regional`, R4 and R5 (306 km) | 0.18 | 0 | 8 km, 42 px | 16 km, 88 px | 28 km, 156 px | 0.0025 | 129 px, 1 | 1 | 0.09 |
+| `iss` | 0.23 | 0 | 8 km, 32 px | 16 km, 67 px | 28 km, 119 px | 0.0025 | 99 px, 1 | 1 | 0.09 |
+| `window`, nearest ground | 0.30 | 0 | 8 km, 25 px | 16 km, 53 px | 28 km, 94 px | 0.0025 | 78 px, 1 | 1 | 0.09 |
+| `window`, target | 0.43 | 0.07 | 8 km, 19 px | 18 km, 41 px | 31 km, 72 px | 0.0028 | 53 px, 1 | 1 | 0.15 |
 
 The glow profile has a hot core: its light falls to half at about 0.3 of the glow radius and to a
 tenth at half of it, so near the floor a glow of 1 to 2 `r` reads as a disc of 0.5 to 1 `r`, and
-the cloud light around it spreads over about 2 `r`.
+the cloud light under it ends at 1.5 `r` at the 400 km floor along its long axis, with about 9 % of its centre left at `r`.
 
 Physical scale and compensation:
 
@@ -256,11 +327,23 @@ Physical scale and compensation:
   lengths are physical; channel heights follow [Observed, procedural, assumed](#observed-procedural-assumed).
 - Compensation only applies where the footprint is a few pixels: the 4 times glow and the point
   size from afar, the pixel width of channels and halos, and the bloom. Near the floor the glow is
-  1 to 2 footprints and the bloom 15 % of the globe's.
+  1 to 2 footprints at 15 % of its level and the bloom 10 % of the globe's.
 - Each flash flickers for its observed duration in wall clock time, so at 60× a storm view shows
   about a minute of flashes at once ([flash profile](flash-profile.md)). Glows there use screen
   blending, the cloud light keeps the brightest flash, and bloom and cloud light scale with how
-  dark the scene is, so overlaps and sunlit clouds never turn white.
+  dark the scene is, so overlaps and sunlit clouds never turn white. At replay speed, channels and
+  near-floor sprites go to a seeded sample of the flashes sized for the speed (about 50 / 20 / 8
+  within their flicker at once at 60× / 600× / 3600×); every flash still lights the cloud
+  ([overlaps in a storm view](flash-profile.md#overlaps-in-a-storm-view)).
+  about a minute of flashes at once ([flash profile](flash-profile.md)). Overlaps there blend by
+  distance: below 1 km per CSS px the brightest glow sets each pixel, so a cell never piles up into
+  a white ball; from 1 km per CSS px glows screen-blend, so points still accumulate softly. From 0.7
+  to 1 km per CSS px (`k` from the camera height, times `h / 1080` on phones) a screen-blended copy
+  weighted `1 - m` is drawn under the max-blended glows, `m = 1 - smoothstep(0, 1, ln(k / 0.7) /
+  ln(1 / 0.7))`: a lone glow on the dark keeps its light and an overlap brightens smoothly from its
+  brightest flash to its screen sum, so zooming across never pops (rule 3). The copy is drawn only
+  in that band. The cloud light keeps the brightest flash, and bloom, cloud light and the near-floor glow scale with
+  how dark the scene is, so overlaps and sunlit clouds never turn white.
 
 Measured on 2026-10-28 with a local production build of #254 against production data, on the same
 Mac as the baseline; captures at the four poses in [`immersive/lightning-scale/`](immersive/lightning-scale/).
@@ -353,7 +436,9 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel cores on screen: joints cross-faded in screen values, each segment's cross-fade adding up to its length, no core thinner than 1.25 device px | Styled, so threads never bead; each core gets back the light its overlaps used to add (exact from a width on, within 5 % below in mid tones, up to 16 % over for the dimmest; stops growing below segments 1/16 width long): channels keep 92 to 102 % of their old light | `RIBBON.hairlinePx`, `RIBBON.minSpan`, `lengthShare`, `overlapGain`, `overlapTone` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
-| Cloud to ground share (25 %) | Procedural, not a classification | `CHANNEL.groundShare` |
+| Flash kinds: seven procedural looks, cloud-to-ground 30 % of seeds (negative multi-stroke 19 %, single-stroke 7 %, positive 3 %, bolt from the blue 1 %; observed band 15 to 40 %), cloud-to-air 3 %, crawlers for flashes observed ≥ 600 ms or ≥ 1,500 km², trunk-and-fan for the rest; leaders at 1 × 10^5 m/s (cloud-to-ground), 2 × 10^5 (in-cloud trunk), 1.5 × 10^5 (bolt from the blue), fans 8 × 10^4, crawlers 1 × 10^5, pace 0.75 to 1.35 per flash; leader time clamped to 50 to 150 ms (bolt from the blue 150 to 250 ms over its whole path, in-cloud trunk 10 to 20 ms), fans within 80 % of the flicker | Procedural, not a classification (ADR 0033); until #401 and #402 the cloud-to-ground kinds share today's ground look and the in-cloud kinds today's in-cloud look | `flashKind`, `KIND`, `leaderSeconds`, `spreadSeconds` |
+| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all at 1×; bands 30-100 / 12-30 / 5-12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share (edge 1.1), the share smoothed over 0.5 s and set on each frame through a speed change; the rest keep a point from afar (farness 0.7-1, about 1.3-3 km per px) and half a sprite (0.5, eased over 0.25 s) where no cloud light shows, both for the 500 newest only | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, [flash profile](flash-profile.md#overlaps-in-a-storm-view) |
+| Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where the cloud light does not show: `low` tier, clouds hidden or not loaded), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `ZOOM.blendFromKmPerPx`, `nearFloor`, `maxBlendShare`, `Lightning.cloudLit`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
 | Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
@@ -364,6 +449,7 @@ the south pole).
 | Translucency, glow of flashes inside | Styled (ADR 0031): drawn as observed up to 0.5, eased to 0.95 at full cover; flashes under them veiled as if eased to 0.8, so they show through; brightness follows the real depth, sunlit tops kept below white by a highlight shoulder; the glow rises and fades in real time, outside the history | `capOpacity`, `veilOpacity`, `scatterGain`, `compositeFragmentShader` |
 | Sunlight, shadows on the clouds and on the ground, relief shading, creases, haze above the clouds | Procedural, on the assumed columns; slopes exaggerated 1.6× in the lighting only, 2.4× in the incidence of dense tops under a high sun; creases darkened by the sky they see; under a high sun, large dense decks lit by the sun lowered to 40° with their observed 6 km shape drawn 6× steeper (styled); seen from afar, dense clouds shaded by their observed broad shape at the scale of the screen, slopes up to 6 to 12× steeper (styled), and by the shadows of taller clouds; the atmosphere hazes the clouds by the air above their tops | `sunFragmentShader`, `deckFragmentShader`, `marchFragmentShader`, `reliefFieldGlsl`, `cloudShadowAt`, `atmosphere.glsl.ts` |
 | Channels veiled in the cloud, hidden below it | Observed cloud opacity on the line of sight (eased like the volume where it draws the clouds), assumed scattering | `veil.ts` |
+| Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift (heading random until #401), drawn per flash (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10 of its mean; round where the splat floor sets the size), the whole of it during the flash's pulses, 0.65 of it where its light has drifted between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor); shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise), read sharpened by up to 1.25 near the floor, into the cloud's headroom, 35 % of it over sunlit cloud (physics: 0); in storm views overlaps keep the brightest, never add | `CLOUD_LIGHT`, `light-map.glsl.ts`, `cloudPatch`, `flashBand`, `glowDepths` |
 | Ground | Observed imagery, 2004/2016 composites | Blue Marble, Black Marble |
 
 ## Clouds in relief
@@ -460,7 +546,7 @@ Audit of `main` at 31d5bf3, the merged 3D lightning (#230 to #234) and M3 replay
   shell (`orbit.ts`).
 - Earth: one global texture set per tier (2k, 4k, 8k on disk; the globe loads 4k on medium and high).
 - Clouds: one shell at 10 km, 2k or 4k frames, bicubic on medium and high, lit from inside by a
-  1024 × 512 flash light map.
+  2048 × 1024 flash light map (1024 × 512 on `medium`).
 - Lightning: one instanced glow per flash in the display window (up to the 262,144 flash ring),
   channels for flashes still flickering (at most 2,048), halos up to 512 channels, fading out from
   1,500 to 6,000 km. Exposure 1.6 and bloom (strength 0.9) are constant at every altitude.
@@ -621,6 +707,15 @@ buffers, drawing buffer) and the screenshot brightness. `--afterglow <minutes>` 
 reference afterglow, `--speed` plays at another replay speed than 60×, `--no-clouds` hides the
 clouds, `--warm` measures a second visit and `--network 4g` or `slow4g` throttles the page. Active flashes count those started within a second of wall clock time, or within the
 afterglow window.
+
+In the page, `window.__app.lightning.stats` reads the storm view sample of the current frame
+([flash profile](flash-profile.md#overlaps-in-a-storm-view)), counted from the flashes loaded when
+it is read: `alive`, the detections within their flicker or fade; `drawn`, those of them in the
+sample (all of them when `share` is 1); `load`, the estimate of `alive` over the last 0.4 s of wall
+clock time the share is sized by; `share`, the applied share of the lots, and `target`, the flashes
+it aims at (Infinity at 1×); `channels`, the flashes holding a channel slot, which includes those
+fading out at the share's edge and merges a flash seen by two instruments. A capture tool reads it
+once per frame to check the targets.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the

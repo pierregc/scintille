@@ -9,6 +9,7 @@ tier there.
 | Pixel ratio cap | 1 | 1.5 | 2 |
 | Flashes on the GPU | 65,536 around the playhead | whole live window | whole live window |
 | Clouds lit by flashes (#64) | off | on | on |
+| Flash light map | none | 1024 × 512 | 2048 × 1024 |
 | Bicubic cloud filtering | off | on | on |
 | Bloom on flashes (#58) | off | off | on (about 0.5 ms GPU per frame) |
 
@@ -17,5 +18,5 @@ tier there.
   GPUs (Apple M, NVIDIA, Radeon RX/Pro) start `high`; anything else `medium`.
 - **Runtime**: if the average frame rate stays under 30 fps for 5 s, the globe drops one tier
   (at most every 10 s, never back up). Pixel ratio, cloud light and post-processing follow at once;
-  textures and flash capacity keep what was loaded.
+  textures, flash capacity and the flash light map's size keep what was loaded.
 - **Override**: `?quality=low|medium|high`. The current tier is on the canvas as `data-quality`.

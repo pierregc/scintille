@@ -1,6 +1,7 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { volumeFieldGlsl } from '../clouds/volume.glsl';
 import { CHANNEL, channelGlsl } from './channel';
+import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -37,10 +38,10 @@ varying float vLight;
 varying vec3 vTint;
 
 ${playbackGlsl}
+${channelGlsl}
 ${flashProfileGlsl}
 ${intensityGlsl}
 ${zoomGlsl}
-${channelGlsl}
 ${veilGlsl}
 ${ribbonGlsl}
 #ifdef CLOUDS
@@ -49,6 +50,7 @@ ${cloudOpacityGlsl}
 #ifdef VOLUME
 ${volumeFieldGlsl}
 #endif
+${densityGlsl}
 
 void cull() {
 	gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
@@ -56,7 +58,8 @@ void cull() {
 
 void main() {
 	float seed = flashShape.w;
-	bool ground = isGround(seed);
+	int kind = flashKind(seed, flashShape.z, flashShape.y);
+	bool ground = isGround(kind);
 	bool branch = segC.z > 0.5;
 	bool inCloud = segC.w > 0.5;
 	// Halos follow the main channel of ground flashes in clear air only; fainter paths keep a bare core.
@@ -68,11 +71,18 @@ void main() {
 	vec3 base = (modelMatrix * vec4(flash.xyz * radius, 1.0)).xyz;
 	float at = flash.w + poolShift;
 	float age = wallAge(time, at);
+	// Only the sample drawn in full at this replay speed gets a channel.
+	float hero = heroWeight(heroLot(seed, flashShape.x), heroShare);
+	if (hero <= 0.0) {
+		cull();
+		return;
+	}
 	float facing = dot(normal, normalize(cameraPosition - base));
 	float distance = length(cameraPosition - base);
 	float kmPerPx = distance / (projectionMatrix[1][1] * viewport.y) / kmToWorld;
-	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, ground)
+	float brightness = flashProfile(age, time - at, duration, flashShape.z, seed, flicker, kind)
 		* intensityBrightness(flashShape.x) * smoothstep(0.0, 0.1, facing) * onScreen(at);
+	brightness *= hero;
 	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float fade = 1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age);
 
@@ -155,9 +165,8 @@ void main() {
 	vShare = lengthShare(vLength) * overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w);
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
-	// The light around a channel leans cool, sometimes rosy or warm; its core stays white.
-	float hue = pulseHash(seed, 120.0);
-	vTint = hue < 0.15 ? vec3(1.0, 0.86, 0.95) : hue < 0.3 ? vec3(1.0, 0.94, 0.86) : vec3(0.86, 0.9, 1.0);
+	// The light around a channel leans cool; its core stays white. Rose and warm tints are dust and distance, seen from the ground.
+	vTint = vec3(0.86, 0.9, 1.0);
 }
 `;
 

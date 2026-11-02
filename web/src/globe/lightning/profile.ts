@@ -1,3 +1,5 @@
+import { type FlashKind, isGround } from './kind';
+
 /** Shape of a flash over time; mirrored in the shaders, see docs/flash-profile.md. */
 export const PROFILE = {
 	/** Flicker phase bounds, seconds of wall clock time: the observed duration, clamped. */
@@ -122,32 +124,9 @@ function shutterPulse(a: number, tau: number): number {
 	return (tau / PROFILE.shutter) * (Math.exp(-Math.max(a - PROFILE.shutter, 0) / tau) - Math.exp(-a / tau));
 }
 
-/**
- * Brightness in [0, 1] of a flash `wallAge` seconds of wall clock time after it started, `sceneAge`
- * seconds of scene time, with an afterglow of `display` seconds of scene time (0 for none).
- * `flicker` false gives the soft single fade used for reduced motion. Cloud-to-ground flashes
- * (`ground`) flash in distinct strokes; in-cloud ones glow between their pulses.
- */
-export function flashProfile(
-	wallAge: number,
-	sceneAge: number,
-	display: number,
-	durationMs: number,
-	seed: number,
-	flicker = true,
-	ground = false,
-): number {
-	if (sceneAge < 0 || wallAge < 0) return 0;
-	const length = flickerLength(durationMs);
-	const life = flashLife(length);
-	let glow = display > 0 && sceneAge <= display ? glowLevel(display) * glowDecay(sceneAge / display) : 0;
-	if (wallAge > life) return glow;
-	glow = Math.max(glow, PROFILE.afterglow * glowDecay(wallAge / life));
-	if (!flicker) return smoothstep(0, PROFILE.softRise, wallAge) * Math.max(Math.exp(-wallAge / PROFILE.softFall), glow);
-	const current = ground ? continuingCurrent(seed) : null;
-	let b = ground
-		? 0
-		: PROFILE.cloudGlow * (0.6 + 0.4 * pulseHash(seed, 94)) * smoothstep(0, 0.03, wallAge) * (1 - smoothstep(length, length + 0.08, wallAge));
+/** Pulses of a flash `wallAge` seconds in, averaged over the shutter; a continuing current holds the light after one stroke. */
+function strokes(wallAge: number, length: number, seed: number, current: ReturnType<typeof continuingCurrent>): number {
+	let b = 0;
 	let start = 0;
 	for (let k = 0; k < PROFILE.maxPulses; k++) {
 		if (k > 0) start += pulseGap(seed, k);
@@ -159,6 +138,43 @@ export function flashProfile(
 			b = Math.max(b, current.level * smoothstep(0, 0.004, a) * (1 - smoothstep(end - 0.03, end, a)));
 		}
 	}
+	return b;
+}
+
+/** A cloud-to-ground flash: distinct strokes, dark in between unless a continuing current holds. */
+export function groundProfile(wallAge: number, length: number, seed: number): number {
+	return strokes(wallAge, length, seed, continuingCurrent(seed));
+}
+
+/** An in-cloud flash: pulses over the glow of its spreading leaders, which fades 80 ms after the flicker. */
+export function cloudProfile(wallAge: number, length: number, seed: number): number {
+	const glow = PROFILE.cloudGlow * (0.6 + 0.4 * pulseHash(seed, 94)) * smoothstep(0, 0.03, wallAge) * (1 - smoothstep(length, length + 0.08, wallAge));
+	return Math.max(glow, strokes(wallAge, length, seed, null));
+}
+
+/**
+ * Brightness in [0, 1] of a flash `wallAge` seconds of wall clock time after it started, `sceneAge`
+ * seconds of scene time, with an afterglow of `display` seconds of scene time (0 for none).
+ * `flicker` false gives the soft single fade used for reduced motion. Cloud-to-ground kinds flash
+ * in distinct strokes; in-cloud kinds glow between their pulses.
+ */
+export function flashProfile(
+	wallAge: number,
+	sceneAge: number,
+	display: number,
+	durationMs: number,
+	seed: number,
+	flicker: boolean,
+	kind: FlashKind,
+): number {
+	if (sceneAge < 0 || wallAge < 0) return 0;
+	const length = flickerLength(durationMs);
+	const life = flashLife(length);
+	let glow = display > 0 && sceneAge <= display ? glowLevel(display) * glowDecay(sceneAge / display) : 0;
+	if (wallAge > life) return glow;
+	glow = Math.max(glow, PROFILE.afterglow * glowDecay(wallAge / life));
+	if (!flicker) return smoothstep(0, PROFILE.softRise, wallAge) * Math.max(Math.exp(-wallAge / PROFILE.softFall), glow);
+	const b = isGround(kind) ? groundProfile(wallAge, length, seed) : cloudProfile(wallAge, length, seed);
 	return Math.max(b, glow * smoothstep(0, length, wallAge));
 }
 
@@ -168,7 +184,7 @@ export const glslFloat = (x: number): string => (Number.isInteger(x) ? `${x}.0` 
 const f = glslFloat;
 const P = PROFILE;
 
-/** GLSL twin of `flashProfile`. */
+/** GLSL twin of `flashProfile`; needs `isGround` from `channelGlsl`. */
 export const flashProfileGlsl = /* glsl */ `
 float pulseHash(float seed, float k) {
 	return fract(sin(seed * 91.345 + k * 47.853) * 43758.5453);
@@ -181,21 +197,9 @@ float spread(float age, float len, bool ground) {
 	float t = clamp(age / (ground ? ${f(P.groundLeader)} : ${f(P.cloudSpread)} * len), 0.0, 1.0);
 	return 1.0 - (1.0 - t) * (1.0 - t);
 }
-float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, bool ground) {
-	if (sceneAge < 0.0 || wallAge < 0.0) return 0.0;
-	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
-	float life = max(${f(P.life)}, len + ${f(P.tail)});
-	float glow = display > 0.0 && sceneAge <= display
-		? ${f(P.afterglow)} * min(1.0, pow(${f(P.glowRef)} / display, ${f(P.glowScale)})) * glowDecay(sceneAge / display)
-		: 0.0;
-	if (wallAge > life) return glow;
-	glow = max(glow, ${f(P.afterglow)} * glowDecay(wallAge / life));
-	if (flicker < 0.5) return smoothstep(0.0, ${f(P.softRise)}, wallAge) * max(exp(-wallAge / ${f(P.softFall)}), glow);
-	bool current = ground && pulseHash(seed, 90.0) < ${f(P.currentShare)};
+float strokes(float wallAge, float len, float seed, bool current) {
 	float currentStroke = 1.0 + floor(pulseHash(seed, 91.0) * 2.0);
-	float b = ground
-		? 0.0
-		: ${f(P.cloudGlow)} * (0.6 + 0.4 * pulseHash(seed, 94.0)) * smoothstep(0.0, 0.03, wallAge) * (1.0 - smoothstep(len, len + 0.08, wallAge));
+	float b = 0.0;
 	float start = 0.0;
 	for (int i = 0; i < ${P.maxPulses}; i++) {
 		float k = float(i);
@@ -213,6 +217,26 @@ float flashProfile(float wallAge, float sceneAge, float display, float durationM
 			b = max(b, ${f(P.currentLevel)} * (0.7 + 0.3 * pulseHash(seed, 92.0)) * smoothstep(0.0, 0.004, a) * (1.0 - smoothstep(end - 0.03, end, a)));
 		}
 	}
+	return b;
+}
+float groundProfile(float wallAge, float len, float seed) {
+	return strokes(wallAge, len, seed, pulseHash(seed, 90.0) < ${f(P.currentShare)});
+}
+float cloudProfile(float wallAge, float len, float seed) {
+	float glow = ${f(P.cloudGlow)} * (0.6 + 0.4 * pulseHash(seed, 94.0)) * smoothstep(0.0, 0.03, wallAge) * (1.0 - smoothstep(len, len + 0.08, wallAge));
+	return max(glow, strokes(wallAge, len, seed, false));
+}
+float flashProfile(float wallAge, float sceneAge, float display, float durationMs, float seed, float flicker, int kind) {
+	if (sceneAge < 0.0 || wallAge < 0.0) return 0.0;
+	float len = clamp(durationMs / 1000.0, ${f(P.minFlicker)}, ${f(P.maxFlicker)});
+	float life = max(${f(P.life)}, len + ${f(P.tail)});
+	float glow = display > 0.0 && sceneAge <= display
+		? ${f(P.afterglow)} * min(1.0, pow(${f(P.glowRef)} / display, ${f(P.glowScale)})) * glowDecay(sceneAge / display)
+		: 0.0;
+	if (wallAge > life) return glow;
+	glow = max(glow, ${f(P.afterglow)} * glowDecay(wallAge / life));
+	if (flicker < 0.5) return smoothstep(0.0, ${f(P.softRise)}, wallAge) * max(exp(-wallAge / ${f(P.softFall)}), glow);
+	float b = isGround(kind) ? groundProfile(wallAge, len, seed) : cloudProfile(wallAge, len, seed);
 	return max(b, glow * smoothstep(0.0, len, wallAge));
 }
 `;
