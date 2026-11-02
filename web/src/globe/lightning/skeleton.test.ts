@@ -90,14 +90,9 @@ describe('channelSkeleton', () => {
 				// Crawlers, deep in the cloud, are drawn in segments as long as the cloud spreads them wide.
 				expect(parts.length).toBeGreaterThan(kind === FlashKind.IcCrawler ? 3 : 10);
 				expect(parts.length).toBeLessThanOrEqual(MAX_SEGMENTS);
-				for (const g of parts) {
-					expect(g.width).toBeGreaterThanOrEqual(SKELETON.minWidth - 1e-6);
-					expect(g.light).toBeGreaterThan(0);
-					expect(g.light).toBeLessThanOrEqual(1);
-					expect(g.from).toBeGreaterThanOrEqual(0);
-					expect(g.from).toBeLessThanOrEqual(g.to + 1e-6);
-					expect(g.to).toBeLessThanOrEqual(1 + 1e-6);
-				}
+				// One check per flash: an expect per segment is too slow for CI runners.
+				const sane = (g: Segment) => g.width >= SKELETON.minWidth - 1e-6 && g.light > 0 && g.light <= 1 && g.from >= 0 && g.from <= g.to + 1e-6 && g.to <= 1 + 1e-6;
+				expect(parts.find((g) => !sane(g))).toBeUndefined();
 			}
 		}
 	});
