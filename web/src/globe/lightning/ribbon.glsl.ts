@@ -82,7 +82,7 @@ void main() {
 		return;
 	}
 	// Only the sample drawn in full at this replay speed gets a channel.
-	float hero = heroWeight(heroLot(seed, flashShape.x), heroShare);
+	float hero = heroWeight(heroLot(seed, flashShape.x, ground), heroShare);
 	if (hero <= 0.0) {
 		cull();
 		return;

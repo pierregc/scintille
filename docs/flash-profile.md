@@ -116,24 +116,27 @@ screen-blended copy of the glows, weighted from 0 to 1, is drawn under the max-b
 across never pops and a lone glow keeps its light. The cloud light keeps the brightest flash at each
 point. On the globe overview, flashes keep adding up, so active regions glow brighter.
 
-**Replay speed never removes a flash.** Every flash lights the cloud at its observed time, place,
-footprint and energy, with its full profile and drift, for its observed duration, at every replay
-speed. What a storm view draws in full, with its channel, its near-floor sprite, its halo and its
+**Replay speed never removes a flash where the cloud light shows.** Every flash lights the cloud at
+its observed time, place, footprint and energy, with its full profile and drift, for its observed
+duration, at every replay speed (where it cannot show, see the limits below). What a storm view draws in full, with its channel, its near-floor sprite, its halo and its
 crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
 lightning look rework, #398):
 
-- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity)`, its seed being already a uniform
+- Each flash holds a fixed lot `seed × mix(1, 0.4, intensity) × k`, `k` being 0.4 for a
+  cloud-to-ground kind and 1 otherwise (`DENSITY.groundWeight`), its seed being already a uniform
   hash of its time and place (hashing it again would not survive the GPU's float32, which must pick
   the same flashes as the channel pool and the sound): a revisit or a shared URL shows the same
-  flashes, and the strongest flash is 2.5 times likelier than the weakest to be drawn. A flash is
+  flashes, the strongest flash is 2.5 times likelier than the weakest to be drawn, and a ground
+  strike 2.5 times likelier than an in-cloud flash, whose channel the cloud mostly hides. About half
+  the sample is then cloud-to-ground; every flash keeps its cloud light either way. A flash is
   drawn while its lot is under the applied share, fading out over the next 10 % of the share rather
   than popping at its edge.
 - The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
   600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
-  between the speeds the target follows a power law). `share = target / (1.5 × load)`, `load`
+  between the speeds the target follows a power law). `share = target / (2.175 × load)`, `load`
   being the flashes within their flicker or fade at once, estimated from those played in the last
-  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (1.5 is the
-  mean of the lot weights; a plain count of the flashes played in the last 0.4 s drew 1.5 times
+  0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (2.175 is the
+  mean of the inverse lot weights, 1.5 for the energy times 1.45 for the kind; a plain count of the flashes played in the last 0.4 s drew 1.5 times
   the target on R1, whose flashes last longer). On a quiet storm the share is 1 and every flash is drawn.
 - The applied share follows the wanted one with a 0.5 s time constant (2 s lagged a storm's rate
   by ten minutes at 600×, halving the drawn count between frames), and jumps to it at once on a
@@ -147,14 +150,16 @@ lightning look rework, #398):
   without the light map; eased over 0.25 s when the cloud light comes or goes), within the 500
   newest flashes (below), so flashes stay points from afar
   ([visual rule 1](immersive-view.md#visual-rules)) while the storm views up to the whole storm
-  framing (1.1 to 1.4 km per px on the reference storms) show the cloud light and the sample alone;
-  a ramp over farness 0.5 to 1 let the points of thousands of flashes at 3600× merge into one white
-  disc over that framing. The round glow steps back for a channel (below) only in the sample, so a
+  framing (0.26 to 0.79 km per px on the reference storms at the 45° frame, 1,000 px tall) show the
+  cloud light and the sample alone; a ramp over farness 0.5 to 1 let the points of thousands of
+  flashes at 3600× merge into one white disc over that framing. The round glow steps back for a channel (below) only in the sample, so a
   flash outside it keeps its full sprite. Limits: where no cloud light shows, a flash outside the
   sample keeps its half sprite only while among the 500 newest (14 ms and a 150 ms fade at the
-  Basse-Kotto peak at 3600×); and the cloud light covers a window of three camera heights around what the
-  camera looks at, so in a grazing view a flash beyond it, outside the sample and not yet a point,
-  is not drawn.
+  Basse-Kotto peak at 3600×; at 600× on R1 on the `low` tier, about 1,000 of the 1,450 to 1,575
+  flashes alive draw nothing, C21Q of [Lightning look validation](immersive-view.md#lightning-look-validation)),
+  so replay speed does remove flashes there; and the cloud light covers a window of three camera
+  heights around what the camera looks at, so in a grazing view a flash beyond it, outside the
+  sample and not yet a point, is not drawn.
 
 The 500 newest-flashes cap of a storm view (`STORM_VIEW_FLASHES`, older ones fading within 150 ms
 of wall clock time) binds every flash while all are drawn, in practice at 1×, and otherwise only the
@@ -191,8 +196,8 @@ kinds keep their heights.
   long as the drop (0.1 to 0.5 of it), end 0.3 to 2 km above the ground and branch again down to three
   levels: 3 to 12 of them for multi-stroke flashes, 1 to 3 for single-stroke ones, at 30 to 100 % of
   the trunk's light. 40 % of multi-stroke flashes get a second ground contact: a path from a branch 1
-  to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit by a later stroke
-  once #402 lands; until then it shows like a branch).
+  to 3 km up to a strike 1 to 4 km from the first, inside the footprint (level 4, lit from a later
+  stroke, see Timing).
 - *Positive cloud-to-ground*: from 9 to 11 km a run of 0.8 to 2.2 r along the heading, kept within the
   footprint, then an oblique drop at 30 to 45° from the vertical (5 to 11 km sideways, shorter in the
   smallest footprints) to a strike 0.6 to 1 r from the position (`KIND.strikeR`); 0 to 3 branches.
@@ -299,26 +304,27 @@ A segment foreshortened on screen adds light for its screen length only. A chain
 shorter than their width still varies along it, less than before (within 23 % of its mean, against up
 to 35 %). No core is drawn thinner than 1.25 device px (`RIBBON.hairlinePx`): a thinner one breaks into
 dashes on the pixel grid, so it widens to that floor and gives up light in proportion. At a pixel ratio
-of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide (the start of ground
-leaders, in-cloud trunk tails, the second contact of the strikes look and its halo); at 2 and above the
+of 1 this also widens the thinnest stretches of main channels, 0.8 to 1.25 px wide; at 2 and above the
 floor is finer than the old 0.75 CSS px. While a channel shows, the
 round glow steps back: to 40 % for a ground flash (10 % with its halo), to 25 % for an in-cloud one,
 scaled by the channel opacity. A ground flash steps back only as much as the cloud above it lets its
-channel through (at least its 30 % trace), so a flash dimmed under a storm keeps most of its glow. Near the floor the round glow is drawn
-at 15 % (styled), as the lit cloud and the channel carry the flash; where the cloud light does not show
-(the `low` tier, clouds hidden or not loaded yet), it keeps 40 %. Over sunlit clouds it keeps 35 % of
-that (styled: from orbit, nothing of a flash shows by day). These are rules of the floor: they ease out
-from 0.3 to 1 km per CSS px, and from there the glow climbs from 40 % to full as before, so views from
-1 km per CSS px (Basse-Kotto's whole-storm frame on a 1,000 px tall view, the globe) keep their points
-and their day marks; smaller storms frame closer and get the rules of the floor. Phones scale both 15 %
-and 40 % by 0.6. In a storm view below 1 km per CSS px, overlapping glows keep the brightest, never add
-up.
+channel through (at least its 30 % trace), so a flash dimmed under a storm keeps most of its glow.
+Near the floor the round glow is drawn at 15 % (styled), as the lit cloud and the channel carry the
+flash; where the cloud light does not show (the `low` tier, clouds hidden or not loaded yet), it keeps
+40 %. Over sunlit clouds it keeps 35 % of that (styled: from orbit, nothing of a flash shows by day).
+These are rules of the floor: they ease out from 0.3 to 1 km per CSS px, and from there the glow climbs
+from 40 % to full as before, so views from 1 km per CSS px (the globe) keep their points and their day
+marks. Since the 45° storm frame (#406) the whole-storm frames of the reference storms sit under 1 km
+per CSS px on a 1,000 px tall view: Basse-Kotto's at 0.79 (10 % of the rules of the floor, 75 % of its
+glows max-blended; at 20° it was 1.1, screen-blended with the far rules), R2 0.61, R1 0.48, the small
+storms 0.26 ([lightning scale](immersive-view.md#lightning-scale)). Phones scale both 15 % and 40 % by 0.6. In a storm view below 1 km per CSS
+px, overlapping glows keep the brightest, never add up.
 
 **Budget.** Channels are built only when the camera is close enough for one to be readable (under about
-9 km per CSS px), for the 384 newest flickering flashes, at most 24 new ones per frame, each with up to
-256 segments (24 kept for a second ground contact and 16 for a cloud-to-air leader's way out,
-`SKELETON.secondSegments` and `airSegments`; a path that would not fit is drawn coarser). All flashes
-keep their glow and cloud light.
+9 km per CSS px), for the flashes of the sample (every flash at 1×) up to the 384 newest flickering
+ones, 24 new ones per frame at most, each with up to 256 segments (24 kept for a second ground contact
+and 16 for a cloud-to-air leader's way out, `SKELETON.secondSegments` and `airSegments`; a path that
+would not fit is drawn coarser). All flashes keep their glow and cloud light.
 
 ## Channel halo
 
@@ -334,13 +340,15 @@ the ground. It fades with camera distance from 1,500 to 6,000 km. Above 256 chan
 
 Flashes also light the clouds from inside, through a light map: an equirectangular window around the
 point the camera looks at, 3 times the camera height in half height, up to the whole globe from about
-3,300 km; 2048 × 1024 texels on `high` (2.3 km at 400 km), 1024 × 512 on `medium` and on phones.
+3,300 km; 1024 × 512 texels on `medium` and `high` (4.7 km at 400 km). A 2048 × 1024 map on `high` (2.3 km)
+was kept only within the 384 MB budget, which the lightning look rework crosses on desktop (#408).
 `w` is the share of the globe the window covers (0.12 at the 400 km floor, 1 from about 3,300 km).
 Each flash lights a patch reaching `(1.3 + 1.7 w) r` around its observed footprint (`CLOUD_LIGHT`): 1.5 `r`
 at the floor, with about 9 % of its centre left at `r` (1.3 `r` and 4 % as `w` tends to 0). The
 patch is styled, elongated and irregular, drawn per flash: its long axis over its short one from
-1.4 to 2.2, its edge lobed by 0.18 (two lobes) and 0.10 (three lobes) of its mean, lying along the
-flash's drift (a drawn heading for ground flashes, which do not drift), and scaled so its farthest
+1.4 to 2.2, its edge lobed by 0.18 (two lobes) and 0.10 (three lobes) of its mean, lying along its
+drift or, for ground flashes, along the drawn feed (both `channelHash(seed, 1)`; its aspect and lobes take
+draws 7 to 9, which no channel detail reads), and scaled so its farthest
 point is at that radius; it is round where the splat floor, not the footprint, sets the size. The
 whole patch lights during the flash's pulses (its profile from 0.35, whole from 0.7, whatever its
 energy, which sets the level), 0.65 of it between them, where its light has drifted; at least 2

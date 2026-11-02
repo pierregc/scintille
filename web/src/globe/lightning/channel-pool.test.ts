@@ -4,7 +4,7 @@ import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { flashLook, flashSeed } from './channel';
 import { BUILDS_PER_FRAME, ChannelPool, SEGMENT_STRIDE } from './channel-pool';
-import { DENSITY, heroLot } from './density';
+import { DENSITY, flashLot } from './density';
 import { FlashPlayback } from './playback';
 import { MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
 
@@ -65,7 +65,7 @@ describe('ChannelPool', () => {
 		const { ring, pool } = setup(Array.from({ length: 60 }, (_, i) => i * 3), 64);
 		const share = 0.1;
 		const sample = Array.from({ length: ring.size }, (_, i) => ring.slot(i)).filter(
-			(s) => heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share * DENSITY.edge,
+			(s) => flashLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]) < share * DENSITY.edge,
 		);
 		expect(sample.length).toBeGreaterThan(5);
 		expect(sample.length).toBeLessThan(40);
@@ -80,7 +80,7 @@ describe('ChannelPool', () => {
 	it('draws the lot of the flash a ring slot holds now, though it has the time of the one before', () => {
 		const { ring, pool } = setup([0], 4);
 		const s = ring.slot(0);
-		const lotAt = (lat: number) => heroLot(flashSeed(ring.time[s], lat, ring.lon[s]), ring.intensity[s]);
+		const lotAt = (lat: number) => flashLot(flashSeed(ring.time[s], lat, ring.lon[s]), ring.intensity[s], ring.durationMs[s], ring.areaKm2[s]);
 		const share = 0.3;
 		const lats = Array.from({ length: 100 }, (_, i) => Math.fround(10 + i * 0.37));
 		const inside = lats.find((lat) => lotAt(lat) < share);

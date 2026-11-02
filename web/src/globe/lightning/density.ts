@@ -1,4 +1,9 @@
+import { flashKind, KIND_SHARES } from './channel';
+import { isGround } from './kind';
 import { glslFloat as f } from './profile';
+
+/** Lot weight of a cloud-to-ground flash, against 1 for an in-cloud one (`DENSITY.groundWeight`). */
+const GROUND_WEIGHT = 0.4;
 
 /**
  * How many flashes a storm view draws in full at each replay speed; see docs/flash-profile.md.
@@ -14,8 +19,10 @@ export const DENSITY = {
 	aliveWindow: 0.4,
 	/** Lot weight of the strongest flash, against 1 for the weakest: stronger flashes are up to 2.5× likelier. */
 	energyWeight: 0.4,
-	/** Mean of the energy weight over the flashes, so `share × alive × meanWeight ≈ target`. */
-	meanWeight: 1.5,
+	/** Lot weight of a cloud-to-ground flash, against 1 for an in-cloud one: ground strikes are 2.5× likelier in the sample, as the cloud hides most in-cloud channels; every flash keeps its cloud light. */
+	groundWeight: GROUND_WEIGHT,
+	/** Mean of the inverse lot weights over the flashes, energy (1.5) times kind (0.3 / 0.4 + 0.7 = 1.45), so `share × alive × meanWeight ≈ target`. */
+	meanWeight: 1.5 * (KIND_SHARES[3] / GROUND_WEIGHT + 1 - KIND_SHARES[3]),
 	/** Time constant of the applied share, wall clock seconds, short enough to follow a storm's rate at 600×; a seek applies it at once, a speed change on every frame until the alive window has passed it. */
 	smoothing: 0.5,
 	/** A flash fades out over this factor of the share instead of popping at its edge. */
@@ -54,8 +61,13 @@ export function heroTarget(speed: number): number {
  * Per-flash lot in [0, 1): a flash is in the sample while its lot is under the share. The seed is already
  * a uniform hash; hashing it again would not survive float32 on the GPU, which must pick the same flashes.
  */
-export function heroLot(seed: number, intensity: number): number {
-	return seed * (1 + (DENSITY.energyWeight - 1) * clamp01(intensity));
+export function heroLot(seed: number, intensity: number, ground: boolean): number {
+	return seed * (1 + (DENSITY.energyWeight - 1) * clamp01(intensity)) * (ground ? DENSITY.groundWeight : 1);
+}
+
+/** `heroLot` of a flash whose kind is drawn from its seed, observed duration and area. */
+export function flashLot(seed: number, intensity: number, durationMs: number, areaKm2: number): number {
+	return heroLot(seed, intensity, isGround(flashKind(seed, durationMs, areaKm2)));
 }
 
 /** Share of the lots under which `target` of the `alive` flashes are drawn in full. */
@@ -89,8 +101,8 @@ export const densityGlsl = /* glsl */ `
 uniform float heroShare;
 uniform float lightMapOff;
 uniform float pointBudgetFrom;
-float heroLot(float seed, float intensity) {
-	return seed * mix(1.0, ${f(DENSITY.energyWeight)}, clamp(intensity, 0.0, 1.0));
+float heroLot(float seed, float intensity, bool ground) {
+	return seed * mix(1.0, ${f(DENSITY.energyWeight)}, clamp(intensity, 0.0, 1.0)) * (ground ? ${f(DENSITY.groundWeight)} : 1.0);
 }
 float heroWeight(float lot, float share) {
 	return 1.0 - smoothstep(share, share * ${f(DENSITY.edge)}, lot);

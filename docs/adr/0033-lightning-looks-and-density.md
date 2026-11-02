@@ -1,6 +1,6 @@
 # 0033 · Lightning looks and a density budget by replay speed
 
-- Status: proposed
+- Status: accepted (#408, with the final values below)
 - Date: 2026-10-31
 - Supersedes [0013 · 3D lightning ribbons](0013-bis-3d-lightning-ribbons.md); amends
   [visual rules](../immersive-view.md#visual-rules) 6, 7 and 11, the bounds that ADR 0020 specifies
@@ -62,13 +62,22 @@ footprint, energy and duration, with its real-time profile and light drift, unca
 The 500-newest cap binds only when every flash is drawn in full.
 
 **The heroes.** Channels, the near-floor sprite, the halo and the sound are drawn for a sample:
-`lot = channelHash(seed, 3) × mix(1.0, 0.4, intensity) < share`, so the strongest flash is up to 2.5×
-likelier than the weakest; `share = target / (1.5 × alive)` with `alive` the flashes played in the
-last 0.4 s of wall time; `target` 50 / 20 / 8 flashes within their flicker at once at 60× / 600× /
-3600×, all of them at 1×, in a named band of 30-100 / 12-30 / 5-12; smoothed with a 2 s time constant
-and set at once on a seek or a speed change, so a revisit or a shared link shows the same heroes.
-Unselected flashes keep a point from afar and a half sprite where the cloud light has no surface, so
-every flash stays a point (ADR 0020 rule 1). The HUD rate stays the data rate; no caption.
+`lot = seed × mix(1.0, 0.4, intensity) × (0.4 for a cloud-to-ground kind, else 1) < share`, the seed being
+already a uniform hash of the flash's time and place (hashing it again would not survive the GPU's
+float32), so the strongest flash is up to 2.5× likelier than the weakest, and a ground strike 2.5×
+likelier than an in-cloud flash, whose channel the cloud mostly hides (about half the sample is then
+cloud-to-ground, and about a quarter of the drawn channel length is steeper than 60° on screen at the
+45° framing: 26 % on Basse-Kotto, 19 % on the wider flashes of Amazonas);
+`share = target / (2.175 × load)` (2.175 the mean of the inverse lot weights) with `load` the flashes within their
+flicker or fade, estimated from those played in the last 0.4 s of wall time; `target` 50 / 20 / 8
+flashes within their flicker at once at 60× / 600× / 3600× (a power law between them), all of them at
+1×, in a named band of 30-100 / 12-30 / 5-12; a flash fades out over the next 10 % of the share
+rather than popping; the applied share follows the wanted one with a 0.5 s time constant (2 s lagged a
+storm's rate by ten minutes at 600×) and is set at once on a seek, a new storm view and, frame by frame,
+through a speed change, so a revisit or a shared link shows the same heroes. Unselected flashes keep a
+point from afar (farness 0.7 to 1) and a half sprite where the cloud light has no surface, both among
+the 500 newest, so every flash stays a point (ADR 0020 rule 1). The HUD rate stays the data rate; no
+caption.
 
 **Seven looks**, drawn from `u = channelHash(seed, 2)` and the observed duration and area:
 
@@ -114,38 +123,68 @@ motion keeps the single soft fade.
   flag is tri-state: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in
   the cloud (crisp, at least 30 % of its light).
 
+**Glow and cloud light.** Near the floor the round glow is drawn at 15 % (40 % where no cloud light
+shows), 35 % of that over sunlit cloud, easing back from 0.3 to 1 km per CSS px to the far view's ramp;
+while a channel of the sample shows, it steps back to 40 % for a cloud-to-ground flash (10 % with its
+halo, and only as much as the cloud lets the channel through) and to 25 % for an in-cloud one; in storm views below 1 km per CSS px overlapping glows keep the
+brightest, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom radius tightens to
+0.4 at the floor; the halo is cool only, 8 core widths at 30 %. Each flash lights an elongated,
+irregular patch of the cloud along its drift or, for a ground flash, its in-cloud feed (long over short axis 1.4 to 2.2), reaching
+`(1.3 + 1.7 w) r` (1.5 r at the 400 km floor, `w` the share of the globe the light window covers) on
+its pulses (whole from a profile of 0.7) and 0.65 of that between them, at `0.35 + 0.65 w` of its
+level, max-blended; the cloud reads it sharpened by `1.25 - 0.25 w`, with a gain of 5, and the volume
+lights each column in a band of 3.5 km half width, 3 km under its own top where that top rises above
+11.5 km and at 8.5 km otherwise, at 1.8 times the flat layer's level; 35 % of it over sunlit cloud; a 1024 × 512 light map on `medium` and `high`: the 2048 × 1024 map on `high` was kept only
+within 384 MB of GPU memory on desktop, and this set measured 386.2 MB with it at 60× (383.1 MB without).
+
+**Drawing and framing.** Channel cores cross-fade their joints in screen values and are drawn no
+thinner than 1.25 device px, so threads never bead (#407). Storms are framed at 45° instead of 20°
+(#406), so a vertical channel shows 0.71 of its length instead of 0.34. A replay opens at its first
+flash, not at the catalog's start (#405).
+
 **[Visual rules](../immersive-view.md#visual-rules) amended** (ADR 0020): rule 6 is about exposure; the
 share of flashes drawn in full is a named deterministic sampling, not an exposure. Rule 7: channels run
 6-11.5 km in the cloud and cloud-to-ground ones from 6-11 km to the ground, in-cloud heights 1.0×,
 cloud-to-ground heights 1.5× with the stem under 11 km. Rule 11: gaps
 10-400 ms, one stroke for 25 % of negative and 81 % of positive cloud-to-ground flashes, 0-3 bright
-pulses in cloud, flicker up to 2 s. The glow sprite is max-blended below 1 km/px in storm views and
-screen-blended from afar.
+pulses in cloud, flicker up to 2 s.
 
-Delivery: #400 introduces the kinds and the contracts with the picture unchanged, #399 the density
-budget, #401 the geometry, #402 the timing, #403 the glow, #404 the cloud light, #408 validates and
-turns this record to accepted.
+**Final values (#408).** The validation pass on the capture matrix of the epic (#398) kept every
+named value at its design value within its band: targets 50 / 20 / 8 (bands 30-100 / 12-30 / 5-12),
+near-floor sprite 0.15 (0.1-0.2), cloud light level 0.35 near the floor (0.3-0.4), volume boost 1.8
+(1.5-2.5), sharpen 1.25 (1-1.5), `VEIL.trace` 0.3 (0.2-0.35), `cgHeightScale` 1.5 (1-1.5); the light
+map stays at 1024 × 512 on `high`, the fallback #398 named for a desktop over 384 MB. Measured in
+[Lightning look validation](../immersive-view.md#lightning-look-validation).
+
+Delivery: #400 introduced the kinds and the contracts with the picture unchanged, #399 the density
+budget, #401 the geometry, #402 the timing, #403 the glow, #404 the cloud light, #405 the replay
+start, #406 the framing tilt, #407 the hairlines; #408 validated them together and accepted this
+record.
 
 ## Consequences
 
 - The picture at speed becomes a sample over a field, measurable through `lightning.stats`; the same
   heroes on a revisit or a shared URL; the sound follows the sample.
 - Hand-mirrored GLSL twins (`flashProfile`, `spread`, `cloudDrift`, `shown`), guarded by
-  string-containment tests of their constants and by GPU captures; the twins of `channel.ts` are also
-  run as JavaScript against the TypeScript in the tests.
-- The kind is drawn twice from the same seed: on the CPU for the skeleton, on the GPU for the profile,
-  the drift and the halo. The GPU reads the seed as a float32 and hashes it in float32, so the two draws
-  disagree for about 21 % of flashes on the kind and 12 % on cloud-to-ground against in-cloud, as the
-  25 % split of `b1b35cf` already did (float32 emulation over 200,000 Basse-Kotto seeds; rounding the
-  seed alone gives 10 % and 4.4 %). Harmless while the kinds of each family draw alike. Before the kinds
-  look different, either the CPU computes the kind once and carries it to the GPU, or both twins hash
-  a quantised seed with an integer hash exact in float32. #402, where the kinds start to differ in time,
-  takes the first: the CPU draws the kind and the leader and spread times once per flash (`flashLook`,
-  three floats per flash instance and per channel segment) and every pass reads them; the stroke and
-  pulse draws stay on the GPU, in float32, alike in every pass but not equal to the TypeScript draws.
-- The sample drifts for about two seconds after a lightning jump (named). A storm's predecessor cell
+  string-containment tests of their constants and by GPU captures; the profile's twins are also run
+  as JavaScript against the TypeScript in the tests.
+- The kind is drawn once from the seed, on the CPU, and carried to every pass (`flashLook`, three floats
+  per flash instance and per channel segment: the kind, the leader and the spread times). Drawn on the
+  GPU in float32 as well, it disagreed with the CPU's for about 21 % of flashes (12 % on
+  cloud-to-ground against in-cloud), so a skeleton of one kind would have got the timing of another.
+  The stroke and pulse draws stay on the GPU, in float32, alike in every pass but not equal to the
+  TypeScript draws: a stroke time the CPU predicts can land a few tens of milliseconds off on screen.
+- The sample follows a storm's rate with a 0.5 s lag and is set at once on a seek or a speed change. A storm's predecessor cell
   before its first replay chunk stays out of the replay until the pipeline scans from `t_start`.
 - To watch: near-white ≤ 2 % at night, p95 frame cost relative to a same-evening `main`, the `low` tier
-  (no light map: heroes plus half sprites), phones, never measured yet.
+  (no light map: heroes plus half sprites), real phones (only emulated so far). Not reached in this
+  set: the share of channel length steeper than 60° on screen (9.7 % at 45°, 1.2 % at 20°, against
+  targets of 20 and 8 %), since in-cloud fans, horizontal by nature, are most of the drawn length; the
+  noon picture at speed, where little of a flash shows over a sunlit deck by design; and GPU memory
+  at replay speed, over its budget by 3 to 10 MB (desktop 394.3 MB at 600× and 3600×, phone 259.3 MB),
+  of which this set adds 4.4 MB on desktop and 4.3 MB on phones (the `flashLook` buffers), the rest
+  being cloud frames that `main` also loads at speed (389.9 and 255.0 MB). At 60× desktop stays within
+  it (383.1 MB) because the light map stays at 1024 × 512 on `high`: the 2048 × 1024 map of #404 would
+  take it to 386.2 MB.
 - ADR 0013-bis no longer describes the code (vertex-shader paths, 2,048 channels): the CPU skeletons of
   256 segments for 384 flashes and the kinds are recorded here.
