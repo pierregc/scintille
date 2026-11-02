@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import polars as pl
+import psycopg
 import pytest
 from scintille_ingest.glm.ingest import IngestedFile
 from scintille_ingest.glm.parse import FLASH_SCHEMA
@@ -96,3 +97,19 @@ def test_restart_after_a_crash_spools_once(tmp_path: Path) -> None:
     assert state.spooled_keys("glm-east", {p.key: p.etag for p in products}) == {
         p.key for p in products
     }
+
+
+def test_reconnects_after_the_server_drops_the_connection() -> None:
+    state = PostgresState(DSN)
+    file = FileIdentity(f"test/{uuid4().hex}.nc", "sha256:1")
+    with psycopg.connect(DSN, autocommit=True) as admin:
+        admin.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+            " WHERE datname = 'scintille' AND pid <> pg_backend_pid()"
+        )
+    with pytest.raises(psycopg.OperationalError):
+        state.get(file)
+    state.advance(file, "glm-east", "downloaded")
+    record = state.get(file)
+    assert record is not None and record.state == "downloaded"
+    state.close()

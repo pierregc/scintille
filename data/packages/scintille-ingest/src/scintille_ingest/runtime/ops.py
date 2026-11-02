@@ -11,7 +11,6 @@ from typing import Any, Protocol
 
 import numpy as np
 import polars as pl
-import psycopg
 from psycopg.types.json import Jsonb
 from scintille_contract.models import (
     SCHEMA_VERSION,
@@ -26,6 +25,7 @@ from scintille_contract.models import (
     StormCounts,
 )
 
+from .db import Database
 from .metrics import Metrics
 from .spool import Spool
 
@@ -147,17 +147,16 @@ class PostgresOps:
     """Operational state shared by ingest-live, lake-writer and Dagster."""
 
     def __init__(self, dsn: str) -> None:
-        self._conn = psycopg.connect(dsn, autocommit=True)
-        self._conn.execute(SCHEMA)
+        self._db = Database(dsn, SCHEMA)
 
     def file_stats(self, now: datetime) -> dict[str, FileStats]:
-        rows = self._conn.execute(
+        rows = self._db.execute(
             FILE_STATS, {"budget_start": now - BUDGET_WINDOW, "hour_start": now - WINDOW}
         ).fetchall()
         return {row[0]: FileStats(row[1], row[2], row[3], row[4]) for row in rows}
 
     def add_catalog_operations(self, month: str, count: int) -> None:
-        self._conn.execute(
+        self._db.execute(
             "INSERT INTO ops_catalog_operations (month, operations) VALUES (%s, %s)"
             " ON CONFLICT (month) DO UPDATE"
             " SET operations = ops_catalog_operations.operations + EXCLUDED.operations",
@@ -165,26 +164,26 @@ class PostgresOps:
         )
 
     def catalog_operations(self, month: str) -> int:
-        row = self._conn.execute(
+        row = self._db.execute(
             "SELECT operations FROM ops_catalog_operations WHERE month = %s", [month]
         ).fetchone()
         return int(row[0]) if row else 0
 
     def put_status(self, name: str, value: Mapping[str, Any], at: datetime) -> None:
-        self._conn.execute(
+        self._db.execute(
             "INSERT INTO ops_status (name, at, value) VALUES (%s, %s, %s)"
             " ON CONFLICT (name) DO UPDATE SET at = EXCLUDED.at, value = EXCLUDED.value",
             [name, at, Jsonb(dict(value))],
         )
 
     def status(self, name: str) -> tuple[datetime, dict[str, Any]] | None:
-        row = self._conn.execute(
+        row = self._db.execute(
             "SELECT at, value FROM ops_status WHERE name = %s", [name]
         ).fetchone()
         return (row[0], row[1]) if row else None
 
     def close(self) -> None:
-        self._conn.close()
+        self._db.close()
 
 
 def completeness(stats: FileStats | None, source: str) -> float | None:
