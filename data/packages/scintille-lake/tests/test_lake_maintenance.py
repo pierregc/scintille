@@ -22,14 +22,14 @@ NOW = datetime(2026, 10, 10, tzinfo=UTC)
 OLD = NOW - timedelta(days=30)
 
 
-def test_default_policy_follows_adr_0006() -> None:
+def test_default_policy_matches_the_catalog() -> None:
     policy = MaintenancePolicy()
-    assert policy.snapshot_retention_days == 3
+    assert policy.snapshot_retention_days == 1
     assert policy.wrangler_commands("scintille-lake") == [
         "npx wrangler basin catalog compaction enable scintille-lake"
         " --token $R2_CATALOG_TOKEN --target-size 128",
         "npx wrangler basin catalog snapshot-expiration enable scintille-lake"
-        " --token $R2_CATALOG_TOKEN --older-than-days 3 --retain-last 5",
+        " --token $R2_CATALOG_TOKEN --older-than-days 1 --retain-last 5",
     ]
 
 
@@ -105,7 +105,7 @@ def test_inventory_skips_recent_files() -> None:
 
 def test_cli_prints_policy(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["maintenance"]) == 0
-    assert "--older-than-days 3" in capsys.readouterr().out
+    assert "--older-than-days 1" in capsys.readouterr().out
 
 
 def test_inventory_reads_each_manifest_once(
