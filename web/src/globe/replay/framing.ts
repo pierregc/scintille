@@ -5,7 +5,7 @@ import { floorRange } from '../surface';
 import { latLonToVector } from '../sun';
 import { fitDistance } from '../viewport';
 
-export const REPLAY_FRAME = { duration: 2800, tilt: 20, viewportFraction: 0.62 };
+export const REPLAY_FRAME = { duration: 2800, tilt: 45, viewportFraction: 0.62 };
 
 /** Look toward the horizon from the camera floor: horizon in the upper third, storm below the centre. */
 export const GRAZE = { duration: 3200, tilt: 72, leadKm: 200 };

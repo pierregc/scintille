@@ -9,6 +9,7 @@ import { SceneClock } from '../clock';
 import type { FlyToOptions } from '../flight';
 import { FakeVisibility } from '../live/testing';
 import type { StormReplay } from '../replay';
+import { REPLAY_FRAME } from '../replay/framing';
 import { StormTrack } from '../replay/track';
 import { ActiveFeed } from './active';
 import { FOOTPRINT } from './footprint';
@@ -77,7 +78,7 @@ describe('storm focus in live', () => {
 		await t.feed.idle();
 		expect(t.focus.pick(28.04, -82.09, 5)).toBe(true);
 		expect(t.focus.live?.id).toBe('synthetic-lakeland');
-		expect(t.flights.at(-1)?.tilt).toBe(20);
+		expect(t.flights.at(-1)?.tilt).toBe(REPLAY_FRAME.tilt);
 		expect(t.focus.selected).toBe(true);
 		t.tick();
 		expect(t.focus.footprint.size).toBe(1);
