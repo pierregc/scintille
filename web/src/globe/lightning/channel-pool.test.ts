@@ -4,6 +4,7 @@ import { FlashRing } from '../live/ring';
 import { encodeChunk } from '../live/testing';
 import { flashSeed } from './channel';
 import { BUILDS_PER_FRAME, ChannelPool, SEGMENT_STRIDE } from './channel-pool';
+import { DENSITY, heroLot } from './density';
 import { FlashPlayback } from './playback';
 import { MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
 
@@ -55,6 +56,40 @@ describe('ChannelPool', () => {
 		playback.update(130_000, 60);
 		pool.sync(130_000, playback);
 		expect(pool.flashes).toBe(1);
+	});
+
+	it('builds channels for the flashes under the share, or fading out past it, only', () => {
+		const { ring, pool } = setup(Array.from({ length: 60 }, (_, i) => i * 3), 64);
+		const share = 0.1;
+		const sample = Array.from({ length: ring.size }, (_, i) => ring.slot(i)).filter(
+			(s) => heroLot(flashSeed(ring.time[s], ring.lat[s], ring.lon[s]), ring.intensity[s]) < share * DENSITY.edge,
+		);
+		expect(sample.length).toBeGreaterThan(5);
+		expect(sample.length).toBeLessThan(40);
+		pool.sync(100_200, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(Math.min(sample.length, BUILDS_PER_FRAME));
+		pool.sync(100_200, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(sample.length);
+		pool.sync(100_200, undefined, undefined, true, 1);
+		expect(pool.flashes).toBe(Math.min(60, sample.length + BUILDS_PER_FRAME));
+	});
+
+	it('draws the lot of the flash a ring slot holds now, though it has the time of the one before', () => {
+		const { ring, pool } = setup([0], 4);
+		const s = ring.slot(0);
+		const lotAt = (lat: number) => heroLot(flashSeed(ring.time[s], lat, ring.lon[s]), ring.intensity[s]);
+		const share = 0.3;
+		const lats = Array.from({ length: 100 }, (_, i) => Math.fround(10 + i * 0.37));
+		const inside = lats.find((lat) => lotAt(lat) < share);
+		const outside = lats.find((lat) => lotAt(lat) >= share * DENSITY.edge);
+		expect(inside).toBeDefined();
+		expect(outside).toBeDefined();
+		ring.lat[s] = inside ?? 0;
+		pool.sync(100_050, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(1);
+		ring.lat[s] = outside ?? 0;
+		pool.sync(100_050, undefined, undefined, true, share);
+		expect(pool.flashes).toBe(0);
 	});
 
 	it('gives one channel to a flash seen by two instruments', () => {

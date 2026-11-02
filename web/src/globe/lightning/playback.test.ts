@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FlashPlayback } from './playback';
+import { FlashPlayback, onScreen, playbackGlsl } from './playback';
 
 describe('FlashPlayback', () => {
 	it('turns scene age into wall clock age at the replay speed', () => {
@@ -20,6 +20,11 @@ describe('FlashPlayback', () => {
 		expect(playback.age(100_032, 160_032)).toBeCloseTo(0.1);
 		expect(playback.span(1, 160_032)).toBeCloseTo(60_000 + 0.9 * 60_000);
 		expect(playback.span(1, 800_000)).toBe(600_000);
+		expect(playback.straddles(1, 100_000)).toBe(false);
+		expect(playback.straddles(1, 100_032)).toBe(true);
+		expect(playback.straddles(1, 160_032)).toBe(true);
+		expect(playback.straddles(1, 700_031)).toBe(true);
+		expect(playback.straddles(1, 700_032)).toBe(false);
 	});
 
 	it('starts afresh after a jump, such as a seek or a return to live', () => {
@@ -29,9 +34,35 @@ describe('FlashPlayback', () => {
 		expect(playback.pivot).toBe(Number.NEGATIVE_INFINITY);
 		expect(playback.age(8_999_000, 9_000_000)).toBeCloseTo(1);
 		expect(playback.age(9_000_000, 50_000)).toBeLessThan(0);
+		expect(playback.straddles(1e6, 9_000_000)).toBe(false);
 	});
 
 	it('rejects a stopped clock', () => {
 		expect(() => new FlashPlayback().update(0, 0)).toThrow(RangeError);
+	});
+
+	it('tells a seek or a speed change from the next frame of play', () => {
+		const playback = new FlashPlayback();
+		playback.update(100_000, 60);
+		expect(playback.jumped).toBe(true);
+		playback.update(100_016, 60);
+		expect(playback.jumped).toBe(false);
+		playback.update(100_032, 600);
+		expect(playback.jumped).toBe(true);
+		playback.update(100_332, 600);
+		expect(playback.jumped).toBe(false);
+		playback.update(9_000_000, 600);
+		expect(playback.jumped).toBe(true);
+	});
+});
+
+describe('onScreen', () => {
+	it('matches the GLSL smoothstep over the fade before the budget start', () => {
+		expect(onScreen(5, 5, 1)).toBe(1);
+		expect(onScreen(4, 5, 1)).toBe(0);
+		expect(onScreen(4.5, 5, 1)).toBe(0.5);
+		expect(onScreen(4.25, 5, 1)).toBeCloseTo(0.15625, 9);
+		expect(onScreen(0, -1e6, 9)).toBe(1);
+		expect(playbackGlsl).toContain('smoothstep(budgetFrom - budgetFade, budgetFrom, at)');
 	});
 });
