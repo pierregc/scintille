@@ -8,7 +8,7 @@ import type { StormDetail } from '../contract/types';
 import { SceneClock } from './clock';
 import { StormReplay } from './replay';
 import { ReplayNavigation } from './replay/navigation';
-import { REPLAY_FRAME } from './replay/framing';
+import { frameStorm, REPLAY_FRAME } from './replay/framing';
 
 const R = 1;
 
@@ -358,7 +358,7 @@ describe('createGlobeControls flight handoff', () => {
 			drag(2000, { button: 2 });
 			const original = controls.view();
 			expect(original.tilt).toBeCloseTo(0, 4);
-			expect(original.altitude).toBeCloseTo(432.5, 1);
+			expect(original.altitude).toBeCloseTo(frameStorm(fixture.bounds, 35, aspect).altitude, 1);
 			const shared = navigation.shareUrl();
 			for (const fresh of [false, true]) {
 				if (fresh) await replay.live();
@@ -430,7 +430,7 @@ describe('createGlobeControls flight handoff', () => {
 				expect(camera.position.distanceTo(start)).toBeGreaterThan(0.01);
 				step(1400);
 				await restoring;
-				expect(controls.view().altitude).toBeCloseTo(432.5, 1);
+				expect(controls.view().altitude).toBeCloseTo(frameStorm(fixture.bounds, 35, aspect).altitude, 1);
 				expect(controls.view().tilt).toBeCloseTo(REPLAY_FRAME.tilt, 4);
 				expect(url.searchParams.has('view')).toBe(false);
 			} finally { fresh.dispose(); }

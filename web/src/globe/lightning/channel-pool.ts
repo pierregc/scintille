@@ -1,5 +1,5 @@
 import { type FlashRing, NO_DELAY, type SourceDelays } from '../live';
-import { CHANNEL, flashSeed, isGround } from './channel';
+import { CHANNEL, flashKind, flashSeed } from './channel';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { channelSkeleton, MAX_SEGMENTS, SEGMENT_FLOATS } from './skeleton';
@@ -139,7 +139,8 @@ export class ChannelPool {
 		const lon = (ring.lon[s] * Math.PI) / 180;
 		const seed = flashSeed(ring.time[s], ring.lat[s], ring.lon[s]);
 		const radius = Math.max(3, Math.sqrt(ring.areaKm2[s] / Math.PI));
-		const skeleton = channelSkeleton(seed, radius, isGround(seed));
+		const kind = flashKind(seed, ring.durationMs[s], ring.areaKm2[s]);
+		const skeleton = channelSkeleton(seed, radius, kind, ring.durationMs[s]);
 		const flash = [
 			Math.cos(lat) * Math.cos(lon),
 			Math.sin(lat),
