@@ -1,6 +1,12 @@
 import { CHANNEL } from './channel';
+import { type FlashKind, isGround } from './kind';
 
-/** Floats per channel segment: start xyz, width (CSS px), end xyz, light, path arrival at start and end, level, inside the cloud. */
+/**
+ * Floats per channel segment: start xyz, width (CSS px), end xyz, light, path arrival at start and end, level, cloud flag.
+ * Level: 0 the main channel, 1 to 3 branches by depth, 4 a second ground contact path, lit from a later stroke (ADR 0033).
+ * Cloud flag: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in the cloud (crisp, at least 30 % of its light).
+ * The shaders read the flag as in-cloud above 0.5, so 1 and 2 draw alike for now.
+ */
 export const SEGMENT_FLOATS = 12;
 export const MAX_SEGMENTS = 256;
 
@@ -9,7 +15,9 @@ export type Look = 'filament' | 'branching' | 'fork' | 'network' | 'strikes';
 
 export interface Skeleton {
 	look: Look;
-	ground: boolean;
+	kind: FlashKind;
+	/** Observed duration the skeleton is drawn for, ms. */
+	durationMs: number;
 	/** Segments written in `data`. */
 	count: number;
 	data: Float32Array;
@@ -196,11 +204,12 @@ function branch(w: Writer, style: Style, parent: Path, count: number, level: num
 }
 
 /**
- * Procedural channel of a flash of observed radius `radiusKm`, in km east, north and up from its
- * position. Its silhouette, branches and heights are drawn from `seed`: the satellites only see the
- * light, so none of this is observed.
+ * Procedural channel of a flash of observed radius `radiusKm` and duration `durationMs`, in km east,
+ * north and up from its position. Its silhouette, branches and heights are drawn from `seed`: the
+ * satellites only see the light, so none of this is observed.
  */
-export function channelSkeleton(seed: number, radiusKm: number, ground: boolean): Skeleton {
+export function channelSkeleton(seed: number, radiusKm: number, kind: FlashKind, durationMs: number): Skeleton {
+	const ground = isGround(kind);
 	const rng = random(seed);
 	const r = Math.max(3, radiusKm);
 	const pick = rng();
@@ -265,5 +274,5 @@ export function channelSkeleton(seed: number, radiusKm: number, ground: boolean)
 		w.data[k * SEGMENT_FLOATS + 8] /= longest;
 		w.data[k * SEGMENT_FLOATS + 9] /= longest;
 	}
-	return { look, ground, count: w.count, data: w.data };
+	return { look, kind, durationMs, count: w.count, data: w.data };
 }
