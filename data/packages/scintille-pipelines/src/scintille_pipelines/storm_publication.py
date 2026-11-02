@@ -313,7 +313,8 @@ def next_hours(last: datetime | None, target: datetime) -> tuple[datetime, datet
 
 @schedule(
     job=hourly_storm_catalog,
-    cron_schedule="20 * * * *",
+    # After the clouds frame (:14 to :29), so the two never share the memory.
+    cron_schedule="35 * * * *",
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.STOPPED,
 )

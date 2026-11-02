@@ -18,7 +18,12 @@ from scintille_lake.tables import FLASHES
 from .gold.assets import GOLD, daily_stats_feed
 from .resources import LakeResource
 
-daily_gold = define_asset_job("daily_gold", selection=[*GOLD, daily_stats_feed])
+# Two steps at a time: each holds a DuckDB, and the run shares the VPS with clouds and the catalog.
+daily_gold = define_asset_job(
+    "daily_gold",
+    selection=[*GOLD, daily_stats_feed],
+    config={"execution": {"config": {"multiprocess": {"max_concurrent": 2}}}},
+)
 
 
 def utc_now() -> datetime:

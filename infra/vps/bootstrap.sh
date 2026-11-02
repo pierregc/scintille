@@ -12,6 +12,17 @@ apt-get install -yq ufw fail2ban unattended-upgrades ca-certificates curl gnupg
 
 timedatectl set-timezone UTC
 
+# 4 GB swap, used only under pressure: without it, a memory peak stalls the host for hours.
+if [ ! -f /swapfile ]; then
+	fallocate -l 4G /swapfile
+	chmod 600 /swapfile
+	mkswap /swapfile
+fi
+swapon --show | grep -q /swapfile || swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+echo 'vm.swappiness=10' > /etc/sysctl.d/90-scintille-swap.conf
+sysctl -q -p /etc/sysctl.d/90-scintille-swap.conf
+
 # Non-root deploy user, same keys as the admin user.
 if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
 	useradd --create-home --shell /bin/bash "$DEPLOY_USER"

@@ -1,6 +1,7 @@
 """Dagster resources, configured from the environment."""
 
 import os
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -21,6 +22,9 @@ class LakeResource(ConfigurableResource):  # type: ignore[type-arg]
     uri: str = LOCAL_URI
     warehouse: str = LOCAL_WAREHOUSE
     token: str | None = None
+    # Each gold step runs its own DuckDB; unbounded, each one would take 80 % of the VPS.
+    duckdb_memory_limit: str = "1GB"
+    duckdb_threads: int = 2
 
     @property
     def config(self) -> LakeConfig:
@@ -29,9 +33,16 @@ class LakeResource(ConfigurableResource):  # type: ignore[type-arg]
     def catalog(self) -> Catalog:
         return pyiceberg_catalog(self.config)
 
+    def duckdb_settings(self) -> dict[str, str | bool | int | float | list[str]]:
+        return {
+            "memory_limit": self.duckdb_memory_limit,
+            "threads": self.duckdb_threads,
+            "temp_directory": os.path.join(tempfile.gettempdir(), "duckdb"),
+        }
+
     @contextmanager
     def duckdb(self) -> Iterator[duckdb.DuckDBPyConnection]:
-        connection = duckdb.connect()
+        connection = duckdb.connect(config=self.duckdb_settings())
         try:
             duckdb_attach(connection, self.config)
             yield connection

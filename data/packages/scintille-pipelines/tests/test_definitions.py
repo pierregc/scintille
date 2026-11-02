@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import duckdb
 import pyarrow as pa
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -137,3 +138,28 @@ def test_dagster_storage_uses_psycopg2_on_the_vps() -> None:
     env = yaml.safe_load(compose.read_text())["x-pipelines"]["environment"]
     assert env["DAGSTER_POSTGRES_URL"].startswith("postgresql+psycopg2://")
     assert env["SCINTILLE_POSTGRES_DSN"].startswith("postgresql://")
+
+
+def test_gold_runs_two_steps_at_a_time() -> None:
+    job = defs.resolve_job_def("daily_gold")
+    assert job.partitioned_config is not None
+    config = job.partitioned_config.get_run_config_for_partition_key("2026-07-16")
+    assert config["execution"]["config"]["multiprocess"]["max_concurrent"] == 2
+
+
+def test_gold_duckdb_is_bounded() -> None:
+    with duckdb.connect(config=LakeResource().duckdb_settings()) as con:
+        row = con.execute(
+            "SELECT current_setting('threads'), current_setting('memory_limit')"
+        ).fetchone()
+    assert row == (2, "953.6 MiB")
+
+
+def test_runs_hand_memory_back_within_a_limit() -> None:
+    compose = yaml.safe_load((Path(__file__).parents[4] / "infra/compose/compose.yaml").read_text())
+    lean = compose["x-lean-memory"]
+    for name in ("dagster-daemon", "clouds", "active-storms"):
+        service = compose["services"][name]
+        assert lean.items() <= service["environment"].items(), name
+        assert service["mem_limit"], name
+    assert "SCINTILLE_POSTGRES_DSN" in compose["services"]["dagster-daemon"]["environment"]
