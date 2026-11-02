@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { cloudsFragmentShader } from '../clouds/clouds.glsl';
 import { compositeFragmentShader, marchFragmentShader } from '../clouds/volume.glsl';
-import { cloudDrift, cloudDriftGlsl, isGround } from './channel';
+import { cloudDrift, cloudDriftGlsl, flashKind } from './channel';
+import { isGround } from './kind';
 import {
 	bandCentre,
 	CLOUD_LIGHT,
@@ -75,7 +76,7 @@ describe('glowDepths', () => {
 
 /** Farthest point of a flash's fitted patch, in splat radii, over `n` directions. */
 function patchFarthest(seed: number, own = 1, n = 3600): number {
-	const { aspect, fit } = cloudPatch(seed, own);
+	const { aspect, fit } = cloudPatch(seed, false, own);
 	let far = 0;
 	for (let k = 0; k < n; k++) {
 		const t = (k * 2 * Math.PI) / n;
@@ -89,7 +90,7 @@ describe('cloudPatch', () => {
 
 	it('draws an elongated, irregular patch whose farthest point is the splat radius', () => {
 		for (const seed of seeds) {
-			const { aspect } = cloudPatch(seed);
+			const { aspect } = cloudPatch(seed, false);
 			expect(aspect).toBeGreaterThanOrEqual(CLOUD_LIGHT.aspectMin);
 			expect(aspect).toBeLessThanOrEqual(CLOUD_LIGHT.aspectMax);
 			expect(patchFarthest(seed)).toBeGreaterThanOrEqual(1 - 1e-9);
@@ -100,9 +101,11 @@ describe('cloudPatch', () => {
 	});
 
 	it('lies along the drift of in-cloud flashes', () => {
-		for (const seed of seeds.filter((s) => !isGround(s))) {
-			const { heading } = cloudPatch(seed);
-			const [east, north] = cloudDrift(0.05, 0.3, 10, seed);
+		for (const seed of seeds) {
+			const kind = flashKind(seed, 300, 300);
+			if (isGround(kind)) continue;
+			const { heading } = cloudPatch(seed, false);
+			const [east, north] = cloudDrift(0.05, 0.3, 10, seed, kind);
 			expect(Math.abs(east * Math.sin(heading) - north * Math.cos(heading))).toBeLessThan(1e-9);
 		}
 		expect(cloudDriftGlsl).toContain('channelHash(seed, 1.0)');
@@ -111,7 +114,7 @@ describe('cloudPatch', () => {
 
 	it('is round where the splat floor, not the footprint, sets the size', () => {
 		for (const seed of seeds.slice(0, 20)) {
-			expect(cloudPatch(seed, 0)).toMatchObject({ aspect: 1, fit: 1 });
+			expect(cloudPatch(seed, false, 0)).toMatchObject({ aspect: 1, fit: 1 });
 			expect(patchEdge(1, seed, 0)).toBe(1);
 			expect(patchFarthest(seed, 0.5)).toBeLessThan(1.02);
 		}

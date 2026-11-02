@@ -1,4 +1,4 @@
-import { channelHash, isGround } from './channel';
+import { channelHash } from './channel';
 import { glslFloat as f } from './profile';
 
 /**
@@ -86,8 +86,8 @@ export function patchEdge(theta: number, seed: number, own = 1): number {
  * drawn for ground flashes, which do not drift; aspect; and the scale that brings its farthest point
  * to the splat radius. Round where the splat floor sets the size (`own` 0).
  */
-export function cloudPatch(seed: number, own = 1): { heading: number; aspect: number; fit: number } {
-	const heading = channelHash(seed, isGround(seed) ? 3 : 1) * 2 * Math.PI;
+export function cloudPatch(seed: number, ground: boolean, own = 1): { heading: number; aspect: number; fit: number } {
+	const heading = channelHash(seed, ground ? 3 : 1) * 2 * Math.PI;
 	const drawn = CLOUD_LIGHT.aspectMin + (CLOUD_LIGHT.aspectMax - CLOUD_LIGHT.aspectMin) * channelHash(seed, 4);
 	const aspect = 1 + (drawn - 1) * own;
 	let reach = 0;
