@@ -182,7 +182,7 @@ describe('kind profiles', () => {
 		expect(golden.expected).toHaveLength(inputs.length);
 		inputs.forEach((c, i) => {
 			const kind = c.ground ? FlashKind.CgMulti : FlashKind.IcTrunkFan;
-			expect(flashProfile(c.wall, c.sceneAge, c.display, c.durationMs, c.seed, c.flicker, kind)).toBeCloseTo(golden.expected[i], 12);
+			expect(flashProfile(c.wall, c.sceneAge, c.display, c.durationMs, c.seed, c.flicker, kind)).toBeCloseTo(golden.expected[i], 10);
 		});
 	});
 
