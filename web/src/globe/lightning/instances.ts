@@ -1,8 +1,8 @@
 import { type FlashRing, NO_DELAY, type RingWatcher, type SourceDelays } from '../live';
-import { flashSeed } from './channel';
+import { flashLook, flashSeed } from './channel';
 
-/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km), duration (ms), seed. */
-export const FLASH_STRIDE = 8;
+/** Floats per flash: direction xyz, time (s from origin), intensity, radius (km), duration (ms), seed, then its look (`flashLook`: kind, leader and spread seconds). */
+export const FLASH_STRIDE = 11;
 
 /** Beyond this distance between scene time and origin, times are rebased to keep float32 precision. */
 export const REBASE_MS = 6 * 3_600_000;
@@ -128,9 +128,12 @@ export class FlashInstances {
 			data[o + 2] = -cosLat * Math.sin(lon);
 			data[o + 3] = (ring.time[s] + delays[ring.source[s]] - this.origin) / 1000;
 			data[o + 4] = ring.intensity[s];
-			data[o + 5] = Math.max(MIN_RADIUS_KM, Math.sqrt(ring.areaKm2[s] / Math.PI));
+			const radius = Math.max(MIN_RADIUS_KM, Math.sqrt(ring.areaKm2[s] / Math.PI));
+			const seed = flashSeed(ring.time[s], ring.lat[s], ring.lon[s]);
+			data[o + 5] = radius;
 			data[o + 6] = ring.durationMs[s];
-			data[o + 7] = flashSeed(ring.time[s], ring.lat[s], ring.lon[s]);
+			data[o + 7] = seed;
+			data.set(flashLook(seed, ring.durationMs[s], ring.areaKm2[s], radius), o + 8);
 			this.#cursor = (this.#cursor + 1) % this.capacity;
 		}
 		this.#end += n;

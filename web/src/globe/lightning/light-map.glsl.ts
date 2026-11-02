@@ -2,12 +2,13 @@ import { channelGlsl, cloudDriftGlsl } from './channel';
 import { CLOUD_LIGHT, cloudPatchGlsl, patchEdgeGlsl } from './cloud-light';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
-import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
+import { flashProfileGlsl, glslFloat as f } from './profile';
 
 /** Splats each flash as a soft, seeded patch in a point sprite over an equirectangular window of the globe, in SphereGeometry UV angles. */
 export const lightMapVertexShader = /* glsl */ `
 attribute vec4 flash;
 attribute vec4 flashShape;
+attribute vec3 flashLook;
 
 uniform float time;
 uniform float duration;
@@ -40,23 +41,20 @@ void main() {
 	}
 	vec3 d = normalize(flash.xyz);
 	float seed = flashShape.w;
-	int kind = flashKind(seed, flashShape.z, flashShape.y);
-	bool ground = isGround(kind);
+	int kind = int(flashLook.x + 0.5);
 	float age = wallAge(time, flash.w);
 	float lat = asin(clamp(d.y, -1.0, 1.0));
-	vec2 drift = cloudDrift(age, clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)}), flashShape.y, seed, kind) / 6371.0 * flicker;
+	vec2 drift = cloudDrift(age, flashShape.y, seed, kind, flashLook.yz) / 6371.0 * flicker;
 	lat += drift.y;
 	float lon = atan(-d.z, d.x) + drift.x / max(cos(lat), 0.05);
 	float relative = mod(lon - window.x + 3.14159265, 6.28318531) - 3.14159265;
 	// Flashes near the antimeridian of the window are drawn a second time on the other side.
 	relative += wrap * (relative > 0.0 ? -6.28318531 : 6.28318531);
 	vec2 center = vec2(relative, lat - window.y) / window.zw;
-	float pulse = 0.0;
-	float brightness = 0.0;
-	if (abs(center.x) < 1.2 && abs(center.y) < 1.2) {
-		pulse = flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind);
-		brightness = pulse * intensityBrightness(flashShape.x) * onScreen(flash.w);
-	}
+	// Flashes outside the window or past the storm view's budget skip the profile.
+	float shown = abs(center.x) < 1.2 && abs(center.y) < 1.2 ? onScreen(flash.w) : 0.0;
+	float pulse = shown > 0.0 ? flashProfile(age, sceneAge, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) : 0.0;
+	float brightness = pulse * intensityBrightness(flashShape.x) * shown;
 	if (brightness <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -74,7 +72,7 @@ void main() {
 	// An elongated, irregular patch along the drift, within the same radius; round where the splat floor sets the size.
 	float own = footprint / max(radiusKm, 1e-6);
 	vLobes = patchLobes(seed, own);
-	vPatch = cloudPatch(seed, ground, own, vLobes);
+	vPatch = cloudPatch(seed, isGround(kind), own, vLobes);
 }
 `;
 

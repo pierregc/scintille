@@ -169,6 +169,7 @@ export function createLightning(
 	const buffer = new InstancedInterleavedBuffer(instances.data, FLASH_STRIDE).setUsage(DynamicDrawUsage);
 	geometry.setAttribute('flash', new InterleavedBufferAttribute(buffer, 4, 0));
 	geometry.setAttribute('flashShape', new InterleavedBufferAttribute(buffer, 4, 4));
+	geometry.setAttribute('flashLook', new InterleavedBufferAttribute(buffer, 3, 8));
 	geometry.instanceCount = 0;
 
 	const time = new NumberUniform();
@@ -239,8 +240,8 @@ export function createLightning(
 	});
 	const channelBuffer = new InstancedInterleavedBuffer(channels.data, SEGMENT_STRIDE).setUsage(DynamicDrawUsage);
 	const channelGeometry = segmentGeometry();
-	for (const [name, offset] of [['segA', 0], ['segB', 4], ['segC', 8], ['flash', 12], ['flashShape', 16]] as const) {
-		channelGeometry.setAttribute(name, new InterleavedBufferAttribute(channelBuffer, 4, offset));
+	for (const [name, offset] of [['segA', 0], ['segB', 4], ['segC', 8], ['flash', 12], ['flashShape', 16], ['flashLook', 20]] as const) {
+		channelGeometry.setAttribute(name, new InterleavedBufferAttribute(channelBuffer, name === 'flashLook' ? 3 : 4, offset));
 	}
 	channelGeometry.instanceCount = 0;
 	const poolShift = new NumberUniform();
@@ -339,15 +340,15 @@ export function createLightning(
 	let viewKmPerPx = 0;
 	let blend: 'add' | 'max' | 'screen' = 'add';
 	const applyBlend = () => {
-		const share = stormView ? maxBlendShare(viewKmPerPx * scale.value) : 0;
-		const mode = !stormView ? 'add' : share > 0 ? 'max' : 'screen';
+		const maxShare = stormView ? maxBlendShare(viewKmPerPx * scale.value) : 0;
+		const mode = !stormView ? 'add' : maxShare > 0 ? 'max' : 'screen';
 		if (mode !== blend) {
 			blend = mode;
 			blendFlashes(material, mode);
 		}
 		// Max over a screen sum weighted by 1 - share: pure max at 1, pure screen at 0, a lone glow on the dark unchanged between.
-		screenMesh.visible = mode === 'max' && share < 1;
-		screenWeight.value = 1 - share;
+		screenMesh.visible = mode === 'max' && maxShare < 1;
+		screenWeight.value = 1 - maxShare;
 	};
 
 	return {
@@ -534,6 +535,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
 	geometry.setAttribute('flash', flashGeometry.getAttribute('flash'));
 	geometry.setAttribute('flashShape', flashGeometry.getAttribute('flashShape'));
+	geometry.setAttribute('flashLook', flashGeometry.getAttribute('flashLook'));
 	const { time, duration, flicker, speed, pivot, pivotSpeed, budgetFade } = flashes.uniforms;
 	const bounds = new Vector4(0, 0, Math.PI, Math.PI / 2);
 	const splat = { value: LIGHT_WINDOW.farSplat as number };

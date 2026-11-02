@@ -1,5 +1,5 @@
 import { FlashKind, isGround } from './kind';
-import { glslFloat, PROFILE, spread } from './profile';
+import { type FlashTiming, flickerLength, glslFloat, PROFILE, spread } from './profile';
 
 /** Thin lightning channel drawn over the glow while a flash flickers; see docs/flash-profile.md. */
 export const CHANNEL = {
@@ -7,10 +7,10 @@ export const CHANNEL = {
 	lengthScale: 2.2,
 	/** The channel fades out this long after the flicker phase, seconds. */
 	fade: 0.15,
-	/** Branches light once, when reached: their decay constant for ground and in-cloud flashes, seconds. */
+	/** Decay of branches after the first stroke (cloud-to-ground) or after the leader reaches them (in-cloud), seconds. */
 	branchTau: 0.06,
 	cloudBranchTau: 0.12,
-	/** Share of an in-cloud path lit at the first pulse; the leaders then cover the rest. */
+	/** Kept for the frozen web/spike shaders; no longer read by the renderer. */
 	cloudStart: 0.2,
 	/** Share of a channel's light left over sunlit clouds, which outshine a thin channel seen from orbit. */
 	dayLevel: 0.3,
@@ -209,64 +209,45 @@ export function spreadSeconds(kind: FlashKind, radiusKm: number, flicker: number
 	return Math.min((k.runR[1] * radiusKm * 1000) / (k.spreadSpeed * pace(seed)), share * flicker);
 }
 
-const f = glslFloat;
-const kindLines = (line: (k: KindShape, kind: FlashKind) => string | null): string =>
-	KIND.map((k, i) => line(k, i as FlashKind)).filter((l) => l !== null).join('\n');
+/** Wall seconds a flash takes to propagate: its leader within `PROFILE.leaderShare` of the flicker, then the spread of its leaders (the leader itself for cloud-to-ground kinds). */
+export function flashTiming(kind: FlashKind, radiusKm: number, flicker: number, seed: number): FlashTiming {
+	const leader = Math.min(leaderSeconds(kind, radiusKm, seed), PROFILE.leaderShare * flicker);
+	return { leader, spread: isGround(kind) ? leader : spreadSeconds(kind, radiusKm, flicker, seed) };
+}
 
-/** GLSL twins of `channelHash`, `flashKind`, `isGround`, `leaderSeconds` and `spreadSeconds`; the shaders pass the radius, so the area is `π r²`. */
+/** The look the shaders read per flash (`flashLook`): its kind, leader and spread seconds, drawn once on the CPU so the skeleton and every pass agree (ADR 0033). */
+export function flashLook(seed: number, durationMs: number, areaKm2: number, radiusKm: number): [FlashKind, number, number] {
+	const kind = flashKind(seed, durationMs, areaKm2);
+	const { leader, spread } = flashTiming(kind, radiusKm, flickerLength(durationMs), seed);
+	return [kind, leader, spread];
+}
+
+const f = glslFloat;
+
+/** GLSL twins of `channelHash` and `isGround`; the kind and the timing come from the CPU (`flashLook`). */
 export const channelGlsl = /* glsl */ `
 float channelHash(float seed, float k) {
 	return fract(sin(seed * 78.233 + k * 12.9898) * 43758.5453);
 }
-int flashKind(float seed, float durationMs, float radiusKm) {
-	float u = channelHash(seed, 2.0);
-	if (u < ${f(KIND_SHARES[0])}) return 0;
-	if (u < ${f(KIND_SHARES[1])}) return 1;
-	if (u < ${f(KIND_SHARES[2])}) return 2;
-	if (u < ${f(KIND_SHARES[3])}) return 3;
-	if (durationMs >= ${f(CRAWLER.minDurationMs)} || radiusKm * radiusKm * 3.14159265 >= ${f(CRAWLER.minAreaKm2)}) return 5;
-	if (u < ${f(cloudToAirBelow)}) return 6;
-	return 4;
-}
 bool isGround(int kind) {
 	return kind <= 3;
-}
-float pace(float seed) {
-	return mix(${f(PACE[0])}, ${f(PACE[1])}, channelHash(seed, 4.0));
-}
-float leaderSeconds(int kind, float radiusKm, float seed) {
-${kindLines((k, kind) => {
-	const { cloudKm, cloudR, climbKm, runKm } = leaderLegs(kind);
-	const cloud = cloudKm + cloudR > 0 ? `${f(cloudKm)} + ${f(cloudR)} * radiusKm + ` : '';
-	const pathKm = `${cloud}length(vec2(${f(climbKm)}, min(${f(runKm)}, max(radiusKm, ${f(k.reachKm)}))))`;
-	return `\tif (kind == ${kind}) return clamp((${pathKm}) * 1000.0 / (${f(k.leaderSpeed)} * pace(seed)), ${f(k.leaderBounds[0])}, ${f(k.leaderBounds[1])});`;
-})}
-	return 0.0;
-}
-float spreadSeconds(int kind, float radiusKm, float flicker, float seed) {
-	if (isGround(kind)) return leaderSeconds(kind, radiusKm, seed);
-${kindLines((k, kind) => {
-	if (isGround(kind)) return null;
-	const share = kind === FlashKind.IcCrawler ? 1 : PROFILE.cloudSpread;
-	return `\tif (kind == ${kind}) return min(${f(k.runR[1] * 1000)} * radiusKm / (${f(k.spreadSpeed)} * pace(seed)), ${f(share)} * flicker);`;
-})}
-	return 0.0;
 }
 `;
 
 /** Offset in km, east and north, of the light of an in-cloud flash `age` seconds in: it follows its leaders across the footprint. */
-export function cloudDrift(age: number, flicker: number, radiusKm: number, seed: number, kind: FlashKind): [number, number] {
+export function cloudDrift(age: number, radiusKm: number, seed: number, kind: FlashKind, timing: FlashTiming): [number, number] {
 	if (isGround(kind)) return [0, 0];
-	const along = (2 * spread(age, flicker, false) - 1) * CHANNEL.drift * radiusKm;
+	const along = (2 * spread(age, timing, kind) - 1) * CHANNEL.drift * radiusKm;
 	const heading = channelHash(seed, 1) * 2 * Math.PI;
 	return [Math.cos(heading) * along, Math.sin(heading) * along];
 }
 
 /** GLSL twin of `cloudDrift`; needs `channelGlsl` and `spread`. */
 export const cloudDriftGlsl = /* glsl */ `
-vec2 cloudDrift(float age, float len, float radiusKm, float seed, int kind) {
+vec2 cloudDrift(float age, float radiusKm, float seed, int kind, vec2 timing) {
 	if (isGround(kind)) return vec2(0.0);
-	float heading = channelHash(seed, 1.0) * 6.2831853;
-	return vec2(cos(heading), sin(heading)) * (2.0 * spread(age, len, false) - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
+	float along = (2.0 * spread(age, timing, kind) - 1.0) * ${f(CHANNEL.drift)} * radiusKm;
+	float heading = channelHash(seed, 1.0) * ${f(2 * Math.PI)};
+	return vec2(cos(heading) * along, sin(heading) * along);
 }
 `;
