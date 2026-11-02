@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import fixture from '../../../../fixtures/storms/2026-07-15-orlando.json';
 import type { StormDetail } from '../../contract/types';
+import { replayStart } from '../archive/storm';
 import { SceneClock } from '../clock';
 import { StormReplay } from './index';
 import { ReplayNavigation, type NavigationHost } from './navigation';
 import { REPLAY_FRAME } from './framing';
 
-function setup(search: string, initialView?: NavigationHost['initialView']) {
+function setup(search: string, initialView?: NavigationHost['initialView'], detail: StormDetail = fixture as StormDetail) {
 	let url = new URL(`https://scintille.app/${search}`);
 	let pop = () => {};
 	const writes: { url: URL; push: boolean }[] = [];
@@ -14,8 +15,8 @@ function setup(search: string, initialView?: NavigationHost['initialView']) {
 	const data = {
 		openStorm: vi.fn().mockImplementation(async (_base: string, slug: string, speed: number) => {
 			if (slug === 'unknown' || slug.includes('/')) throw new Error('missing');
-			clock.replay(Date.parse(fixture.storm.t_start), speed);
-			return { ...fixture, storm: { ...fixture.storm, slug } } as StormDetail;
+			clock.replay(replayStart(detail), speed);
+			return { ...detail, storm: { ...detail.storm, slug } } as StormDetail;
 		}),
 		live: vi.fn().mockImplementation(async () => { clock.live(); }),
 	};
@@ -59,6 +60,25 @@ describe('replay browser navigation', () => {
 			await x.replay.live();
 			expect(x.url().searchParams.has('storm')).toBe(false);
 			expect(x.writes.at(-1)?.push).toBe(true);
+		} finally { x.dispose(); }
+	});
+	it('writes no time before the first flash, so a share or reload lands where the address bar says', async () => {
+		const early = { ...fixture, storm: { ...fixture.storm, t_start: '2026-07-15T17:30:01Z' } } as StormDetail;
+		const start = replayStart(early);
+		const x = setup('', undefined, early);
+		try {
+			await x.replay.open(fixture.storm.slug);
+			x.clock.pause();
+			x.clock.seek(Date.parse(early.storm.t_start));
+			expect(x.clock.time()).toBeLessThan(start);
+			expect(x.url().searchParams.get('time')).toBe(new Date(start).toISOString());
+			const shared = new URL(x.navigation.shareUrl());
+			expect(shared.searchParams.get('time')).toBe(new Date(start).toISOString());
+			const reload = setup(shared.search, undefined, early);
+			try {
+				await reload.navigation.restore();
+				expect(reload.clock.time()).toBe(start);
+			} finally { reload.dispose(); }
 		} finally { x.dispose(); }
 	});
 	it.each(['navigation', 'selection'])('reframes on reload after an interrupted %s entry while explicit sharing keeps its view', async (entry) => {
