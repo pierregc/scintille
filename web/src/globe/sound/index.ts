@@ -33,8 +33,8 @@ export interface Sound {
 	setEnabled(on: boolean): void;
 	readonly levels: SoundLevels;
 	setLevels(levels: Partial<SoundLevels>): void;
-	/** Crackles for flashes the playhead crossed since the last frame, each source `delays` behind; relays the ambient tracks. */
-	update(sceneTime: number, delays?: SourceDelays): void;
+	/** Crackles for flashes the playhead crossed since the last frame, each source `delays` behind, within the sample drawn in full (`heroShare`); relays the ambient tracks. */
+	update(sceneTime: number, delays?: SourceDelays, heroShare?: number): void;
 	dispose(): void;
 }
 
@@ -252,7 +252,7 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 			graph.music.gain.setTargetAtTime(BED_GAIN * levels.music ** 2, now, FADE_S);
 			graph.flashes.gain.setTargetAtTime(CRACKLE_GAIN * levels.flashes ** 2, now, FADE_S);
 		},
-		update(sceneTime, delays) {
+		update(sceneTime, delays, heroShare = 1) {
 			if (generation !== ring.generation) {
 				generation = ring.generation;
 				if (graph) for (let i = 0; i < graph.voices.length; i++) stop(graph, i);
@@ -268,7 +268,7 @@ export function createSound(ring: FlashRing, camera: Camera, radius = 1, base = 
 			position[0] = camera.position.x;
 			position[1] = camera.position.y;
 			position[2] = camera.position.z;
-			const trigger = scheduler.update(sceneTime, graph.context.currentTime, listener, delays);
+			const trigger = scheduler.update(sceneTime, graph.context.currentTime, listener, delays, heroShare);
 			if (trigger) play(graph, trigger);
 		},
 		dispose() {

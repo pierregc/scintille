@@ -23,7 +23,7 @@ import { StormFocus } from './focus';
 import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
-import { bloomStrength } from './lightning/zoom';
+import { bloomRadius, bloomStrength } from './lightning/zoom';
 import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
 import { type FeedStatus, feedStatus } from './live/freshness';
 import { clipPlanes } from './orbit';
@@ -68,7 +68,7 @@ export interface GlobeApp {
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
 	readonly sound: Sound;
-	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView'>;
+	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView' | 'stats'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
 	/** Time of the newest flashes drawn, for the selected storm's sources if any: ages are measured from it. */
@@ -261,7 +261,7 @@ export function createGlobeApp(
 	const lightning = createLightning(live.ring, {
 		radius: RADIUS,
 		capacity: preset.maxFlashes ?? live.ring.capacity,
-		lightMapWidth: preset.cloudLight ? 1024 : 0,
+		lightMapWidth: preset.lightMapWidth,
 		clouds: clouds.opacity,
 		phone,
 	});
@@ -374,8 +374,9 @@ export function createGlobeApp(
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
-		sound.update(now, delays);
+		sound.update(now, delays, lightning.heroShare);
 		if (!renderParams && fps.frame(time)) downgrade();
+		lightning.cloudLit = clouds.mesh.visible && PRESETS[tier].cloudLight;
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {
 			volume.render(renderer, {
@@ -397,7 +398,7 @@ export function createGlobeApp(
 			clouds.setFlatShown(1);
 		}
 		if (post) {
-			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength));
+			post.setBloom(bloomStrength(kmPerPx, BLOOM.strength), bloomRadius(kmPerPx, BLOOM.nearRadius, BLOOM.radius));
 			post.render();
 		} else renderer.render(scene, camera);
 	};

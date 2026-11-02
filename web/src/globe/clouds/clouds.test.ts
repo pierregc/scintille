@@ -2,6 +2,7 @@ import { Texture, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { atmosphereParameters } from '../atmosphere';
 import { CLOUD_TOP_KM } from '../lightning';
+import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { zoomLimits } from '../orbit';
 import { isCloudToggleKey } from './dev';
 import { CLOUD_MAX_GAP_MS, type Clouds, CLOUDS_RENDER_ORDER, cloudOpacityGlsl, cloudShellRadius, createClouds } from './index';
@@ -76,7 +77,7 @@ describe('createClouds', () => {
 		clouds.setFlashLight({ map, window });
 		expect(uniforms.flashLight.value).toBe(map);
 		expect(uniforms.flashWindow.value).toBe(window);
-		expect(uniforms.flashGain.value).toBeGreaterThan(0);
+		expect(uniforms.flashGain.value).toBe(CLOUD_LIGHT.gain);
 		clouds.setFlashLight(null);
 		expect(uniforms.flashGain.value).toBe(0);
 	});
