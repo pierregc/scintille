@@ -1,4 +1,5 @@
 import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, type Texture, Vector2, Vector3, Vector4 } from 'three';
+import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
@@ -21,8 +22,6 @@ export const CLOUD_FADE_LATITUDES = [66, 72.7] as const;
 
 /** Draws before the atmosphere (0) so it hazes the clouds, and before lightning (1). */
 export const CLOUDS_RENDER_ORDER = -1;
-
-const FLASH_GAIN = 5;
 
 /** Beyond this distance from every frame, the scene time has no honest cloud picture: the layer hides. */
 export const CLOUD_MAX_GAP_MS = 3 * 3_600_000;
@@ -256,7 +255,7 @@ export function createClouds(
 		setFlashLight(light) {
 			material.uniforms.flashLight.value = light?.map ?? null;
 			if (light) material.uniforms.flashWindow.value = light.window;
-			material.uniforms.flashGain.value = light ? FLASH_GAIN : 0;
+			material.uniforms.flashGain.value = light ? CLOUD_LIGHT.gain : 0;
 		},
 		dispose() {
 			disposed = true;

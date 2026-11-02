@@ -33,6 +33,11 @@ describe('cloud tiers', () => {
 	it('loads 2k clouds on low and 4k above', () => {
 		expect([PRESETS.low.clouds, PRESETS.medium.clouds, PRESETS.high.clouds]).toEqual(['2k', '4k', '4k']);
 	});
+
+	it('lights the clouds from a finer flash map on high, none on low', () => {
+		expect([PRESETS.low.lightMapWidth, PRESETS.medium.lightMapWidth, PRESETS.high.lightMapWidth]).toEqual([0, 1024, 2048]);
+		for (const preset of Object.values(PRESETS)) expect(preset.lightMapWidth > 0).toBe(preset.cloudLight);
+	});
 });
 
 describe('FpsMonitor', () => {
