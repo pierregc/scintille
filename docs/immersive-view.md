@@ -325,6 +325,12 @@ Physical scale and compensation:
   size from afar, the pixel width of channels and halos, and the bloom. Near the floor the glow is
   1 to 2 footprints at 15 % of its level and the bloom 10 % of the globe's.
 - Each flash flickers for its observed duration in wall clock time, so at 60× a storm view shows
+  about a minute of flashes at once ([flash profile](flash-profile.md)). Glows there use screen
+  blending, the cloud light keeps the brightest flash, and bloom and cloud light scale with how
+  dark the scene is, so overlaps and sunlit clouds never turn white. At replay speed, channels and
+  near-floor sprites go to a seeded sample of the flashes sized for the speed (about 50 / 20 / 8
+  within their flicker at once at 60× / 600× / 3600×); every flash still lights the cloud
+  ([overlaps in a storm view](flash-profile.md#overlaps-in-a-storm-view)).
   about a minute of flashes at once ([flash profile](flash-profile.md)). Overlaps there blend by
   distance: below 1 km per CSS px the brightest glow sets each pixel, so a cell never piles up into
   a white ball; from 1 km per CSS px glows screen-blend, so points still accumulate softly. From 0.7
@@ -426,6 +432,7 @@ the south pole).
 | Leader spread and light drift within the footprint | Procedural, seeded, within 0.6 `r` of the observed position | `spread`, `cloudDrift` |
 | Channel path, branches, widths, brightness along them | Procedural, seeded | `skeleton.ts` |
 | Flash kinds: seven procedural looks, cloud-to-ground 30 % of seeds (negative multi-stroke 19 %, single-stroke 7 %, positive 3 %, bolt from the blue 1 %; observed band 15 to 40 %), cloud-to-air 3 %, crawlers for flashes observed ≥ 600 ms or ≥ 1,500 km², trunk-and-fan for the rest; leaders at 1 × 10^5 m/s (cloud-to-ground), 2 × 10^5 (in-cloud trunk), 1.5 × 10^5 (bolt from the blue), fans 8 × 10^4, crawlers 1 × 10^5, pace 0.75 to 1.35 per flash; leader time clamped to 50 to 150 ms (bolt from the blue 150 to 250 ms over its whole path, in-cloud trunk 10 to 20 ms), fans within 80 % of the flicker | Procedural, not a classification (ADR 0033); until #401 and #402 the cloud-to-ground kinds share today's ground look and the in-cloud kinds today's in-cloud look | `flashKind`, `KIND`, `leaderSeconds`, `spreadSeconds` |
+| Flashes drawn in full by replay speed | Styled rendering budget, not a classification: every flash lights the cloud at full level for its observed duration; channels, near-floor sprites, halos and sound go to a seeded sample of about 50 / 20 / 8 flashes within their flicker at once at 60× / 600× / 3600× (all at 1×; bands 30-100 / 12-30 / 5-12), stronger flashes up to 2.5× likelier, fading out over the next 10 % of the share (edge 1.1), the share smoothed over 0.5 s and set on each frame through a speed change; the rest keep a point from afar (farness 0.7-1, about 1.3-3 km per px) and half a sprite (0.5, eased over 0.25 s) where no cloud light shows, both for the 500 newest only | `DENSITY`, `heroLot`, `heroShare`, `pointWeight`, [flash profile](flash-profile.md#overlaps-in-a-storm-view) |
 | Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where the cloud light does not show: `low` tier, clouds hidden or not loaded), easing back to the former 40 % to full ramp from 1 km per CSS px; 35 % of that over sunlit cloud at the floor, eased out the same way (physics: nothing of a flash shows from orbit by day); in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; the bloom tightens to 0.4 radius at the floor; the halo is cool only | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `ZOOM.floorKmPerPx`, `ZOOM.blendFromKmPerPx`, `nearFloor`, `maxBlendShare`, `Lightning.cloudLit`, `CHANNEL.glowDayLevel`, `BLOOM.nearRadius`, `vTint` |
 | Channel heights (in-cloud 8 to 11.5 km, ground channels from the cloud to the ground) | Assumed, not exaggerated; lowered under the drawn top where the clouds are in relief (within 1 km of the observed top on opaque clouds, ADR 0031) | `SKELETON`, `ribbon.glsl.ts` |
 | Cloud top 12 km, cloud shell 10 km | Assumed, for the flat layer seen from afar and where no height is published | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
@@ -694,6 +701,15 @@ buffers, drawing buffer) and the screenshot brightness. `--afterglow <minutes>` 
 reference afterglow, `--speed` plays at another replay speed than 60×, `--no-clouds` hides the
 clouds, `--warm` measures a second visit and `--network 4g` or `slow4g` throttles the page. Active flashes count those started within a second of wall clock time, or within the
 afterglow window.
+
+In the page, `window.__app.lightning.stats` reads the storm view sample of the current frame
+([flash profile](flash-profile.md#overlaps-in-a-storm-view)), counted from the flashes loaded when
+it is read: `alive`, the detections within their flicker or fade; `drawn`, those of them in the
+sample (all of them when `share` is 1); `load`, the estimate of `alive` over the last 0.4 s of wall
+clock time the share is sized by; `share`, the applied share of the lots, and `target`, the flashes
+it aims at (Infinity at 1×); `channels`, the flashes holding a channel slot, which includes those
+fading out at the share's edge and merges a flash seen by two instruments. A capture tool reads it
+once per frame to check the targets.
 
 Limits: memory is what the page asks WebGL for, not what the driver uses. Frame cost with
 synchronization is an upper bound (CPU and GPU no longer overlap). Frame intervals follow the

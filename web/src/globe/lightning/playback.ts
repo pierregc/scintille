@@ -11,12 +11,15 @@ export class FlashPlayback {
 	/** Scene time (UTC ms) of the last speed change during play, and the speed before it. */
 	pivot = Number.NEGATIVE_INFINITY;
 	pivotSpeed = 1;
+	/** The last update was a seek or a speed change rather than the next frame of play. */
+	jumped = true;
 	#last = Number.NaN;
 
 	update(sceneMs: number, speed: number): void {
 		if (!(speed > 0)) throw new RangeError(`speed must be positive, got ${speed}`);
+		const continuous = Math.abs(sceneMs - this.#last) <= Math.max(speed, this.speed) * MAX_FRAME_MS;
+		this.jumped = speed !== this.speed || !continuous;
 		if (speed !== this.speed) {
-			const continuous = Math.abs(sceneMs - this.#last) <= Math.max(speed, this.speed) * MAX_FRAME_MS;
 			this.pivot = continuous ? sceneMs : Number.NEGATIVE_INFINITY;
 			this.pivotSpeed = this.speed;
 			this.speed = speed;
@@ -33,10 +36,20 @@ export class FlashPlayback {
 	/** Scene ms before `now` holding every flash started less than `seconds` of wall clock time ago. */
 	span(seconds: number, now: number): number {
 		const wall = seconds * 1000;
-		const back = wall * this.speed;
-		if (now < this.pivot || now - back >= this.pivot) return back;
+		if (!this.straddles(seconds, now)) return wall * this.speed;
 		return now - this.pivot + (wall - (now - this.pivot) / this.speed) * this.pivotSpeed;
 	}
+
+	/** Whether the `seconds` of wall clock time up to `now` reach back past the last speed change during play. */
+	straddles(seconds: number, now: number): boolean {
+		return now >= this.pivot && now - seconds * 1000 * this.speed < this.pivot;
+	}
+}
+
+/** TS twin of the GLSL `onScreen`: 1 for a flash played at `at` from `budgetFrom` on, fading in over the `budgetFade` before it, in scene seconds. */
+export function onScreen(at: number, budgetFrom: number, budgetFade: number): number {
+	const t = Math.min(1, Math.max(0, (at - (budgetFrom - budgetFade)) / budgetFade));
+	return t * t * (3 - 2 * t);
 }
 
 /** GLSL twin of `FlashPlayback.age`; `time`, `pivot` in seconds from the instance origin. `onScreen` fades out flashes started before `budgetFrom`. */
