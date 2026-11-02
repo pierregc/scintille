@@ -19,12 +19,13 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 /** Objects on this layer glow; everything else is drawn as usual. */
 export const BLOOM_LAYER = 1;
 
-export const BLOOM = { strength: 0.9, radius: 0.55, threshold: 0 };
+/** `radius` from afar; near the floor, where glows are resolved, the bloom tightens to `nearRadius`. */
+export const BLOOM = { strength: 0.9, radius: 0.55, nearRadius: 0.4, threshold: 0 };
 
 export interface PostProcessing {
 	render(): void;
-	/** Bloom strength, BLOOM.strength by default. */
-	setBloom(strength: number): void;
+	/** Bloom strength and radius, BLOOM.strength and BLOOM.radius by default. */
+	setBloom(strength: number, radius?: number): void;
 	setSize(width: number, height: number, pixelRatio: number): void;
 	dispose(): void;
 }
@@ -100,8 +101,9 @@ export function createPostProcessing(
 			quad.render(renderer);
 			renderer.autoClear = autoClear;
 		},
-		setBloom(strength) {
+		setBloom(strength, radius = BLOOM.radius) {
 			bloom.strength = strength;
+			bloom.radius = radius;
 		},
 		setSize(width, height, pixelRatio) {
 			bloomComposer.setPixelRatio(pixelRatio);

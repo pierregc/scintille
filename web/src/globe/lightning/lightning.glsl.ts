@@ -20,8 +20,11 @@ uniform float kmToWorld;
 uniform float viewportHeight;
 uniform float viewScale;
 uniform float nearGlowLevel;
+uniform float glowLevel;
+uniform float blendWeight;
 uniform float flicker;
 uniform float haloStrength;
+uniform vec3 sunDirection;
 
 varying vec2 vCorner;
 varying float vBrightness;
@@ -70,7 +73,10 @@ void main() {
 	float viewKmPerPx = kmPerPx * viewScale;
 	brightness *= keep;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
-	brightness *= glowShare(viewKmPerPx, nearGlowLevel);
+	brightness *= glowShare(viewKmPerPx, nearGlowLevel, glowLevel);
+	// Over sunlit cloud the glow keeps a styled trace near the floor; from afar the points keep their day marks.
+	float day = smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection)));
+	brightness *= mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * nearFloor(viewKmPerPx));
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
@@ -93,7 +99,7 @@ void main() {
 	vec3 world = center + east * (position.x * size + drift.x) + north * (position.y * size + drift.y);
 	gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 	vCorner = position.xy;
-	vBrightness = brightness;
+	vBrightness = brightness * blendWeight;
 }
 `;
 

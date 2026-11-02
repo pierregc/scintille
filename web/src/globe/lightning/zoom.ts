@@ -7,6 +7,10 @@ export const ZOOM = {
 	/** Glow compensation is minimal below `nearKmPerPx` and full above `farKmPerPx`. */
 	nearKmPerPx: 0.3,
 	farKmPerPx: 3,
+	/** Rules of the floor fade out from `nearKmPerPx` to this zoom, where storm views screen-blend glows again. */
+	floorKmPerPx: 1,
+	/** Storm views fade screen-blended glows in under the max-blended ones from this zoom to `floorKmPerPx`. */
+	blendFromKmPerPx: 0.7,
 	/** Glow radius over the observed radius near the floor, weakest to strongest flash. */
 	nearGlow: [1, 2],
 	/** Glow radius over the observed radius from afar, times `intensityScale`. */
@@ -16,9 +20,11 @@ export const ZOOM = {
 	/** Channel opacity rises while its half length grows over this range, CSS px. */
 	revealPx: [6, 18],
 	/** Share of the bloom kept near the floor, where glows are resolved and need no halo to be seen. */
-	nearBloom: 0.15,
-	/** Glow level near the floor, where the lit cloud and the channels carry the flash. */
-	nearGlowLevel: 0.4,
+	nearBloom: 0.1,
+	/** Glow level at `nearKmPerPx` on the ramp from afar, and at the floor where the cloud light does not show. */
+	glowLevel: 0.4,
+	/** Glow level at the floor, where the lit cloud and the channels carry the flash. */
+	nearGlowLevel: 0.15,
 } as const;
 
 /** Phones draw lightning as a view of `viewHeight` CSS px would, shrunk to their screen, and dim the glows near the floor. */
@@ -45,9 +51,27 @@ export function bloomStrength(kmPerPx: number, strength: number): number {
 	return strength * (ZOOM.nearBloom + (1 - ZOOM.nearBloom) * farness(kmPerPx));
 }
 
-/** Level of the round glow, out of its full brightness. */
-export function glowShare(kmPerPx: number, nearLevel: number = ZOOM.nearGlowLevel): number {
-	return nearLevel + (1 - nearLevel) * farness(kmPerPx);
+/** 1 at the floor, 0 from `floorKmPerPx`: the weight of the rules of the floor. */
+export function nearFloor(kmPerPx: number): number {
+	return 1 - smoothstep(0, 1, Math.log(kmPerPx / ZOOM.nearKmPerPx) / Math.log(ZOOM.floorKmPerPx / ZOOM.nearKmPerPx));
+}
+
+/** Share of a storm view's glow drawn with max blending: 1 up to `blendFromKmPerPx`, 0 from `floorKmPerPx`, where screen blending has fully faded in. */
+export function maxBlendShare(kmPerPx: number): number {
+	return 1 - smoothstep(0, 1, Math.log(kmPerPx / ZOOM.blendFromKmPerPx) / Math.log(ZOOM.floorKmPerPx / ZOOM.blendFromKmPerPx));
+}
+
+/** Bloom radius for a view of `kmPerPx`: `near` at the floor, `far` from `floorKmPerPx`. */
+export function bloomRadius(kmPerPx: number, near: number, far: number): number {
+	const w = nearFloor(kmPerPx);
+	return far * (1 - w) + near * w;
+}
+
+/** Level of the round glow, out of its full brightness: `nearLevel` at the floor, the ramp from `rampLevel` to 1 from `floorKmPerPx`. */
+export function glowShare(kmPerPx: number, nearLevel: number = ZOOM.nearGlowLevel, rampLevel: number = ZOOM.glowLevel): number {
+	const far = rampLevel + (1 - rampLevel) * farness(kmPerPx);
+	const w = nearFloor(kmPerPx);
+	return far * (1 - w) + nearLevel * w;
 }
 
 /** Glow radius in km of a flash of observed radius `radiusKm`; the point floor stays in CSS px whatever the `viewScale`. */
@@ -75,8 +99,11 @@ float glowRadiusKm(float radiusKm, float intensity, float kmPerPx, float scale) 
 	float far = ${f(ZOOM.farGlow)} * intensityScale(i);
 	return max(radiusKm * mix(near, far, farness(kmPerPx * scale)), ${f(ZOOM.pointPx)} * kmPerPx * intensityScale(i));
 }
-float glowShare(float kmPerPx, float nearLevel) {
-	return mix(nearLevel, 1.0, farness(kmPerPx));
+float nearFloor(float kmPerPx) {
+	return 1.0 - smoothstep(0.0, 1.0, log(kmPerPx / ${f(ZOOM.nearKmPerPx)}) / ${f(Math.log(ZOOM.floorKmPerPx / ZOOM.nearKmPerPx))});
+}
+float glowShare(float kmPerPx, float nearLevel, float rampLevel) {
+	return mix(mix(rampLevel, 1.0, farness(kmPerPx)), nearLevel, nearFloor(kmPerPx));
 }
 float channelReveal(float radiusKm, float kmPerPx) {
 	return smoothstep(${f(ZOOM.revealPx[0])}, ${f(ZOOM.revealPx[1])}, radiusKm * ${f(CHANNEL.lengthScale)} / kmPerPx);
