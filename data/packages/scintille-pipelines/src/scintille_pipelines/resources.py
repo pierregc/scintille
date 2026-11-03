@@ -24,7 +24,8 @@ class LakeResource(ConfigurableResource):  # type: ignore[type-arg]
     token: str | None = None
     # Each gold step runs its own DuckDB; unbounded, each one would take 80 % of the VPS.
     duckdb_memory_limit: str = "1GB"
-    duckdb_threads: int = 2
+    # Gold mostly waits on R2 reads: fewer threads made each step twice as slow.
+    duckdb_threads: int = 4
 
     @property
     def config(self) -> LakeConfig:
