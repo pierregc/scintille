@@ -6,10 +6,14 @@ import pyarrow as pa
 import pytest
 import yaml  # type: ignore[import-untyped]
 from dagster import (
+    DagsterInstance,
+    DagsterRunStatus,
     DefaultScheduleStatus,
     DefaultSensorStatus,
     EnvVar,
     RunRequest,
+    RunsFilter,
+    SkipReason,
     build_schedule_context,
     build_sensor_context,
 )
@@ -106,14 +110,31 @@ def test_secrets_come_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 MIDDAY = datetime(2026, 7, 16, 12, tzinfo=UTC)
+QUEUED = DagsterRunStatus.QUEUED
 
 
 def test_sensor_requests_the_open_day(lake: SqliteLake, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(automation, "utc_now", lambda: MIDDAY)
-    request = automation.silver_changed(build_sensor_context(resources={"lake": lake}))
+    context = build_sensor_context(instance=DagsterInstance.ephemeral(), resources={"lake": lake})
+    request = automation.silver_changed(context)
     assert isinstance(request, RunRequest)
     assert request.partition_key == "2026-07-16"
     assert "2026-07-16" in daily.get_partition_keys(current_time=MIDDAY)
+
+
+def test_sensor_waits_while_a_gold_run_is_queued(
+    lake: SqliteLake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = DagsterInstance.ephemeral()
+
+    def get_runs(filters: RunsFilter | None = None, limit: int | None = None) -> list[object]:
+        queued = filters and filters.job_name == "daily_gold" and filters.statuses == [QUEUED]
+        return [object()] if queued else []
+
+    monkeypatch.setattr(instance, "get_runs", get_runs)
+    context = build_sensor_context(instance=instance, resources={"lake": lake})
+    assert isinstance(automation.silver_changed(context), SkipReason)
+    assert context.cursor is None
 
 
 def test_schedule_requests_the_last_closed_day() -> None:
@@ -152,7 +173,7 @@ def test_gold_duckdb_is_bounded() -> None:
         row = con.execute(
             "SELECT current_setting('threads'), current_setting('memory_limit')"
         ).fetchone()
-    assert row == (2, "953.6 MiB")
+    assert row == (4, "953.6 MiB")
 
 
 def test_runs_hand_memory_back_within_a_limit() -> None:

@@ -3,9 +3,11 @@
 from datetime import UTC, datetime, timedelta
 
 from dagster import (
+    DagsterRunStatus,
     DefaultScheduleStatus,
     DefaultSensorStatus,
     RunRequest,
+    RunsFilter,
     ScheduleEvaluationContext,
     SensorEvaluationContext,
     SkipReason,
@@ -59,5 +61,9 @@ def silver_changed(context: SensorEvaluationContext, lake: LakeResource) -> RunR
     snapshot_id = str(snapshot.snapshot_id)
     if snapshot_id == context.cursor:
         return SkipReason("no new snapshot")
+    # A queued run will read this snapshot anyway; the cursor stays so the next tick catches up.
+    queued = RunsFilter(job_name=daily_gold.name, statuses=[DagsterRunStatus.QUEUED])
+    if context.instance.get_runs(queued, limit=1):
+        return SkipReason("a gold run is already queued")
     context.update_cursor(snapshot_id)
     return RunRequest(run_key=snapshot_id, partition_key=open_day(utc_now()))
