@@ -50,20 +50,20 @@ expiration; we only configure and watch them. Values live in `MaintenancePolicy`
 | Setting | Default | Variable |
 |---|---|---|
 | Compaction target file size | 128 MB (R2 accepts 64 to 512) | `SCINTILLE_COMPACTION_TARGET_MB` |
-| Snapshot expiration | 3 days | `SCINTILLE_SNAPSHOT_RETENTION_DAYS` |
+| Snapshot expiration | 1 day | `SCINTILLE_SNAPSHOT_RETENTION_DAYS` |
 | Snapshots always kept | 5 | `SCINTILLE_SNAPSHOTS_RETAINED_MIN` |
 | Orphan inventory minimum file age | 7 days, must exceed snapshot expiration | `SCINTILLE_ORPHAN_MIN_AGE_DAYS` |
 | Silver retention, whole days dropped by `silver_retention` at 03:40 UTC | 21 days, at least 7 | `SCINTILLE_SILVER_RETENTION_DAYS` |
 
-The snapshot defaults are the ADR 0006 values; the retention decision (#41) may change
-them. A read-only `scintille-lake retention-report` command and the
+Snapshot expiration has run with these values since 29 October 2026: each table keeps about a
+day of snapshots, which freed 2.6 GB of metadata and old gold versions. A read-only `scintille-lake retention-report` command and the
 [retention measurement runbook](retention.md) collect evidence for the proposed policy. The catalog token in Terraform has no catalog permission, so the policy is applied by hand:
 
 ```sh
 cd data
 uv run scintille-lake maintenance     # prints the two wrangler commands below
 npx wrangler basin catalog compaction enable scintille-lake --token $R2_CATALOG_TOKEN --target-size 128
-npx wrangler basin catalog snapshot-expiration enable scintille-lake --token $R2_CATALOG_TOKEN --older-than-days 3 --retain-last 5
+npx wrangler basin catalog snapshot-expiration enable scintille-lake --token $R2_CATALOG_TOKEN --older-than-days 1 --retain-last 5
 ```
 
 Runs show in the dashboard, under each table's Maintenance tab.

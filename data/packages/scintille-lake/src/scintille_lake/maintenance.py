@@ -15,10 +15,10 @@ TARGET_RANGE_MB = (64, 512)
 
 @dataclass(frozen=True)
 class MaintenancePolicy:
-    """Retention and compaction settings; snapshot values await decision #41."""
+    """Retention and compaction settings; snapshot expiration as applied on 29 October 2026."""
 
     compaction_target_mb: int = 128
-    snapshot_retention_days: int = 3
+    snapshot_retention_days: int = 1
     snapshots_retained_min: int = 5
     orphan_min_age_days: int = 7
     silver_retention_days: int = 21
