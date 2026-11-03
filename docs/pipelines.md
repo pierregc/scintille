@@ -222,12 +222,13 @@ store, probes the DuckDB write path, tests the Postgres lock and runs a job on D
 
 `feeds/storm_catalog` exports `storms/<slug>.json`, immutable replay chunks, zero-based index pages
 of 50 summaries and XML sitemaps. `hourly_storm_catalog` materializes its upstream storm assets;
-`storm_catalog_schedule` runs at minute 20 UTC and is **stopped by default**. It requests the hours
+`storm_catalog_schedule` runs at minute 35 UTC, after the hourly clouds frame, and is **stopped by
+default**. It requests the hours
 after the last published one, up to the previous hour, at most 6 per run, and skips while a catalog
 run is queued or running: a failed hour is caught up at the next tick. Each step retries 3 times
 (30 s, then exponential), and run monitoring fails a run still going after an hour, such as one
 orphaned by a deploy, which frees the `storm-tracks` pool.
-A storm starting at the beginning of an hour therefore reaches publication after 80 minutes when
+A storm starting at the beginning of an hour therefore reaches publication after 95 minutes when
 silver is available and the run succeeds, within the two-hour target.
 
 Classification (#183/#72) is on main and ADR 0009 is accepted. Before activation, materialize

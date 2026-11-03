@@ -10,6 +10,19 @@ x-service: &service
   logging:
     driver: ${SCINTILLE_LOG_DRIVER:-json-file}
 
+x-pipelines-env: &pipelines-env
+  SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+  DAGSTER_POSTGRES_URL: postgresql+psycopg2://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
+  SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
+
+# Hand freed memory back to the host instead of keeping it for later frames or runs.
+x-lean-memory: &lean-memory
+  ARROW_DEFAULT_MEMORY_POOL: system
+  MALLOC_ARENA_MAX: "2"
+  MALLOC_MMAP_THRESHOLD_: "131072"
+  MALLOC_TRIM_THRESHOLD_: "131072"
+  _RJEM_MALLOC_CONF: background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0
+
 x-pipelines: &pipelines
   <<: *service
   image: ghcr.io/pierregc/scintille-pipelines:${SCINTILLE_TAG:-main}
@@ -18,10 +31,7 @@ x-pipelines: &pipelines
     dockerfile: Dockerfile
     args:
       PACKAGE: scintille-pipelines
-  environment:
-    SCINTILLE_POSTGRES_DSN: postgresql://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
-    DAGSTER_POSTGRES_URL: postgresql+psycopg2://scintille:${POSTGRES_PASSWORD:-scintille}@postgres:5432/scintille
-    SCINTILLE_CACHE_DIR: /var/lib/scintille/cache
+  environment: *pipelines-env
   # Reference downloads (Natural Earth) survive container recreation.
   volumes:
     - cache:/var/lib/scintille/cache
@@ -59,6 +69,10 @@ services:
   dagster-daemon:
     <<: *pipelines
     command: ["dagster-daemon", "run", "-m", "scintille_pipelines.definitions"]
+    environment:
+      <<: [*pipelines-env, *lean-memory]
+    # Runs live in this container: one that outgrows it fails alone instead of stalling the host.
+    mem_limit: 4g
     healthcheck:
       test: ["CMD", "dagster-daemon", "liveness-check"]
       interval: 30s
@@ -111,13 +125,7 @@ services:
   active-storms:
     <<: *pipelines
     command: ["scintille-active-storms", "--spool", "/var/lib/scintille/spool", "--port", "8082"]
-    environment:
-      # Hand freed memory back, so the steady state stays well under the limit.
-      ARROW_DEFAULT_MEMORY_POOL: system
-      MALLOC_ARENA_MAX: "2"
-      MALLOC_MMAP_THRESHOLD_: "131072"
-      MALLOC_TRIM_THRESHOLD_: "131072"
-      _RJEM_MALLOC_CONF: background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0
+    environment: *lean-memory
     volumes:
       - spool:/var/lib/scintille/spool:ro
     cpus: 1
@@ -136,6 +144,7 @@ services:
     profiles: ["clouds"]
     command: ["scintille-ingest", "clouds", "--port", "8081"]
     environment:
+      <<: *lean-memory
       SCINTILLE_CLOUD_SOURCE: composite
       SCINTILLE_CLOUD_WORKERS: "2"
     # Two cores and the memory-mapped disks of one frame, so Dagster and the hot path keep theirs.
