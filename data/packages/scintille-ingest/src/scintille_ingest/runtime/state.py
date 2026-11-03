@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, Protocol
 
-import psycopg
-
+from .db import Database
 from .identity import FileIdentity
 
 FileState = Literal["downloaded", "published_live", "spooled"]
@@ -113,11 +112,10 @@ class PostgresState:
     """Shared with Dagster's Postgres; one row per file identity."""
 
     def __init__(self, dsn: str) -> None:
-        self._conn = psycopg.connect(dsn, autocommit=True)
-        self._conn.execute(SCHEMA)
+        self._db = Database(dsn, SCHEMA)
 
     def get(self, identity: FileIdentity) -> FileRecord | None:
-        row = self._conn.execute(
+        row = self._db.execute(
             "SELECT source, state, batch_id, etag FROM ingest_files"
             " WHERE key = %s AND checksum = %s",
             [identity.key, identity.checksum],
@@ -132,7 +130,7 @@ class PostgresState:
         batch_id: str | None = None,
         etag: str | None = None,
     ) -> None:
-        self._conn.execute(
+        self._db.execute(
             f"""
             INSERT INTO ingest_files (key, checksum, source, state, batch_id, etag, updated_at)
             VALUES (%(key)s, %(checksum)s, %(source)s, %(state)s, %(batch)s, %(etag)s, %(now)s)
@@ -159,7 +157,7 @@ class PostgresState:
         )
 
     def spooled_keys(self, source: str, versions: Mapping[str, str | None]) -> set[str]:
-        rows = self._conn.execute(
+        rows = self._db.execute(
             """
             SELECT DISTINCT f.key
             FROM ingest_files f
@@ -172,4 +170,4 @@ class PostgresState:
         return {row[0] for row in rows}
 
     def close(self) -> None:
-        self._conn.close()
+        self._db.close()
