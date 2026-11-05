@@ -152,8 +152,8 @@ export const GLOBAL_TEXEL_KM = (360 / 4096) * DEG * EARTH_RADIUS_KM;
 export const TEXEL_PX = 2;
 
 /** Level to show where one CSS pixel covers `kmPerPx` km: null while the global texture is enough. */
-export function levelFor(source: DetailSource, kmPerPx: number): number | null {
-	if (GLOBAL_TEXEL_KM <= TEXEL_PX * kmPerPx) return null;
+export function levelFor(source: DetailSource, kmPerPx: number, coarsest = false): number | null {
+	if (GLOBAL_TEXEL_KM <= TEXEL_PX * kmPerPx) return coarsest ? source.levels[0] : null;
 	for (const z of source.levels) {
 		if (texelDegrees(z, source.tileSize) * DEG * EARTH_RADIUS_KM <= TEXEL_PX * kmPerPx) return z;
 	}
@@ -175,10 +175,10 @@ export interface ViewPoint {
  * point no tile covers at its level takes the next finer level that has one (storm packs keep only
  * the finest heights).
  */
-export function wantedTiles(source: DetailSource, points: readonly ViewPoint[], finerFallback = false): TileKey[] {
+export function wantedTiles(source: DetailSource, points: readonly ViewPoint[], finerFallback = false, coarsest = false): TileKey[] {
 	const scored = new Map<string, { key: TileKey; score: number }>();
 	for (const point of points) {
-		const level = levelFor(source, point.kmPerPx);
+		const level = levelFor(source, point.kmPerPx, coarsest);
 		if (level === null) continue;
 		let found = false;
 		for (const z of source.levels) {
@@ -281,6 +281,8 @@ export interface CloudDetailOptions {
 	fadeMs?: number;
 	/** Where no tile covers a point at its level, load the next finer one instead (heights of storm packs). */
 	finerFallback?: boolean;
+	/** Keep loading the coarsest level however far the view, where the global texture has nothing to offer (heights). */
+	coarsest?: boolean;
 	fetch?: typeof fetch;
 	/** One byte per texel, rows from the north. */
 	decode?: (blob: Blob, size: number) => Promise<Uint8Array>;
@@ -325,6 +327,7 @@ export function createCloudDetail(
 		maxLoads = 6,
 		fadeMs = 400,
 		finerFallback = false,
+		coarsest = false,
 		fetch: fetchTile = (input, init) => fetch(input, init),
 		decode = decodeTile,
 	}: CloudDetailOptions = {},
@@ -506,7 +509,7 @@ export function createCloudDetail(
 			const queue: [DetailSource, TileKey][] = [];
 			for (const source of view.frames) {
 				if (!source) continue;
-				for (const key of wantedTiles(source, points, finerFallback)) {
+				for (const key of wantedTiles(source, points, finerFallback, coarsest)) {
 					if (keep.size >= slotCount - 4) break;
 					const id = tileId(source, key);
 					if (keep.has(id)) continue;

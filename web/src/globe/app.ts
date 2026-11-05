@@ -1,4 +1,4 @@
-import { Matrix4, PerspectiveCamera, Scene, type ShaderMaterial, Vector2, Vector3, WebGLRenderer } from 'three';
+import { Matrix4, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { BUILD } from '../version';
 import { SceneData } from './archive';
 import { FlashDays } from './archive/days';
@@ -167,7 +167,7 @@ export function createGlobeApp(
 	const cloudMode = compareClouds ? new URLSearchParams(location.search).get('clouds') : null;
 	const volumeScale = renderParams || phone || cloudMode === 'flat' ? 0 : preset.cloudVolume;
 	const heightDetail = volumeScale > 0 && cloudDetail
-		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 24, finerFallback: true })
+		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 80, finerFallback: true, coarsest: true })
 		: undefined;
 	const volume: CloudVolume | undefined = heightDetail
 		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, maxSamples: preset.cloudSamples, detail: cloudMode !== 'columns' })
@@ -177,10 +177,6 @@ export function createGlobeApp(
 		Object.assign(clouds.opacity.uniforms, volume.uniforms);
 		clouds.opacity.defines.VOLUME = '';
 		clouds.useVolume(volume.uniforms);
-		const air = atmosphere.mesh.material as ShaderMaterial;
-		Object.assign(air.uniforms, volume.hazeUniforms);
-		air.defines = { ...air.defines, CLOUD_HAZE: '' };
-		air.needsUpdate = true;
 		Object.assign(earth.material.uniforms, volume.uniforms);
 		earth.material.defines.CLOUD_SHADOW = '';
 		earth.material.needsUpdate = true;

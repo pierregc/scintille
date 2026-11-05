@@ -208,12 +208,12 @@ void main() {
 	float opacity = cloudOpacity(vUv, geo, uvDx, uvDy);
 #ifdef VOLUME
 	float relief = 1.0;
-	// Seen from afar, where heights are known: the shadows of taller clouds and the far relief light.
-	if (shadeOn > 0.0) {
+	// Where heights are known: the shadows of taller clouds and the relief light (ADR 0034).
+	if (reliefOn > 0.0) {
 		float pxKm = distance(cameraPosition, vWorldPosition) * reliefKmPerUnit / max(dot(n, view), 0.3);
 		vec3 far = farRelief(latLon, pxKm);
-		direct *= mix(1.0, mix(reliefSky, 1.0, far.b), shadeOn);
-		relief = mix(1.0, far.g, reliefWeight(pxKm, opacity / max(cloudMaxOpacity, 1e-3)));
+		direct *= mix(1.0, mix(reliefSky, 1.0, far.b), reliefOn);
+		relief = mix(1.0, far.g, reliefWeight(opacity / max(cloudMaxOpacity, 1e-3)));
 	}
 #endif
 

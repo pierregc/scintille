@@ -5,7 +5,6 @@ import {
 	kmBetween,
 	marchPhase,
 	NEAR_MAX_KM,
-	RELIEF_NEAR_KM,
 	RELIEF_TOP_PX_KM,
 	reliefFade,
 	volumeFade,
@@ -103,19 +102,16 @@ describe('halton', () => {
 });
 
 describe('reliefFade', () => {
-	it('leaves close views to the volume, shades far ones, and stops before the heights do', () => {
-		expect(reliefFade(400, 0.25)).toEqual({ shade: 1, relief: 0 });
-		expect(reliefFade(RELIEF_NEAR_KM[1], 0.8)).toEqual({ shade: 1, relief: 1 });
-		expect(reliefFade(VOLUME_FADE_KM[1], 1.8)).toEqual({ shade: 1, relief: 1 });
-		expect(reliefFade(7700, RELIEF_TOP_PX_KM[1])).toEqual({ shade: 0, relief: 0 });
-		expect(reliefFade(18000, 11)).toEqual({ shade: 0, relief: 0 });
-		const mid = reliefFade(7000, (RELIEF_TOP_PX_KM[0] + RELIEF_TOP_PX_KM[1]) / 2);
-		expect(mid.shade).toBeCloseTo(0.5, 6);
-		expect(mid.relief).toBeCloseTo(0.5, 6);
+	it('shows the same relief from the floor to the whole globe', () => {
+		expect(reliefFade(0.25)).toBe(1);
+		expect(reliefFade(1.8)).toBe(1);
+		expect(reliefFade(16)).toBe(1);
+		expect(reliefFade(RELIEF_TOP_PX_KM[1])).toBe(0);
+		expect(reliefFade((RELIEF_TOP_PX_KM[0] + RELIEF_TOP_PX_KM[1]) / 2)).toBeCloseTo(0.5, 6);
 	});
 
-	it('stops before a texel of the global frame (9.8 km) spans two pixels, where heights stop loading', () => {
-		expect(RELIEF_TOP_PX_KM[1]).toBeLessThan((((360 / 4096) * Math.PI) / 180) * 6371 / 2);
+	it('fades out once texels of the coarsest window span under about two pixels', () => {
+		expect(WINDOW_TEXEL_KM[WINDOW_TEXEL_KM.length - 1] / RELIEF_TOP_PX_KM[0]).toBeLessThanOrEqual(2);
 	});
 });
 
