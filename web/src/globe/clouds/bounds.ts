@@ -22,6 +22,9 @@ export const CLOUD_DAY_COLOR = [0.93, 0.94, 0.96] as const;
 export const CLOUD_WARM_TINT = [1.6, 0.8, 0.45] as const;
 export const CLOUD_TERMINATOR_TINT = 0.8;
 
+/** Height of the flat cloud layer: over the lightning glows (12 km) and channels, so flashes start inside the clouds. */
+export const CLOUD_SHELL_KM = 13;
+
 /** Opacity of the densest column seen straight down, and the cover up to which a column is drawn as observed (ADR 0031). */
 export const VOLUME_MAX_OPACITY = 0.95;
 export const VOLUME_KNEE = 0.5;

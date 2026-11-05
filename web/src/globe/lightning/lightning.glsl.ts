@@ -5,7 +5,7 @@ import { densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
-import { veilGlsl } from './veil';
+import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
 
 export const lightningVertexShader = /* glsl */ `
@@ -47,7 +47,13 @@ ${volumeFieldGlsl}
 ${densityGlsl}
 void main() {
 	vec3 normal = normalize(mat3(modelMatrix) * flash.xyz);
-	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + lift), 1.0)).xyz;
+	float glowLift = lift;
+#ifdef VOLUME
+	// Under a cloud drawn in relief the glow stays inside it, under its top.
+	float glowTop = cloudTopAt(flash.xyz);
+	if (glowTop > 0.0) glowLift = min(lift, max(glowTop - ${f(VEIL.reliefMargin)}, 1.0) / 6371.0);
+#endif
+	vec3 center = (modelMatrix * vec4(flash.xyz * radius * (1.0 + glowLift), 1.0)).xyz;
 	float facing = dot(normal, normalize(cameraPosition - center));
 	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, the newest of which stay points from afar.
 	float hero = heroWeight(heroLot(flashShape.w, flashShape.x, isGround(int(flashLook.x + 0.5))), heroShare);
