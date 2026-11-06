@@ -30,8 +30,8 @@ import { breadcrumbs, website } from '../seo/jsonld';
 				<ol>
 					<li><b>Satellites</b>GLM file every 20 s, LI every 10 min</li>
 					<li><b>ingest-live</b>Polls, parses, dedupes</li>
-					<li><b>Live feed</b>30 s chunks on R2, last hour</li>
-					<li><b>Globe</b>Plays 2 min behind real time</li>
+					<li><b>Live feed</b>20 s chunks on R2, last hour</li>
+					<li><b>Globe</b>Plays 70 s behind real time</li>
 				</ol>
 			</section>
 			<section>
@@ -47,7 +47,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 
 		<h2 id="sources">Sources</h2>
 		<ul>
-			<li>NOAA GOES-East and GOES-West lightning mappers (GLM): the Americas. Listed every 10 s on AWS open data.</li>
+			<li>NOAA GOES-East and GOES-West lightning mappers (GLM): the Americas. Listed every 2 s on AWS open data.</li>
 			<li>EUMETSAT MTG Lightning Imager (LI): Europe, Africa, the Atlantic. Checked every 30 s on the EUMETSAT Data Store.</li>
 			<li>Clouds: hourly composite of GOES, Himawari and MTG full disks, gaps filled by NOAA GMGSI. Cloud-top heights come from the infrared and the GFS temperature profile.</li>
 		</ul>
@@ -55,8 +55,8 @@ import { breadcrumbs, website } from '../seo/jsonld';
 
 		<h2 id="delay">Near real time</h2>
 		<ul>
-			<li>A GLM file lands about 30 s after the flash; the feed publishes every 30 s.</li>
-			<li>The globe plays 2 min behind, so every flash is loaded before it is due.</li>
+			<li>A GLM file lands about 20 s after the flash; the feed publishes about every 20 s.</li>
+			<li>The globe plays 70 s behind, so flashes are loaded before they are due.</li>
 			<li>LI ships 10 minute files: Europe and Africa play 12 min behind.</li>
 		</ul>
 		<p>Live delay per satellite is on the <a href="/status/">status page</a>.</p>
