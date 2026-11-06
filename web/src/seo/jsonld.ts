@@ -85,7 +85,7 @@ export interface StormArticle {
 	image?: string;
 }
 
-/** Storm pages (#88): an Article about the storm, with its time span and place. */
+/** Storm pages: an Article about the storm, with its time span and place. */
 export function stormArticle(storm: StormArticle): JsonLd {
 	const url = new URL(storm.path, SITE_URL).href;
 	return {

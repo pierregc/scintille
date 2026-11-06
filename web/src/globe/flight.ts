@@ -23,7 +23,7 @@ export interface FlyToOptions {
 /** A camera position as shared in links; heading defaults to north. */
 export type CameraView = Required<Omit<FlyToOptions, 'duration' | 'heading'>> & { heading?: number };
 
-/** Flight tuning, exposed for the cinematic presets (#83). */
+/** Flight tuning, exposed for the cinematic presets. */
 export const FLIGHT = {
 	minDurationMs: 1800,
 	/** Extra milliseconds per radian travelled. */

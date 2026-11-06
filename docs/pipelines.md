@@ -209,7 +209,7 @@ so its value never shows in the UI or the logs. Unset variables fall back to the
 | Resource | Variables |
 |---|---|
 | `lake` | `SCINTILLE_LAKE_URI`, `SCINTILLE_LAKE_WAREHOUSE`, `SCINTILLE_LAKE_TOKEN` ([lakehouse](lakehouse.md)) |
-| `postgres` | `SCINTILLE_POSTGRES_DSN`; `partition_lock(key)` is the advisory lock shared with `lake-writer` and backfills |
+| `postgres` | `SCINTILLE_POSTGRES_DSN`; the per-partition advisory locks shared with `lake-writer` and backfills are in `scintille_lake.locks` |
 | `r2` | `SCINTILLE_R2_ENDPOINT`, `SCINTILLE_R2_BUCKET`, `SCINTILLE_R2_ACCESS_KEY_ID`, `SCINTILLE_R2_SECRET_ACCESS_KEY` |
 
 ## Tests

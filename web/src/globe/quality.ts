@@ -8,7 +8,7 @@ export interface QualityPreset {
 	maxPixelRatio: number;
 	/** Flashes kept on the GPU; null keeps the whole live window. */
 	maxFlashes: number | null;
-	/** Clouds lit from inside by flashes (#64). */
+	/** Clouds lit from inside by flashes. */
 	cloudLight: boolean;
 	/** Width of the equirectangular flash light map; 0 without one. */
 	lightMapWidth: number;
@@ -18,7 +18,7 @@ export interface QualityPreset {
 	cloudBicubic: boolean;
 	/** Finer cloud tiles near the camera. */
 	cloudDetail: boolean;
-	/** Bloom and grading (#58). */
+	/** Bloom and grading. */
 	postProcessing: boolean;
 	/** GPU memory for surface detail tiles (ADR 0022), MB. */
 	surfaceMb: number;

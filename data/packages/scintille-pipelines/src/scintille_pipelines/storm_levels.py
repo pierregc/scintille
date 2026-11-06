@@ -52,7 +52,7 @@ STORM_LEVELS = gold_table(
 
 
 class StormLevelsConfig(Config):
-    """Defaults are the proposal of ADR 0009, pending its decision (#71)."""
+    """Defaults from ADR 0009."""
 
     score: str = "flashes_x_peak"
     thresholds: list[float] = [8, 25, 120, 450]  # noqa: RUF012

@@ -4,7 +4,7 @@ import { flickerLength, PROFILE } from './profile';
 
 /**
  * Floats per channel segment: start xyz, width (CSS px), end xyz, light, path arrival at start and end, level, cloud flag.
- * Level: 0 the main channel, 1 to 3 branches by depth, 4 a second ground contact path (ADR 0033; #402 lights it from a later stroke).
+ * Level: 0 the main channel, 1 to 3 branches by depth, 4 a second ground contact path (ADR 0033), lit by a later stroke.
  * Cloud flag: 0 clear air (crisp, with a halo), 1 in the cloud (veiled by depth), 2 a trace in the cloud (crisp, at least 30 % of its light).
  * Arrival: the in-cloud stem (a cloud-to-ground feed, an in-cloud trunk) is run by `SKELETON.stemArrival`; a
  * cloud-to-ground drop then reaches its strike at 1, its branches within it; in-cloud fans end their growth together at 1.

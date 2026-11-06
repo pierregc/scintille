@@ -88,8 +88,6 @@ variable `DEPLOY_ENABLED` is `true`:
 - **`deploy`** (push to `main` or a manual run on `main`, without re-running the checks): rebuilds with the production-only
   variables (Web Analytics token), runs `wrangler deploy --message <sha>`, then polls
   `https://scintille.app/version.json` until it reports the commit just deployed (up to 5 minutes).
-  That last check only runs when `SITE_PUBLIC` is `true`, since the pre-launch Access gate hides
-  the site from CI.
   Deploys are serialized by the `web-deploy-production` concurrency group and never cancelled.
 
 To redeploy `main` without a change: Actions > web > Run workflow, or
@@ -148,9 +146,6 @@ footer of the About sheet), which is how the `deploy` job and a human can tell w
 Rollback: Workers & Pages > `scintille` > Deployments > Rollback, or `wrangler rollback`; the durable
 fix is a revert PR ([deploy](deploy.md#rollback)).
 
-Until launch, `scintille.app` is behind a Cloudflare Access gate (#142); Previews and
-`data.scintille.app` are public.
-
 ### VPS deploy
 
 Ingestion and Dagster run on one OVH VPS with Docker Compose ([ADR 0008](adr/0008-ovh-vps.md)). On a
@@ -172,7 +167,6 @@ fails the job. It keeps the last five releases. Settings and secrets of the serv
 | Name | Kind | Used by | Effect |
 |---|---|---|---|
 | `DEPLOY_ENABLED` | Variable | `web` | `true` turns on `deploy`, `preview` and `preview-cleanup` |
-| `SITE_PUBLIC` | Variable | `web` | `true` turns on the post-deploy version check (after #142) |
 | `VPS_DEPLOY` | Variable | `images` | `true` turns on the VPS `deploy` job |
 | `VPS_HOST` | Variable | `images` | VPS address |
 | `CF_WEB_ANALYTICS_TOKEN` | Variable | `web` | Public Web Analytics token, production builds only |

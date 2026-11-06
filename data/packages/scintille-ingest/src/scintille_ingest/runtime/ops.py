@@ -1,4 +1,4 @@
-"""Operational metrics: `live/metrics.json`, built every minute by `ingest-live` (#38)."""
+"""Operational metrics: `live/metrics.json`, built every minute by `ingest-live`."""
 
 import asyncio
 import contextlib

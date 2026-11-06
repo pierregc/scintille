@@ -12,7 +12,7 @@ from scintille_contract.models import FlashRecord
 
 # Event times may run a little past the product window (flash grouping, clock skew).
 WINDOW_TOLERANCE = timedelta(minutes=5)
-# Filled later by the calibration (#33).
+# Null for a source or unit the calibration does not know.
 NULLABLE = {"intensity"}
 
 

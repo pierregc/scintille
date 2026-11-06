@@ -16,7 +16,7 @@ from scintille_lake.migrate import migrate, sync_table
 from scintille_lake.tables import FLASHES, INGEST_LOG, gold_table
 from scintille_pipelines.gold import models
 from scintille_pipelines.gold.assets import GOLD, daily_stats_feed, feed_key
-from scintille_pipelines.resources import FeedResource, LakeResource, PostgresResource
+from scintille_pipelines.resources import FeedResource, LakeResource
 from scintille_pipelines.storm_cells import storm_cells
 from scintille_pipelines.storm_names import storm_names
 from scintille_pipelines.storms import storm_tracks, storms
@@ -123,14 +123,3 @@ def test_storm_cells_rerun_against_lakekeeper() -> None:
             run_config={"ops": {"gold__storm_tracks": {"config": {"new_chain": True}}}},
         )
         assert result.success
-
-
-def test_partition_lock_is_exclusive() -> None:
-    postgres = PostgresResource()
-    key = "silver.flashes/2026-07-15/glm-east"
-    with postgres.partition_lock(key) as held:
-        assert held
-        with postgres.partition_lock(key, wait=False) as other:
-            assert not other
-    with postgres.partition_lock(key, wait=False) as after:
-        assert after

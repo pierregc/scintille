@@ -10,8 +10,6 @@ export const CHANNEL = {
 	/** Decay of branches after the first stroke (cloud-to-ground) or after the leader reaches them (in-cloud), seconds. */
 	branchTau: 0.06,
 	cloudBranchTau: 0.12,
-	/** Kept for the frozen web/spike shaders; no longer read by the renderer. */
-	cloudStart: 0.2,
 	/** Share of a channel's light left over sunlit clouds, which outshine a thin channel seen from orbit. */
 	dayLevel: 0.3,
 	/** In-cloud light drifts along the channel over the flash, this many observed radii either side of the position. */

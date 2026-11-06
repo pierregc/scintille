@@ -1,4 +1,4 @@
-"""Dagster's own storage on the local Postgres, configured as in production (#271)."""
+"""Dagster's own storage on the local Postgres, configured as in production."""
 
 from collections.abc import Iterator
 from pathlib import Path

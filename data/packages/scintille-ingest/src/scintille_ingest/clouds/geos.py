@@ -76,11 +76,6 @@ class Points:
         return cls(sin_phi, np.cos(phi), np.sin(lam), np.cos(lam), normal)
 
 
-def ecef(lat: Array, lon: Array, height: Array | float, view: View) -> tuple[Array, Array, Array]:
-    """Earth-centred coordinates in metres, x towards the satellite's longitude."""
-    return _ecef(Points.of(lat, lon), height, view)[:3]
-
-
 def _ecef(
     points: Points, height: Array | float, view: View
 ) -> tuple[Array, Array, Array, Array, Array]:

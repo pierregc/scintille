@@ -16,7 +16,7 @@ Method. Both prototypes run on the merged renderer behind `?surface=base|tiles|v
 cycles), in development and PR previews only. Measurements use `web/scripts/bench.mjs` on the five
 reference storms and four poses of [immersive view](../immersive-view.md), afterglow 0, clouds on,
 against a local production build that proxies the live data
-([`web/spike/surface`](../../web/spike/surface/README.md)). Same Mac as the baseline, headless
+([`web/spike/surface`](https://github.com/pierregc/scintille/tree/87e41af/web/spike/surface)). Same Mac as the baseline, headless
 Chromium on Metal: frame costs run about 1 ms above the headed baseline, so modes are compared with
 each other, not with the baseline.
 
