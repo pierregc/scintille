@@ -66,3 +66,4 @@ What becomes easier, what becomes harder, what we must watch.
 | [0034](0034-one-cloud-relief.md) | One cloud relief from the globe to the floor | accepted |
 | [0035](0035-lightning-inside-clouds.md) | Lightning inside the clouds | accepted |
 | [0036](0036-current-adr-statuses.md) | Keep ADR statuses current | accepted |
+| [0037](0037-storm-cloud-detail.md) | 0.5 km cloud detail under strong storms | accepted |

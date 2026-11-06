@@ -61,8 +61,8 @@ describe('within', () => {
 			const centre: [number, number] = [(random() - 0.5) * 140, (random() - 0.5) * 360];
 			const far: [number, number] = [Math.max(-80, Math.min(80, centre[0] + (random() - 0.5) * 30)), centre[1] + (random() - 0.5) * 30];
 			const near = within(centre, far, NEAR_MAX_KM);
-			const fine = windowAround(near[0], near[1], 1, 512);
-			const coarse = windowAround(centre[0], centre[1], 2, 512);
+			const fine = windowAround(near[0], near[1], 2, 512);
+			const coarse = windowAround(centre[0], centre[1], 3, 512);
 			for (const [u, v] of [[-0.96, -0.96], [0.96, -0.96], [-0.96, 0.96], [0.96, 0.96]]) {
 				const lat = fine.lat + v * fine.halfLat;
 				const lon = fine.lon + u * fine.halfLon;

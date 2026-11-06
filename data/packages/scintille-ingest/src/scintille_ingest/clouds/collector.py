@@ -10,18 +10,20 @@ import sys
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 
 import obstore
 from obstore.store import ObjectStore
 
 from scintille_ingest.runtime.metrics import Metrics
 
-from . import pyramid
+from . import pyramid, storm_level
 from .gfs import GfsSkin, SkinTemperature
 from .gmgsi import GmgsiProduct, Mosaic, list_products, read_mosaic
 from .profile import GfsProfile, HeightTable
 from .publish import CloudPublisher
 from .sources import SlotFiles, Sources, decode
+from .storm_detail import Position
 from .sun import subsolar_point
 from .texture import TIERS, encode_tiers, opacity
 
@@ -144,6 +146,10 @@ def _max_rss_mb(who: int) -> int:
     return round(peak / (1 << 20 if sys.platform == "darwin" else 1 << 10))
 
 
+class StormAreas(Protocol):
+    async def positions(self, slot: datetime) -> list[Position]: ...
+
+
 def hour_slots(now: datetime, window: timedelta) -> list[datetime]:
     """Whole hours within the window, oldest first."""
     newest = now.replace(minute=0, second=0, microsecond=0)
@@ -166,6 +172,7 @@ class CompositeCollector:
         workers: int = 2,
         metrics: Metrics | None = None,
         profile: GfsProfile | None = None,
+        storms: StormAreas | None = None,
         cadence: float = 60.0,
         max_backoff: float = 600.0,
         deadline: timedelta = timedelta(minutes=45),
@@ -176,6 +183,7 @@ class CompositeCollector:
         self.download_timeout = download_timeout
         self.skin = skin
         self.profile = profile
+        self.storms = storms
         self.fallback = fallback
         self.publisher = publisher
         self.work_dir = work_dir
@@ -222,8 +230,16 @@ class CompositeCollector:
             skin = await self.skin.at(files.slot)
             table = await self.profile.at(files.slot) if self.profile else None
             fallback = await asyncio.to_thread(self._fallback, files.slot)
+            storms = await self._storm_positions(files.slot)
             rendered = await asyncio.to_thread(
-                self._render, downloaded, directory / "disks", skin, fallback, files.slot, table
+                self._render,
+                downloaded,
+                directory / "disks",
+                skin,
+                fallback,
+                files.slot,
+                table,
+                storms,
             )
         finally:
             await asyncio.to_thread(shutil.rmtree, directory, True)
@@ -237,6 +253,7 @@ class CompositeCollector:
             rendered.tiles,
             rendered.heights,
             table.label if table else f"lapse from {skin.label}",
+            rendered.storm,
         )
         self.metrics.inc("cloud_frames_total")
         self.metrics.set("cloud_frame_age_seconds", (now - files.slot).total_seconds())
@@ -252,6 +269,8 @@ class CompositeCollector:
                     "tiles": len(rendered.tiles),
                     "tile_bytes": sum(len(b) for b in rendered.tiles.values()),
                     "height_bytes": sum(len(b) for b in rendered.heights.values()),
+                    "storm_tiles": len(rendered.storm),
+                    "storm_bytes": sum(len(b) for b in rendered.storm.values()),
                     "bytes": {tier: len(b) for tier, b in rendered.textures.items()},
                     "max_rss_mb": _max_rss_mb(resource.RUSAGE_SELF),
                     "worker_max_rss_mb": _max_rss_mb(resource.RUSAGE_CHILDREN),
@@ -266,6 +285,15 @@ class CompositeCollector:
         """Frames cut short by a restart leave gigabytes behind."""
         for directory in self.work_dir.glob("[0-9]" * 8 + "T" + "[0-9]" * 4):
             shutil.rmtree(directory, ignore_errors=True)
+
+    async def _storm_positions(self, slot: datetime) -> list[Position]:
+        if self.storms is None:
+            return []
+        try:
+            return await self.storms.positions(slot)
+        except Exception:
+            log.warning("active storms unreadable; no storm tiles", exc_info=True)
+            return []
 
     def _fallback(self, slot: datetime) -> Mosaic | None:
         """The newest GMGSI mosaic at most two hours before the slot, if any."""
@@ -289,17 +317,20 @@ class CompositeCollector:
         fallback: Mosaic | None,
         slot: datetime,
         table: HeightTable | None = None,
+        storms: list[Position] | None = None,
     ) -> pyramid.Rendered:
         directory.mkdir(parents=True, exist_ok=True)
         table = table.mapped(directory / "tops.npy") if table else None
-        base = pyramid.Inputs((), skin.values, subsolar_point(slot), fallback, table)
-        satellites = decode(downloaded, directory, base.top_at)
+        subsolar = subsolar_point(slot)
+        keys = storm_level.storm_keys(storms or [], subsolar)
+        base = pyramid.Inputs((), skin.values, subsolar, fallback, table)
+        satellites = decode(
+            downloaded, directory, base.top_at, storm_level.windows(keys) if keys else None
+        )
         for path in downloaded.values():
             for file in path:
                 file.unlink(missing_ok=True)
-        inputs = pyramid.Inputs(
-            tuple(satellites), skin.values, subsolar_point(slot), fallback, table
-        )
+        inputs = pyramid.Inputs(tuple(satellites), skin.values, subsolar, fallback, table, keys)
         return pyramid.frame(inputs, self.workers)
 
     async def run(self) -> None:

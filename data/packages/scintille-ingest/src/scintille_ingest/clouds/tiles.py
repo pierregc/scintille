@@ -1,4 +1,5 @@
-"""Detail tiles: equirectangular pyramid levels of about 4, 2 and 1 km (ADR 0023)."""
+"""Detail tiles: equirectangular pyramid levels of about 4, 2 and 1 km (ADR 0023), and 0.5 km
+under strong storms by day (ADR 0037)."""
 
 import base64
 import io
@@ -13,6 +14,7 @@ from scintille_contract.cloud_archive import (
     DETAIL_HEIGHT_LEVELS,
     DETAIL_HEIGHT_MAX_KM,
     DETAIL_LEVELS,
+    DETAIL_STORM_LEVEL,
     DETAIL_TILE_SIZE,
 )
 
@@ -22,6 +24,8 @@ BORDER = DETAIL_BORDER
 """Texels copied from the neighbouring tiles on each side, so cubic filtering needs no neighbour."""
 LEVELS = tuple(DETAIL_LEVELS)
 FINE_LEVEL = LEVELS[-1]
+STORM_LEVEL = DETAIL_STORM_LEVEL
+"""Only some of its tiles exist, listed in the frame's manifest (ADR 0037)."""
 HEIGHT_LEVELS = tuple(DETAIL_HEIGHT_LEVELS)
 HEIGHT_MAX_KM = float(DETAIL_HEIGHT_MAX_KM)
 """Height tiles map 0 to 255 onto 0 to this many km above sea level (ADR 0028)."""
@@ -131,14 +135,37 @@ COARSE_SLOTS = INDEX_SLOTS - rows(FINE_LEVEL) * columns(FINE_LEVEL)
 HEIGHT_SLOTS = slots(HEIGHT_LEVELS)
 
 
-def pack(tiles: Mapping[Key, bytes], heights: Mapping[Key, bytes] | None = None) -> bytes:
+def storm_slot(key: Key) -> int:
+    return key.y * columns(key.z) + key.x
+
+
+def storm_slots(keys: Iterable[Key]) -> str:
+    """Base64 of the storm level tiles present: ascending little-endian uint16 slots, row-major
+    from the north-west."""
+    slots = np.array(sorted(storm_slot(k) for k in keys), "<u2")
+    return base64.b64encode(slots.tobytes()).decode()
+
+
+def storm_index_offset(heights: bool) -> int:
+    return (INDEX_SLOTS + (HEIGHT_SLOTS if heights else 0)) * 8
+
+
+def pack(
+    tiles: Mapping[Key, bytes],
+    heights: Mapping[Key, bytes] | None = None,
+    storm: Mapping[Key, bytes] | None = None,
+) -> bytes:
     """One object per frame: an index of (offset, length) little-endian uint32 pairs, one per
     possible opacity tile (length 0 where absent); with `heights`, a second index of the same form
-    for the height levels; then the WebP tiles back to back. Offsets count from the start."""
+    for the height levels; with `storm`, a pair per storm level tile present, in slot order; then
+    the WebP tiles back to back. Offsets count from the start."""
     index = np.zeros((INDEX_SLOTS, 2), "<u4")
     height_index = np.zeros((HEIGHT_SLOTS if heights is not None else 0, 2), "<u4")
+    storm_keys = sorted(storm or {}, key=storm_slot)
+    assert all(k.z == STORM_LEVEL for k in storm_keys)
+    storm_index = np.zeros((len(storm_keys), 2), "<u4")
     body = io.BytesIO()
-    start = (INDEX_SLOTS + len(height_index)) * 8
+    start = (INDEX_SLOTS + len(height_index) + len(storm_index)) * 8
     for key in sorted(tiles):
         data = tiles[key]
         index[index_slot(key)] = (start + body.tell(), len(data))
@@ -147,12 +174,25 @@ def pack(tiles: Mapping[Key, bytes], heights: Mapping[Key, bytes] | None = None)
         data = (heights or {})[key]
         height_index[index_slot(key, HEIGHT_LEVELS)] = (start + body.tell(), len(data))
         body.write(data)
-    return index.tobytes() + height_index.tobytes() + body.getvalue()
+    for i, key in enumerate(storm_keys):
+        data = (storm or {})[key]
+        storm_index[i] = (start + body.tell(), len(data))
+        body.write(data)
+    return index.tobytes() + height_index.tobytes() + storm_index.tobytes() + body.getvalue()
 
 
 def unpack(data: bytes, key: Key) -> bytes | None:
     offset, length = np.frombuffer(data, "<u4", 2, index_slot(key) * 8)
     return data[int(offset) : int(offset) + int(length)] if length else None
+
+
+def unpack_storm(data: bytes, key: Key, slots: str, index_offset: int) -> bytes | None:
+    listed = np.frombuffer(base64.b64decode(slots), "<u2")
+    rank = int(np.searchsorted(listed, storm_slot(key)))
+    if rank == listed.size or listed[rank] != storm_slot(key):
+        return None
+    offset, length = np.frombuffer(data, "<u4", 2, index_offset + rank * 8)
+    return data[int(offset) : int(offset) + int(length)]
 
 
 def unpack_height(data: bytes, key: Key) -> bytes | None:

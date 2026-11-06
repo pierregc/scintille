@@ -66,6 +66,18 @@ class CloudHeights(BaseModel):
     """Temperature profile the heights come from, or the lapse rate fallback."""
 
 
+class CloudStormDetail(BaseModel):
+    """Tiles of the storm level in the same pack, after the other indexes (ADR 0037)."""
+
+    level: int
+    slots: str
+    """Tiles present: base64 of ascending little-endian uint16 slots, row-major from the
+    north-west."""
+    index_offset: int = Field(strict=True, ge=0)
+    index_bytes: int = Field(strict=True, ge=0)
+    """One (offset, length) pair per slot, in the same order."""
+
+
 class CloudDetail(BaseModel):
     """Finer tiles of the same frame, for close views (ADR 0023)."""
 
@@ -85,6 +97,18 @@ class CloudDetail(BaseModel):
     index_bytes: int = Field(strict=True, ge=0)
     """Length of the index at the start of the object."""
     height: CloudHeights | None = None
+    storm: CloudStormDetail | None = None
+
+
+def storm_ref(storm: Mapping[tiles.Key, bytes] | None, heights: bool) -> CloudStormDetail | None:
+    if not storm:
+        return None
+    return CloudStormDetail(
+        level=tiles.STORM_LEVEL,
+        slots=tiles.storm_slots(storm),
+        index_offset=tiles.storm_index_offset(heights),
+        index_bytes=len(storm) * 8,
+    )
 
 
 class CloudFrameRef(BaseModel):
@@ -196,13 +220,16 @@ class CloudPublisher:
         detail: Mapping[tiles.Key, bytes] | None = None,
         heights: Mapping[tiles.Key, bytes] | None = None,
         heights_reference: str = "",
+        storm: Mapping[tiles.Key, bytes] | None = None,
     ) -> CloudFrameRef:
         """Detail tiles, textures, then the manifest, then the archive copies. Live textures that
         left the window are deleted on the next publish, so cached manifests still resolve."""
         time = time.astimezone(UTC)
         name = texture_name(time, product)
         detail_ref = (
-            await self._detail(time, name, detail, heights, heights_reference) if detail else None
+            await self._detail(time, name, detail, heights, heights_reference, storm)
+            if detail
+            else None
         )
         refs = {}
         for tier, data in textures.items():
@@ -244,10 +271,11 @@ class CloudPublisher:
         detail: Mapping[tiles.Key, bytes],
         heights: Mapping[tiles.Key, bytes] | None = None,
         heights_reference: str = "",
+        storm: Mapping[tiles.Key, bytes] | None = None,
     ) -> CloudDetail:
         """Uploads the tiles as one object; the returned path is relative to the archive root."""
         path = detail_path(time, name)
-        data = tiles.pack(detail, heights)
+        data = tiles.pack(detail, heights, storm)
         await self.archive.put(path, data, PACK_HEADERS)
         return CloudDetail(
             path=path,
@@ -267,6 +295,7 @@ class CloudPublisher:
             )
             if heights is not None
             else None,
+            storm=storm_ref(storm, heights is not None),
         )
 
     def manifest(self, now: datetime) -> CloudManifest:
@@ -405,8 +434,21 @@ class CloudPublisher:
             if detail.height
             else None
         )
+        storm = (
+            {
+                k: tile
+                for k in sorted(keys_under(positions, (tiles.STORM_LEVEL,)))
+                if (
+                    tile := tiles.unpack_storm(
+                        pack, k, detail.storm.slots, detail.storm.index_offset
+                    )
+                )
+            }
+            if detail.storm
+            else None
+        )
         storm_path = f"{path.removesuffix('.tiles')}-storms.tiles"
-        data = tiles.pack(kept, heights)
+        data = tiles.pack(kept, heights, storm)
         await self.archive.put(storm_path, data, PACK_HEADERS)
         log.info(
             "storm cloud detail kept",
@@ -418,6 +460,7 @@ class CloudPublisher:
                 "fine": tiles.bitmap(kept, tiles.FINE_LEVEL),
                 "coarse": tiles.coarse_bitmap(kept),
                 "size_bytes": len(data),
+                "storm": storm_ref(storm, heights is not None),
             }
         )
 
