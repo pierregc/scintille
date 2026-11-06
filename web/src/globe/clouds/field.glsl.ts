@@ -5,8 +5,8 @@
 export const volumeFieldGlsl = /* glsl */ `
 uniform highp sampler2DArray volumeField;
 uniform highp sampler2DArray volumeSun;
-uniform vec4 volumeWindows[5];
-// Windows in use: the four of the march, or up to five while only the far relief is baked.
+uniform vec4 volumeWindows[6];
+// Windows in use: the four of the march, or up to six while only the relief is baked.
 uniform int volumeCount;
 uniform float volumeOn;
 uniform float volumeMaxOpacity;
@@ -28,7 +28,7 @@ vec3 volumeWindowUv(vec2 latLon, int k) {
 
 // The finest baked window holding a point and its texture coordinates; z is -1 outside them all.
 vec3 volumeWindowAt(vec2 latLon) {
-	for (int k = 0; k < 5; k++) {
+	for (int k = 0; k < 6; k++) {
 		if (k >= volumeCount) break;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z < 0.98) return vec3(w.xy, float(k));
@@ -39,7 +39,7 @@ vec3 volumeWindowAt(vec2 latLon) {
 // A baked texture at a point: the finest window, faded into the next one near its edge so the
 // detail of two windows never meets at a visible seam. Alpha 0 outside every window.
 vec4 volumeSample(highp sampler2DArray map, vec2 latLon) {
-	for (int k = 0; k < 5; k++) {
+	for (int k = 0; k < 6; k++) {
 		if (k >= volumeCount) break;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z >= 0.98) continue;
@@ -104,29 +104,27 @@ float cloudShadowAt(vec3 direction) {
 `;
 
 /**
- * Far relief (ADR 0031): the light of the dense tops' broad shape and the sunlit share of each top,
- * baked in the 4, 8 and 16 km windows, read at full resolution where a screen pixel covers some
- * kilometres. Include after `volumeFieldGlsl`.
+ * Relief light (ADR 0034): the light of the dense tops' broad shape and the sunlit share of each top,
+ * baked in every window and read at full resolution at every height. Include after `volumeFieldGlsl`.
  */
 export const reliefFieldGlsl = /* glsl */ `
 uniform highp sampler2DArray volumeRelief;
 uniform float reliefOn;
-uniform float shadeOn;
 
-// Deck light, far relief light and sunlit share at the top in window k and coarser, faded into the
-// next window near its edge; (1, 1, 1) past them all.
+// Relief light and sunlit share at the top (g, b) in window k and coarser, faded into the next window
+// near its edge; (1, 1, 1) past them all.
 vec3 reliefIn(vec2 latLon, int from) {
-	for (int k = 2; k < 5; k++) {
+	for (int k = 0; k < 6; k++) {
 		if (k < from) continue;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z >= 0.98) continue;
-		vec3 fine = textureLod(volumeRelief, vec3(w.xy, float(k - 2)), 0.0).rgb;
+		vec3 fine = textureLod(volumeRelief, vec3(w.xy, float(k)), 0.0).rgb;
 		float edge = smoothstep(0.82, 0.96, w.z);
 		if (edge <= 0.0) return fine;
 		vec3 coarse = vec3(1.0);
-		if (k < 4) {
+		if (k < 5) {
 			vec3 c = volumeWindowUv(latLon, k + 1);
-			if (c.z < 0.98) coarse = textureLod(volumeRelief, vec3(c.xy, float(k - 1)), 0.0).rgb;
+			if (c.z < 0.98) coarse = textureLod(volumeRelief, vec3(c.xy, float(k + 1)), 0.0).rgb;
 		}
 		return mix(fine, coarse, edge);
 	}
@@ -134,23 +132,20 @@ vec3 reliefIn(vec2 latLon, int from) {
 }
 
 // The relief at a point seen with pxKm km per CSS pixel, from the window whose texel spans about
-// 3.4 pixels: broad shapes 10 to 40 pixels across while a pixel covers up to about 4.7 km.
+// 3.4 pixels: broad shapes 10 to 40 pixels across at every height, up to the 32 km window.
 vec3 farRelief(vec2 latLon, float pxKm) {
 	float level = log2(max(pxKm * 3.4, 1e-3));
-	float lod = clamp(level, 2.0, 4.0);
+	float lod = clamp(level, 0.0, 5.0);
 	int k = int(floor(lod));
 	vec3 r = reliefIn(latLon, k);
 	if (lod > float(k)) r = mix(r, reliefIn(latLon, k + 1), lod - float(k));
-	return mix(r, vec3(1.0), smoothstep(5.0, 5.6, level));
+	return mix(r, vec3(1.0), smoothstep(6.0, 6.6, level));
 }
 
-// Share of the far relief light where a pixel covers pxKm km: the volume's own light until then.
-float reliefShare(float pxKm) { return reliefOn * smoothstep(0.9, 1.6, pxKm); }
+// How much of the relief light shows: on dense enough cloud.
+float reliefWeight(float cover) { return reliefOn * smoothstep(0.4, 0.8, cover); }
 
-// How much of the far relief light shows: where pixels are large enough and cloud dense enough.
-float reliefWeight(float pxKm, float cover) { return reliefShare(pxKm) * smoothstep(0.4, 0.8, cover); }
-
-// A colour toned by the far relief light: shade turns a little bluer, light only fills the headroom.
+// A colour toned by the relief light: shade turns a little bluer, light only fills the headroom.
 vec3 reliefTone(vec3 c, float f) {
 	if (f >= 1.0) return c + c * max(1.0 - c, 0.0) * (f - 1.0) * 2.0;
 	return c * f * mix(vec3(1.0), vec3(0.85, 0.95, 1.15), clamp(2.0 * (1.0 - f), 0.0, 1.0));

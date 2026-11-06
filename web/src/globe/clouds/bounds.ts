@@ -17,6 +17,11 @@ export interface StyleBounds {
 	maxLiftKm: number;
 }
 
+/** Sunlit cloud and its warm tint near the terminator, shared by the flat layer and the volume so the clouds keep one colour at every height. */
+export const CLOUD_DAY_COLOR = [0.93, 0.94, 0.96] as const;
+export const CLOUD_WARM_TINT = [1.6, 0.8, 0.45] as const;
+export const CLOUD_TERMINATOR_TINT = 0.8;
+
 /** Opacity of the densest column seen straight down, and the cover up to which a column is drawn as observed (ADR 0031). */
 export const VOLUME_MAX_OPACITY = 0.95;
 export const VOLUME_KNEE = 0.5;

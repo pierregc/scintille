@@ -210,6 +210,26 @@ far relief fades out before the height tiles stop loading (6,500 to 7,700 km str
 1,000-pixel-tall view): the whole globe stays flat. The flat layer stays a little bluer than the volume, as the atmosphere hazes it as a
 shell at 10 km.
 
+## One relief at every height
+
+QA of 2026-11-05 (#427): no relief on arrival, relief from mid zoom, then a burnt white and a
+different, softer relief close up; the far relief invented large shapes on wide decks. Three lights
+took turns with height. [ADR 0034](adr/0034-one-cloud-relief.md) keeps one: the relief light, at
+full resolution and one moderate exaggeration from the whole globe to the floor, the flat layer's
+colour and haze for the volume, and a sharpened cover close up.
+
+Late afternoon, 20,000 to 400 km, before and after.
+![Zoom at dusk](immersive/relief-qa/dusk-zoom.jpg)
+
+Noon, the same zoom.
+![Zoom at noon](immersive/relief-qa/noon-zoom.jpg)
+
+A wide deck at noon: the large invented lumps are gone.
+![Deck](immersive/relief-qa/deck.jpg)
+
+Close up: the burnt white is gone and cumulus edges are crisper.
+![Close up](immersive/relief-qa/close.jpg)
+
 ## Bounds and cost
 
 Style bounds (ADR 0030 rule 2) hold at five places, read back from the shader in full precision

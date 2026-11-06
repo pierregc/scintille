@@ -2,6 +2,7 @@ import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, 
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
+import { CLOUD_DAY_COLOR, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
 import type { CloudDetail, DetailSource } from './detail';
 import type { CloudFrame } from './frame';
@@ -122,11 +123,11 @@ export function createClouds(
 			twilightWeights: { value: new Vector4(...twilight.weights) },
 			twilightSoftness: { value: twilight.softness },
 			sunDip: { value: Math.sin(Math.acos(1 / (1 + altitudeKm / EARTH_RADIUS_KM))) },
-			dayColor: { value: new Color(0.93, 0.94, 0.96) },
+			dayColor: { value: new Color(...CLOUD_DAY_COLOR) },
 			twilightColor: { value: new Color(0.03, 0.036, 0.05) },
 			nightColor: { value: new Color(0.006, 0.007, 0.01) },
-			warmTint: { value: new Color(1.6, 0.8, 0.45) },
-			terminatorTint: { value: 0.8 },
+			warmTint: { value: new Color(...CLOUD_WARM_TINT) },
+			terminatorTint: { value: CLOUD_TERMINATOR_TINT },
 			limbThickening: { value: 0.6 },
 			flashLight: { value: null },
 			flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },

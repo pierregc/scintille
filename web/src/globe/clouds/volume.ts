@@ -29,8 +29,8 @@ import { type StyleBounds, styleBounds, VEIL_MAX_OPACITY, VOLUME_KNEE, VOLUME_MA
 import {
 	compositeFragmentShader,
 	compositeVertexShader,
-	deckFragmentShader,
 	marchFragmentShader,
+	reliefFragmentShader,
 	passVertexShader,
 	rawFieldFragmentShader,
 	resolveFragmentShader,
@@ -49,9 +49,9 @@ const KM_PER_DEGREE = (EARTH_RADIUS_KM * Math.PI) / 180;
 
 /**
  * Texel sizes (km) of the nested windows: the two finest around the ground below the screen centre,
- * the others around the centre. The march reads the first four; the 16 km one serves the far relief.
+ * the others around the centre. The march reads the first four; the relief light reads them all.
  */
-export const WINDOW_TEXEL_KM = [1, 2, 4, 8, 16] as const;
+export const WINDOW_TEXEL_KM = [1, 2, 4, 8, 16, 32] as const;
 /** Windows the march reads. */
 const MARCH_WINDOWS = 4;
 /** Screen height (NDC) the two finest windows centre on, where oblique views magnify the ground. */
@@ -60,28 +60,32 @@ const NEAR_SCREEN_Y = -0.4;
 export const NEAR_MAX_KM = 400;
 /** Camera heights (km) over which the volume replaces the flat layer. */
 export const VOLUME_FADE_KM = [1800, 2800] as const;
-/** Exaggeration of the styled tops' slopes in the lighting; the heights themselves are not exaggerated. */
+/** Exaggeration of the styled tops' slopes in the sky each top sees; the heights themselves are not exaggerated. */
 const RELIEF = 1.6;
 /** Brightness of sunlit cloud for the many scatterings a capped column leaves out. */
 const SCATTER_GAIN = 2;
 /** Share of that gain kept under a high sun, so sunlit tops stay below white and show their relief. */
 const NOON_EXPOSURE = 0.86;
-/** Further steepening of the styled slopes in the light of a high sun only, which barely changes with slope. */
-const NOON_RELIEF = 1.5;
-/** Steepening of the dense decks' broad slopes in their stylised light under a high sun. */
-const DECK_RELIEF = 6;
-/** First window whose dense tops give the broad shape (4 km texels); the decks' light stops at the 8 km one. */
-const DECK_FIRST = 2;
-/** Widths (texels) of the broad shape and of the surroundings its hollows are measured against: 6 and 16 km in the 4 km window. */
-const DECK_WIDTH_TEXELS = [1.5, 4] as const;
-/** Share of the far relief light's shading kept on screen, after the highlight shoulder. */
+/**
+ * Relief light (ADR 0034): the broad slopes of the dense tops are drawn RELIEF_EXAGGERATION ×
+ * texelKm^RELIEF_SCALE times steeper (3 in the 1 km window, 7 in the 32 km one), the same rule at
+ * every height; slopes under RELIEF_CORE, compression noise rather than shape, are cored out.
+ */
+const RELIEF_EXAGGERATION = 3;
+const RELIEF_SCALE = 0.25;
+const RELIEF_CORE = 0.035;
+/** Sine of the highest sun the relief light takes (45°), so a noon sun still shows the shape. */
+const RELIEF_SUN_CAP = 0.71;
+/** Widths (texels) of the broad shape and of its wider surroundings. */
+const RELIEF_WIDTH_TEXELS = [1.5, 4] as const;
+/** Share of the relief light's shading kept on screen, after the highlight shoulder. */
 const RELIEF_STRENGTH = 0.7;
 /** Direct light left on a top in the shadow of a taller cloud, in the flat layer. */
 const RELIEF_SKY = 0.15;
-/** Camera heights (km) over which the far relief light comes in, so close views keep the volume's own light. */
-export const RELIEF_NEAR_KM = [700, 1200] as const;
-/** Km per CSS pixel at the screen centre over which the far relief fades out, before the height tiles stop loading (4.9). */
-export const RELIEF_TOP_PX_KM = [4.1, 4.85] as const;
+/** Km per CSS pixel at the screen centre over which the relief fades out, as the 32 km window's texels shrink under 3.4 pixels. */
+export const RELIEF_TOP_PX_KM = [19, 28] as const;
+/** Cover of the 1 and 2 km windows sharpened against its ring of neighbours (ADR 0034): crisper small clouds, the same mean. */
+const COVER_SHARPEN = 1;
 /** Above the march, a window moves only once the view has moved this many of its texels. */
 const FAR_SNAP_TEXELS = 32;
 
@@ -154,18 +158,11 @@ export function volumeFade(heightKm: number): number {
 	return 1 - t * t * (3 - 2 * t);
 }
 
-/**
- * How much of the far relief shows at a camera height (km) and a footprint at the screen centre (km
- * per CSS pixel): `shade` for the shadows of taller clouds on the flat layer, `relief` for the far
- * relief light, which close views leave to the volume.
- */
-export function reliefFade(heightKm: number, centrePxKm: number): { shade: number; relief: number } {
-	const step = ([a, b]: readonly [number, number], x: number) => {
-		const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-		return t * t * (3 - 2 * t);
-	};
-	const shade = 1 - step(RELIEF_TOP_PX_KM, centrePxKm);
-	return { shade, relief: shade * step(RELIEF_NEAR_KM, heightKm) };
+/** How much of the relief light and the shadows of taller clouds show at a footprint at the screen centre (km per CSS pixel). */
+export function reliefFade(centrePxKm: number): number {
+	const [a, b] = RELIEF_TOP_PX_KM;
+	const t = Math.min(1, Math.max(0, (centrePxKm - a) / (b - a)));
+	return 1 - t * t * (3 - 2 * t);
 }
 
 /**
@@ -188,7 +185,7 @@ export function windowToBake(missing: readonly boolean[], stale: () => readonly 
 
 /** Taps per side over each texel of window `k` for the heights and the cover, so coarse windows hold texel means. */
 export function bakeTaps(k: number): [number, number] {
-	return [[1, 1], [1, 1], [2, 1], [2, 2], [4, 2]][k] as [number, number];
+	return [[1, 1], [1, 1], [2, 1], [2, 2], [4, 2], [8, 4]][k] as [number, number];
 }
 
 export interface CloudVolumeOptions {
@@ -225,8 +222,6 @@ export interface CloudVolume {
 	readonly mesh: Mesh;
 	/** What other materials need to read the field: share these uniforms and include `volumeFieldGlsl`. */
 	readonly uniforms: Record<string, IUniform>;
-	/** What the atmosphere needs to haze the clouds by the air above them only (define CLOUD_HAZE). */
-	readonly hazeUniforms: Record<string, IUniform>;
 	/** 0 to 1: how much the volume shows instead of the flat layer. */
 	readonly fade: number;
 	detail: boolean;
@@ -259,10 +254,10 @@ export function createCloudVolume({
 	const field = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: HalfFloatType });
 	const sun = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: UnsignedByteType });
 	const raw = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
-	// The light of the broad shape over the coarse windows (decks, far relief, sunlit tops), and their spread tops on the way.
-	const deck = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length - DECK_FIRST, { depthBuffer: false, type: HalfFloatType });
+	// The relief light of every window and the sunlit share of its tops, and their spread tops on the way.
+	const reliefLight = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: HalfFloatType });
 	const spread = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
-	for (const target of [field, sun, raw, deck, spread]) {
+	for (const target of [field, sun, raw, reliefLight, spread]) {
 		target.texture.minFilter = LinearFilter;
 		target.texture.magFilter = LinearFilter;
 		target.texture.generateMipmaps = false;
@@ -282,9 +277,8 @@ export function createCloudVolume({
 		volumeWindows: { value: windows },
 		volumeCount: { value: MARCH_WINDOWS },
 		volumeOn: { value: 0 },
-		volumeRelief: { value: deck.texture },
+		volumeRelief: { value: reliefLight.texture },
 		reliefOn: { value: 0 },
-		shadeOn: { value: 0 },
 		reliefKmPerUnit: { value: 0 },
 		reliefSky: { value: RELIEF_SKY },
 		volumeMaxOpacity: { value: VOLUME_MAX_OPACITY },
@@ -310,6 +304,7 @@ export function createCloudVolume({
 		bakeTexels,
 		texelKm: { value: 1 },
 		styled: { value: detail ? 1 : 0 },
+		coverSharpen: { value: detail ? COVER_SHARPEN : 0 },
 		sunDir,
 	};
 	const styleMaterial = pass(styleFragmentShader, styleUniforms);
@@ -324,10 +319,9 @@ export function createCloudVolume({
 		spreadWidth: { value: new Vector2(1, 1) },
 	};
 	const spreadMaterial = pass(spreadFragmentShader, spreadUniforms);
-	const deckRelief = { value: detail ? DECK_RELIEF : 0 };
-	const deckOn = { value: 1 };
+	const reliefExaggeration = { value: detail ? RELIEF_EXAGGERATION : 0 };
 	const bakeLayer = { value: 0 };
-	const deckMaterial = pass(deckFragmentShader, {
+	const reliefMaterial = pass(reliefFragmentShader, {
 		spread: { value: spread.texture },
 		volumeField: { value: field.texture },
 		volumeSun: { value: sun.texture },
@@ -336,9 +330,11 @@ export function createCloudVolume({
 		bakeTexels,
 		texelKm: styleUniforms.texelKm,
 		sunDir,
-		deckRelief,
-		deckOn,
 		reliefStrength: { value: RELIEF_STRENGTH },
+		reliefExaggeration,
+		reliefScalePow: { value: RELIEF_SCALE },
+		reliefCore: { value: RELIEF_CORE },
+		reliefSunCap: { value: RELIEF_SUN_CAP },
 	});
 	const reliefPixelAngle = { value: 0.001 };
 	const rayMatrix = { value: new Matrix4() };
@@ -355,11 +351,8 @@ export function createCloudVolume({
 		subPixel: { value: new Vector2() },
 		sunDir,
 		lightGain,
-		volumeDeck: { value: deck.texture },
-		reliefPixelAngle,
 		scatterGain: { value: SCATTER_GAIN },
 		noonExposure: { value: NOON_EXPOSURE },
-		noonRelief: { value: detail ? NOON_RELIEF : 1 },
 		relief: { value: detail ? RELIEF : 1 },
 		frameJitter: { value: 0 },
 		maxSamples: { value: maxSamples },
@@ -414,16 +407,6 @@ export function createCloudVolume({
 		depthTest: false,
 		depthWrite: false,
 	});
-	const viewport = { value: new Vector2(1, 1) };
-	const hazeUniforms: Record<string, IUniform> = {
-		cloudResolved: composite.uniforms.resolved,
-		cloudDepth: { value: fresh.textures[1] },
-		cloudMarchSize: marchSize,
-		cloudFreshSize: resolveUniforms.freshSize,
-		cloudPhase: phase,
-		cloudFade: fadeUniform,
-		cloudViewport: viewport,
-	};
 	const mesh = new Mesh(fullScreen(), composite);
 	mesh.frustumCulled = false;
 	mesh.renderOrder = -1;
@@ -501,34 +484,30 @@ export function createCloudVolume({
 		draw(renderer, styleMaterial, field, k);
 		draw(renderer, sunMaterial, sun, k);
 		uniforms.volumeCount.value = count;
-		if (k >= DECK_FIRST) {
-			// Dense tops spread across, then along (through the free observations target), then lit.
-			spreadUniforms.spreadWidth.value.set(...DECK_WIDTH_TEXELS);
-			spreadUniforms.spreadLayer.value = k;
-			spreadUniforms.spreadSource.value = spread.texture;
-			spreadUniforms.spreadStep.value.set(1 / texels, 0);
-			draw(renderer, spreadMaterial, raw);
-			spreadUniforms.spreadLayer.value = -1;
-			spreadUniforms.spreadSource.value = raw.texture;
-			spreadUniforms.spreadStep.value.set(0, 1 / texels);
-			draw(renderer, spreadMaterial, spread);
-			bakeLayer.value = k;
-			deckOn.value = k < MARCH_WINDOWS ? 1 : 0;
-			draw(renderer, deckMaterial, deck, k - DECK_FIRST);
-		}
+		// Dense tops spread across, then along (through the free observations target), then lit.
+		spreadUniforms.spreadWidth.value.set(...RELIEF_WIDTH_TEXELS);
+		spreadUniforms.spreadLayer.value = k;
+		spreadUniforms.spreadSource.value = spread.texture;
+		spreadUniforms.spreadStep.value.set(1 / texels, 0);
+		draw(renderer, spreadMaterial, raw);
+		spreadUniforms.spreadLayer.value = -1;
+		spreadUniforms.spreadSource.value = raw.texture;
+		spreadUniforms.spreadStep.value.set(0, 1 / texels);
+		draw(renderer, spreadMaterial, spread);
+		bakeLayer.value = k;
+		draw(renderer, reliefMaterial, reliefLight, k);
 	};
 
 	const volume: CloudVolume = {
 		mesh,
 		uniforms,
-		hazeUniforms,
 		get fade() { return fadeUniform.value; },
 		get detail() { return styleUniforms.styled.value > 0.5; },
 		set detail(on: boolean) {
 			styleUniforms.styled.value = on ? 1 : 0;
 			marchUniforms.relief.value = on ? RELIEF : 1;
-			marchUniforms.noonRelief.value = on ? NOON_RELIEF : 1;
-			deckRelief.value = on ? DECK_RELIEF : 0;
+			reliefExaggeration.value = on ? RELIEF_EXAGGERATION : 0;
+			styleUniforms.coverSharpen.value = on ? COVER_SHARPEN : 0;
 			baked = 0;
 			lastViewProjection = null;
 		},
@@ -554,14 +533,13 @@ export function createCloudVolume({
 			const centre = groundAt(0);
 			const shown = (opacity.uniforms.cloudShown?.value ?? 0) > 0.5;
 			const fade = shown ? volumeFade(heightKm) : 0;
-			const far = shown ? reliefFade(heightKm, slant * cssAngle) : { shade: 0, relief: 0 };
+			const relief = shown ? reliefFade(slant * cssAngle) : 0;
 			const marching = fade > 0;
 			fadeUniform.value = fade;
 			uniforms.volumeOn.value = fade;
-			uniforms.reliefOn.value = far.relief;
-			uniforms.shadeOn.value = far.shade;
+			uniforms.reliefOn.value = relief;
 			mesh.visible = marching;
-			if (!marching && far.shade <= 0) {
+			if (!marching && relief <= 0) {
 				lastViewProjection = null;
 				baked = 0;
 				return;
@@ -581,7 +559,7 @@ export function createCloudVolume({
 			sunDir.value.copy(view.sun).normalize();
 
 			if (!marching) {
-				// Above the march only the coarse windows the far relief reads are baked, coarsest first, one
+				// Above the march only the coarse windows the relief reads are baked, coarsest first, one
 				// at a time, and they move only once the view has gone a good way.
 				if (uniforms.volumeCount.value !== WINDOW_TEXEL_KM.length) {
 					uniforms.volumeCount.value = WINDOW_TEXEL_KM.length;
@@ -589,8 +567,8 @@ export function createCloudVolume({
 				}
 				lastViewProjection = null;
 				groundAt(-1);
-				// The finest window the far relief reads at the bottom of the screen, where pixels are smallest.
-				const first = Math.min(3, Math.max(DECK_FIRST, Math.floor(Math.log2(3.4 * slant * cssAngle))));
+				// The finest window the relief reads at the bottom of the screen, where pixels are smallest.
+				const first = Math.min(4, Math.max(2, Math.floor(Math.log2(3.4 * slant * cssAngle))));
 				for (let k = 0; k < first; k++) if (placed[k] || signatures[k]) empty(k);
 				const shared = inputs(true);
 				const missing = signatures.map((sig) => !sig);
@@ -603,13 +581,13 @@ export function createCloudVolume({
 			}
 
 			// The march's windows at once after a jump; then, every other frame, the next window whose inputs
-			// changed, and one anyway every 32 frames. The 16 km window joins them once far relief shows.
+			// changed, and one anyway every 32 frames. The coarser windows join them while the relief shows.
 			if (uniforms.volumeCount.value !== MARCH_WINDOWS) {
 				uniforms.volumeCount.value = MARCH_WINDOWS;
 				baked = 0;
 			}
 			const shared = inputs(false);
-			const count = far.relief > 0 ? WINDOW_TEXEL_KM.length : MARCH_WINDOWS;
+			const count = relief > 0 ? WINDOW_TEXEL_KM.length : MARCH_WINDOWS;
 			if (count === MARCH_WINDOWS && placed[MARCH_WINDOWS]) empty(MARCH_WINDOWS);
 			if (baked === 0) {
 				for (let k = MARCH_WINDOWS - 1; k >= 0; k--) bake(renderer, k, ...pointFor(k));
@@ -643,7 +621,6 @@ export function createCloudVolume({
 			rayMatrix.value.copy(viewProjection).invert();
 			eyeKm.value.copy(eye).multiplyScalar(EARTH_RADIUS_KM);
 
-			renderer.getDrawingBufferSize(viewport.value);
 			draw(renderer, marchMaterial, fresh);
 			historyValid.value = lastViewProjection ? 1 : 0;
 			if (lastViewProjection) previous.value.copy(lastViewProjection);
@@ -688,8 +665,8 @@ export function createCloudVolume({
 			return bounds;
 		},
 		dispose() {
-			for (const t of [field, sun, raw, deck, spread, fresh, ...history]) t.dispose();
-			for (const m of [rawMaterial, styleMaterial, sunMaterial, spreadMaterial, deckMaterial, marchMaterial, resolveMaterial, composite]) m.dispose();
+			for (const t of [field, sun, raw, reliefLight, spread, fresh, ...history]) t.dispose();
+			for (const m of [rawMaterial, styleMaterial, sunMaterial, spreadMaterial, reliefMaterial, marchMaterial, resolveMaterial, composite]) m.dispose();
 			quad.geometry.dispose();
 			mesh.geometry.dispose();
 		},

@@ -157,6 +157,15 @@ describe('levelFor', () => {
 		expect(levelFor(s, 0.51)).toBe(5);
 		expect(levelFor(s, 0.23)).toBe(5);
 	});
+
+	it('keeps the coarsest level however far the view when asked, as heights have no global frame', () => {
+		const s = source();
+		expect(levelFor(s, 11.7, true)).toBe(3);
+		expect(levelFor(s, 40, true)).toBe(3);
+		expect(levelFor(s, 1.2, true)).toBe(4);
+		expect(wantedTiles(s, [{ lat: 38.5, lon: 2.6, kmPerPx: 16, offCentre: 0 }])).toEqual([]);
+		expect(wantedTiles(s, [{ lat: 38.5, lon: 2.6, kmPerPx: 16, offCentre: 0 }], false, true)).toEqual([{ z: 3, x: 8, y: 2 }]);
+	});
 });
 
 describe('tileAt', () => {
