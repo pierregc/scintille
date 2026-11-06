@@ -22,15 +22,13 @@ measured it.
 Behind the globe runs a small lakehouse, fed around the clock by geostationary satellites.
 
 ```mermaid
-flowchart TB
-    lightning["Lightning<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
-    ingest -->|seconds| live[("Live feed<br/>R2 + CDN")]
-    ingest -->|durable spool| writer["lake-writer"]
-    writer -->|every 5 min| lake[("Iceberg on R2<br/>bronze · silver · gold")]
-    lake --> dagster["Dagster"]
-    dagster -->|hourly| storms[("Storms, replays,<br/>flash archive")]
-    imagery["Cloud imagery<br/>GOES · Himawari · MTG"] --> clouds["clouds"]
-    clouds -->|hourly| textures[("Cloud textures")]
+%%{init: {"flowchart": {"rankSpacing": 30, "nodeSpacing": 24, "padding": 10}}}%%
+flowchart LR
+    lightning["Lightning<br/>GOES GLM · MTG LI"] -->|"ingest-live<br/>seconds"| live[("Live feed<br/>R2 + CDN")]
+    lightning -->|ingest-live| spool[("Spool<br/>VPS disk")]
+    spool -->|"lake-writer<br/>every 5 min"| lake[("Iceberg on R2<br/>bronze · silver · gold")]
+    lake -->|"Dagster<br/>hourly"| storms[("Storms, replays,<br/>flash archive")]
+    imagery["Clouds<br/>GOES · Himawari · MTG"] -->|"clouds<br/>hourly"| textures[("Cloud textures")]
     live --> globe["Three.js globe"]
     storms --> globe
     textures --> globe
@@ -41,9 +39,9 @@ flowchart TB
     classDef cloud fill:#ede9fe,stroke:#7c3aed,color:#3b0764
     classDef app fill:#111827,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
     class lightning,imagery source
-    class ingest,live hot
-    class writer,lake,dagster,storms lake
-    class clouds,textures cloud
+    class live hot
+    class spool,lake,storms lake
+    class textures cloud
     class globe app
 ```
 
