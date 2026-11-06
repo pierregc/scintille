@@ -6,61 +6,36 @@ How data flows from the satellites to the browser. Decisions and reasons are in
 
 ```mermaid
 flowchart LR
-    subgraph sources["Satellites"]
-        glm["GOES GLM L2<br/>NOAA, AWS"]
-        li["MTG LI L2<br/>EUMETSAT"]
-        archives[("Upstream archives<br/>NOAA, EUMETSAT")]
-    end
-
-    subgraph vps["OVH VPS"]
-        live_proc["ingest-live<br/>poll, parse, publish"]
-        spool[("Durable spool<br/>one file per batch")]
-        writer["lake-writer<br/>PyIceberg, every 5 min"]
-        pg[("Postgres<br/>file state, locks")]
-        dagster["Dagster<br/>gold, checks, backfills"]
-    end
-
-    subgraph r2["Cloudflare R2"]
-        live[("live/<br/>manifest + 20 s chunks")]
-        subgraph lake["Iceberg via R2 Data Catalog"]
-            bronze[("bronze.ingest_log")]
-            silver[("silver.flashes")]
-            gold[("gold.*")]
-        end
-        pub[("storms/, regions/<br/>JSON + sitemaps")]
-    end
-
-    worker["Cloudflare Worker<br/>Astro pages"]
-    browser["Browser<br/>Three.js globe"]
-
-    glm --> live_proc
-    li --> live_proc
-    live_proc -->|seconds| live
-    live_proc --> spool
-    spool --> writer
-    writer --> silver
-    writer --> bronze
-    pg --- live_proc
-    pg --- writer
-    silver --> dagster
-    bronze --> dagster
-    dagster --> gold
-    gold --> dagster
-    dagster --> pub
-    archives -.->|backfill| dagster
-    dagster -.->|partition rebuild| silver
-    live --> browser
-    pub --> worker
-    worker -->|HTML| browser
+    imagers["GOES, Himawari, MTG<br/>cloud imagery"] --> clouds_proc["clouds<br/>hourly composite"]
+    clouds_proc --> textures[("Cloud textures")]
+    lightning["GOES GLM, MTG LI<br/>lightning"] --> ingest["ingest-live<br/>poll, parse, publish"]
+    ingest -->|seconds| live[("live/<br/>manifest + 20 s chunks")]
+    ingest --> spool[("Durable spool<br/>one file per batch")]
+    spool --> writer["lake-writer<br/>every 5 min"]
+    writer --> lake[("Iceberg<br/>bronze, silver")]
+    lake --> dagster["Dagster<br/>gold, storms, checks"]
+    archives[("Upstream archives<br/>NOAA, EUMETSAT")] -.->|backfill| dagster
+    dagster --> gold[("Iceberg gold")]
+    dagster --> pub[("storms/, archive/<br/>catalog, replays, flash archive")]
+    dagster --> d1[("D1<br/>storm search")]
+    lake --> active_proc["active-storms<br/>every 5 min"]
+    spool --> active_proc
+    active_proc --> pub
+    d1 --> worker["Worker<br/>pages, search API"]
+    live & pub & textures --> browser["Browser<br/>Three.js globe"]
+    worker --> browser
 ```
+
+The services run in Docker Compose on one OVH VPS, with Postgres for file state, locks and Dagster.
+Everything they publish is stored on Cloudflare R2, the search index in D1.
 
 | Element | Meaning |
 |---|---|
 | `ingest-live` | Always on, seconds of latency; never waits on the lakehouse |
 | Durable spool + `lake-writer` | Decouple the live feed from catalog commits; a catalog outage only grows the spool |
-| Dagster | Minutes to hours: gold, checks, backfills, published JSON and sitemaps |
-| Worker | Serves prerendered pages and renders storm and region pages from published JSON |
-| Solid arrow | Regular data flow |
-| Dotted arrow | On demand: backfills, reprocessing, partition rebuilds |
-| Plain line | Shared state (Postgres), not data flow |
-| Cylinder | Stored data; tables under `lake` are Apache Iceberg |
+| Dagster | Minutes to hours: gold, the storm catalog and its replays, the flash archive, the search index, checks, backfills and partition rebuilds |
+| `active-storms` | Storms active now, rewritten every 5 minutes from silver and the spool |
+| `clouds` | Hourly cloud composite and cloud-top heights, published as textures |
+| Worker | Serves the prerendered pages and the storm search API |
+| Dotted arrow | On demand: backfills from the upstream archives |
+| Cylinder | Stored data; Iceberg tables sit behind R2 Data Catalog |
