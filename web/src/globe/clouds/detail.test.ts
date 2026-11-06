@@ -9,6 +9,7 @@ import {
 	heightSource,
 	indexSlot,
 	levelFor,
+	sourceLevels,
 	tileAt,
 	viewPoints,
 	wantedTiles,
@@ -18,20 +19,33 @@ const MANIFEST = 'https://data.example/live/clouds/manifest.json';
 const FINE_BYTES = (64 * 32) / 8;
 const SLOTS = 128 + 512 + 2048;
 
-/** A pack holding three bytes for every listed tile. */
-function pack(keys: { z: number; x: number; y: number }[]): Uint8Array<ArrayBuffer> {
-	const index = new Uint32Array(SLOTS * 2);
+/** A pack holding three bytes for every listed tile, then for every listed storm tile behind its own index. */
+function pack(keys: { z: number; x: number; y: number }[], storm: [number, number][] = []): Uint8Array<ArrayBuffer> {
+	const stormSlots = storm.map(([x, y]) => y * columns(6) + x).sort((a, b) => a - b);
+	const head = (SLOTS + stormSlots.length) * 8;
+	const index = new Uint32Array((SLOTS + stormSlots.length) * 2);
 	const body: number[] = [];
 	for (const key of keys) {
 		const slot = indexSlot([3, 4, 5], key);
-		index[2 * slot] = SLOTS * 8 + body.length;
+		index[2 * slot] = head + body.length;
 		index[2 * slot + 1] = 3;
 		body.push(key.z, key.y, key.x);
 	}
-	const out = new Uint8Array(SLOTS * 8 + body.length);
+	for (const [rank, slot] of stormSlots.entries()) {
+		index[2 * (SLOTS + rank)] = head + body.length;
+		index[2 * (SLOTS + rank) + 1] = 3;
+		body.push(6, slot >> 7, slot & 127);
+	}
+	const out = new Uint8Array(head + body.length);
 	out.set(new Uint8Array(index.buffer));
-	out.set(body, SLOTS * 8);
+	out.set(body, head);
 	return out;
+}
+
+/** The storm block of a pack without heights, listing level 6 tiles. */
+function stormRef(tiles: [number, number][]) {
+	const slots = new Uint16Array(tiles.map(([x, y]) => y * columns(6) + x).sort((a, b) => a - b));
+	return { level: 6, slots: btoa(String.fromCharCode(...new Uint8Array(slots.buffer))), index_offset: SLOTS * 8, index_bytes: tiles.length * 8 };
 }
 
 /** Serves byte ranges of `data`, as the data domain does. */
@@ -119,6 +133,43 @@ describe('heightSource', () => {
 		expect(h && hasTile(h, { z: 4, x: 17, y: 7 })).toBe(true);
 		expect(h && hasTile(h, { z: 4, x: 18, y: 7 })).toBe(false);
 		expect(h && hasTile(h, { z: 3, x: 8, y: 3 })).toBe(false);
+	});
+});
+
+describe('stormTiles', () => {
+	it('ranks the storm tiles of a pack in slot order, past the dense levels', () => {
+		const s = detailSource(ref({ storm: stormRef([[65, 32], [64, 32]]) }), MANIFEST);
+		expect(s?.storm?.ranks.get(32 * 128 + 64)).toBe(0);
+		expect(s?.storm?.ranks.get(32 * 128 + 65)).toBe(1);
+		expect(s && sourceLevels(s)).toEqual([3, 4, 5, 6]);
+		expect(sourceLevels(source())).toEqual([3, 4, 5]);
+	});
+
+	it('ignores a storm block that does not match the contract, keeping the rest', () => {
+		const one = stormRef([[64, 32]]);
+		for (const storm of [
+			{ ...one, level: 7 },
+			{ ...one, index_bytes: 16 },
+			{ ...one, index_offset: 8 },
+			{ ...one, slots: btoa(String.fromCharCode(1, 0, 0, 0)), index_bytes: 16 },
+			{ ...one, slots: '%%%' },
+		]) {
+			const s = detailSource(ref({ storm }), MANIFEST);
+			expect(s).not.toBeNull();
+			expect(s?.storm).toBeNull();
+		}
+	});
+
+	it('serves level 6 near the floor, only where a storm tile is listed', () => {
+		const s = detailSource(ref({ fine: bitmap([[32, 16]]), storm: stormRef([[64, 32]]) }), MANIFEST);
+		if (!s) throw new Error('invalid test detail');
+		expect(hasTile(s, { z: 6, x: 64, y: 32 })).toBe(true);
+		expect(hasTile(s, { z: 6, x: 65, y: 32 })).toBe(false);
+		expect(levelFor(s, 0.51)).toBe(5);
+		expect(levelFor(s, 0.23)).toBe(6);
+		expect(levelFor(source(), 0.23)).toBe(5);
+		expect(wantedTiles(s, [{ lat: -0.5, lon: 0.5, kmPerPx: 0.23, offCentre: 0 }]).map((k) => k.z)).toEqual([3, 4, 5, 6]);
+		expect(wantedTiles(s, [{ lat: -0.5, lon: 3.5, kmPerPx: 0.23, offCentre: 0 }]).map((k) => k.z)).toEqual([3, 4, 5]);
 	});
 });
 
@@ -269,11 +320,33 @@ describe('createCloudDetail', () => {
 		expect(ranges.length).toBeGreaterThan(8);
 		expect(renderer.copyTextureToTexture).toHaveBeenCalled();
 		const pages = (detail.uniforms.detailPagesA.value as DataTexture).image.data as Uint8Array;
-		const cell = (16 * 64 + 32) * 2 * 4;
+		// Cells at the storm level: the level 5 tile (32, 16) starts at cell (64, 32).
+		const cell = (32 * 128 + 64) * 2 * 4;
 		expect(pages[cell + 1]).toBe(5);
 		expect(pages[cell + 2]).toBe(255);
 		expect(pages[cell + 5]).toBe(4);
 		expect(detail.uniforms.detailOn.value).toBe(1);
+		detail.dispose();
+	});
+
+	it('loads the storm tiles under the view from their own index, over the level 5 tile', async () => {
+		const storm: [number, number][] = [[64, 32], [63, 32], [64, 31], [63, 31]];
+		const { fetchTile, detail } = setup(24, pack(tilesUnderView, storm));
+		const s = detailSource(ref({ fine: bitmap([[32, 16], [31, 16], [32, 15], [31, 15]]), storm: stormRef(storm) }), MANIFEST);
+		if (!s) throw new Error('invalid test detail');
+		for (let i = 0; i < 3; i++) {
+			detail.update(view([s, s]));
+			await detail.idle();
+		}
+		detail.update(view([s, s]));
+		const ranges = fetchTile.mock.calls.map(([, init]) => new Headers(init?.headers).get('Range'));
+		expect(ranges).toContain(`bytes=${SLOTS * 8}-${SLOTS * 8 + storm.length * 8 - 1}`);
+		const pages = (detail.uniforms.detailPagesA.value as DataTexture).image.data as Uint8Array;
+		const cell = (32 * 128 + 64) * 2 * 4;
+		expect(pages[cell + 1]).toBe(6);
+		expect(pages[cell + 5]).toBe(5);
+		expect(detail.levelAt(-0.5, 0.5)).toBe(6);
+		expect(detail.levelAt(-40, 100)).toBe(0);
 		detail.dispose();
 	});
 

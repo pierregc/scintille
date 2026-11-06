@@ -31,6 +31,24 @@ export interface CloudDetailRef {
 	index_bytes: number;
 	/** Cloud-top height tiles in the same pack (ADR 0028). */
 	height?: CloudHeightRef | null;
+	/** Finer daytime tiles under strong storms, behind a sparse index (ADR 0037). */
+	storm?: CloudStormRef | null;
+}
+
+export interface CloudStormRef {
+	level: number;
+	/** Base64 of the tiles' slots in their level (row-major from the north-west), little-endian uint16, ascending. */
+	slots: string;
+	index_offset: number;
+	index_bytes: number;
+}
+
+/** A pack's sparse level: rank of each present tile in its index of (offset, length) pairs. */
+export interface StormTiles {
+	level: number;
+	ranks: ReadonlyMap<number, number>;
+	indexOffset: number;
+	indexBytes: number;
 }
 
 export interface CloudHeightRef {
@@ -57,6 +75,8 @@ export interface DetailSource {
 	indexBytes: number;
 	/** Cloud-top heights in km above sea level, as tiles of the same pack (ADR 0028). */
 	heights?: DetailSource | null;
+	/** Finer tiles under strong storms, past the dense levels. */
+	storm?: StormTiles | null;
 }
 
 export interface TileKey {
@@ -85,8 +105,37 @@ export function detailSource(ref: unknown, manifestUrl: string): DetailSource | 
 		url, tileSize: r.tile_size, border: r.border, levels, maxLatitude: r.max_latitude, fine, coarse, indexOffset: 0, indexBytes,
 	};
 	source.heights = heightSource(r.height, source);
+	source.storm = stormTiles(r.storm, source);
 	return source;
 }
+
+/** The sparse storm level of a pack; null when absent or not matching the contract. */
+export function stormTiles(ref: unknown, opacity: DetailSource): StormTiles | null {
+	if (typeof ref !== 'object' || ref === null) return null;
+	const s = ref as Partial<CloudStormRef>;
+	const level = RULES.detail_storm_level;
+	if (s.level !== level || typeof s.slots !== 'string' || typeof s.index_offset !== 'number' ||
+		typeof s.index_bytes !== 'number' || s.index_offset < opacity.indexBytes) return null;
+	let raw: Uint8Array;
+	try {
+		raw = Uint8Array.from(atob(s.slots), (c) => c.charCodeAt(0));
+	} catch { return null; }
+	if (raw.length % 2 !== 0 || s.index_bytes !== (raw.length / 2) * 8) return null;
+	const ranks = new Map<number, number>();
+	const total = columns(level) * rows(level);
+	let last = -1;
+	for (let i = 0; i < raw.length / 2; i++) {
+		const slot = raw[2 * i] | (raw[2 * i + 1] << 8);
+		if (slot <= last || slot >= total) return null;
+		ranks.set(slot, i);
+		last = slot;
+	}
+	return { level, ranks, indexOffset: s.index_offset, indexBytes: s.index_bytes };
+}
+
+/** Every level a source can serve, coarsest first: its dense levels, then its storm level. */
+export const sourceLevels = (source: DetailSource): readonly number[] =>
+	source.storm ? [...source.levels, source.storm.level] : source.levels;
 
 /** The height tiles of a pack as their own source; null when the pack has none or they do not match the contract. */
 export function heightSource(ref: unknown, opacity: DetailSource): DetailSource | null {
@@ -107,7 +156,7 @@ export function heightSource(ref: unknown, opacity: DetailSource): DetailSource 
 		}
 		coarse = new Uint8Array(Math.ceil(indexSlots(levels.slice(0, -1)) / 8));
 	}
-	return { ...opacity, levels, fine, coarse, indexOffset: h.index_offset, indexBytes: h.index_bytes, heights: null };
+	return { ...opacity, levels, fine, coarse, indexOffset: h.index_offset, indexBytes: h.index_bytes, heights: null, storm: null };
 }
 
 /** A base64 bitmap of `count` bits; undefined when malformed. */
@@ -136,6 +185,7 @@ export const texelDegrees = (z: number, tileSize: number) => 180 / (2 ** z * til
 
 export function hasTile(source: DetailSource, { z, x, y }: TileKey): boolean {
 	if (x < 0 || x >= columns(z) || y < 0 || y >= rows(z)) return false;
+	if (source.storm && z === source.storm.level) return source.storm.ranks.has(y * columns(z) + x);
 	const finest = source.levels[source.levels.length - 1];
 	if (!source.levels.includes(z)) return false;
 	if (z === finest && source.fine) return bitSet(source.fine, y * columns(z) + x);
@@ -154,10 +204,11 @@ export const TEXEL_PX = 2;
 /** Level to show where one CSS pixel covers `kmPerPx` km: null while the global texture is enough. */
 export function levelFor(source: DetailSource, kmPerPx: number, coarsest = false): number | null {
 	if (GLOBAL_TEXEL_KM <= TEXEL_PX * kmPerPx) return coarsest ? source.levels[0] : null;
-	for (const z of source.levels) {
+	const levels = sourceLevels(source);
+	for (const z of levels) {
 		if (texelDegrees(z, source.tileSize) * DEG * EARTH_RADIUS_KM <= TEXEL_PX * kmPerPx) return z;
 	}
-	return source.levels[source.levels.length - 1];
+	return levels[levels.length - 1];
 }
 
 export interface ViewPoint {
@@ -181,7 +232,7 @@ export function wantedTiles(source: DetailSource, points: readonly ViewPoint[], 
 		const level = levelFor(source, point.kmPerPx, coarsest);
 		if (level === null) continue;
 		let found = false;
-		for (const z of source.levels) {
+		for (const z of sourceLevels(source)) {
 			if (z > level && (found || !finerFallback)) break;
 			const key = tileAt(point.lat, point.lon, z);
 			if (!hasTile(source, key)) continue;
@@ -254,6 +305,8 @@ export interface CloudDetail {
 	update(view: DetailView): void;
 	/** Resolves when no tile load is pending. */
 	idle(): Promise<void>;
+	/** Finest level shown at a point (degrees) in either blended frame; 0 where only the global texture is. */
+	levelAt(latDeg: number, lonDeg: number): number;
 	dispose(): void;
 }
 
@@ -321,7 +374,7 @@ const PAGE_TEXELS = 2;
 export function createCloudDetail(
 	renderer: Pick<WebGLRenderer, 'copyTextureToTexture' | 'initTexture'>,
 	{
-		levels = RULES.detail_levels,
+		levels = [...RULES.detail_levels, RULES.detail_storm_level],
 		prefix = 'detail',
 		slots: slotCount = 48,
 		maxLoads = 6,
@@ -388,16 +441,31 @@ export function createCloudDetail(
 		return boundedBody(response, Math.min(length, RULES.max_frame_bytes));
 	};
 
-	const indexOf = (source: DetailSource): Promise<Uint32Array> => {
-		let index = indexes.get(source.url);
+	const indexOf = (url: string, offset: number, bytes: number): Promise<Uint32Array> => {
+		const id = `${url}#${offset}`;
+		let index = indexes.get(id);
 		if (!index) {
-			index = readRange(source.url, source.indexOffset, source.indexBytes, new AbortController().signal)
+			index = readRange(url, offset, bytes, new AbortController().signal)
 				.then((data) => new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4));
-			index.catch(() => indexes.delete(source.url));
-			indexes.set(source.url, index);
-			if (indexes.size > 4) indexes.delete(indexes.keys().next().value as string);
+			index.catch(() => indexes.delete(id));
+			indexes.set(id, index);
+			if (indexes.size > 8) indexes.delete(indexes.keys().next().value as string);
 		}
 		return index;
+	};
+
+	/** Offset and length of a tile in its pack: the dense index, or the sparse one of the storm level. */
+	const entryOf = async (source: DetailSource, key: TileKey): Promise<[number, number]> => {
+		const storm = source.storm;
+		if (storm && key.z === storm.level) {
+			const rank = storm.ranks.get(key.y * columns(key.z) + key.x);
+			if (rank === undefined) return [0, 0];
+			const index = await indexOf(source.url, storm.indexOffset, storm.indexBytes);
+			return [index[2 * rank], index[2 * rank + 1]];
+		}
+		const index = await indexOf(source.url, source.indexOffset, source.indexBytes);
+		const slot = indexSlot(source.levels, key);
+		return [index[2 * slot], index[2 * slot + 1]];
 	};
 
 	const freeSlot = (keep: Set<string>): number => {
@@ -422,9 +490,7 @@ export function createCloudDetail(
 		loading.set(id, request);
 		const work = (async () => {
 			try {
-				const index = await indexOf(source);
-				const slot = indexSlot(levels, key);
-				const [offset, length] = [index[2 * slot], index[2 * slot + 1]];
+				const [offset, length] = await entryOf(source, key);
 				if (!length) throw new Error('cloud tile missing from its pack');
 				const bytes = await readRange(source.url, offset, length, request.signal);
 				const texels = await decode(new Blob([bytes], { type: 'image/webp' }), size);
@@ -448,42 +514,38 @@ export function createCloudDetail(
 		void work.finally(() => { pending = pending.filter((p) => p !== work); });
 	};
 
+	// Each loaded tile of the frame, coarsest first, becomes the top of the cells it covers, the top
+	// it covers their tile below: the two finest loaded levels of every cell.
 	const writePages = (frame: 0 | 1, source: DetailSource | null, now: number): boolean => {
 		const data = pageData[frame];
 		data.fill(0);
 		if (!source) return false;
 		let stillFading = false;
 		const cols = columns(finest);
-		const cell = { z: finest, x: 0, y: 0 };
-		const loaded: { slot: number; z: number; fade: number }[] = [];
-		for (let y = 0; y < rows(finest); y++) {
-			for (let x = 0; x < cols; x++) {
-				cell.x = x;
-				cell.y = y;
-				loaded.length = 0;
-				for (let i = levels.length - 1; i >= 0 && loaded.length < 2; i--) {
-					const z = levels[i];
-					const shift = finest - z;
-					const index = bySlot.get(tileId(source, { z, x: x >> shift, y: y >> shift }));
-					if (index === undefined) continue;
-					const slot = slots[index];
-					if (!slot) continue;
-					const fade = Math.min(Math.max((now - slot.readyAt) / fadeMs, 0), 1);
-					loaded.push({ slot: index, z, fade });
-				}
-				if (loaded.length === 0) continue;
-				const offset = (y * cols + x) * PAGE_TEXELS * 4;
-				const [top, under] = loaded;
-				data[offset] = top.slot;
-				data[offset + 1] = top.z;
-				data[offset + 2] = Math.round(top.fade * 255);
-				data[offset + 3] = 255;
-				if (top.fade < 1) stillFading = true;
-				if (under) {
-					data[offset + 4] = under.slot;
-					data[offset + 5] = under.z;
-					data[offset + 6] = 255;
-					data[offset + 7] = 255;
+		const prefix = `${source.url}|`;
+		const shown = [...bySlot.values()]
+			.filter((index) => slots[index]?.id.startsWith(prefix) && levels.includes(slots[index].key.z))
+			.sort((a, b) => (slots[a]?.key.z ?? 0) - (slots[b]?.key.z ?? 0));
+		for (const index of shown) {
+			const slot = slots[index];
+			if (!slot) continue;
+			const { z, x, y } = slot.key;
+			const shift = finest - z;
+			const fade = Math.min(Math.max((now - slot.readyAt) / fadeMs, 0), 1);
+			if (fade < 1) stillFading = true;
+			for (let cy = y << shift; cy < (y + 1) << shift; cy++) {
+				for (let cx = x << shift; cx < (x + 1) << shift; cx++) {
+					const offset = (cy * cols + cx) * PAGE_TEXELS * 4;
+					if (data[offset + 3] === 255) {
+						data[offset + 4] = data[offset];
+						data[offset + 5] = data[offset + 1];
+						data[offset + 6] = 255;
+						data[offset + 7] = 255;
+					}
+					data[offset] = index;
+					data[offset + 1] = z;
+					data[offset + 2] = Math.round(fade * 255);
+					data[offset + 3] = 255;
 				}
 			}
 		}
@@ -536,6 +598,11 @@ export function createCloudDetail(
 		},
 		async idle() {
 			while (pending.length > 0) await Promise.allSettled(pending);
+		},
+		levelAt(latDeg, lonDeg) {
+			const { x, y } = tileAt(latDeg, lonDeg, finest);
+			const offset = (y * columns(finest) + x) * PAGE_TEXELS * 4;
+			return Math.max(...pageData.map((data) => (data[offset + 3] === 255 ? data[offset + 1] : 0)));
 		},
 		dispose() {
 			disposed = true;

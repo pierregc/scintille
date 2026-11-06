@@ -167,7 +167,14 @@ export function createGlobeApp(
 		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 80, finerFallback: true, coarsest: true })
 		: undefined;
 	const volume: CloudVolume | undefined = heightDetail
-		? createCloudVolume({ opacity: clouds.opacity, heights: heightDetail.uniforms, scale: volumeScale, maxSamples: preset.cloudSamples, detail: cloudMode !== 'columns' })
+		? createCloudVolume({
+			opacity: clouds.opacity,
+			heights: heightDetail.uniforms,
+			scale: volumeScale,
+			maxSamples: preset.cloudSamples,
+			detail: cloudMode !== 'columns',
+			levelAt: (lat, lon) => cloudDetail?.levelAt(lat, lon) ?? 0,
+		})
 		: undefined;
 	if (volume) {
 		scene.add(volume.mesh);
