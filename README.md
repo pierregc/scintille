@@ -22,11 +22,10 @@ measured it.
 Behind the globe runs a small lakehouse, fed around the clock by geostationary satellites.
 
 ```mermaid
-flowchart LR
+flowchart TB
     lightning["Lightning<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
     ingest -->|seconds| live[("Live feed<br/>R2 + CDN")]
-    ingest --> spool[("Spool<br/>VPS disk")]
-    spool --> writer["lake-writer"]
+    ingest -->|durable spool| writer["lake-writer"]
     writer -->|every 5 min| lake[("Iceberg on R2<br/>bronze · silver · gold")]
     lake --> dagster["Dagster"]
     dagster -->|hourly| storms[("Storms, replays,<br/>flash archive")]
@@ -43,7 +42,7 @@ flowchart LR
     classDef app fill:#111827,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
     class lightning,imagery source
     class ingest,live hot
-    class spool,writer,lake,dagster,storms lake
+    class writer,lake,dagster,storms lake
     class clouds,textures cloud
     class globe app
 ```
