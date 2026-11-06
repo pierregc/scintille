@@ -1,6 +1,6 @@
 # 0013 · One scene data owner for live and archive playback
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-12
 
 ## Context

@@ -1,6 +1,6 @@
 # 0013 · 3D lightning ribbons
 
-- Status: proposed
+- Status: superseded by [0033](0033-lightning-looks-and-density.md)
 - Date: 2026-10-14
 
 ## Context

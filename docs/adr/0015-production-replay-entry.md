@@ -1,6 +1,6 @@
 # 0015 · Production replay entry and framing
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-17
 
 ## Context

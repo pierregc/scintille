@@ -1,6 +1,6 @@
 # 0012 · Retention policy for flashes, raw products, and cloud frames
 
-- Status: proposed
+- Status: superseded by [0025](0025-past-days-archive.md)
 - Date: 2026-10-12
 
 ## Context

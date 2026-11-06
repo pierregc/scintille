@@ -1,6 +1,6 @@
 # 0035 · Lightning inside the clouds
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-05
 - Amends the 10 km cloud shell of [ADR 0028](0028-cloud-relief.md) and the veil of
   [ADR 0033](0033-lightning-looks-and-density.md) (`veil.ts`), under the bounded license of

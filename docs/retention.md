@@ -1,7 +1,7 @@
 # Retention measurements
 
-Issue #41 remains a proposed decision ([ADR 0012](adr/0012-retention-policy.md)). Use read-only
-catalog/listing credentials. The report reads metadata and manifests; it never scans Parquet,
+The rules in force are in [ADR 0025](adr/0025-past-days-archive.md) and `infra/terraform/r2.tf`.
+Use read-only catalog/listing credentials. The report reads metadata and manifests; it never scans Parquet,
 migrates tables, changes maintenance, writes data, or deletes objects. Keep exports outside Git.
 
 ## Commands

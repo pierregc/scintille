@@ -1,6 +1,6 @@
 # 0019 · Use storm framing for ordinary reloads and explicit views for sharing
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-17
 
 ## Context
