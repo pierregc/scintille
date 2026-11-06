@@ -5,6 +5,7 @@ How data flows from the satellites to the browser. Decisions and reasons are in
 (hosting); the live feed format is in [the data contract](data-contract.md).
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 260}}}%%
 flowchart LR
     imagers["GOES, Himawari, MTG<br/>cloud imagery"] --> clouds_proc["clouds<br/>hourly composite"]
     clouds_proc --> textures[("Cloud textures")]
