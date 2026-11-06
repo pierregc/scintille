@@ -24,12 +24,28 @@ Behind the globe runs a small lakehouse, fed around the clock by geostationary s
 ```mermaid
 flowchart LR
     lightning["Lightning<br/>GOES GLM · MTG LI"] --> ingest["ingest-live"]
-    ingest -->|20 s chunks| live[("Live feed<br/>R2 + CDN")]
-    ingest --> spool[("Spool<br/>VPS disk")] --> writer["lake-writer"]
-    writer -->|every 5 min| lake[("Iceberg<br/>bronze · silver · gold")]
-    lake --> dagster["Dagster"] --> storms[("Storms, replays,<br/>flash archive")]
-    imagery["Cloud imagery<br/>GOES · Himawari · MTG"] --> clouds["clouds"] --> textures[("Cloud textures")]
-    live & storms & textures --> globe["Three.js globe"]
+    ingest -->|seconds| live[("Live feed<br/>R2 + CDN")]
+    ingest --> spool[("Spool<br/>VPS disk")]
+    spool --> writer["lake-writer"]
+    writer -->|every 5 min| lake[("Iceberg on R2<br/>bronze · silver · gold")]
+    lake --> dagster["Dagster"]
+    dagster -->|hourly| storms[("Storms, replays,<br/>flash archive")]
+    imagery["Cloud imagery<br/>GOES · Himawari · MTG"] --> clouds["clouds"]
+    clouds -->|hourly| textures[("Cloud textures")]
+    live --> globe["Three.js globe"]
+    storms --> globe
+    textures --> globe
+
+    classDef source fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef hot fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef lake fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef cloud fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    classDef app fill:#111827,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
+    class lightning,imagery source
+    class ingest,live hot
+    class spool,writer,lake,dagster,storms lake
+    class clouds,textures cloud
+    class globe app
 ```
 
 - **Two paths.** `ingest-live` publishes the live feed in chunks of about 20 seconds and writes

@@ -24,6 +24,19 @@ flowchart LR
     d1 --> worker["Worker<br/>pages, search API"]
     live & pub & textures --> browser["Browser<br/>Three.js globe"]
     worker --> browser
+
+    classDef source fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef hot fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef lake fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef cloud fill:#ede9fe,stroke:#7c3aed,color:#3b0764
+    classDef serve fill:#fce7f3,stroke:#db2777,color:#831843
+    classDef app fill:#111827,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
+    class lightning,imagers,archives source
+    class ingest,live hot
+    class spool,writer,lake,dagster,gold,pub,active_proc lake
+    class clouds_proc,textures cloud
+    class d1,worker serve
+    class browser app
 ```
 
 The services run in Docker Compose on one OVH VPS, with Postgres for file state, locks and Dagster.
