@@ -1,6 +1,6 @@
 # 0017 · Preserve ADR history and disambiguate duplicate identifiers
 
-- Status: proposed
+- Status: superseded by [0036](0036-current-adr-statuses.md)
 - Date: 2026-10-17
 
 ## Context

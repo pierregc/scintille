@@ -1,6 +1,6 @@
 # 0016 · Replay URL state and navigation
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-17
 
 ## Context

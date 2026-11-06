@@ -1,6 +1,6 @@
 # 0034 · One cloud relief from the globe to the floor
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-05
 - Replaces the far relief light, the deck light, the march's own relief, the warm sun and the haze
   above the tops of [ADR 0031](0031-cloud-look.md); amends visual rule 12 of

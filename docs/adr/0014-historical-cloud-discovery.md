@@ -1,6 +1,6 @@
 # 0014 · Daily cloud archive discovery
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-16
 
 ## Context

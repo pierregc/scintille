@@ -1,6 +1,6 @@
 # 0031 · Cloud look: observed relief, sparse styling, exact light
 
-- Status: proposed
+- Status: accepted, its lighting replaced by [0034](0034-one-cloud-relief.md)
 - Date: 2026-10-29
 
 This record replaces the styled detail, the transparency cap and the rendering of

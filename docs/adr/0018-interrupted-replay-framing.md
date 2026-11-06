@@ -1,6 +1,6 @@
 # 0018 · Reload interrupted replay approaches without persisting an intermediate destination
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-17
 
 ## Context

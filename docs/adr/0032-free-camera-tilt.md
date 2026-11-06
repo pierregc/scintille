@@ -1,6 +1,6 @@
 # 0032 · Free camera tilt: orbit along the floor, then raise the gaze
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-30
 
 ## Context
