@@ -22,7 +22,7 @@ measured it.
 Behind the globe runs a small lakehouse, fed around the clock by geostationary satellites.
 
 ```mermaid
-%%{init: {"flowchart": {"rankSpacing": 30, "nodeSpacing": 24, "padding": 10}}}%%
+%%{init: {"flowchart": {"rankSpacing": 30, "nodeSpacing": 24, "padding": 10, "wrappingWidth": 260}}}%%
 flowchart LR
     lightning["Lightning<br/>GOES GLM · MTG LI"] -->|"ingest-live<br/>seconds"| live[("Live feed<br/>R2 + CDN")]
     lightning -->|ingest-live| spool[("Spool<br/>VPS disk")]
