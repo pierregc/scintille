@@ -254,9 +254,13 @@ readable: its opacity rises while its half length grows from 6 to 18 CSS px.
 
 **Through the cloud.** The cloud is assumed from 7 km (its base) to 11.5 km. The observed cloud layer
 decides how a channel shows (`veil.ts`): for each segment, the renderer follows the line of sight from
-its middle up to the camera and reads the cloud opacity where it leaves the 10 km cloud shell, so a
-channel under the edge of a storm can show beside it. Each segment carries a cloud flag from its kind
-and stage, not from its height alone:
+its middle up to the camera and reads the cloud opacity where it leaves the 13 km cloud shell, so a
+channel under the edge of a storm can show beside it. Seen from above, a flash meets 55 % of that
+opacity: the clouds are slightly transparent over lightning (styled, [ADR 0035](adr/0035-lightning-inside-clouds.md)).
+At a slant, the cloud crossed toward the eye thickens the veil and spreads the light up to five times
+farther (slant paths 1.5 to 4), so a channel at the steepest tilt reads inside its cloud, not on top
+of it (`seenThrough`). Each segment carries a cloud flag from its kind and stage, not from its height
+alone:
 
 - *In the cloud* (fans, crawlers, a cloud-to-ground stem whatever its height, the part of a drop above
   the base): light scatters around the channel. It spreads over 0.5 km just under the 11.5 km top to
@@ -278,8 +282,8 @@ While the cloud layer is hidden or has no frame for the scene, channels in the c
 by an opacity of 0.6 and those below it stay crisp. Over sunlit clouds, which outshine a thin channel
 seen from orbit, channels keep 30 % of their light.
 
-**Under clouds in relief.** Where the clouds are drawn in relief (ADR 0028, 0031), channels stay half a
-kilometre under the observed top: the part of a channel above the 7 km base is compressed toward that
+**Under clouds in relief.** Where the clouds are drawn in relief (ADR 0028, 0031), channels and the
+round glow stay half a kilometre under the observed top: the part of a channel above the 7 km base is compressed toward that
 top, to no less than 30 % of its height, while a drop under the base keeps its height. Under a top
 lower than 8.85 km even that compressed channel would rise over the top, so the whole channel is lowered
 with it (to no less than 30 %). The veil reads the channel's own heights, not the lowered ones.

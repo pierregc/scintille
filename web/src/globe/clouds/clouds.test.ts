@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { atmosphereParameters } from '../atmosphere';
 import { CLOUD_TOP_KM } from '../lightning';
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
+import { SKELETON } from '../lightning/skeleton';
 import { zoomLimits } from '../orbit';
 import { isCloudToggleKey } from './dev';
 import { CLOUD_MAX_GAP_MS, type Clouds, CLOUDS_RENDER_ORDER, cloudOpacityGlsl, cloudShellRadius, createClouds } from './index';
@@ -44,11 +45,13 @@ function frame(time = T0) {
 }
 
 describe('cloud shell', () => {
-	it('sits between the ground and the lightning cloud tops, inside the atmosphere', () => {
+	it('sits just over the lightning cloud tops, so flashes start inside the clouds, inside the atmosphere', () => {
 		const lightningTop = 1 + CLOUD_TOP_KM / 6371;
+		const highestChannel = 1 + (SKELETON.cloudTopKm + SKELETON.airAboveTopKm) / 6371;
 		const shell = cloudShellRadius(1);
-		expect(shell).toBeGreaterThan(1.001);
-		expect(shell).toBeLessThan(lightningTop);
+		expect(shell).toBeGreaterThan(lightningTop);
+		expect(shell).toBeGreaterThan(highestChannel);
+		expect(shell).toBeLessThan(lightningTop + 1.5 / 6371);
 		expect(shell).toBeLessThan(atmosphereParameters(1).atmosphereRadius);
 		expect(zoomLimits(1, 35, 1).min).toBeGreaterThan(shell);
 	});

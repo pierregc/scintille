@@ -166,13 +166,15 @@ void main() {
 	}
 #endif
 	if (inCloud) {
-		vec2 veiled = cloudVeil(opacity, 0.5 * (segA.z + segB.z), kmPerPx, width, segC.w);
+		// Slightly transparent from above; at a slant the cloud crossed toward the eye veils and spreads it (ADR 0035).
+		vec2 seen = seenThrough(opacity, slant);
+		vec2 veiled = cloudVeil(seen.x, 0.5 * (segA.z + segB.z), kmPerPx / seen.y, width, segC.w);
 		if (!trace) light *= veilOverlap(length(segB.xyz - segA.xyz) / kmPerPx, width, veiled.x);
 		// A trace's halo is sized from its core width, not from the width the cloud spreads it to.
 		if (halo < 0.5 || !trace) width = veiled.x;
 		light *= veiled.y;
 	} else {
-		light *= clearAirLight(opacity, slant);
+		light *= clearAirLight(opacity * mix(${f(VEIL.through)}, 1.0, grazingShare(slant)), slant);
 	}
 	// Hairlines draw no thinner than the pixel grid renders evenly and give up light instead, so they never break into dashes.
 	vec2 thin = hairline(width, pixelRatio * viewScale);

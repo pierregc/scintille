@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../sun';
 import { SKELETON } from './skeleton';
 import { glslFloat } from './profile';
-import { clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, liftHeight, reliefLift, VEIL, veilGlsl, veilOverlap } from './veil';
+import { clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, grazingShare, liftHeight, reliefLift, seenThrough, VEIL, veilGlsl, veilOverlap } from './veil';
 
 const R = 6371;
 const SHELL = R + 10;
@@ -113,11 +113,30 @@ describe('cloud veil', () => {
 		expect(reliefLift(8.9)[2]).toBe(1);
 	});
 
+	it('lets a flash show through slightly transparent clouds from above and veils it at a slant', () => {
+		expect(grazingShare(1)).toBe(0);
+		expect(grazingShare(0.1)).toBe(1);
+		const above = seenThrough(0.8, 1);
+		expect(above.opacity).toBeCloseTo(0.8 * VEIL.through, 6);
+		expect(above.reach).toBe(1);
+		const slanted = seenThrough(0.8, 0.15);
+		expect(slanted.opacity).toBeGreaterThan(0.8);
+		expect(slanted.reach).toBeCloseTo(VEIL.maxPath, 6);
+		let last = 0;
+		for (const slant of [1, 0.7, 0.5, 0.35, 0.25, 0.15]) {
+			const { opacity } = seenThrough(0.8, slant);
+			expect(opacity).toBeGreaterThanOrEqual(last);
+			last = opacity;
+		}
+	});
+
 	it('writes the trace and the relief bounds into the shader twins', () => {
 		for (const x of [VEIL.trace, VEIL.traceWidth, VEIL.reliefMargin, VEIL.reliefMin, SKELETON.cloudBaseKm]) expect(veilGlsl).toContain(glslFloat(x));
 		expect(veilGlsl).toContain('float clearAirLight(float opacity, float slant)');
 		expect(veilGlsl).toContain('vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float flag)');
 		expect(veilGlsl).toContain('vec3 liftPoint(vec3 p, vec3 lift)');
 		expect(veilGlsl).toContain('float veilOverlap(float lengthPx, float width, float veiled)');
+		expect(veilGlsl).toContain('vec2 seenThrough(float opacity, float slant)');
+		for (const x of [VEIL.through, VEIL.maxPath, ...VEIL.slantPath]) expect(veilGlsl).toContain(glslFloat(x));
 	});
 });

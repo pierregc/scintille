@@ -21,6 +21,11 @@ export const VEIL = {
 	/** Under a cloud drawn in relief, channels stay this far under its top, km, their part in the cloud compressed at most to this share. */
 	reliefMargin: 0.5,
 	reliefMin: 0.3,
+	/** Seen from above, a flash meets this share of the cloud's opacity: clouds slightly transparent over lightning (styled, ADR 0035). */
+	through: 0.55,
+	/** Over these slant paths (1 / cosine of the view to the vertical, at most maxPath) the cloud crossed toward the eye veils a flash fully, spread that much farther: at a slant it reads inside the cloud. */
+	slantPath: [1.5, 4],
+	maxPath: 5,
 } as const;
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -63,6 +68,24 @@ export function cloudVeil(opacity: number, heightKm: number, kmPerPx: number, wi
 	return { width: veiled, light: flag > 1.5 ? Math.max(light, VEIL.trace) : light };
 }
 
+/** How much of a flash's veil comes from the cloud crossed at a slant rather than from above, 0 to 1. */
+export function grazingShare(slant: number): number {
+	const path = Math.min(VEIL.maxPath, Math.max(1, 1 / Math.max(slant, 0.05)));
+	const t = clamp01((path - VEIL.slantPath[0]) / (VEIL.slantPath[1] - VEIL.slantPath[0]));
+	return t * t * (3 - 2 * t);
+}
+
+/**
+ * Opacity an in-cloud channel meets seen at `slant`, and how many times farther the cloud spreads it: slightly
+ * transparent from above, thickened by the cloud crossed toward the eye at a slant.
+ */
+export function seenThrough(opacity: number, slant: number): { opacity: number; reach: number } {
+	const path = Math.min(VEIL.maxPath, Math.max(1, 1 / Math.max(slant, 0.05)));
+	const grazing = grazingShare(slant);
+	const thick = 1 - (1 - Math.min(Math.max(opacity, 0), 0.999)) ** mix(1, path, VEIL.limb);
+	return { opacity: thick * mix(VEIL.through, 1, grazing), reach: mix(Math.sqrt(path), path, grazing) };
+}
+
 /**
  * Share of its light a segment `lengthPx` long keeps once the cloud spreads it from `width` to `veiled` px: a segment
  * shorter than that width overlaps its neighbours over it, so they share their light and a path does not add up to a
@@ -85,7 +108,7 @@ export function liftHeight(z: number, lift: [number, number, number]): number {
 	return (z <= lift[0] ? z : lift[0] + (z - lift[0]) * lift[1]) * lift[2];
 }
 
-/** GLSL twins of `cloudCrossing`, `cloudTransmission`, `clearAirLight`, `cloudVeil`, `veilOverlap`, `reliefLift` and `liftHeight` (on a point), with the shell radius as a uniform. */
+/** GLSL twins of `cloudCrossing`, `cloudTransmission`, `clearAirLight`, `grazingShare`, `seenThrough`, `cloudVeil`, `veilOverlap`, `reliefLift` and `liftHeight` (on a point), with the shell radius as a uniform. */
 export const veilGlsl = /* glsl */ `
 uniform float cloudShell;
 vec3 cloudCrossing(vec3 point, vec3 eye) {
@@ -103,6 +126,16 @@ float cloudTransmission(float opacity, float slant) {
 }
 float clearAirLight(float opacity, float slant) {
 	return max(cloudTransmission(opacity, slant), ${f(VEIL.trace)});
+}
+float grazingShare(float slant) {
+	float path = clamp(1.0 / max(slant, 0.05), 1.0, ${f(VEIL.maxPath)});
+	return smoothstep(${f(VEIL.slantPath[0])}, ${f(VEIL.slantPath[1])}, path);
+}
+vec2 seenThrough(float opacity, float slant) {
+	float path = clamp(1.0 / max(slant, 0.05), 1.0, ${f(VEIL.maxPath)});
+	float grazing = grazingShare(slant);
+	float thick = 1.0 - pow(1.0 - clamp(opacity, 0.0, 0.999), mix(1.0, path, ${f(VEIL.limb)}));
+	return vec2(thick * mix(${f(VEIL.through)}, 1.0, grazing), mix(sqrt(path), path, grazing));
 }
 vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float flag) {
 	float depth = clamp((${f(SKELETON.cloudTopKm)} - heightKm) / ${f(SKELETON.cloudTopKm - SKELETON.cloudBaseKm)}, 0.0, 1.0);

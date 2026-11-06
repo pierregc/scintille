@@ -1,7 +1,7 @@
 import { CLOUD_LIGHT, cloudLightGlsl } from '../lightning/cloud-light';
 import { flashLightGlsl } from '../lightning/light-map.glsl';
 import { glslFloat as f } from '../lightning/profile';
-import { CLOUD_DAY_COLOR, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
+import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
 import { cloudOpacityGlsl } from './clouds.glsl';
 import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
@@ -846,7 +846,7 @@ void main() {
 	if (reliefOn > 0.0 && cover > 0.02) {
 		vec4 far = rayMatrix * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
 		vec3 rd = normalize(far.xyz / far.w - eyeKm);
-		float r = 6371.0 + (seen.b > 0.1 ? seen.b : 10.0);
+		float r = 6371.0 + (seen.b > 0.1 ? seen.b : ${f(CLOUD_SHELL_KM)});
 		float b = dot(eyeKm, rd);
 		float disc = b * b - dot(eyeKm, eyeKm) + r * r;
 		if (disc > 0.0) {

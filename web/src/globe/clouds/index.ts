@@ -2,21 +2,20 @@ import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, 
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
-import { CLOUD_DAY_COLOR, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
+import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
 import type { CloudDetail, DetailSource } from './detail';
 import type { CloudFrame } from './frame';
 import { browserStorage, type PreferenceStorage, readCloudsVisible, writeCloudsVisible } from './preference';
 import { blendPair, easePosition, framePosition, MAX_CLOUD_FRAMES } from './timeline';
 
+export { CLOUD_SHELL_KM } from './bounds';
 export { cloudOpacityGlsl } from './clouds.glsl';
 export { type CloudFrame, loadCloudFrame } from './frame';
 
 const EARTH_RADIUS_KM = 6371;
 const DEG = Math.PI / 180;
 
-/** Shell height: just under the lightning cloud tops (12 km), so flashes sit on the clouds. */
-export const CLOUD_SHELL_KM = 10;
 
 /** GMGSI covers 72.7° S to 72.7° N (ADR 0007); the layer fades out before that edge. */
 export const CLOUD_FADE_LATITUDES = [66, 72.7] as const;
