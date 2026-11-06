@@ -95,7 +95,7 @@ resource "cloudflare_r2_bucket_lifecycle" "live" {
       }
     },
     {
-      # Cloud frames for replay; 30 days pending the retention decision (#41).
+      # Cloud frames for replay, kept 30 days.
       id         = "archive-clouds-30-days"
       enabled    = true
       conditions = { prefix = "archive/clouds/" }

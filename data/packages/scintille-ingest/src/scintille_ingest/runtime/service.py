@@ -28,7 +28,7 @@ log = logging.getLogger("scintille_ingest.live")
 
 
 class Publisher(Protocol):
-    """Live feed (#36). Idempotent by `flash_id`: after a crash a file can be published twice."""
+    """Live feed. Idempotent by `flash_id`: after a crash a file can be published twice."""
 
     async def publish(self, source: str, flashes: pl.DataFrame) -> None: ...
 

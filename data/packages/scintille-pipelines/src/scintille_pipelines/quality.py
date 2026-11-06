@@ -75,7 +75,7 @@ def volume_anomaly(count: int, baseline: list[int]) -> Outcome:
 
 
 def uniqueness(flash_ids: pl.Series) -> Outcome:
-    """No `flash_id` twice in a closed partition; a violation calls for a rebuild (#40)."""
+    """No `flash_id` twice in a closed partition; a violation calls for a rebuild."""
     duplicates = flash_ids.len() - flash_ids.n_unique()
     return Outcome(duplicates == 0, {"rows": flash_ids.len(), "duplicates": duplicates})
 

@@ -1,4 +1,4 @@
-"""Flags the flashes another source sees better (#34), from the static ownership mask."""
+"""Flags the flashes another source sees better, from the static ownership mask."""
 
 from collections.abc import Collection
 

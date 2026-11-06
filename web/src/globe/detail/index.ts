@@ -1,13 +1,12 @@
 import type { PerspectiveCamera, ShaderMaterial, Vector3 } from 'three';
 import type { AtlasRenderer } from './atlas';
 import { SurfaceTiles, type SurfaceTilesStats } from './tiles';
-import { SurfaceVectors } from './vectors';
 
-/** Surface detail: raster tiles (ADR 0022); base textures only and the vector overlays of #125 stay to compare against. */
-export type SurfaceMode = 'base' | 'tiles' | 'vectors' | 'both';
-export const SURFACE_MODES: readonly SurfaceMode[] = ['tiles', 'base', 'vectors', 'both'];
+/** Surface detail: raster tiles (ADR 0022), or the base textures alone to compare against. */
+export type SurfaceMode = 'base' | 'tiles';
+export const SURFACE_MODES: readonly SurfaceMode[] = ['tiles', 'base'];
 
-/** `?surface=tiles|base|vectors|both`, and `?texel=<css px>` for the refinement threshold. */
+/** `?surface=tiles|base`, and `?texel=<css px>` for the refinement threshold. */
 export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPixels: number } {
 	const params = new URLSearchParams(search);
 	const mode = params.get('surface') as SurfaceMode;
@@ -18,12 +17,10 @@ export function surfaceFromSearch(search: string): { mode: SurfaceMode; texelPix
 export interface SurfaceDetailOptions {
 	renderer: AtlasRenderer;
 	earth: ShaderMaterial;
-	root: string;
 	surfaceRoot: string;
 	radius: number;
 	baseTexelKm: number;
 	anisotropy: number;
-	pixelRatio: () => number;
 	mode: SurfaceMode;
 	texelPixels: number;
 	/** GPU bytes the tiles may hold. */
@@ -32,7 +29,6 @@ export interface SurfaceDetailOptions {
 
 export class SurfaceDetail {
 	readonly tiles: SurfaceTiles;
-	readonly vectors: SurfaceVectors;
 	#mode: SurfaceMode;
 
 	constructor(private readonly options: SurfaceDetailOptions) {
@@ -45,7 +41,6 @@ export class SurfaceDetail {
 			anisotropy: options.anisotropy,
 			maxBytes: options.maxBytes,
 		});
-		this.vectors = new SurfaceVectors(`${options.root}/vectors/lines.bin`, options.radius, options.earth.uniforms.sunDirection.value as Vector3, options.pixelRatio);
 	}
 
 	get mode(): SurfaceMode {
@@ -54,24 +49,18 @@ export class SurfaceDetail {
 
 	set mode(mode: SurfaceMode) {
 		this.#mode = mode;
-		if (mode === 'base' || mode === 'vectors') this.tiles.clear();
+		if (mode === 'base') this.tiles.clear();
 	}
 
 	update(camera: PerspectiveCamera, viewHeight: number): void {
-		const tiles = this.#mode === 'tiles' || this.#mode === 'both';
-		const vectors = this.#mode === 'vectors' || this.#mode === 'both';
-		if (tiles) this.tiles.update(camera, viewHeight, this.options.earth.uniforms.sunDirection.value as Vector3);
-		const heightKm = (camera.position.length() / this.options.radius - 1) * 6371;
-		if (vectors) this.vectors.update(heightKm);
-		else this.vectors.group.visible = false;
+		if (this.#mode === 'tiles') this.tiles.update(camera, viewHeight, this.options.earth.uniforms.sunDirection.value as Vector3);
 	}
 
-	stats(): { mode: SurfaceMode; tiles: SurfaceTilesStats | null; vectors: boolean } {
-		return { mode: this.#mode, tiles: this.tiles.stats, vectors: this.vectors.loaded };
+	stats(): { mode: SurfaceMode; tiles: SurfaceTilesStats | null } {
+		return { mode: this.#mode, tiles: this.tiles.stats };
 	}
 
 	dispose(): void {
 		this.tiles.dispose();
-		this.vectors.dispose();
 	}
 }

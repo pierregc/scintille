@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import geos
-from .disk import Disk, bilinear, block_mean
+from .disk import Disk, block_mean
 from .profile import lapse_heights
 from .texture import OPACITY_KELVIN, smoothstep
 
@@ -185,15 +185,6 @@ def opacity(
         value = fields.coverage * value + (1 - fields.coverage) * fallback
         fine *= fields.coverage
     return value.astype(np.float32), fine.astype(np.float32)
-
-
-def sample_grid(values: Array, lat: NDArray[np.float64], lon: NDArray[np.float64]) -> Array:
-    """Equirectangular global field (rows north to south from 90°, columns from -180°) at points."""
-    n_rows, n_cols = values.shape
-    rows = (90 - lat) / 180 * n_rows - 0.5
-    cols = ((lon + 180) / 360 * n_cols - 0.5) % n_cols
-    padded = np.concatenate([values, values[:, :1]], axis=1)
-    return bilinear(padded, np.clip(rows, 0, n_rows - 1), cols)
 
 
 FILL_SIGMA = 6.0

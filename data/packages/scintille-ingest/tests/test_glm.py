@@ -12,7 +12,6 @@ from scintille_ingest.glm.discovery import (
     fetch,
     latest_product,
     list_products,
-    new_products,
     public_store,
 )
 from scintille_ingest.glm.ingest import ingest_glm_file
@@ -163,7 +162,6 @@ def test_discovery_lists_the_hour_prefix_and_falls_back_one_hour() -> None:
 
     listed = list_products(store, datetime(2026, 10, 8, 18, 30, tzinfo=UTC))
     assert [p.name for p in listed] == [names[2], names[0], names[1]]
-    assert [p.name for p in new_products(listed, {listed[0].key})] == [names[0], names[1]]
 
     latest = latest_product(store, datetime(2026, 10, 8, 19, 0, 10, tzinfo=UTC))
     assert latest is not None and latest.name == names[1]

@@ -52,7 +52,7 @@ class LakeResource(ConfigurableResource):  # type: ignore[type-arg]
 
 
 class PostgresResource(ConfigurableResource):  # type: ignore[type-arg]
-    """Pipeline state; also holds the per-partition write lock shared with lake-writer."""
+    """Pipeline state in Postgres."""
 
     dsn: str = LOCAL_POSTGRES
 
@@ -60,27 +60,6 @@ class PostgresResource(ConfigurableResource):  # type: ignore[type-arg]
     def connect(self) -> Iterator[psycopg.Connection]:
         with psycopg.connect(self.dsn, autocommit=True) as connection:
             yield connection
-
-    @contextmanager
-    def partition_lock(self, key: str, wait: bool = True) -> Iterator[bool]:
-        """Session advisory lock on `key` (e.g. `silver.flashes/2026-07-15/glm-east`).
-
-        Yields whether the lock is held; with `wait=False` it does not block.
-        """
-        with self.connect() as connection:
-            if wait:
-                connection.execute("SELECT pg_advisory_lock(hashtextextended(%s, 0))", [key])
-                held = True
-            else:
-                row = connection.execute(
-                    "SELECT pg_try_advisory_lock(hashtextextended(%s, 0))", [key]
-                ).fetchone()
-                held = bool(row and row[0])
-            try:
-                yield held
-            finally:
-                if held:
-                    connection.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", [key])
 
 
 class R2Resource(ConfigurableResource):  # type: ignore[type-arg]

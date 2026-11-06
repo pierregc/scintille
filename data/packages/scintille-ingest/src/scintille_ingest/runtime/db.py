@@ -1,4 +1,4 @@
-"""One autocommit Postgres connection that reopens after the server restarts (#380)."""
+"""One autocommit Postgres connection that reopens after the server restarts."""
 
 from typing import Any
 

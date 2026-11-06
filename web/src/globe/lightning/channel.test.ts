@@ -121,7 +121,7 @@ describe('flash kinds', () => {
 				expect(flashLook(seed, durationMs, areaKm2, radius)).toEqual([kind, leader, spread]);
 			}
 		}
-		// The shaders no longer draw the kind or the timing themselves: the float32 hash of the seed would differ (ADR 0033).
+		// The CPU draws the kind and the timing: a float32 hash of the seed in the shaders would differ (ADR 0033).
 		expect(channelGlsl).not.toContain('flashKind');
 		expect(channelGlsl).not.toContain('leaderSeconds');
 		expect(channelGlsl).toContain('bool isGround(int kind)');

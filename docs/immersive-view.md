@@ -415,7 +415,7 @@ back per storm:
 
 Separate page runs swung by 3 ms between repetitions (median p95 15.1 ms with tiles, 13.3 ms base,
 other GPU jobs on the Mac), so the cost is measured in one page with the modes alternated. The
-prototype of #252 drew patches over the globe and cost about 2 ms more. `spike/surface/stress.mjs`
+prototype of #252 drew patches over the globe and cost about 2 ms more. [`spike/surface/stress.mjs`](https://github.com/pierregc/scintille/blob/87e41af/web/spike/surface/stress.mjs)
 (rapid flights, repeated dives, missing tiles, 429, offline) kept the globe whole, the tile array
 full but never over it (88 and 36 layers), the JS heap flat (37.3 MB desktop, 36.3 MB mobile) and
 no page error.

@@ -1,4 +1,4 @@
-"""MonitoredRunLauncher against a real code server (#326)."""
+"""MonitoredRunLauncher against a real code server."""
 
 import json
 import os

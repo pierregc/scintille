@@ -436,7 +436,7 @@ def glm_once(satellites: Sequence[Satellite], rows: int) -> int:
 
 
 def mtg_once(store: mtg_discovery.DataStore, rows: int, save: Path | None = None) -> int:
-    """Latest chunk of the last hour, with the latencies #32 asks to measure."""
+    """Latest chunk of the last hour, with its latencies."""
     now = datetime.now(UTC)
     listed = store.search(now - timedelta(hours=1), now)
     found = mtg_discovery.chunks(listed)

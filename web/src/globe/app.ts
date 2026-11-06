@@ -18,7 +18,7 @@ import { attachCoverageLabel, surfacePoint } from './coverage/label';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
-import { createEarth, surfaceRoot, texturesRoot } from './earth';
+import { createEarth, surfaceRoot } from './earth';
 import { StormFocus } from './focus';
 import { ActiveFeed, pickCell } from './focus/active';
 import { kmToWorld, worldToKm } from './flight';
@@ -83,7 +83,7 @@ export interface GlobeApp {
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
-	/** Surface detail prototypes (#125), in development and PR previews only. */
+	/** Surface detail, switchable to the base textures in development and PR previews. */
 	readonly surface?: SurfaceDetail;
 	/** Clouds in relief (ADR 0028), in development and PR previews only. */
 	readonly cloudVolume?: { detail: boolean; coverage(): { width: number; height: number; values: Float32Array }; styleCheck(): StyleBounds };
@@ -127,24 +127,21 @@ export function createGlobeApp(
 	if (import.meta.env.DEV) applyDevReplay(clock, location.search);
 	const earth = createEarth(renderer, RADIUS, preset.textures);
 	scene.add(earth.mesh);
-	// Development and PR previews can switch to the base textures or the #125 prototypes to compare.
+	// Development and PR previews can switch to the base textures to compare.
 	const compareSurface = import.meta.env.DEV || BUILD.pr !== null;
 	const surfaceBytes = renderParams ? 0 : surfaceBudgetMb(tier, phone) * 1e6;
 	const surface = surfaceBytes > 0
 		? new SurfaceDetail({
 				renderer,
 				earth: earth.material,
-				root: texturesRoot(),
 				surfaceRoot: surfaceRoot(),
 				radius: RADIUS,
 				baseTexelKm: (40075 / Number.parseInt(preset.textures, 10)) / 1024,
 				anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
-				pixelRatio: () => renderer.getPixelRatio(),
 				maxBytes: surfaceBytes,
 				...(compareSurface ? surfaceFromSearch(location.search) : { mode: 'tiles', texelPixels: 2 }),
 			})
 		: undefined;
-	if (surface) earth.mesh.add(surface.vectors.group);
 	const cycleSurface = (event: KeyboardEvent) => {
 		if (!surface || !compareSurface || event.key !== 'S' || !event.shiftKey) return;
 		surface.mode = SURFACE_MODES[(SURFACE_MODES.indexOf(surface.mode) + 1) % SURFACE_MODES.length];

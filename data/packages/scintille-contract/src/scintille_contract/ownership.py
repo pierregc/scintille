@@ -53,13 +53,6 @@ def owner_index(
     return np.where(seen.any(axis=0), best, -1)
 
 
-def owners(
-    lat: ArrayLike, lon: ArrayLike, satellites: tuple[Satellite, ...] = SATELLITES
-) -> list[Source | None]:
-    names = [s.source for s in satellites]
-    return [names[i] if i >= 0 else None for i in owner_index(lat, lon, satellites).tolist()]
-
-
 def zone(satellite: int, satellites: tuple[Satellite, ...] = SATELLITES) -> list[Polygon]:
     """Owned zone in the lon/lat plane, longitudes unwrapped around the sub-point.
 

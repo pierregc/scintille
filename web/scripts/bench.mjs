@@ -1,7 +1,7 @@
 // Measures the immersive storm view on the reference storms (docs/immersive-view.md).
 // Usage: node scripts/bench.mjs --refs ../docs/immersive/references.json --out <dir>
 //   [--url https://scintille.app] [--profile desktop|mobile] [--gl gpu|swiftshader] [--seconds 8]
-//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles|vectors|both] [--relief flat|columns|volume] [--journey] [--headed] [--video]
+//   [--storm <id>] [--afterglow <minutes>] [--speed <replay speed>] [--no-clouds] [--surface base|tiles] [--relief flat|columns|volume] [--journey] [--headed] [--video]
 //   [--warm] [--network 4g|slow4g]
 // --warm opens the storm once before measuring, so the load is from the browser cache.
 // --network throttles every request of the measured page (Chrome DevTools presets).

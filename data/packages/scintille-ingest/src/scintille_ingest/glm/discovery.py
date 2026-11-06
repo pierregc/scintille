@@ -1,6 +1,5 @@
 """Find new GLM files by listing the hour prefixes of the public NOAA buckets."""
 
-from collections.abc import Set
 from dataclasses import replace
 from datetime import datetime, timedelta
 
@@ -35,10 +34,6 @@ def latest_product(store: ObjectStore, now: datetime) -> ProductKey | None:
         if products:
             return products[-1]
     return None
-
-
-def new_products(listed: list[ProductKey], seen: Set[str]) -> list[ProductKey]:
-    return [product for product in listed if product.key not in seen]
 
 
 def fetch(store: ObjectStore, key: str) -> bytes:

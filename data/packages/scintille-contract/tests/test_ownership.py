@@ -3,11 +3,20 @@ from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scintille_contract import ownership
-from scintille_contract.ownership import SATELLITES, Satellite, owner_index, owners
+from scintille_contract.models import Source
+from scintille_contract.ownership import SATELLITES, Satellite, owner_index
 from shapely import Point
 
 MASK = Path(__file__).parents[3] / "contract" / "ownership.geojson"
+
+
+def owners(
+    lat: ArrayLike, lon: ArrayLike, satellites: tuple[Satellite, ...] = SATELLITES
+) -> list[Source | None]:
+    names = [s.source for s in satellites]
+    return [names[i] if i >= 0 else None for i in owner_index(lat, lon, satellites).tolist()]
 
 
 def test_each_point_belongs_to_the_nearest_subpoint() -> None:

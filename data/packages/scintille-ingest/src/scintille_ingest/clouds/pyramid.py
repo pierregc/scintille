@@ -68,15 +68,6 @@ class Inputs:
         bt[(lat > mosaic.lat.max()) | (lat < mosaic.lat.min())] = np.nan
         return bt
 
-    def fallback_at(
-        self, lat: NDArray[np.float64], lon: NDArray[np.float64], skin: Array | None = None
-    ) -> Array | None:
-        bt = self.fallback_bt_at(lat, lon)
-        if bt is None:
-            return None
-        surface = self.skin_at(lat, lon) if skin is None else skin
-        return np.nan_to_num(smoothstep(*OPACITY_KELVIN, surface - bt), nan=0.0)
-
 
 def area(
     inputs: Inputs,
