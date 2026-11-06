@@ -29,7 +29,7 @@ bytes (#437).
    15 km included), so memory stays flat. Level 6 uses the level 5 rule with the visible at its native
    resolution; its detail ratio is smoothed over the same 1 km, so levels 5 and 6 agree.
 3. **Contract**: an optional `storm` block in `detail` lists the tiles and a sparse index after the
-   other two; old packs and old clients are unchanged. Storm packs keep level 6 under their storms.
+   other indexes; old packs and old clients are unchanged. Storm packs keep level 6 under their storms.
 4. **Client**: the detail cache and its page table go down to level 6; the volume gets a seventh
    window of 0.5 km around the ground looked at, baked only while level 6 tiles are loaded there.
    The relief light keeps reading the 1 km window and coarser.

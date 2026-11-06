@@ -246,7 +246,7 @@ that ignore it keep the global textures:
   ```
 
   `slots` is base64 of the tiles present: ascending little-endian uint16 slots of level 6
-  (`y × 128 + x`). A third index of `index_bytes` starts at `index_offset`, after the other two,
+  (`y × 128 + x`). Their index of `index_bytes` starts at `index_offset`, after the other indexes,
   with one (offset, length) pair per listed slot in the same order. Tiles have the size and border
   of the other levels. A `-storms.tiles` object keeps the level 6 tiles under its storms.
 
