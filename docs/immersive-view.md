@@ -453,7 +453,7 @@ against what physics alone would show, within the bounds of
 | Round glow near the floor, by day, and where glows overlap | Styled: 15 % of its level at the floor (40 % where no cloud light shows), 35 % of that over sunlit cloud (physics: none), easing back from 0.3 to 1 km per CSS px to the far view's 40 % to full ramp; in a storm view below 1 km per CSS px overlapping glows keep the brightest, never add up, cross-fading to screen blending from 0.7 to 1 km per CSS px; while a channel of the sample shows, it steps back to 40 % (10 % with a halo, and only as much as the cloud lets a ground channel through) or 25 % in cloud; bloom radius 0.4 at the floor | `ZOOM.nearGlowLevel`, `ZOOM.glowLevel`, `nearFloor`, `maxBlendShare`, `CHANNEL.glowDayLevel`, `CHANNEL.glowDip`, `BLOOM.nearRadius` |
 | Cloud light shape | Styled about the observed footprint, at the observed energy: an elongated, irregular patch along the flash's drift or, for a ground flash, its drawn in-cloud feed (long over short axis 1.4 to 2.2, edge lobed by 0.18 and 0.10), the whole of it during the flash's pulses and 0.65 of it between them, its farthest point at `(1.3 + 1.7 w) r` (1.5 `r` at the 400 km floor) at `0.35 + 0.65 w` of its level; shaped by the styled columns (a band of 3.5 km half width 3 km under each top above 11.5 km, at 8.5 km otherwise, 1.8 times the flat layer's level), read sharpened by up to 1.25 near the floor, 35 % of it over sunlit cloud (physics: none); in storm views overlaps keep the brightest, never add up | `CLOUD_LIGHT`, `LIGHT_WINDOW`, `cloudPatch`, `flashBand`, `glowDepths` |
 | Cloud top 12 km, cloud shell 13 km | Assumed, for the flat layer seen from afar and where no height is published; the shell sits over the channels' tops so flashes start inside the clouds (styled, [ADR 0035](adr/0035-lightning-inside-clouds.md)) | `CLOUD_TOP_KM`, `CLOUD_SHELL_KM` |
-| Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
+| Cloud opacity | Observed IR, converted (ADR 0007), with visible detail by day (ADR 0023); about 1 km, 0.5 km by day around strong storms (ADR 0037), 2 km at night outside Europe and Africa, hourly | Composite frames and detail tiles |
 | Cloud-top height | Observed IR matched to the GFS temperature profile (ADR 0028); 2 km, about 1 km median difference with GOES ACHA on opaque tops, thin cirrus placed too low | Height tiles, `volumeField` |
 | Cloud base and thickness | Assumed: 0.7 to 1 km for low tops, 1.5 km for thin high clouds, 2.5 km for anvil edges, down to 1.5 km above sea level inside storms | `volumeColumn` |
 | Tops of semi-transparent edges of high systems | Assumed (ADR 0031): lifted toward the nearest opaque plateau inward, as infrared places them too low | `styleFragmentShader` |
@@ -477,13 +477,15 @@ captures and the comparison with ISS photographs are in [cloud look](cloud-look.
   ([data contract](data-contract.md#cloud-detail-tiles)), loaded by a second tile cache (80 layers),
   level 3 however far the view; storm packs keep level 4 only, which is loaded from afar in place of
   level 3.
-- **Bake**: six nested windows of 512² texels (1, 2, 4, 8, 16 and 32 km), in half floats: the 1 and
-  2 km windows around the ground below the screen centre (40 % of the half-height, at most 400 km
-  from it), the others around the screen centre; the march reads the first four. Three passes: the
+- **Bake**: seven nested windows of 512² texels (0.5, 1, 2, 4, 8, 16 and 32 km), in half floats:
+  the 0.5, 1 and 2 km windows around the ground below the screen centre (40 % of the half-height,
+  at most 400 km from it), the others around the screen centre; the march reads the first five.
+  The 0.5 km window is baked only while level 6 storm tiles are loaded there
+  ([ADR 0037](adr/0037-storm-cloud-detail.md)), and the relief light never reads it. Three passes: the
   observations (blended opacity, top, convective core, heights known; texel means from 4 km up),
   their styling from the neighbourhood (hashed noise, never finer than 2.5 texels), and the sunlight
   through the other columns at the ground and at each column's own top, with the sky each dense top
-  sees in the two finest windows, whose cover is also sharpened against its ring of neighbours.
+  sees in the three finest windows, whose cover is also sharpened against its ring of neighbours.
   Every window adds the relief light of the broad shape, from its dense tops spread over 1.5
   texels, and the sunlit share of each top. A window is baked again when its
   place, frames, tiles or sun change (at most one every other frame); windows fade into each other

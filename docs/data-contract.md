@@ -232,6 +232,23 @@ that ignore it keep the global textures:
   the profile was missing). Clear texels carry the tops of the nearby clouds, so filtering never
   slopes a top down to the ground. A `-storms.tiles` object keeps the level 4 heights under its
   storms.
+- By day, under storms of level 4 and up, a frame may add level 6 tiles (about 0.49 km) from the
+  native 0.5 km visible channels ([ADR 0037](adr/0037-storm-cloud-detail.md)), declared by an
+  optional `storm` block inside `detail`; clients that ignore it read the other indexes as before:
+
+  ```json
+  "storm": {
+    "level": 6,
+    "slots": "4BDhEA…",
+    "index_offset": 26624,
+    "index_bytes": 1480
+  }
+  ```
+
+  `slots` is base64 of the tiles present: ascending little-endian uint16 slots of level 6
+  (`y × 128 + x`). A third index of `index_bytes` starts at `index_offset`, after the other two,
+  with one (offset, length) pair per listed slot in the same order. Tiles have the size and border
+  of the other levels. A `-storms.tiles` object keeps the level 6 tiles under its storms.
 
 ## Historical cloud discovery
 
