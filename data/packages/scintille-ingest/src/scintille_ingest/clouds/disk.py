@@ -1,6 +1,6 @@
 """A satellite channel on its scan grid, and how the composite samples it."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -45,13 +45,15 @@ class Disk:
     values: NDArray[np.floating]
     resolution_km: float
     """Sampling distance at the sub-satellite point."""
+    fine: tuple["Disk", ...] = ()
+    """Windows of the channel at its native resolution, for the storm tiles (ADR 0037)."""
 
     def __reduce__(self) -> tuple[Any, ...]:
         """A memory-mapped disk travels to worker processes as its file name."""
         fields = (self.satellite, self.kind, self.view, self.grid)
         if isinstance(self.values, np.memmap) and self.values.filename:
-            return _reopen, (*fields, str(self.values.filename), self.resolution_km)
-        return Disk, (*fields, self.values, self.resolution_km)
+            return _reopen, (*fields, str(self.values.filename), self.resolution_km, self.fine)
+        return Disk, (*fields, self.values, self.resolution_km, self.fine)
 
     def sample(self, rows: NDArray[np.float64], cols: NDArray[np.float64]) -> NDArray[np.float32]:
         """Bilinear value at fractional pixel indices; NaN outside the grid or next to no data."""
@@ -59,10 +61,69 @@ class Disk:
 
 
 def _reopen(
-    satellite: str, kind: Kind, view: View, grid: Grid, path: str, resolution_km: float
+    satellite: str,
+    kind: Kind,
+    view: View,
+    grid: Grid,
+    path: str,
+    resolution_km: float,
+    fine: tuple[Disk, ...] = (),
 ) -> Disk:
     values: NDArray[np.floating] = np.lib.format.open_memmap(path, mode="r")
-    return Disk(satellite, kind, view, grid, values, resolution_km)
+    return Disk(satellite, kind, view, grid, values, resolution_km, fine)
+
+
+@dataclass(frozen=True)
+class Window:
+    """Rows `row0` to `row1` and columns `col0` to `col1` of a scan grid, ends excluded."""
+
+    row0: int
+    row1: int
+    col0: int
+    col1: int
+
+
+Windows = Callable[[View, Grid], Sequence[Window]]
+"""Where a reader keeps a channel at its native resolution, given its native scan grid."""
+
+
+class Patches:
+    """A channel's native values inside some windows, filled as a reader streams the disk."""
+
+    def __init__(
+        self,
+        disk: tuple[str, Kind, View, Grid, float],
+        windows: Sequence[Window],
+        allocate: Allocate,
+    ) -> None:
+        satellite, kind, view, grid, resolution_km = disk
+        self.parts: list[tuple[Window, Disk]] = []
+        for w in windows:
+            values = allocate((w.row1 - w.row0, w.col1 - w.col0), np.float16)
+            values[:] = np.nan
+            sub = Grid(
+                grid.x0 + grid.dx * w.col0,
+                grid.dx,
+                grid.y0 + grid.dy * w.row0,
+                grid.dy,
+                w.row1 - w.row0,
+                w.col1 - w.col0,
+            )
+            self.parts.append((w, Disk(satellite, kind, view, sub, values, resolution_km)))
+
+    def write(self, row: int, col: int, values: NDArray[np.floating]) -> None:
+        """Copies `values`, whose first pixel is at `row`, `col` of the native grid."""
+        for w, disk in self.parts:
+            r0, r1 = max(w.row0, row), min(w.row1, row + values.shape[0])
+            c0, c1 = max(w.col0, col), min(w.col1, col + values.shape[1])
+            if r0 < r1 and c0 < c1:
+                disk.values[r0 - w.row0 : r1 - w.row0, c0 - w.col0 : c1 - w.col0] = values[
+                    r0 - row : r1 - row, c0 - col : c1 - col
+                ]
+
+    @property
+    def disks(self) -> tuple[Disk, ...]:
+        return tuple(disk for _, disk in self.parts)
 
 
 def bilinear(

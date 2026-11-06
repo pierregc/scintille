@@ -96,9 +96,13 @@ class Fields:
 
 
 def blend(
-    lat: NDArray[np.float64], lon: NDArray[np.float64], satellites: Sequence[Satellite]
+    lat: NDArray[np.float64],
+    lon: NDArray[np.float64],
+    satellites: Sequence[Satellite],
+    native: bool = False,
 ) -> Fields:
-    """Parallax-corrected, view-angle weighted blend of every disk at `lat`, `lon` (2-D)."""
+    """Parallax-corrected, view-angle weighted blend of every disk at `lat`, `lon` (2-D); with
+    `native`, the visible channels at their native resolution where windows of them were kept."""
     shape = lat.shape
     bt_sum = np.zeros(shape, np.float32)
     bt_weight = np.zeros(shape, np.float32)
@@ -128,8 +132,11 @@ def blend(
         if sat.infrared.resolution_km <= FINE_KM:
             fine_ir += w
         coverage = np.maximum(coverage, np.where(seen, edge, 0))
-        if sat.visible is not None:
-            refl = sat.visible.sample(*sat.visible.grid.index(x, y))
+        visible = sat.visible
+        if visible is not None:
+            refl = visible.sample(*visible.grid.index(x, y))
+            if native:
+                refl = _native(visible, x, y, refl)
             ok = np.isfinite(refl) & (weight > 0)
             wv = np.where(ok, weight, 0)
             refl_sum += np.where(ok, refl, 0) * wv
@@ -141,17 +148,30 @@ def blend(
     return Fields(bt, refl, coverage, fine)
 
 
+def _native(visible: Disk, x: NDArray[np.float64], y: NDArray[np.float64], refl: Array) -> Array:
+    """`refl` replaced by the native windows of `visible` wherever they hold the scan angles."""
+    for window in visible.fine:
+        rows, cols = window.grid.index(x, y)
+        last_row, last_col = window.grid.rows - 1, window.grid.cols - 1
+        if rows.max() < 0 or cols.max() < 0 or rows.min() > last_row or cols.min() > last_col:
+            continue
+        value = window.sample(rows, cols)
+        refl = np.where(np.isfinite(value), value, refl)
+    return refl
+
+
 DETAIL_LIMITS = (0.5, 1.6)
 """Bounds of the visible detail ratio applied to the infrared opacity."""
 
 
-def detail_ratio(reflectance: Array) -> Array:
+def detail_ratio(reflectance: Array, scale: int = 1) -> Array:
     """Visible brightness over its smoothed value at the infrared scale: above 1 on the bright
-    side of an edge, below on the dark side; 1 where there is no visible data."""
-    filled = np.where(np.isfinite(reflectance), reflectance, 0).astype(np.float32)
-    known = np.isfinite(reflectance).astype(np.float32)
-    smooth = _binomial5(filled)
-    weight = _binomial5(known)
+    side of an edge, below on the dark side; 1 where there is no visible data. `scale` texels
+    span about 1 km, so the smoothing keeps the same size on finer grids."""
+    smooth = np.where(np.isfinite(reflectance), reflectance, 0).astype(np.float32)
+    weight = np.isfinite(reflectance).astype(np.float32)
+    for _ in range(scale * scale):
+        smooth, weight = _binomial5(smooth), _binomial5(weight)
     with np.errstate(invalid="ignore", divide="ignore"):
         local = smooth / weight
         ratio = reflectance / np.maximum(local, 0.02)
@@ -172,13 +192,13 @@ def _binomial5(values: Array) -> Array:
 
 
 def opacity(
-    fields: Fields, skin: Array, cos_sun: Array, fallback: Array | None = None
+    fields: Fields, skin: Array, cos_sun: Array, fallback: Array | None = None, scale: int = 1
 ) -> tuple[Array, Array]:
     """Cloud opacity (0 clear, 1 opaque) and the share of it resolved at about 1 km. The infrared
     sets how much cloud there is; by day, the visible channel adds its finer detail."""
     infrared = np.nan_to_num(smoothstep(*OPACITY_KELVIN, skin - fields.bt), nan=0.0)
     day = smoothstep(*DAY, cos_sun)
-    ratio = detail_ratio(fields.reflectance)
+    ratio = detail_ratio(fields.reflectance, scale)
     value = np.clip(infrared * (1 + day * (ratio - 1)), 0, 1)
     fine = np.maximum(fields.fine, np.where(np.isfinite(fields.reflectance), day, 0))
     if fallback is not None:

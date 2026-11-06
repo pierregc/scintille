@@ -9,7 +9,7 @@ from pathlib import Path
 import netCDF4
 import numpy as np
 
-from .disk import Allocate, Disk, block_mean, in_memory
+from .disk import Allocate, Disk, Patches, Windows, block_mean, in_memory
 from .geos import Grid, View
 
 COLLECTION = "EO:EUM:DAT:0665"
@@ -34,12 +34,18 @@ def is_body_chunk(entry: str) -> bool:
     return "-CHK-BODY-" in entry and entry.endswith(".nc")
 
 
-def read(chunks: Iterable[Path], channel: str, allocate: Allocate = in_memory) -> Disk:
-    """`vis_06_hr` (0.5 km) becomes 1 km reflectance factor; `ir_105_hr` stays 1 km brightness
-    temperature. Missing chunks stay NaN."""
+def read(
+    chunks: Iterable[Path],
+    channel: str,
+    allocate: Allocate = in_memory,
+    fine: Windows | None = None,
+) -> Disk:
+    """`vis_06_hr` (0.5 km) becomes 1 km reflectance factor, kept at 0.5 km in the `fine` windows;
+    `ir_105_hr` stays 1 km brightness temperature. Missing chunks stay NaN."""
     visible = channel == VISIBLE
     factor = 2 if visible else 1
     out = None
+    patches = None
     for path in chunks:
         with netCDF4.Dataset(path) as ds:
             ds.set_auto_maskandscale(False)
@@ -64,6 +70,10 @@ def read(chunks: Iterable[Path], channel: str, allocate: Allocate = in_memory) -
                 )
                 out = allocate((size // factor, size // factor), np.float16)
                 out[:] = np.nan
+                if visible and fine:
+                    patches = Patches(
+                        ("mtg-i1", "reflectance", view, grid, 0.5), fine(view, grid), allocate
+                    )
             radiance_var = group["effective_radiance"]
             fill = int(radiance_var._FillValue)
             scale = np.float32(radiance_var.scale_factor)
@@ -84,6 +94,8 @@ def read(chunks: Iterable[Path], channel: str, allocate: Allocate = in_memory) -
                 radiance[counts == fill] = np.nan
                 if visible:
                     radiance *= to_reflectance
+                    if patches is not None:
+                        patches.write(first_row + start, first_col, radiance)
                     values = block_mean(radiance, factor)
                 else:
                     values = _brightness(radiance, group)
@@ -98,6 +110,7 @@ def read(chunks: Iterable[Path], channel: str, allocate: Allocate = in_memory) -
         grid.coarsened(factor) if factor > 1 else grid,
         out,
         1.0,
+        patches.disks if patches is not None else (),
     )
 
 

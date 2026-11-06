@@ -10,5 +10,6 @@
   "detail_border": 2,
   "detail_height_levels": [3, 4],
   "detail_height_max_km": 20,
+  "detail_storm_level": 6,
   "tiers": ["2k", "4k"]
 }
