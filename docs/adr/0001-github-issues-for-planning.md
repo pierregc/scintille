@@ -4,8 +4,8 @@
 - Date: 2026-10-08
 
 ## Context
-The project is built by one maintainer working with several coding agents in parallel (Claude Code,
-Codex). Tickets must be readable and writable by those agents, show dependencies between tasks, and
+The project is built by one maintainer working with several coding agents in parallel. Tickets
+must be readable and writable by those agents, show dependencies between tasks, and
 give a review checkpoint for every change. The board is also part of the portfolio: it shows how
 the work is organized.
 

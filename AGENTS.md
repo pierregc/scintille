@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for coding agents (Codex, Claude Code and others) working on this repository.
+Instructions for coding agents working on this repository.
 Read this file before starting any ticket.
 
 ## Project
@@ -25,7 +25,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 
 | Path | Content |
 |---|---|
-| `web/` | Astro site; the globe will live in `web/src/globe/` |
+| `web/` | Astro site and the Three.js globe (`web/src/globe/`) |
 | `data/packages/scintille-contract/` | Shared data contract (flash schema, live feed format) |
 | `data/packages/scintille-ingest/` | Hot path service: satellite ingestion, live feed publishing |
 | `data/packages/scintille-lake/` | Iceberg tables as code, catalog connections ([lakehouse](docs/lakehouse.md)) |
@@ -45,6 +45,8 @@ pnpm -C web test     # unit tests (Vitest)
 pnpm -C web dev      # dev server
 ```
 
+Astro-specific notes are in `web/AGENTS.md`.
+
 Data (uv installs Python 3.13 itself), run from `data/`:
 
 ```sh
@@ -59,6 +61,7 @@ Before opening a PR, every command of the area you touched must pass.
 
 ## Workflow
 
+- Read the ticket and its blockers with `gh issue view <n>` before starting.
 - **One ticket = one branch = one PR.** Never push to `main`.
 - Open the PR as a draft while iterating and mark it ready for review once the local commands pass. Only ready PRs run `ci`; add the `preview` label for a site Preview, and run `images` or `render` by hand when needed ([CI/CD](docs/ci-cd.md)).
 - A PR touching `web/` needs a Preview: add the `preview` label, which redeploys it on each push.
@@ -82,6 +85,7 @@ Before opening a PR, every command of the area you touched must pass.
 
 Several agents work on the repository at the same time, each on its own branch.
 
+- Work in a separate git worktree per ticket.
 - Touch only the files your ticket needs.
 - Lockfiles (`web/pnpm-lock.yaml`, `data/uv.lock`): never resolve conflicts by hand. Rebase on `main`, take `main`'s lockfile, then re-run `pnpm -C web install` or `uv lock` to add your changes back.
 - Rebase on `main` before asking for a review if `main` has moved.
