@@ -25,7 +25,7 @@ Decisions are recorded as ADRs in `docs/adr/`.
 
 | Path | Content |
 |---|---|
-| `web/` | Astro site; the globe will live in `web/src/globe/` |
+| `web/` | Astro site and the Three.js globe (`web/src/globe/`) |
 | `data/packages/scintille-contract/` | Shared data contract (flash schema, live feed format) |
 | `data/packages/scintille-ingest/` | Hot path service: satellite ingestion, live feed publishing |
 | `data/packages/scintille-lake/` | Iceberg tables as code, catalog connections ([lakehouse](docs/lakehouse.md)) |
