@@ -1,8 +1,7 @@
 # Architecture
 
-How data flows from the satellites to the browser. Decisions and reasons are in
-[ADR 0006](adr/0006-data-architecture.md) (data) and [ADR 0005](adr/0005-hosting-and-dynamic-pages.md)
-(hosting); the live feed format is in [the data contract](data-contract.md).
+How data flows from the satellites to the browser. The live feed format is in
+[the data contract](data-contract.md).
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 260}}}%%

@@ -21,29 +21,7 @@ measured it.
 
 Behind the globe runs a small lakehouse, fed around the clock by geostationary satellites.
 
-```mermaid
-%%{init: {"flowchart": {"rankSpacing": 30, "nodeSpacing": 24, "padding": 10, "wrappingWidth": 260}}}%%
-flowchart LR
-    lightning["Lightning<br/>GOES GLM · MTG LI"] -->|"ingest-live<br/>seconds"| live[("Live feed<br/>R2 + CDN")]
-    lightning -->|ingest-live| spool[("Spool<br/>VPS disk")]
-    spool -->|"lake-writer<br/>every 5 min"| lake[("Iceberg on R2<br/>bronze · silver · gold")]
-    lake -->|"Dagster<br/>hourly"| storms[("Storms, replays,<br/>flash archive")]
-    imagery["Clouds<br/>GOES · Himawari · MTG"] -->|"clouds<br/>hourly"| textures[("Cloud textures")]
-    live --> globe["Three.js globe"]
-    storms --> globe
-    textures --> globe
-
-    classDef source fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
-    classDef hot fill:#fef3c7,stroke:#d97706,color:#78350f
-    classDef lake fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef cloud fill:#ede9fe,stroke:#7c3aed,color:#3b0764
-    classDef app fill:#111827,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
-    class lightning,imagery source
-    class live hot
-    class spool,lake,storms lake
-    class textures cloud
-    class globe app
-```
+![Architecture: lightning goes live in seconds through ingest-live, reaches the Iceberg lakehouse every five minutes and the storm catalog every hour; clouds are composited hourly; the globe reads all three](docs/images/architecture.png)
 
 - **Two paths.** `ingest-live` publishes the live feed in chunks of about 20 seconds and writes
   every batch to a durable spool; `lake-writer` commits the spool to Iceberg every five minutes, so
@@ -62,8 +40,8 @@ flowchart LR
 - **Operations**: Terraform for Cloudflare, Docker Compose on one VPS, deploys that roll back on
   failure, and a public [status page](https://scintille.app/status/) fed by live metrics.
 
-Every significant choice is an [ADR](docs/adr/). The full picture is in
-[architecture](docs/architecture.md) and on the [methodology page](https://scintille.app/methodology/).
+The full picture is in [architecture](docs/architecture.md) and on the
+[methodology page](https://scintille.app/methodology/).
 
 ## Stack
 
@@ -82,7 +60,7 @@ Every significant choice is an [ADR](docs/adr/). The full picture is in
 | [`web/`](web/) | The site and the Three.js globe |
 | [`data/`](data/) | Python packages: data contract, ingestion, Iceberg tables, Dagster pipelines |
 | [`infra/`](infra/) | Terraform, Docker Compose and the VPS setup |
-| [`docs/`](docs/) | Architecture, runbooks and decision records |
+| [`docs/`](docs/) | Architecture and runbooks |
 | [`fixtures/`](fixtures/) | A recorded hour of data for local runs and tests |
 
 ## Running locally
