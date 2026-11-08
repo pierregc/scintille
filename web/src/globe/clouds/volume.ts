@@ -38,6 +38,7 @@ import {
 	styleFragmentShader,
 	sunFragmentShader,
 } from './volume.glsl';
+import { CLOUD_ARCHIVE_RULES } from '../../contract/cloud-archive';
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { lookedAt } from '../surface';
 
@@ -48,12 +49,17 @@ const DEG = Math.PI / 180;
 const KM_PER_DEGREE = (EARTH_RADIUS_KM * Math.PI) / 180;
 
 /**
- * Texel sizes (km) of the nested windows: the two finest around the ground below the screen centre,
- * the others around the centre. The march reads the first four; the relief light reads them all.
+ * Texel sizes (km) of the nested windows: the three finest around the ground below the screen centre,
+ * the others around the centre. The march reads the first five; the relief light reads all but the
+ * first, which is baked only over storm tiles (ADR 0037).
  */
-export const WINDOW_TEXEL_KM = [1, 2, 4, 8, 16, 32] as const;
+export const WINDOW_TEXEL_KM = [0.5, 1, 2, 4, 8, 16, 32] as const;
 /** Windows the march reads. */
-const MARCH_WINDOWS = 4;
+const MARCH_WINDOWS = 5;
+/** Windows around the ground below the screen centre. */
+const NEAR_WINDOWS = 3;
+/** Detail level of the storm tiles, which the 0.5 km window waits for. */
+const STORM_LEVEL = CLOUD_ARCHIVE_RULES.detail_storm_level;
 /** Screen height (NDC) the two finest windows centre on, where oblique views magnify the ground. */
 const NEAR_SCREEN_Y = -0.4;
 /** Farthest (km) the two finest windows' centre may sit from the others', so the 2 km window stays inside the 4 km one. */
@@ -185,7 +191,7 @@ export function windowToBake(missing: readonly boolean[], stale: () => readonly 
 
 /** Taps per side over each texel of window `k` for the heights and the cover, so coarse windows hold texel means. */
 export function bakeTaps(k: number): [number, number] {
-	return [[1, 1], [1, 1], [2, 1], [2, 2], [4, 2], [8, 4]][k] as [number, number];
+	return [[1, 1], [1, 1], [1, 1], [2, 1], [2, 2], [4, 2], [8, 4]][k] as [number, number];
 }
 
 export interface CloudVolumeOptions {
@@ -200,6 +206,8 @@ export interface CloudVolumeOptions {
 	maxSamples?: number;
 	/** Styled detail (ADR 0030); off gives the observed columns only. */
 	detail?: boolean;
+	/** Finest detail level loaded at a point (degrees), 0 for none: the 0.5 km window waits for storm tiles. */
+	levelAt?: (latDeg: number, lonDeg: number) => number;
 }
 
 export interface VolumeView {
@@ -231,8 +239,8 @@ export interface CloudVolume {
 	setQuality(quality: { scale: number; maxSamples: number }): void;
 	/** Share of each reduced pixel the clouds cover, for development checks. */
 	coverage(renderer: WebGLRenderer): { width: number; height: number; values: Float32Array };
-	/** How far the styling strays from the observations over the finest window, for development checks. */
-	styleCheck(renderer: WebGLRenderer): StyleBounds;
+	/** How far the styling strays from the observations over window `k` (the 1 km one by default), for development checks. */
+	styleCheck(renderer: WebGLRenderer, k?: number): StyleBounds;
 	dispose(): void;
 }
 
@@ -249,6 +257,7 @@ export function createCloudVolume({
 	scale: initialScale = 0.5,
 	maxSamples = 64,
 	detail = true,
+	levelAt = () => 0,
 }: CloudVolumeOptions): CloudVolume {
 	// Field and observations in half floats: 8 bits would step the tops by 78 m, which the light turns into contour lines.
 	const field = new WebGLArrayRenderTarget(texels, texels, WINDOW_TEXEL_KM.length, { depthBuffer: false, type: HalfFloatType });
@@ -475,7 +484,7 @@ export function createCloudVolume({
 		bakeWindow.value.copy(windows[k]);
 		styleUniforms.texelKm.value = WINDOW_TEXEL_KM[k];
 		taps.value.set(...bakeTaps(k));
-		skyViewOn.value = k < 2 ? 1 : 0;
+		skyViewOn.value = k < NEAR_WINDOWS ? 1 : 0;
 		// Only the march's windows give the ground its shadows; the 16 km one reads itself for its tops.
 		const count = uniforms.volumeCount.value;
 		groundOn.value = k < MARCH_WINDOWS && uniforms.volumeOn.value > 0 ? 1 : 0;
@@ -484,6 +493,8 @@ export function createCloudVolume({
 		draw(renderer, styleMaterial, field, k);
 		draw(renderer, sunMaterial, sun, k);
 		uniforms.volumeCount.value = count;
+		// The relief light never reads the 0.5 km window.
+		if (k === 0) return;
 		// Dense tops spread across, then along (through the free observations target), then lit.
 		spreadUniforms.spreadWidth.value.set(...RELIEF_WIDTH_TEXELS);
 		spreadUniforms.spreadLayer.value = k;
@@ -550,7 +561,7 @@ export function createCloudVolume({
 			const autoClear = renderer.autoClear;
 			renderer.autoClear = false;
 			const near = within(centre, groundAt(NEAR_SCREEN_Y), NEAR_MAX_KM);
-			const pointFor = (k: number) => (k < 2 ? near : centre);
+			const pointFor = (k: number) => (k < NEAR_WINDOWS ? near : centre);
 			// The 16 km window, and above the march every coarse one, moves only once the view has gone a good way.
 			const wanted = (k: number): [number, number] => {
 				const q = placed[k];
@@ -568,7 +579,7 @@ export function createCloudVolume({
 				lastViewProjection = null;
 				groundAt(-1);
 				// The finest window the relief reads at the bottom of the screen, where pixels are smallest.
-				const first = Math.min(4, Math.max(2, Math.floor(Math.log2(3.4 * slant * cssAngle))));
+				const first = Math.min(5, Math.max(3, Math.floor(Math.log2(3.4 * slant * cssAngle)) + 1));
 				for (let k = 0; k < first; k++) if (placed[k] || signatures[k]) empty(k);
 				const shared = inputs(true);
 				const missing = signatures.map((sig) => !sig);
@@ -589,11 +600,15 @@ export function createCloudVolume({
 			const shared = inputs(false);
 			const count = relief > 0 ? WINDOW_TEXEL_KM.length : MARCH_WINDOWS;
 			if (count === MARCH_WINDOWS && placed[MARCH_WINDOWS]) empty(MARCH_WINDOWS);
+			const storm = Math.max(levelAt(...near), levelAt(...centre)) >= STORM_LEVEL;
+			if (!storm && (placed[0] || signatures[0])) empty(0);
+			const from = storm ? 0 : 1;
 			if (baked === 0) {
-				for (let k = MARCH_WINDOWS - 1; k >= 0; k--) bake(renderer, k, ...pointFor(k));
+				for (let k = MARCH_WINDOWS - 1; k >= from; k--) bake(renderer, k, ...pointFor(k));
 			} else {
-				const missing = signatures.slice(0, count).map((sig) => !sig);
-				const next = windowToBake(missing, () => missing.map((_, k) => signatures[k] !== signature(k, ...wanted(k), shared)), 0, baked, 2, 32);
+				const missing = signatures.slice(0, count).map((sig, k) => k >= from && !sig);
+				const stale = () => missing.map((_, k) => k >= from && signatures[k] !== signature(k, ...wanted(k), shared));
+				const next = windowToBake(missing, stale, from, baked, 2, 32);
 				if (next >= 0) bake(renderer, next, ...wanted(next));
 			}
 			baked++;
@@ -645,12 +660,12 @@ export function createCloudVolume({
 			for (let i = 0; i < values.length; i++) values[i] = 1 - DataUtils.fromHalfFloat(half[i * 4 + 3]);
 			return { width: target.width, height: target.height, values };
 		},
-		styleCheck(renderer) {
-			if (!placed[0]) throw new Error('styleCheck needs the march: bring the camera below 2,800 km');
+		styleCheck(renderer, k = 1) {
+			if (!placed[k]) throw new Error('styleCheck needs the march: bring the camera below 2,800 km');
 			const target = renderer.getRenderTarget();
-			bakeWindow.value.copy(windows[0]);
-			styleUniforms.texelKm.value = WINDOW_TEXEL_KM[0];
-			taps.value.set(...bakeTaps(0));
+			bakeWindow.value.copy(windows[k]);
+			styleUniforms.texelKm.value = WINDOW_TEXEL_KM[k];
+			taps.value.set(...bakeTaps(k));
 			const styled = new WebGLRenderTarget(texels, texels, { depthBuffer: false, type: HalfFloatType });
 			draw(renderer, rawMaterial, raw);
 			draw(renderer, styleMaterial, styled);
@@ -659,7 +674,7 @@ export function createCloudVolume({
 				renderer.readRenderTargetPixels(from, 0, 0, texels, texels, half);
 				return Float32Array.from(half, (h) => DataUtils.fromHalfFloat(h));
 			};
-			const bounds = styleBounds(read(raw), read(styled), texels, WINDOW_TEXEL_KM[0]);
+			const bounds = styleBounds(read(raw), read(styled), texels, WINDOW_TEXEL_KM[k]);
 			styled.dispose();
 			renderer.setRenderTarget(target);
 			return bounds;

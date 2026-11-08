@@ -11,7 +11,7 @@ import numpy as np
 import obstore
 from obstore.store import ObjectStore
 
-from .disk import Allocate, Disk, block_mean, in_memory
+from .disk import Allocate, Disk, Patches, Windows, block_mean, in_memory
 from .geos import Grid, View
 
 VISIBLE = "B03"
@@ -159,10 +159,17 @@ def _blocks(header: bytes) -> dict[int, bytes]:
     return blocks
 
 
-def read(segments: Iterable[Path], satellite: str, allocate: Allocate = in_memory) -> Disk:
-    """Band 3 (0.5 km) becomes 1 km reflectance factor; band 13 stays 2 km brightness temperature.
-    `segments` are the compressed files of one band, in any order; missing ones stay NaN."""
+def read(
+    segments: Iterable[Path],
+    satellite: str,
+    allocate: Allocate = in_memory,
+    fine: Windows | None = None,
+) -> Disk:
+    """Band 3 (0.5 km) becomes 1 km reflectance factor, kept at 0.5 km in the `fine` windows;
+    band 13 stays 2 km brightness temperature. `segments` are the compressed files of one band,
+    in any order; missing ones stay NaN."""
     out = None
+    patches = None
     for path in segments:
         data = bz2.decompress(path.read_bytes())
         first = np.frombuffer(data, _BLOCK1, 1)[0]
@@ -189,6 +196,10 @@ def read(segments: Iterable[Path], satellite: str, allocate: Allocate = in_memor
             out[:] = np.nan
             grid = _grid(nav, total_rows, cols)
             view = View(float(nav["sub_lon"]), float(nav["distance"]) * 1000 - 6378137.0, "y")
+            if factor > 1 and fine:
+                patches = Patches(
+                    (satellite, "reflectance", view, grid, 0.5), fine(view, grid), allocate
+                )
         top = (int(segment["first_row"]) - 1) // factor
         for start in range(0, rows, STRIP_ROWS):
             part = counts[start : start + STRIP_ROWS]
@@ -198,6 +209,8 @@ def read(segments: Iterable[Path], satellite: str, allocate: Allocate = in_memor
             radiance[(part == cal["error_count"]) | (part == cal["outside_count"])] = np.nan
             if visible:
                 radiance *= np.float32(cal["albedo"])
+                if patches is not None:
+                    patches.write(int(segment["first_row"]) - 1 + start, 0, radiance)
                 values = block_mean(radiance, factor)
             else:
                 values = _brightness(radiance.astype(np.float64), cal).astype(np.float32)
@@ -212,6 +225,7 @@ def read(segments: Iterable[Path], satellite: str, allocate: Allocate = in_memor
         grid.coarsened(factor) if factor > 1 else grid,
         out,
         1.0 if visible else 2.0,
+        patches.disks if patches is not None else (),
     )
 
 

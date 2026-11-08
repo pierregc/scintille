@@ -5,8 +5,9 @@
 export const volumeFieldGlsl = /* glsl */ `
 uniform highp sampler2DArray volumeField;
 uniform highp sampler2DArray volumeSun;
-uniform vec4 volumeWindows[6];
-// Windows in use: the four of the march, or up to six while only the relief is baked.
+uniform vec4 volumeWindows[7];
+// Windows in use: the five of the march, or all seven while only the relief is baked. The first, at
+// 0.5 km, is empty unless storm tiles are near (ADR 0037).
 uniform int volumeCount;
 uniform float volumeOn;
 uniform float volumeMaxOpacity;
@@ -28,7 +29,7 @@ vec3 volumeWindowUv(vec2 latLon, int k) {
 
 // The finest baked window holding a point and its texture coordinates; z is -1 outside them all.
 vec3 volumeWindowAt(vec2 latLon) {
-	for (int k = 0; k < 6; k++) {
+	for (int k = 0; k < 7; k++) {
 		if (k >= volumeCount) break;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z < 0.98) return vec3(w.xy, float(k));
@@ -39,7 +40,7 @@ vec3 volumeWindowAt(vec2 latLon) {
 // A baked texture at a point: the finest window, faded into the next one near its edge so the
 // detail of two windows never meets at a visible seam. Alpha 0 outside every window.
 vec4 volumeSample(highp sampler2DArray map, vec2 latLon) {
-	for (int k = 0; k < 6; k++) {
+	for (int k = 0; k < 7; k++) {
 		if (k >= volumeCount) break;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z >= 0.98) continue;
@@ -114,7 +115,7 @@ uniform float reliefOn;
 // Relief light and sunlit share at the top (g, b) in window k and coarser, faded into the next window
 // near its edge; (1, 1, 1) past them all.
 vec3 reliefIn(vec2 latLon, int from) {
-	for (int k = 0; k < 6; k++) {
+	for (int k = 0; k < 7; k++) {
 		if (k < from) continue;
 		vec3 w = volumeWindowUv(latLon, k);
 		if (w.z >= 0.98) continue;
@@ -122,7 +123,7 @@ vec3 reliefIn(vec2 latLon, int from) {
 		float edge = smoothstep(0.82, 0.96, w.z);
 		if (edge <= 0.0) return fine;
 		vec3 coarse = vec3(1.0);
-		if (k < 5) {
+		if (k < 6) {
 			vec3 c = volumeWindowUv(latLon, k + 1);
 			if (c.z < 0.98) coarse = textureLod(volumeRelief, vec3(c.xy, float(k + 1)), 0.0).rgb;
 		}
@@ -132,13 +133,14 @@ vec3 reliefIn(vec2 latLon, int from) {
 }
 
 // The relief at a point seen with pxKm km per CSS pixel, from the window whose texel spans about
-// 3.4 pixels: broad shapes 10 to 40 pixels across at every height, up to the 32 km window.
+// 3.4 pixels: broad shapes 10 to 40 pixels across at every height, from the 1 km window (k + 1 holds
+// 2^k km texels) up to the 32 km one.
 vec3 farRelief(vec2 latLon, float pxKm) {
 	float level = log2(max(pxKm * 3.4, 1e-3));
 	float lod = clamp(level, 0.0, 5.0);
 	int k = int(floor(lod));
-	vec3 r = reliefIn(latLon, k);
-	if (lod > float(k)) r = mix(r, reliefIn(latLon, k + 1), lod - float(k));
+	vec3 r = reliefIn(latLon, k + 1);
+	if (lod > float(k)) r = mix(r, reliefIn(latLon, k + 2), lod - float(k));
 	return mix(r, vec3(1.0), smoothstep(6.0, 6.6, level));
 }
 

@@ -23,6 +23,8 @@ Array = NDArray[np.float32]
 STRIP = 256
 FINE_SHARE = 0.25
 """A level 5 tile is rendered where at least this share of its area has about 1 km sources."""
+STORM_SCALE = 1 << (tiles.STORM_LEVEL - tiles.FINE_LEVEL)
+"""Storm level texels across a level 5 texel."""
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ class Inputs:
     """Coarser global mosaic for what no disk sees well."""
     profile: HeightTable | None = None
     """Cloud-top heights from the GFS temperature profile; without it, from the skin."""
+    storm_keys: frozenset[Key] = frozenset()
+    """Storm level tiles to render where their level 5 parent is (ADR 0037)."""
 
     @cached_property
     def _skin_wrapped(self) -> Array:
@@ -75,9 +79,10 @@ def area(
     lon: NDArray[np.float64],
     visible: bool,
     tops: bool = False,
+    native: bool = False,
 ) -> tuple[Array, Array, Array | None]:
     """Opacity, fine share and, with `tops`, cloud-top height (km) on the grid of `lat` by `lon`.
-    Without `visible`, infrared only."""
+    Without `visible`, infrared only; with `native`, the visible at its native resolution."""
     opacity = np.empty((lat.size, lon.size), np.float32)
     fine = np.empty_like(opacity)
     height = np.empty_like(opacity) if tops else None
@@ -89,7 +94,7 @@ def area(
     step = lat.size if visible else STRIP
     for start in range(0, lat.size, step):
         la, lo = np.meshgrid(lat[start : start + step], lon, indexing="ij")
-        fields = composite.blend(la, lo, satellites)
+        fields = composite.blend(la, lo, satellites, native)
         cos_sun = cos_zenith(la, lo, inputs.subsolar)
         skin = inputs.skin_at(la, lo)
         # Most of the globe is seen well by some disk: the fallback is only sampled where needed.
@@ -100,7 +105,9 @@ def area(
             if fallback_bt is not None
             else None
         )
-        value, share = composite.opacity(fields, skin, cos_sun, fallback)
+        value, share = composite.opacity(
+            fields, skin, cos_sun, fallback, STORM_SCALE if native else 1
+        )
         if not visible:
             daylight = smoothstep(*composite.DAY, cos_sun) * fields.coverage
             share = np.maximum(share, daylight)
@@ -124,6 +131,8 @@ class Block:
     """Cloud-top height tiles of levels 3 and 4 (ADR 0028)."""
     overview: NDArray[np.uint8] | None = None
     """The level 3 tile without its border, for the global textures."""
+    storm: dict[Key, bytes] = field(default_factory=dict)
+    """Storm level tiles (ADR 0037)."""
 
 
 def block(inputs: Inputs, x3: int, y3: int) -> Block:
@@ -157,10 +166,25 @@ def block(inputs: Inputs, x3: int, y3: int) -> Block:
             ]
             if not tiles.in_band(5, 4 * y3 + dy) or share.mean() < FINE_SHARE:
                 continue
-            lat5, lon5 = tiles.centers(5, 4 * x3 + dx, 4 * y3 + dy, BORDER + 2)
+            x5, y5 = 4 * x3 + dx, 4 * y3 + dy
+            lat5, lon5 = tiles.centers(5, x5, y5, BORDER + 2)
             op5, _, _ = area(inputs, lat5, lon5, visible=True)
-            out.tiles[Key(5, 4 * y3 + dy, 4 * x3 + dx)] = tiles.encode(op5[2:-2, 2:-2])
+            out.tiles[Key(5, y5, x5)] = tiles.encode(op5[2:-2, 2:-2])
+            for key in storm_children(inputs.storm_keys, x5, y5):
+                lat6, lon6 = tiles.centers(key.z, key.x, key.y, BORDER + 2)
+                op6, _, _ = area(inputs, lat6, lon6, visible=True, native=True)
+                out.storm[key] = tiles.encode(op6[2:-2, 2:-2])
     return out
+
+
+def storm_children(wanted: frozenset[Key], x5: int, y5: int) -> list[Key]:
+    """The wanted storm level tiles under a level 5 tile."""
+    return [
+        k
+        for dy in range(STORM_SCALE)
+        for dx in range(STORM_SCALE)
+        if (k := Key(tiles.STORM_LEVEL, y5 * STORM_SCALE + dy, x5 * STORM_SCALE + dx)) in wanted
+    ]
 
 
 def _half(values: Array) -> Array:
@@ -200,18 +224,21 @@ class Rendered:
     textures: dict[str, bytes]
     """Global WebP per tier, as published by the infrared mosaic before."""
     heights: dict[Key, bytes] = field(default_factory=dict)
+    storm: dict[Key, bytes] = field(default_factory=dict)
 
 
 def frame(inputs: Inputs, workers: int = 1) -> Rendered:
     mosaic = np.zeros((tiles.rows(3) * TILE, tiles.columns(3) * TILE), np.uint8)
     all_tiles: dict[Key, bytes] = {}
     all_heights: dict[Key, bytes] = {}
+    all_storm: dict[Key, bytes] = {}
     for (x3, y3), result in blocks(inputs, workers):
         all_tiles.update(result.tiles)
         all_heights.update(result.heights)
+        all_storm.update(result.storm)
         assert result.overview is not None
         mosaic[y3 * TILE : (y3 + 1) * TILE, x3 * TILE : (x3 + 1) * TILE] = result.overview
-    return Rendered(all_tiles, global_textures(mosaic), all_heights)
+    return Rendered(all_tiles, global_textures(mosaic), all_heights, all_storm)
 
 
 def global_textures(mosaic: NDArray[np.uint8]) -> dict[str, bytes]:

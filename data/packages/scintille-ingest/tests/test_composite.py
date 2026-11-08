@@ -14,9 +14,9 @@ import pytest
 from obstore.store import MemoryStore
 from PIL import Image
 from scintille_contract.cloud_archive import ARCHIVE_DETAIL_PATTERN
-from scintille_ingest.clouds import abi, ahi, composite, fci, geos, pyramid, tiles
+from scintille_ingest.clouds import abi, ahi, composite, fci, geos, pyramid, storm_level, tiles
 from scintille_ingest.clouds.collector import CompositeCollector, hour_slots
-from scintille_ingest.clouds.disk import Disk, bilinear, mapped
+from scintille_ingest.clouds.disk import Disk, Patches, Window, bilinear, mapped
 from scintille_ingest.clouds.gfs import SkinTemperature
 from scintille_ingest.clouds.publish import ArchiveCloudManifest, CloudManifest, CloudPublisher
 from scintille_ingest.clouds.sources import Sources
@@ -639,7 +639,7 @@ def test_hour_slots() -> None:
 class Rendered(CompositeCollector):
     rendered: list[datetime]
 
-    def _render(self, downloaded, directory, skin, fallback, slot, table=None):  # type: ignore[no-untyped-def]
+    def _render(self, downloaded, directory, skin, fallback, slot, table=None, storms=None):  # type: ignore[no-untyped-def]
         self.rendered.append(slot)
         return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"})
 
@@ -713,3 +713,185 @@ def test_a_failed_chunk_is_downloaded_again(
     monkeypatch.setattr(src.mtg, "fetch", flaky)
     downloaded = src.download(src.find(SLOT), tmp_path)
     assert len(downloaded["mtg-i1/chunks"]) == 40 and failures["left"] == 0
+
+
+FULL_DISK = geos.Grid(-0.151865, 1.4e-05, 0.151865, -1.4e-05, 21696, 21696)
+"""GOES ABI band 2 full disk scan angles."""
+
+
+def cell(level: int, minutes: list[int], area_km2: float = 2500.0) -> dict[str, object]:
+    path = [
+        {"time": (SLOT + timedelta(minutes=m)).isoformat(), "lat": 1.0 + m / 100, "lon": -50.0}
+        for m in minutes
+    ]
+    return {"level": level, "area_km2": area_km2, "path": path, "name": "ignored"}
+
+
+def test_positions_keep_strong_storms_around_the_slot() -> None:
+    feed = storm_level.ActiveStorms.model_validate(
+        {"cells": [cell(5, [-90, -30, 50]), cell(3, [0]), cell(4, [70])]}
+    )
+    found = storm_level.positions(feed, SLOT)
+    assert [p.lat for p in found] == [pytest.approx(0.7), pytest.approx(1.5)]
+    assert found[0].radius_km == pytest.approx(math.sqrt(2500 / math.pi) + storm_level.MARGIN_KM)
+
+
+def test_active_areas_read_the_live_feed() -> None:
+    import json
+
+    import obstore
+
+    store = MemoryStore()
+    areas = storm_level.ActiveAreas(ObjectLiveStore(store, "storms/"))
+    assert asyncio.run(areas.positions(SLOT)) == []
+    feed = {"schema_version": 1, "cells": [cell(4, [0])]}
+    obstore.put(store, "storms/active.json", json.dumps(feed).encode())
+    assert len(asyncio.run(areas.positions(SLOT))) == 1
+
+
+def test_storm_keys_are_the_lit_tiles_of_the_storm_level() -> None:
+    noon = datetime(2026, 11, 5, 12, tzinfo=UTC)
+    day, night = Position(0.0, 0.0, 100.0), Position(0.0, 180.0, 100.0)
+    keys = storm_level.storm_keys([day, night], subsolar_point(noon))
+    assert keys and keys == keys_under([day], (tiles.STORM_LEVEL,))
+    assert all(k.z == tiles.STORM_LEVEL for k in keys)
+
+
+def test_windows_hold_what_a_tile_samples_at_every_height() -> None:
+    key = tiles.Key(tiles.STORM_LEVEL, 35, 44)
+    (window,) = storm_level.windows([key])(GOES_EAST, FULL_DISK)
+    assert 500 < window.row1 - window.row0 < 800 and 500 < window.col1 - window.col0 < 800
+    lat, lon = tiles.centers(key.z, key.x, key.y, tiles.BORDER + 2)
+    la, lo = np.meshgrid(lat, lon, indexing="ij")
+    for height in (0.0, composite.MAX_HEIGHT_KM * 1e3):
+        x, y, _ = geos.scan_angles(la, lo, height, GOES_EAST)
+        rows, cols = FULL_DISK.index(x, y)
+        assert rows.min() >= window.row0 and rows.max() <= window.row1 - 1
+        assert cols.min() >= window.col0 and cols.max() <= window.col1 - 1
+    behind = tiles.Key(tiles.STORM_LEVEL, 35, 110)
+    assert storm_level.windows([behind])(GOES_EAST, FULL_DISK) == []
+
+
+def test_patches_keep_the_native_values_of_their_windows() -> None:
+    grid = geos.Grid(0.0, 1.0, 0.0, 1.0, 8, 8)
+    patches = Patches(
+        ("test", "reflectance", GOES_EAST, grid, 0.5),
+        [Window(2, 6, 1, 4), Window(0, 2, 6, 8)],
+        lambda shape, dtype: np.empty(shape, dtype),
+    )
+    values = np.arange(64, dtype=np.float32).reshape(8, 8)
+    patches.write(0, 0, values[:3])
+    patches.write(3, 0, values[3:])
+    first, second = patches.disks
+    assert np.array_equal(first.values, values[2:6, 1:4])
+    assert np.array_equal(second.values, values[0:2, 6:8])
+    rows, cols = first.grid.index(np.array([2.0]), np.array([3.0]))
+    assert rows.tolist() == [1.0] and cols.tolist() == [1.0]
+    refl = composite._native(
+        Disk("test", "reflectance", GOES_EAST, grid, values, 1.0, patches.disks),
+        np.array([2.0, 0.0]),
+        np.array([3.0, 7.0]),
+        np.full(2, -1.0, np.float32),
+    )
+    assert refl.tolist() == [26.0, -1.0]
+
+
+def test_abi_keeps_band_2_native_in_the_windows(tmp_path: Path) -> None:
+    path = abi_file(tmp_path / "c02.nc", 2)
+
+    def windows(view: geos.View, grid: geos.Grid) -> list[Window]:
+        assert grid.rows == 64 and view == GOES_EAST
+        return [Window(10, 30, 20, 40)]
+
+    disk = abi.read(path, "goes19", mapped(tmp_path), windows)
+    (native,) = disk.fine
+    assert native.values.shape == (20, 20) and native.resolution_km == 0.5
+    assert native.values[5, 5] == pytest.approx(0.1, abs=1e-3)
+    assert native.grid.y0 == pytest.approx(disk.grid.y0 - disk.grid.dy / 4 + 10 * native.grid.dy)
+    assert abi.read(path, "goes19").fine == ()
+
+
+def test_detail_ratio_keeps_its_size_on_a_finer_grid() -> None:
+    def ratios(km: float, scale: int) -> list[float]:
+        x = (np.arange(int(40 / km)) + 0.5) * km - 20
+        reflectance = np.tile(np.where(x < 0, 0.2, 0.6).astype(np.float32), (9, 1))
+        ratio = composite.detail_ratio(reflectance, scale)[4]
+        return [float(v) for v in np.interp([-3, -2, -1, 1, 2, 3], x, ratio)]
+
+    assert np.allclose(ratios(0.5, 2), ratios(1.0, 1), atol=0.05)
+    assert not np.allclose(ratios(0.5, 1), ratios(1.0, 1), atol=0.05)
+
+
+def test_block_renders_the_wanted_storm_tiles_under_level_5() -> None:
+    disk = uniform_disk(GOES_EAST, 250.0)
+    visible = uniform_disk(GOES_EAST, 0.5, kind="reflectance", km=1.0)
+    satellite = composite.Satellite(
+        disk, visible, composite.heights(disk, composite.lapse(skin_at))
+    )
+    skin = np.full((721, 1440), 300.0, np.float32)
+    plain = pyramid.block(pyramid.Inputs((satellite,), skin, subsolar_point(SLOT)), 4, 3)
+    parent = next(k for k in sorted(plain.tiles) if k.z == 5)
+    children = pyramid.storm_children(
+        frozenset(keys_under([Position(0, 0, 1e5)], (tiles.STORM_LEVEL,))), parent.x, parent.y
+    )
+    assert len(children) == 4 and not plain.storm
+    wanted = frozenset(children[:3]) | {tiles.Key(tiles.STORM_LEVEL, 0, 0)}
+    inputs = pyramid.Inputs((satellite,), skin, subsolar_point(SLOT), storm_keys=wanted)
+    block = pyramid.block(inputs, 4, 3)
+    assert set(block.storm) == set(children[:3])
+    image = Image.open(io.BytesIO(block.storm[children[0]])).convert("L")
+    assert image.size == (tiles.TILE + 2 * tiles.BORDER,) * 2
+
+
+def test_pack_finds_the_storm_tiles_behind_the_other_indexes() -> None:
+    storm_keys = [tiles.Key(tiles.STORM_LEVEL, 30, 70), tiles.Key(tiles.STORM_LEVEL, 2, 5)]
+    tiles_in = {tiles.Key(4, 3, 5): b"xyz"}
+    for heights in (None, {tiles.Key(3, 1, 1): b"h"}):
+        data = tiles.pack(tiles_in, heights, {storm_keys[0]: b"far", storm_keys[1]: b"near"})
+        slots = tiles.storm_slots(storm_keys)
+        listed = np.frombuffer(base64.b64decode(slots), "<u2").tolist()
+        assert listed == sorted(k.y * 128 + k.x for k in storm_keys)
+        offset = tiles.storm_index_offset(heights is not None)
+        assert tiles.unpack_storm(data, storm_keys[0], slots, offset) == b"far"
+        assert tiles.unpack_storm(data, storm_keys[1], slots, offset) == b"near"
+        missing = tiles.Key(tiles.STORM_LEVEL, 2, 6)
+        assert tiles.unpack_storm(data, missing, slots, offset) is None
+        assert tiles.unpack(data, tiles.Key(4, 3, 5)) == b"xyz"
+
+
+def test_storm_tiles_are_listed_in_both_manifests_and_kept_under_top_storms() -> None:
+    import obstore
+
+    pub, store = publisher(top=1)
+    catalog(store, [[storm("strong", SLOT - timedelta(minutes=30), 5000, 10.0, 20.0)]])
+    under = sorted(keys_under([Position(10.0, 20.0, 5.0)], (tiles.STORM_LEVEL,)))
+    away = tiles.Key(tiles.STORM_LEVEL, 10, 10)
+    storm_tiles = {under[0]: b"s6", away: b"w6"}
+    detail = {tiles.Key(5, 14, 35): b"l5", tiles.Key(4, 10, 10): b"w4"}
+    heights = {tiles.Key(4, 10, 10): b"h4"}
+    textures = {"2k": b"x", "4k": b"y"}
+    asyncio.run(
+        pub.publish(SLOT, "first", "gfs", textures, SLOT, detail, heights, "gfs", storm_tiles)
+    )
+    live = CloudManifest.model_validate_json(
+        obstore.get(store, "live/clouds/manifest.json").bytes().to_bytes()
+    )
+    ref = live.frames[0].detail
+    assert ref is not None and ref.storm is not None
+    assert ref.storm.level == tiles.STORM_LEVEL and ref.storm.index_bytes == 16
+    assert ref.storm.index_offset == (tiles.INDEX_SLOTS + tiles.HEIGHT_SLOTS) * 8
+    path = posixpath.normpath(posixpath.join("live/clouds", ref.path))
+    data = obstore.get(store, path).bytes().to_bytes()
+    found = tiles.unpack_storm(data, away, ref.storm.slots, ref.storm.index_offset)
+    assert found == b"w6"
+    next_day = SLOT + timedelta(hours=25)
+    asyncio.run(pub.publish(next_day, "second", "gfs", textures, next_day, detail, heights, "gfs"))
+    day = ArchiveCloudManifest.model_validate_json(
+        obstore.get(store, "archive/clouds/manifests/2026-10-18.json").bytes().to_bytes()
+    )
+    kept = day.frames[0].detail
+    assert kept is not None and kept.storm is not None
+    path = posixpath.normpath(posixpath.join("archive/clouds/manifests", kept.path))
+    data = obstore.get(store, path).bytes().to_bytes()
+    assert tiles.unpack_storm(data, under[0], kept.storm.slots, kept.storm.index_offset) == b"s6"
+    assert tiles.unpack_storm(data, away, kept.storm.slots, kept.storm.index_offset) is None

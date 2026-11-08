@@ -18,7 +18,7 @@ from scintille_ingest.mtg.discovery import Listed
 
 from . import abi, ahi, fci
 from .composite import Satellite, TopAt, heights
-from .disk import mapped
+from .disk import Windows, mapped
 
 log = logging.getLogger("scintille_ingest.clouds")
 
@@ -172,8 +172,14 @@ def _save(fetch: Callable[[str, str], bytes], product: str, entry: str, target: 
     target.write_bytes(fetch(product, entry))
 
 
-def decode(downloaded: Mapping[str, list[Path]], directory: Path, top_at: TopAt) -> list[Satellite]:
-    """Decodes every complete satellite into memory-mapped disks under `directory`."""
+def decode(
+    downloaded: Mapping[str, list[Path]],
+    directory: Path,
+    top_at: TopAt,
+    fine: Windows | None = None,
+) -> list[Satellite]:
+    """Decodes every complete satellite into memory-mapped disks under `directory`, the visible
+    channels at their native resolution in the `fine` windows as well."""
     allocate = mapped(directory)
     satellites = []
     for satellite in GOES_BUCKETS:
@@ -183,7 +189,9 @@ def decode(downloaded: Mapping[str, list[Path]], directory: Path, top_at: TopAt)
             infrared = abi.read(ir[0], satellite, allocate)
             satellites.append(
                 Satellite(
-                    infrared, abi.read(vis[0], satellite, allocate), heights(infrared, top_at)
+                    infrared,
+                    abi.read(vis[0], satellite, allocate, fine),
+                    heights(infrared, top_at),
                 )
             )
     ir = downloaded.get(f"himawari09/{ahi.INFRARED}")
@@ -191,12 +199,16 @@ def decode(downloaded: Mapping[str, list[Path]], directory: Path, top_at: TopAt)
     if ir and vis:
         infrared = ahi.read(ir, "himawari09", allocate)
         satellites.append(
-            Satellite(infrared, ahi.read(vis, "himawari09", allocate), heights(infrared, top_at))
+            Satellite(
+                infrared, ahi.read(vis, "himawari09", allocate, fine), heights(infrared, top_at)
+            )
         )
     chunks = downloaded.get("mtg-i1/chunks")
     if chunks:
         infrared = fci.read(chunks, fci.INFRARED, allocate)
         satellites.append(
-            Satellite(infrared, fci.read(chunks, fci.VISIBLE, allocate), heights(infrared, top_at))
+            Satellite(
+                infrared, fci.read(chunks, fci.VISIBLE, allocate, fine), heights(infrared, top_at)
+            )
         )
     return satellites

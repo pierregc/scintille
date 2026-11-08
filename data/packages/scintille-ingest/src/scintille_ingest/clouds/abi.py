@@ -10,7 +10,7 @@ import numpy as np
 import obstore
 from obstore.store import ObjectStore
 
-from .disk import Allocate, Disk, block_mean, in_memory, planck_bt
+from .disk import Allocate, Disk, Patches, Windows, block_mean, in_memory, planck_bt
 from .geos import Grid, View
 
 VISIBLE = "C02"
@@ -56,8 +56,11 @@ def list_files(store: ObjectStore, start: datetime, end: datetime) -> list[AbiFi
     return sorted(found, key=lambda f: (f.start, f.band))
 
 
-def read(path: Path, satellite: str, allocate: Allocate = in_memory) -> Disk:
-    """Band 2 (0.5 km) becomes 1 km reflectance factor; band 13 stays 2 km brightness."""
+def read(
+    path: Path, satellite: str, allocate: Allocate = in_memory, fine: Windows | None = None
+) -> Disk:
+    """Band 2 (0.5 km) becomes 1 km reflectance factor, kept at 0.5 km in the `fine` windows;
+    band 13 stays 2 km brightness."""
     with netCDF4.Dataset(path) as ds:
         ds.set_auto_maskandscale(False)
         projection = ds["goes_imager_projection"]
@@ -88,6 +91,11 @@ def read(path: Path, satellite: str, allocate: Allocate = in_memory) -> Disk:
                 float(ds[n][()]) for n in ("planck_fk1", "planck_fk2", "planck_bc1", "planck_bc2")
             ]
         out = allocate((grid.rows // factor, grid.cols // factor), np.float16)
+        patches = (
+            Patches((satellite, "reflectance", view, grid, 0.5), fine(view, grid), allocate)
+            if visible and fine
+            else None
+        )
         for start in range(0, grid.rows, STRIP_ROWS):
             counts = np.asarray(rad[start : start + STRIP_ROWS, :]).view(np.uint16)
             radiance = counts.astype(np.float32)
@@ -96,6 +104,8 @@ def read(path: Path, satellite: str, allocate: Allocate = in_memory) -> Disk:
             radiance[counts == fill] = np.nan
             if visible:
                 radiance *= np.float32(kappa0)
+                if patches:
+                    patches.write(start, 0, radiance)
                 values = block_mean(radiance, factor)
             else:
                 values = planck_bt(np.where(radiance > 0, radiance, np.nan), *constants)
@@ -107,4 +117,5 @@ def read(path: Path, satellite: str, allocate: Allocate = in_memory) -> Disk:
         grid.coarsened(factor) if factor > 1 else grid,
         out,
         1.0 if visible else 2.0,
+        patches.disks if patches else (),
     )
