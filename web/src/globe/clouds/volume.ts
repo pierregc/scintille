@@ -157,6 +157,43 @@ export function halton(index: number, base: number): number {
 	return result;
 }
 
+/** Screen positions (clip space) where the view's motion is measured, and the height (km) of the clouds there. */
+const SHIFT_POINTS: readonly [number, number][] = [[0, 0], [-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]];
+const SHIFT_SHELL_KM = 8;
+
+const shiftFar = new Vector4();
+const shiftRay = new Vector3();
+const shiftAt = new Vector4();
+
+/**
+ * Largest distance (reduced pixels) clouds moved on screen since the previous view: points of a layer
+ * 8 km up, under the centre and the corners, projected by `previous` (Earth-frame km to clip space).
+ * `inverse` maps the current clip space back to Earth-frame km, where the eye is `eyeKm`.
+ */
+export function viewShift(previous: Matrix4, inverse: Matrix4, eyeKm: Vector3, size: Vector2): number {
+	const radius = EARTH_RADIUS_KM + SHIFT_SHELL_KM;
+	let shift = 0;
+	for (const [x, y] of SHIFT_POINTS) {
+		shiftFar.set(x, y, 1, 1).applyMatrix4(inverse);
+		shiftRay.set(shiftFar.x / shiftFar.w, shiftFar.y / shiftFar.w, shiftFar.z / shiftFar.w).sub(eyeKm).normalize();
+		const b = eyeKm.dot(shiftRay);
+		const disc = b * b - eyeKm.lengthSq() + radius * radius;
+		if (disc < 0) continue;
+		const t = -b - Math.sqrt(disc);
+		if (t <= 0) continue;
+		shiftAt.set(eyeKm.x + shiftRay.x * t, eyeKm.y + shiftRay.y * t, eyeKm.z + shiftRay.z * t, 1).applyMatrix4(previous);
+		if (shiftAt.w <= 0) return Infinity;
+		shift = Math.max(shift, Math.hypot(((shiftAt.x / shiftAt.w - x) * size.x) / 2, ((shiftAt.y / shiftAt.w - y) * size.y) / 2));
+	}
+	return shift;
+}
+
+/** Share of the rays' jitter kept for a view moving `shift` reduced pixels a frame: the history averages it only while the view holds still. */
+export function jitterShare(shift: number): number {
+	const t = Math.min(1, Math.max(0, (shift - 0.05) / 0.7));
+	return 1 - t * t * (3 - 2 * t);
+}
+
 /** How much the volume replaces the flat layer at a camera height (km). */
 export function volumeFade(heightKm: number): number {
 	const [a, b] = VOLUME_FADE_KM;
@@ -624,9 +661,6 @@ export function createCloudVolume({
 			marchUniforms.pixelAngle.value = (2 * Math.tan((fov * DEG) / 2)) / height;
 			resolveUniforms.freshSize.value.set(fresh.width, fresh.height);
 			phase.value.set(...marchPhase(frame));
-			// Golden-ratio steps: each pixel's offset visits the whole step evenly over a few frames.
-			marchUniforms.frameJitter.value = ((Math.floor(frame / 4) * 0.618034) % 1 + 1) % 1;
-			marchUniforms.subPixel.value.set(halton(Math.floor(frame / 4) + 1, 2) - 0.5, halton(Math.floor(frame / 4) + 1, 3) - 0.5);
 			marchUniforms.flashLight.value = view.light?.map ?? null;
 			if (view.light) marchUniforms.flashWindow.value = view.light.window;
 			marchUniforms.flashGain.value = view.light ? CLOUD_LIGHT.gain : 0;
@@ -635,6 +669,11 @@ export function createCloudVolume({
 			viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(toEarth);
 			rayMatrix.value.copy(viewProjection).invert();
 			eyeKm.value.copy(eye).multiplyScalar(EARTH_RADIUS_KM);
+			// Golden-ratio steps: each pixel's offset visits the whole step evenly over a few frames. A moving
+			// view keeps every ray in place instead, or a lone ray grazing a cloud edge would flicker.
+			const still = lastViewProjection ? jitterShare(viewShift(lastViewProjection, rayMatrix.value, eyeKm.value, marchSize.value)) : 1;
+			marchUniforms.frameJitter.value = still * (((Math.floor(frame / 4) * 0.618034) % 1 + 1) % 1);
+			marchUniforms.subPixel.value.set(still * (halton(Math.floor(frame / 4) + 1, 2) - 0.5), still * (halton(Math.floor(frame / 4) + 1, 3) - 0.5));
 
 			draw(renderer, marchMaterial, fresh);
 			historyValid.value = lastViewProjection ? 1 : 0;

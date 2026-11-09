@@ -788,14 +788,22 @@ void main() {
 	float motion = length(uv * marchSize - (px + 0.5));
 	float moving = smoothstep(0.05, 0.75, motion);
 	vec4 kept = texture2D(history, uv);
-	// Only a change of cover (a new frame, clouds coming or going) shortens the history; light
-	// that varies with the jittered steps is what the history averages away.
-	float change = smoothstep(0.1, 0.3, abs(a.a - kept.a));
+	// A moving view spreads each new ray over its neighbours: alone, a ray that hits or misses a
+	// cloud edge would show as a dot, at another pixel every frame.
+	vec4 ray = a;
+	if (isFresh && moving > 0.0) {
+		vec4 around = b + c + texelFetch(fresh, clamp(q0 - ivec2(1, 0), ivec2(0), hi), 0) + texelFetch(fresh, clamp(q0 - ivec2(0, 1), ivec2(0), hi), 0);
+		ray = mix(a, 0.5 * a + 0.125 * around, moving);
+	}
+	// Only a change of cover (a new frame, clouds coming or going) shortens the history of a still
+	// view; light that varies with the jittered steps is what the history averages away. While the
+	// view moves, the clamp already follows the clouds.
+	float change = smoothstep(0.1, 0.3, abs(a.a - kept.a)) * (1.0 - moving);
 	float box = mix(0.15, 0.05, moving);
 	vec4 lo = min(min(a, b), min(c, d)) - box;
 	vec4 hiv = max(max(a, b), max(c, d)) + box;
 	vec4 past = clamp(kept, lo, hiv);
-	gl_FragColor = isFresh ? mix(past, a, mix(mix(0.05, 0.35, moving), 0.6, change)) : past;
+	gl_FragColor = isFresh ? mix(past, ray, mix(mix(0.05, 0.2, moving), 0.6, change)) : past;
 }
 `;
 

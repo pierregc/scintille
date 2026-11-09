@@ -1,7 +1,9 @@
+import { Matrix4, PerspectiveCamera, Vector2 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
 	bakeTaps,
 	halton,
+	jitterShare,
 	kmBetween,
 	marchPhase,
 	NEAR_MAX_KM,
@@ -9,6 +11,7 @@ import {
 	reliefFade,
 	volumeFade,
 	VOLUME_FADE_KM,
+	viewShift,
 	WINDOW_TEXEL_KM,
 	windowAround,
 	windowToBake,
@@ -152,5 +155,50 @@ describe('kmBetween', () => {
 		expect(kmBetween([0, 0], [0, 1])).toBeCloseTo((6371 * Math.PI) / 180, 6);
 		expect(kmBetween([10, 20], [10, 20])).toBe(0);
 		expect(kmBetween([0, 179.5], [0, -179.5])).toBeCloseTo((6371 * Math.PI) / 180, 6);
+	});
+});
+
+describe('viewShift', () => {
+	const size = new Vector2(800, 500);
+	// A camera 500 km over the equator looking down, in Earth-frame km, and its view-projection.
+	const look = (pitch: number) => {
+		const camera = new PerspectiveCamera(35, size.x / size.y, 10, 20000);
+		camera.position.set(6871, 0, 0);
+		camera.up.set(0, 1, 0);
+		camera.lookAt(0, 0, 0);
+		camera.rotateX(pitch);
+		camera.updateMatrixWorld();
+		return { eye: camera.position.clone(), viewProjection: new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse) };
+	};
+
+	it('is zero for a still view', () => {
+		const { eye, viewProjection } = look(0);
+		expect(viewShift(viewProjection, viewProjection.clone().invert(), eye, size)).toBeCloseTo(0, 6);
+	});
+
+	it('measures a small turn in reduced pixels', () => {
+		const before = look(0);
+		const after = look(0.001);
+		const shift = viewShift(before.viewProjection, after.viewProjection.clone().invert(), after.eye, size);
+		const centre = (0.001 / Math.tan((17.5 * Math.PI) / 180)) * (size.y / 2);
+		expect(shift).toBeGreaterThan(centre * 0.9);
+		expect(shift).toBeLessThan(centre * 1.5);
+	});
+
+	it('ignores screen points that see no clouds', () => {
+		const before = look(Math.PI / 2);
+		const after = look(Math.PI / 2 + 0.01);
+		expect(viewShift(before.viewProjection, after.viewProjection.clone().invert(), after.eye, size)).toBe(0);
+	});
+});
+
+describe('jitterShare', () => {
+	it('keeps the jitter for a still view and drops it once the view moves about a pixel a frame', () => {
+		expect(jitterShare(0)).toBe(1);
+		expect(jitterShare(0.05)).toBe(1);
+		expect(jitterShare(0.4)).toBeGreaterThan(0);
+		expect(jitterShare(0.4)).toBeLessThan(1);
+		expect(jitterShare(0.75)).toBe(0);
+		expect(jitterShare(Infinity)).toBe(0);
 	});
 });
