@@ -10,6 +10,10 @@ varying vec3 vLocalNormal;
 varying vec3 vNormal;
 varying vec3 vSun;
 varying vec3 vWorldPosition;
+#ifdef VOLUME
+varying vec3 vLocalPosition;
+varying vec3 vLocalEye;
+#endif
 
 void main() {
 	mat3 model = mat3(modelMatrix);
@@ -19,6 +23,10 @@ void main() {
 	vNormal = model * normal;
 	vSun = model * sunDirection;
 	vWorldPosition = world.xyz;
+#ifdef VOLUME
+	vLocalPosition = position;
+	vLocalEye = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
+#endif
 	gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -171,6 +179,18 @@ ${volumeFieldGlsl}
 ${reliefFieldGlsl}
 uniform float reliefKmPerUnit;
 uniform float reliefSky;
+uniform float handoffRadius;
+varying vec3 vLocalPosition;
+varying vec3 vLocalEye;
+
+// Where the line of sight through this point comes down to low tops, or its lowest point: an
+// oblique view meets the clouds further on than this layer.
+vec2 handoffLatLon() {
+	vec3 dir = normalize(vLocalPosition - vLocalEye);
+	float b = dot(vLocalEye, dir);
+	float disc = b * b - dot(vLocalEye, vLocalEye) + handoffRadius * handoffRadius;
+	return volumeLatLon(vLocalEye + dir * (disc > 0.0 ? -b - sqrt(disc) : -b));
+}
 #endif
 
 // Mirrors twilight() in the Earth shader.
@@ -190,9 +210,11 @@ void main() {
 	float drawn = 0.0;
 #ifdef VOLUME
 	vec2 latLon = vec2((0.5 - geo.y) * 3.141592654, (geo.x - 0.5) * 6.283185307);
-	// The volume draws the clouds where their heights are known; this layer keeps the rest.
+	// The volume draws the clouds where their heights are known, here and down the line of sight, so
+	// an oblique view never looks through a gap between the two; this layer keeps the rest.
 	if (volumeOn > 0.0) {
-		drawn = smoothstep(0.3, 0.7, volumeSample(volumeField, latLon).a) * volumeOn;
+		float known = min(volumeSample(volumeField, latLon).a, volumeSample(volumeField, handoffLatLon()).a);
+		drawn = smoothstep(0.3, 0.7, known) * volumeOn;
 		if (drawn >= 0.999) discard;
 	}
 #endif
