@@ -263,6 +263,36 @@ the ten strongest storms of each day.
   reliable and striking; other families later with careful wording. A 30-day catalogue everywhere
   would need an hourly height image (about 0.1 to 0.15 GB over 30 days, estimated).
 
+## Steady in motion
+
+Zooming and tilting made the clouds vibrate (#440). Measured frame by frame in headless Chromium,
+the camera's own motion taken out, two causes:
+
+- **Sparkling cloud edges**: the volume marches a quarter of its pixels per frame with jittered
+  rays; while the view moved, each new ray weighed 35 % and showed as a dot wherever it hit or
+  missed a cloud edge, at another pixel every frame. A moving view now keeps its rays in place and
+  spreads each new ray over its neighbours and gives it 20 %. Still views are unchanged.
+- **Dark band toward the horizon**: the flat layer stepped aside wherever heights were known on its
+  13 km shell, while the volume met lower clouds further along the line of sight, past the heights
+  it knew. The layer now also checks where its line of sight comes down to 0.5 km.
+
+Pixels changing by more than 12 grey levels from one frame to the next once the camera's motion is
+taken out, 1600 × 1000 at 2×, same data before and after:
+
+| Camera path | Before | After |
+|---|---|---|
+| Tilt 50° to 54° at 450 km | 0.145 % | 0.029 % |
+| Tilt 0° to 80° at 450 km | 0.81 % | 0.49 % |
+| Zoom 2,600 to 500 km, tilted 45° | 0.162 % | 0.055 % |
+| Zoom 3,000 to 500 km, straight down | 0.036 % | 0.016 % |
+
+Top: an oblique view. Bottom: what changes between two frames of a slow tilt, the camera's motion
+taken out:
+![Steady in motion](immersive/cloud-look/motion.jpg)
+
+Depth precision is not involved: the near plane stays at half the gap to the closest shell, at least
+125 km from the 400 km floor, so the depth buffer resolves 0.1 m at 450 km and 2 m at 2,000 km.
+
 ## Open points
 
 - Frame cost on a mid-range laptop (Iris Xe, `medium`) and on a phone is estimated, not measured;
