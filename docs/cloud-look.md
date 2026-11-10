@@ -265,13 +265,18 @@ the ten strongest storms of each day.
 
 ## Steady in motion
 
-Zooming and tilting made the clouds vibrate (#440). Measured frame by frame in headless Chromium,
-the camera's own motion taken out, two causes:
+Zooming and tilting made the clouds vibrate (#440), most of all toward the horizon at full tilt.
+Measured frame by frame in headless Chromium, the camera's own motion taken out, three causes:
 
-- **Sparkling cloud edges**: the volume marches a quarter of its pixels per frame with jittered
-  rays; while the view moved, each new ray weighed 35 % and showed as a dot wherever it hit or
-  missed a cloud edge, at another pixel every frame. A moving view now keeps its rays in place and
-  spreads each new ray over its neighbours and gives it 20 %. Still views are unchanged.
+- **Sparkling cloud edges while the view moves**: the volume marches a quarter of its pixels per
+  frame with jittered rays; each new ray weighed 35 % and showed as a dot wherever it hit or missed
+  a cloud edge, at another pixel every frame. A moving view now keeps its rays in place, spreads each
+  new ray over its neighbours and gives it 20 %.
+- **Shimmer toward the horizon, even with a still camera**: a ray grazing far clouds hits or misses
+  them at random, which passed for a change of cover and let it weigh 60 %; and the relief light was
+  read at the height this frame's rays saw, so each km of jitter moved the lookup by tens of km. A
+  change of cover is now read over four rays, and the relief light where the line of sight crosses
+  the tops the field holds.
 - **Dark band toward the horizon**: the flat layer stepped aside wherever heights were known on its
   13 km shell, while the volume met lower clouds further along the line of sight, past the heights
   it knew. The layer now also checks where its line of sight comes down to 0.5 km.
@@ -279,12 +284,19 @@ the camera's own motion taken out, two causes:
 Pixels changing by more than 12 grey levels from one frame to the next once the camera's motion is
 taken out, 1600 × 1000 at 2×, same data before and after:
 
-| Camera path | Before | After |
+| Camera | Before | After |
 |---|---|---|
-| Tilt 50° to 54° at 450 km | 0.145 % | 0.029 % |
-| Tilt 0° to 80° at 450 km | 0.81 % | 0.49 % |
-| Zoom 2,600 to 500 km, tilted 45° | 0.162 % | 0.055 % |
-| Zoom 3,000 to 500 km, straight down | 0.036 % | 0.016 % |
+| Still at the floor, full tilt | 0.61 % | 0.13 % |
+| Turning 4° at the floor, full tilt | 0.55 % | 0.08 % |
+| Tilting 86° to 90° at the floor | 0.35 % | 0.01 % |
+| Still at 700 km, tilted 58° | 0.165 % | 0.016 % |
+| Tilting 50° to 54° at 450 km | 0.145 % | 0.014 % |
+| Tilting 0° to 80° at 450 km | 0.81 % | 0.43 % |
+| Zoom 2,600 to 500 km, tilted 45° | 0.162 % | 0.034 % |
+| Zoom 3,000 to 500 km, straight down | 0.036 % | 0.015 % |
+
+Full tilt with a still camera, and what changes between two frames:
+![Steady toward the horizon](immersive/cloud-look/horizon.jpg)
 
 Top: an oblique view. Bottom: what changes between two frames of a slow tilt, the camera's motion
 taken out:
