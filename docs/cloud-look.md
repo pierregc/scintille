@@ -279,7 +279,7 @@ motion taken out, four causes:
   so each km of jitter moved the lookup by tens of km in a grazing view. It is now read where the
   line of sight crosses the tops the field holds.
 - **Sparkling cloud edges while the view moves**: each new ray weighed 35 % and showed as a dot. A
-  moving view now keeps its rays in place, spreads each new ray over its neighbours and gives it 20 %.
+  moving view now keeps its rays in place, spreads each new ray over its neighbours and gives it 12 %.
 - **Dark band toward the horizon**: the flat layer stepped aside wherever heights were known on its
   13 km shell, while the volume met lower clouds further along the line of sight, past the heights
   it knew. The layer now also checks where its line of sight comes down to 0.5 km.
@@ -289,14 +289,17 @@ camera's motion is taken out, 1600 × 1000 at 2×, same data before and after:
 
 | Camera | Before > 4 | After > 4 | Before > 12 | After > 12 |
 |---|---|---|---|---|
-| Still at the floor, full tilt | 2.7 % | 0.006 % | 0.60 % | 0.001 % |
-| Still at 700 km, tilted 58° | 0.83 % | 0.001 % | 0.16 % | 0.0001 % |
-| Turning 4° at the floor, full tilt | 3.2 % | 0.63 % | 0.54 % | 0.013 % |
-| Tilting 86° to 90° at the floor | 2.4 % | 0.21 % | 0.46 % | 0.021 % |
-| Tilting 50° to 54° at 450 km | 1.4 % | 0.24 % | 0.145 % | 0.012 % |
-| Tilting 0° to 80° at 450 km | 5.2 % | 4.1 % | 0.81 % | 0.47 % |
-| Zoom 2,600 to 500 km, tilted 45° | 1.7 % | 0.53 % | 0.162 % | 0.031 % |
-| Zoom 3,000 to 500 km, straight down | 1.0 % | 0.62 % | 0.036 % | 0.015 % |
+| Still at the floor, full tilt | 2.7 % | 0.009 % | 0.60 % | 0.002 % |
+| Still at 700 km, tilted 58° | 0.83 % | 0.002 % | 0.16 % | 0.0001 % |
+| Turning 4° at the floor, full tilt | 3.2 % | 0.42 % | 0.54 % | 0.007 % |
+| Tilting 86° to 90° at the floor | 2.4 % | 0.14 % | 0.46 % | 0.015 % |
+| Tilting 50° to 54° at 450 km | 1.4 % | 0.22 % | 0.16 % | 0.009 % |
+| Tilting 0° to 80° at 450 km | 5.2 % | 4.1 % | 0.83 % | 0.46 % |
+| Zoom 2,600 to 500 km, tilted 45° | 1.7 % | 0.54 % | 0.16 % | 0.036 % |
+| Zoom 3,000 to 500 km, straight down | 1.0 % | 0.64 % | 0.036 % | 0.019 % |
+
+Marching every pixel every frame while the view moves (2.8 ms more) made it worse: sharper but more
+aliased. What remains in motion is the grain of a volume marched at half the CSS resolution.
 
 After a stop the picture settles within a second and then holds; after a 25 min jump in scene time a
 still view meets the picture drawn directly at the new time within 20 frames.

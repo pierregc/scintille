@@ -500,7 +500,7 @@ captures and the comparison with ISS photographs are in [cloud look](cloud-look.
   low-discrepancy offsets that a history averages ever more finely (down to 1/128 a ray), held
   within the sixteen rays around and shortened only where cover changes beyond what they disagree
   on, so the picture settles and holds. While it moves, rays stay in place, each new ray is spread
-  over its neighbours and weighs 20 %, and the history is clamped to the four rays around, so cloud
+  over its neighbours and weighs 12 %, and the history is clamped to the four rays around, so cloud
   edges do not sparkle. Flashes light the cloud around them from the flash light map, added in the
   composite so the glow is never delayed. Sunlit tops take the flat layer's white and its √(sin
   elevation) dimming, and under a high sun the exposure comes down; a highlight shoulder keeps them
