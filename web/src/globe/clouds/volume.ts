@@ -410,6 +410,7 @@ export function createCloudVolume({
 	const marchMaterial = pass(marchFragmentShader, marchUniforms);
 	const previous = { value: new Matrix4() };
 	const historyValid = { value: 0 };
+	const steadySamples = { value: 0 };
 	const resolveUniforms: Record<string, IUniform> = {
 		fresh: { value: fresh.textures[0] },
 		freshDepth: { value: fresh.textures[1] },
@@ -421,6 +422,7 @@ export function createCloudVolume({
 		eyeKm,
 		previous,
 		historyValid,
+		steadySamples,
 	};
 	const resolveMaterial = pass(resolveFragmentShader, resolveUniforms);
 
@@ -460,6 +462,7 @@ export function createCloudVolume({
 
 	let scale = initialScale;
 	let frame = 0;
+	let stillFrames = 0;
 	let current = 0;
 	let baked = 0;
 	let lastViewProjection: Matrix4 | null = null;
@@ -672,6 +675,9 @@ export function createCloudVolume({
 			// Golden-ratio steps: each pixel's offset visits the whole step evenly over a few frames. A moving
 			// view keeps every ray in place instead, or a lone ray grazing a cloud edge would flicker.
 			const still = lastViewProjection ? jitterShare(viewShift(lastViewProjection, rayMatrix.value, eyeKm.value, marchSize.value)) : 1;
+			// Rays each pixel received since the view stopped: a still view averages them all.
+			stillFrames = lastViewProjection && still === 1 ? stillFrames + 1 : 0;
+			steadySamples.value = Math.floor(stillFrames / 4);
 			marchUniforms.frameJitter.value = still * (((Math.floor(frame / 4) * 0.618034) % 1 + 1) % 1);
 			marchUniforms.subPixel.value.set(still * (halton(Math.floor(frame / 4) + 1, 2) - 0.5), still * (halton(Math.floor(frame / 4) + 1, 3) - 0.5));
 

@@ -750,6 +750,7 @@ uniform mat4 rayMatrix;
 uniform vec3 eyeKm;
 uniform mat4 previous;
 uniform float historyValid;
+uniform float steadySamples;
 
 void main() {
 	vec2 px = floor(gl_FragCoord.xy);
@@ -793,16 +794,31 @@ void main() {
 		vec4 around = b + c + texelFetch(fresh, clamp(q0 - ivec2(1, 0), ivec2(0), hi), 0) + texelFetch(fresh, clamp(q0 - ivec2(0, 1), ivec2(0), hi), 0);
 		ray = mix(a, 0.5 * a + 0.125 * around, moving);
 	}
+	vec4 lo = min(min(a, b), min(c, d));
+	vec4 hiv = max(max(a, b), max(c, d));
 	// Only a change of cover (a new frame, clouds coming or going) shortens the history of a still
-	// view; light that varies with the jittered steps is what the history averages away. The cover is
-	// read over four rays, as one ray grazing far clouds hits or misses them at random. While the
-	// view moves, the clamp already follows the clouds.
-	float change = smoothstep(0.1, 0.3, abs(0.25 * (a.a + b.a + c.a + d.a) - kept.a)) * (1.0 - moving);
+	// view, and only beyond what the four rays around disagree on: one ray grazing far clouds hits or
+	// misses them at random. While the view moves, the clamp already follows the clouds.
+	float change = smoothstep(0.1, 0.3, abs(0.25 * (a.a + b.a + c.a + d.a) - kept.a) - 0.5 * (hiv.a - lo.a)) * (1.0 - moving);
+	// A still view is held within the sixteen rays around: the four nearest alone often all miss what
+	// the history has averaged.
+	vec4 wideLo = lo;
+	vec4 wideHi = hiv;
+	if (moving < 1.0) {
+		for (int j = -1; j <= 2; j++) {
+			for (int i = -1; i <= 2; i++) {
+				vec4 n = texelFetch(fresh, clamp(q0 + ivec2(i, j), ivec2(0), hi), 0);
+				wideLo = min(wideLo, n);
+				wideHi = max(wideHi, n);
+			}
+		}
+	}
 	float box = mix(0.15, 0.05, moving);
-	vec4 lo = min(min(a, b), min(c, d)) - box;
-	vec4 hiv = max(max(a, b), max(c, d)) + box;
-	vec4 past = clamp(kept, lo, hiv);
-	gl_FragColor = isFresh ? mix(past, ray, mix(mix(0.05, 0.2, moving), 0.6, change)) : past;
+	vec4 past = clamp(kept, mix(wideLo, lo, moving) - box, mix(wideHi, hiv, moving) + box);
+	// A still view averages every ray marched since it stopped, ever more finely, so its details
+	// settle and hold.
+	float still = max(1.0 / (5.0 + steadySamples), 1.0 / 128.0);
+	gl_FragColor = isFresh ? mix(past, ray, mix(mix(still, 0.2, moving), 0.6, change)) : past;
 }
 `;
 
