@@ -265,35 +265,41 @@ the ten strongest storms of each day.
 
 ## Steady in motion
 
-Zooming and tilting made the clouds vibrate (#440), most of all toward the horizon at full tilt.
-Measured frame by frame in headless Chromium, the camera's own motion taken out, three causes:
+Zooming and tilting made the clouds vibrate (#440), most of all toward the horizon at full tilt, and
+even a still picture never quite held. Measured frame by frame in headless Chromium, the camera's own
+motion taken out, four causes:
 
-- **Sparkling cloud edges while the view moves**: the volume marches a quarter of its pixels per
-  frame with jittered rays; each new ray weighed 35 % and showed as a dot wherever it hit or missed
-  a cloud edge, at another pixel every frame. A moving view now keeps its rays in place, spreads each
-  new ray over its neighbours and gives it 20 %.
-- **Shimmer toward the horizon, even with a still camera**: a ray grazing far clouds hits or misses
-  them at random, which passed for a change of cover and let it weigh 60 %; and the relief light was
-  read at the height this frame's rays saw, so each km of jitter moved the lookup by tens of km. A
-  change of cover is now read over four rays, and the relief light where the line of sight crosses
-  the tops the field holds.
+- **A still picture that kept boiling**: the volume marches a quarter of its pixels per frame with
+  jittered rays and kept each new one at 5 %, so the picture never settled; it was clamped to the
+  four rays around, which a ray grazing far clouds often all miss, and any ray that hit or missed a
+  cloud passed for a change of cover (60 %). A still view now averages every ray since it stopped,
+  down to 1/128 a ray, held within the sixteen rays around, and a change of cover counts only beyond
+  what those rays disagree on.
+- **Relief light shimmering toward the horizon**: it was read at the height this frame's rays saw,
+  so each km of jitter moved the lookup by tens of km in a grazing view. It is now read where the
+  line of sight crosses the tops the field holds.
+- **Sparkling cloud edges while the view moves**: each new ray weighed 35 % and showed as a dot. A
+  moving view now keeps its rays in place, spreads each new ray over its neighbours and gives it 20 %.
 - **Dark band toward the horizon**: the flat layer stepped aside wherever heights were known on its
   13 km shell, while the volume met lower clouds further along the line of sight, past the heights
   it knew. The layer now also checks where its line of sight comes down to 0.5 km.
 
-Pixels changing by more than 12 grey levels from one frame to the next once the camera's motion is
-taken out, 1600 × 1000 at 2×, same data before and after:
+Pixels changing by more than 4 and by more than 12 grey levels from one frame to the next once the
+camera's motion is taken out, 1600 × 1000 at 2×, same data before and after:
 
-| Camera | Before | After |
-|---|---|---|
-| Still at the floor, full tilt | 0.61 % | 0.13 % |
-| Turning 4° at the floor, full tilt | 0.55 % | 0.08 % |
-| Tilting 86° to 90° at the floor | 0.35 % | 0.01 % |
-| Still at 700 km, tilted 58° | 0.165 % | 0.016 % |
-| Tilting 50° to 54° at 450 km | 0.145 % | 0.014 % |
-| Tilting 0° to 80° at 450 km | 0.81 % | 0.43 % |
-| Zoom 2,600 to 500 km, tilted 45° | 0.162 % | 0.034 % |
-| Zoom 3,000 to 500 km, straight down | 0.036 % | 0.015 % |
+| Camera | Before > 4 | After > 4 | Before > 12 | After > 12 |
+|---|---|---|---|---|
+| Still at the floor, full tilt | 2.7 % | 0.006 % | 0.60 % | 0.001 % |
+| Still at 700 km, tilted 58° | 0.83 % | 0.001 % | 0.16 % | 0.0001 % |
+| Turning 4° at the floor, full tilt | 3.2 % | 0.63 % | 0.54 % | 0.013 % |
+| Tilting 86° to 90° at the floor | 2.4 % | 0.21 % | 0.46 % | 0.021 % |
+| Tilting 50° to 54° at 450 km | 1.4 % | 0.24 % | 0.145 % | 0.012 % |
+| Tilting 0° to 80° at 450 km | 5.2 % | 4.1 % | 0.81 % | 0.47 % |
+| Zoom 2,600 to 500 km, tilted 45° | 1.7 % | 0.53 % | 0.162 % | 0.031 % |
+| Zoom 3,000 to 500 km, straight down | 1.0 % | 0.62 % | 0.036 % | 0.015 % |
+
+After a stop the picture settles within a second and then holds; after a 25 min jump in scene time a
+still view meets the picture drawn directly at the new time within 20 frames.
 
 Full tilt with a still camera, and what changes between two frames:
 ![Steady toward the horizon](immersive/cloud-look/horizon.jpg)
