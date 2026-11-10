@@ -470,7 +470,9 @@ Below a camera height of 1,800 km the flat cloud layer gives way to a volume (#3
 to 2,800 km, the flat layer keeping the cover the volume hands over. At every height, from the whole
 globe to the floor, both are shaded by the same relief light of the broad shapes, drawn at full
 resolution, and the flat layer by the shadows of taller clouds. Where no height is observed, the
-volume draws nothing and the flat layer stays, unshaded, pixel by pixel. Diagnosis, before and after
+volume draws nothing and the flat layer stays, unshaded, pixel by pixel; it leaves a pixel to the
+volume only where heights are known both on it and where its line of sight comes down to 0.5 km, so
+an oblique view never looks through a gap between the two. Diagnosis, before and after
 captures and the comparison with ISS photographs are in [cloud look](cloud-look.md).
 
 - **Data**: each composite frame carries cloud-top heights for levels 3 and 4 in its tile pack
@@ -491,17 +493,21 @@ captures and the comparison with ISS photographs are in [cloud look](cloud-look.
   place, frames, tiles or sun change (at most one every other frame); windows fade into each other
   near their edges. Above the march only the coarse windows are baked, one at a time, and a window
   moves only once the view has gone 32 of its texels.
-- **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected at
-  the depth the march returns; at most 48 crossings per ray (`high`) or 40 (`medium`). Each column
-  crossing is integrated in one piece, sunlight falling with depth below the top in closed form,
-  so the picture does not depend on where steps fall. Steps and rays get low-discrepancy offsets
-  that a history averages; it shortens where cover changes or the camera moves. Flashes light the
-  cloud around them from the flash light map, added in the composite so the glow is never
-  delayed. Sunlit tops take the flat layer's white and its √(sin elevation) dimming, and under a
-  high sun the exposure comes down; a highlight shoulder keeps them below white. The composite
-  draws the relief light at full resolution after the shoulder, at every height; the march keeps
-  the light through the columns, the walls and the sky. The atmosphere hazes the volume as it hazes
-  the flat layer.
+- **March**: half the CSS resolution, a quarter of the pixels per frame, the rest reprojected at the
+  depth the march returns; at most 48 crossings per ray (`high`) or 40 (`medium`). Each column
+  crossing is integrated in one piece, sunlight falling with depth below the top in closed form, so
+  the picture does not depend on where steps fall. While the view holds still, steps and rays get
+  low-discrepancy offsets that a history averages ever more finely (down to 1/128 a ray), held
+  within the sixteen rays around and shortened only where cover changes beyond what they disagree
+  on, so the picture settles and holds. While it moves, rays stay in place, each new ray is spread
+  over its neighbours and weighs 12 %, and the history is clamped to the four rays around, so cloud
+  edges do not sparkle. Flashes light the cloud around them from the flash light map, added in the
+  composite so the glow is never delayed. Sunlit tops take the flat layer's white and its √(sin
+  elevation) dimming, and under a high sun the exposure comes down; a highlight shoulder keeps them
+  below white. The composite draws the relief light at full resolution after the shoulder, at every
+  height, where the line of sight crosses the tops the field holds; the march keeps the light
+  through the columns, the walls and the sky. The atmosphere hazes the volume as it hazes the flat
+  layer.
 - **Ground**: the Earth shader darkens sunlight by the baked transmittance at the ground.
 - **Tiers**: `high` (half the CSS size) and `medium` (0.4); `low` and phones keep the unshaded flat layer
   until a real phone is measured. In development and PR previews, `?clouds=flat|columns` and
