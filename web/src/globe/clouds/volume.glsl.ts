@@ -787,8 +787,8 @@ void main() {
 	float motion = length(uv * marchSize - (px + 0.5));
 	float moving = smoothstep(0.05, 0.75, motion);
 	vec4 kept = texture2D(history, uv);
-	// A moving view spreads each new ray over its neighbours: alone, a ray that hits or misses a
-	// cloud edge would show as a dot, at another pixel every frame.
+	// A moving view spreads each new ray over its neighbours and keeps 12 % of it: alone, a ray that
+	// hits or misses a cloud edge would show as a dot, at another pixel every frame.
 	vec4 ray = a;
 	if (isFresh && moving > 0.0) {
 		vec4 around = b + c + texelFetch(fresh, clamp(q0 - ivec2(1, 0), ivec2(0), hi), 0) + texelFetch(fresh, clamp(q0 - ivec2(0, 1), ivec2(0), hi), 0);
@@ -818,7 +818,7 @@ void main() {
 	// A still view averages every ray marched since it stopped, ever more finely, so its details
 	// settle and hold.
 	float still = max(1.0 / (5.0 + steadySamples), 1.0 / 128.0);
-	gl_FragColor = isFresh ? mix(past, ray, mix(mix(still, 0.2, moving), 0.6, change)) : past;
+	gl_FragColor = isFresh ? mix(past, ray, mix(mix(still, 0.12, moving), 0.6, change)) : past;
 }
 `;
 
