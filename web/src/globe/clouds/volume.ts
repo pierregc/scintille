@@ -274,6 +274,8 @@ export interface CloudVolume {
 	render(renderer: WebGLRenderer, view: VolumeView): void;
 	/** March resolution (share of the CSS size) and most crossings per ray, when the quality tier changes. */
 	setQuality(quality: { scale: number; maxSamples: number }): void;
+	/** Turns the volume and its relief off, for a quality tier without them. */
+	hide(): void;
 	/** Share of each reduced pixel the clouds cover, for development checks. */
 	coverage(renderer: WebGLRenderer): { width: number; height: number; values: Float32Array };
 	/** How far the styling strays from the observations over window `k` (the 1 km one by default), for development checks. */
@@ -696,6 +698,14 @@ export function createCloudVolume({
 		setQuality(quality) {
 			scale = quality.scale;
 			marchUniforms.maxSamples.value = quality.maxSamples;
+		},
+		hide() {
+			fadeUniform.value = 0;
+			uniforms.volumeOn.value = 0;
+			uniforms.reliefOn.value = 0;
+			mesh.visible = false;
+			lastViewProjection = null;
+			baked = 0;
 		},
 		coverage(renderer) {
 			const target = history[current];
