@@ -2,11 +2,6 @@
 	"pad": 0.5,
 	"tracks": [
 		{
-			"id": "700896",
-			"loop": 30,
-			"bytes": 372759
-		},
-		{
 			"id": "402338",
 			"loop": 80,
 			"bytes": 972739
@@ -15,11 +10,6 @@
 			"id": "384388",
 			"loop": 80,
 			"bytes": 972739
-		},
-		{
-			"id": "609769",
-			"loop": 35,
-			"bytes": 432945
 		},
 		{
 			"id": "683324",
@@ -137,13 +127,6 @@
 	],
 	"sources": [
 		{
-			"id": "700896",
-			"title": "Cosmic Ray (Ambient)",
-			"author": "younoise",
-			"url": "https://freesound.org/s/700896/",
-			"license": "CC0-1.0"
-		},
-		{
 			"id": "402338",
 			"title": "ps Calm Aurorae",
 			"author": "arseniiv",
@@ -155,13 +138,6 @@
 			"title": "Peaceful Drone",
 			"author": "mricken1",
 			"url": "https://freesound.org/s/384388/",
-			"license": "CC0-1.0"
-		},
-		{
-			"id": "609769",
-			"title": "Calm airy tension drone",
-			"author": "xkeril",
-			"url": "https://freesound.org/s/609769/",
 			"license": "CC0-1.0"
 		},
 		{
