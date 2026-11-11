@@ -391,10 +391,7 @@ export function createGlobeApp(
 			// The flat layer steps aside pixel by pixel, where the volume knows the heights.
 			clouds.setFlatShown(1);
 		} else if (volume) {
-			volume.mesh.visible = false;
-			volume.uniforms.volumeOn.value = 0;
-			volume.uniforms.reliefOn.value = 0;
-			volume.uniforms.shadeOn.value = 0;
+			volume.hide();
 			clouds.setFlatShown(1);
 		}
 		if (post) {

@@ -2,6 +2,7 @@ import { Matrix4, PerspectiveCamera, Vector2 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
 	bakeTaps,
+	createCloudVolume,
 	halton,
 	jitterShare,
 	kmBetween,
@@ -200,5 +201,20 @@ describe('jitterShare', () => {
 		expect(jitterShare(0.4)).toBeLessThan(1);
 		expect(jitterShare(0.75)).toBe(0);
 		expect(jitterShare(Infinity)).toBe(0);
+	});
+});
+
+describe('createCloudVolume', () => {
+	it('turns the volume and its relief off when hidden', () => {
+		const volume = createCloudVolume({ opacity: { uniforms: {}, defines: {} } });
+		volume.uniforms.volumeOn.value = 1;
+		volume.uniforms.reliefOn.value = 1;
+		volume.mesh.visible = true;
+		volume.hide();
+		expect(volume.mesh.visible).toBe(false);
+		expect(volume.fade).toBe(0);
+		expect(volume.uniforms.volumeOn.value).toBe(0);
+		expect(volume.uniforms.reliefOn.value).toBe(0);
+		volume.dispose();
 	});
 });
