@@ -33,6 +33,7 @@ import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
+import { glare } from './glare';
 import { latLonToVector, sunDirection } from './sun';
 import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
 import { StormReplay } from './replay';
@@ -71,6 +72,8 @@ export interface GlobeApp {
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView' | 'stats'>;
 	/** Freshness of the live feed now. */
 	feedStatus(): FeedStatus;
+	/** Sunlit ground under the HUD now, 0 to 1. */
+	glare(): number;
 	/** Time of the newest flashes drawn, for the selected storm's sources if any: ages are measured from it. */
 	observedTime(): number;
 	/** Whether observations are loaded for this time; false means unknown, not an empty sky. */
@@ -448,6 +451,8 @@ export function createGlobeApp(
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
+		glare: () =>
+			glare(camera.position.toArray(), sunDirection(new Date(clock.time())), worldToKm(camera.position.length() - RADIUS, RADIUS)),
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),

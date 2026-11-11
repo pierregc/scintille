@@ -82,11 +82,16 @@ import StormSuggestions from './StormSuggestions.astro';
 	@media (max-width: 640px) {
 		.storm { top: auto; bottom: calc(var(--gut) + 128px); flex-direction: column-reverse; }
 	}
+	@property --glare {
+		syntax: '<number>';
+		inherits: true;
+		initial-value: 0;
+	}
 	.hud {
-		--ink: rgb(238 242 247 / 0.9);
-		--soft: rgb(238 242 247 / 0.62);
-		--dim: rgb(238 242 247 / 0.4);
-		--hair: rgb(238 242 247 / 0.14);
+		--ink: rgb(238 242 247 / calc(0.9 + 0.08 * var(--glare)));
+		--soft: rgb(238 242 247 / calc(0.62 + 0.18 * var(--glare)));
+		--dim: rgb(238 242 247 / calc(0.4 + 0.2 * var(--glare)));
+		--hair: rgb(238 242 247 / calc(0.14 + 0.14 * var(--glare)));
 		--glow: #f3e7cc;
 		--shade: rgb(0 0 0 / 0.55);
 		--mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -95,7 +100,34 @@ import StormSuggestions from './StormSuggestions.astro';
 		color: var(--ink);
 		font: 300 14px/1.6 var(--sans);
 		-webkit-font-smoothing: antialiased;
-		text-shadow: 0 0 14px var(--shade);
+		text-shadow: 0 0 2px rgb(4 8 18 / calc(0.45 * var(--glare))), 0 0 14px var(--shade);
+		transition: --glare 1.5s ease;
+	}
+	/* Over sunlit ground the sky darkens behind the HUD, as with a graduated filter. */
+	.hud::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		opacity: var(--glare);
+		background:
+			radial-gradient(60% 55% at 0 0, rgb(4 8 18 / 0.6), rgb(4 8 18 / 0.42) 40%, rgb(4 8 18 / 0.16) 72%, transparent),
+			radial-gradient(40% 75% at 100% 0, rgb(4 8 18 / 0.6), rgb(4 8 18 / 0.42) 40%, rgb(4 8 18 / 0.16) 72%, transparent),
+			linear-gradient(transparent 66%, rgb(4 8 18 / 0.2) 78%, rgb(4 8 18 / 0.5) 92%, rgb(4 8 18 / 0.58));
+	}
+	@media (max-width: 640px) {
+		.hud::before {
+			background: linear-gradient(
+				rgb(4 8 18 / 0.6),
+				rgb(4 8 18 / 0.48) 24%,
+				rgb(4 8 18 / 0.22) 38%,
+				transparent 48%,
+				transparent 52%,
+				rgb(4 8 18 / 0.22) 60%,
+				rgb(4 8 18 / 0.48) 72%,
+				rgb(4 8 18 / 0.6)
+			);
+		}
 	}
 	.hud p {
 		margin: 0;
@@ -567,6 +599,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		.dots i {
 			animation: none;
 		}
+		.hud,
 		.state .rate {
 			transition: none;
 		}
@@ -703,6 +736,8 @@ import StormSuggestions from './StormSuggestions.astro';
 				replayStatus.hidden = !caption;
 				if (replayStatus.textContent !== caption) replayStatus.textContent = caption;
 			}
+			const glare = String(Math.round((app?.glare() ?? 0) * 20) / 20);
+			if (root.style.getPropertyValue('--glare') !== glare) root.style.setProperty('--glare', glare);
 			const now = app?.clock.time() ?? Date.now();
 			const text = formatTime(now);
 			if (time && time.textContent !== text) {
