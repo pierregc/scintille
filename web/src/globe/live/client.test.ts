@@ -91,6 +91,42 @@ describe('LiveClient', () => {
 		live.stop();
 	});
 
+	it('loads the chunks live mode plays first, then the older ones in a single ring push', async () => {
+		const refs = [];
+		for (let i = 0; i < 40; i++) refs.push(await feed.publish(T0 + i * 30, 30, 3));
+		const push = vi.spyOn(ring, 'push');
+		const live = client({ concurrency: 4, recentMs: 300_000 });
+		live.start();
+		await settle();
+		const requested = feed.chunkRequests();
+		expect(requested.slice(0, 10)).toEqual(refs.slice(30).map((ref) => `https://data.example/live/${ref.path}`));
+		expect(push).toHaveBeenCalledTimes(11);
+		expect(ring.size).toBe(120);
+		for (let i = 1; i < ring.size; i++) expect(ring.time[ring.slot(i)]).toBeGreaterThanOrEqual(ring.time[ring.slot(i - 1)]);
+		expect(live.coverageStart()).toBe(T0 * 1000);
+		live.stop();
+	});
+
+	it('goes live when an older chunk is already deleted, and retries it without backing off', async () => {
+		const old = await feed.publish(T0, 30, 1);
+		for (let i = 1; i < 40; i++) await feed.publish(T0 + i * 30, 30, 1);
+		const body = feed.files.get(old.path);
+		feed.files.delete(old.path);
+		const live = client({ now: () => T0 * 1000 + 1_200_000, recentMs: 300_000 });
+		live.start();
+		await settle();
+		expect(live.failures).toBe(0);
+		expect(errors).toHaveLength(1);
+		expect(live.loadedAt).not.toBeNull();
+		expect(ring.size).toBe(39);
+		expect(feedLabel(feedStatus(live.manifest, live.loadedAt, T0 * 1000 + 1_200_000)).state).toBe('Live');
+
+		feed.files.set(old.path, body as Uint8Array<ArrayBuffer>);
+		await tick(POLL);
+		expect(ring.size).toBe(40);
+		live.stop();
+	});
+
 	it('reports every chunk it loads, once, with its manifest entry', async () => {
 		await feed.publish(T0, 30, 2);
 		const seen: [number, string][] = [];
