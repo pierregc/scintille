@@ -722,7 +722,8 @@ Findings:
    composite detail (#331).
 3. **Night glows read large on phones** (R1, R3) and exceed the near white budget (#333). Fixed:
    phones now draw lightning at the desktop scale ([Lightning scale](#lightning-scale)).
-4. **HUD text fades over sunlit clouds** near the floor (#334).
+4. **HUD text fades over sunlit clouds** near the floor. Fixed: by day near the floor the view darkens
+   toward the HUD (#334, `hud-glare.jpg`).
 5. **Phone gestures over the HUD zoom the page.** The replay caption and the gaps between the storm
    buttons now let gestures through to the globe; the clock, layers and timeline blocks remain (#335).
 6. A real phone is not measured yet: the frame interval p95 ≤ 33 ms on a phone needs a device.

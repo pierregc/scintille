@@ -13,7 +13,8 @@ mockup is [`visual-direction/a2-ethereal.html`](visual-direction/a2-ethereal.htm
 
 - **The globe is the content.** The HUD never hides more than the corners and a thin bottom strip.
 - **Light, not chrome.** No boxes, no fills, no blur. Legibility comes from a soft text shadow, not from a
-  background.
+  background. Over sunlit ground near the floor, the view darkens softly toward the HUD, as with a
+  graduated filter, and the type loses some of its transparency.
 - **One strong element.** The UTC clock is the only large piece of type; everything else is small caps.
 - **Live is a breath.** The live state is a slow white pulse. No red, no "LIVE" badge.
 - **Warmth is rare.** The pale cream accent marks only the playhead and the main call to action.
