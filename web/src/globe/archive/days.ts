@@ -216,11 +216,13 @@ export class DayFeed {
 			if (this.#pushed.length) this.#reset();
 			return;
 		}
-		let next = this.#next(order, first, from);
+		const playhead = this.#lastAtOrBefore(order, time);
+		const tight = this.#flashes(order, first, playhead) > this.#ring.capacity;
+		let next = this.#next(order, first, from, playhead, tight);
 		this.#prefetch(order, next);
 		while (next < order.length && order[next].eventMin <= time + LOOK_AHEAD_MS) {
 			const chunk = this.#decoded.get(order[next].url);
-			if (!chunk || !this.#fits(chunk.count, from)) break;
+			if (!chunk || (next > playhead && (tight || !this.#fits(chunk.count, from)))) break;
 			this.#ring.push(chunk);
 			this.#decoded.delete(order[next].url);
 			this.#pushed.push(order[next]);
@@ -230,16 +232,44 @@ export class DayFeed {
 		this.#prefetch(order, next);
 	}
 
-	/** Index of the next chunk to push; clears the ring when the playhead left what it holds. */
-	#next(order: ArchiveChunkRef[], first: number, from: number): number {
+	/** Index of the last chunk starting at or before `time`. */
+	#lastAtOrBefore(order: ArchiveChunkRef[], time: number): number {
+		let index = -1;
+		while (index + 1 < order.length && order[index + 1].eventMin <= time) index++;
+		return index;
+	}
+
+	#flashes(order: ArchiveChunkRef[], from: number, to: number): number {
+		let flashes = 0;
+		for (let i = from; i <= to; i++) flashes += order[i].flashCount;
+		return flashes;
+	}
+
+	/** First chunk worth loading up to the playhead: the older ones would be overwritten before it arrives. */
+	#trimmed(order: ArchiveChunkRef[], first: number, playhead: number): number {
+		let flashes = 0;
+		for (let i = playhead; i > first; i--) {
+			flashes += order[i].flashCount;
+			if (flashes >= this.#ring.capacity) return i;
+		}
+		return first;
+	}
+
+	/**
+	 * Index of the next chunk to push; clears the ring when the playhead left what it holds.
+	 * When the display window does not fit (`tight`), the ring keeps the newest flashes up to the playhead.
+	 */
+	#next(order: ArchiveChunkRef[], first: number, from: number, playhead: number, tight: boolean): number {
+		const start = tight ? this.#trimmed(order, first, playhead) : first;
 		const last = this.#pushed.at(-1);
-		if (!last) return first;
+		if (!last) return start;
 		const index = order.findIndex((ref) => ref.url === last.url);
 		const lost = this.#pushedFlashes > this.#ring.size;
-		const start = lost && this.#ring.size ? this.#ring.time[this.#ring.slot(0)] : this.#pushed[0].eventMin;
-		if (index < 0 || first > index + 1 || (from < start && order[first].eventMin < start)) {
+		const oldest = lost && this.#ring.size ? this.#ring.time[this.#ring.slot(0)] : this.#pushed[0].eventMin;
+		const behind = from < oldest && order[first].eventMin < oldest && (!tight || index > playhead);
+		if (index < 0 || start > index + 1 || behind) {
 			this.#reset();
-			return first;
+			return start;
 		}
 		return index + 1;
 	}

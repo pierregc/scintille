@@ -59,7 +59,9 @@ lightning data is missing, never an empty sky.
 
 **Client.** Free replay before the live window reads the flash index of the playhead day and its
 neighbours, like clouds, and streams its chunks into the renderer ring in event order, as the live
-feed does: the ring keeps the display window and the next chunk, so memory does not grow. Inside
+feed does: the ring keeps the display window and the next chunk, so memory does not grow. At busy
+hours, when the window does not fit, it keeps the newest flashes up to the playhead and drops the
+oldest of the afterglow. Inside
 the live window, free replay keeps the live feed. An hour is archived two minutes after it ends and
 complete thirty minutes later, well before it leaves the 60-minute live window: the two meet with at
 most a two-minute hole, two minutes per hour, and the live contract does not change.
