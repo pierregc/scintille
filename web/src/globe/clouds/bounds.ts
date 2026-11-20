@@ -25,6 +25,9 @@ export const CLOUD_TERMINATOR_TINT = 0.8;
 /** Height of the flat cloud layer: over the lightning glows (12 km) and channels, so flashes start inside the clouds. */
 export const CLOUD_SHELL_KM = 13;
 
+/** Low tops the flat layer follows its line of sight down to before it leaves a pixel to the volume. */
+export const HANDOFF_TOP_KM = 0.5;
+
 /** Opacity of the densest column seen straight down, and the cover up to which a column is drawn as observed (ADR 0031). */
 export const VOLUME_MAX_OPACITY = 0.95;
 export const VOLUME_KNEE = 0.5;

@@ -609,7 +609,6 @@ void main() {
 	vec3 L = vec3(0.0);
 	float glowLight = 0.0;
 	float depthSum = 0.0;
-	float heightSum = 0.0;
 	float depthWeight = 0.0;
 	// Each pixel shifts its steps by a low-discrepancy offset that turns every frame, so step
 	// boundaries never line up into contours; the first step starts at the slab top, never past it.
@@ -726,7 +725,6 @@ void main() {
 				float glow = flashLightAtLod(geo) * inBand;
 				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * cloudLightDay(s);
 				depthSum += T * alpha * tv;
-				heightSum += T * alpha * h;
 				depthWeight += T * alpha;
 				T *= 1.0 - alpha;
 			}
@@ -734,8 +732,8 @@ void main() {
 		t = next;
 	}
 	gl_FragColor = vec4(L, T);
-	// Depth for the reprojection, glow of the flashes, height of the cloud seen (for the relief light).
-	marchDepth = vec4(depthWeight > 0.0 ? depthSum / depthWeight : t1, glowLight, depthWeight > 0.0 ? heightSum / depthWeight : 0.0, 1.0);
+	// Depth for the reprojection and glow of the flashes.
+	marchDepth = vec4(depthWeight > 0.0 ? depthSum / depthWeight : t1, glowLight, 0.0, 1.0);
 }
 `;
 
@@ -752,6 +750,7 @@ uniform mat4 rayMatrix;
 uniform vec3 eyeKm;
 uniform mat4 previous;
 uniform float historyValid;
+uniform float steadySamples;
 
 void main() {
 	vec2 px = floor(gl_FragCoord.xy);
@@ -788,14 +787,38 @@ void main() {
 	float motion = length(uv * marchSize - (px + 0.5));
 	float moving = smoothstep(0.05, 0.75, motion);
 	vec4 kept = texture2D(history, uv);
-	// Only a change of cover (a new frame, clouds coming or going) shortens the history; light
-	// that varies with the jittered steps is what the history averages away.
-	float change = smoothstep(0.1, 0.3, abs(a.a - kept.a));
+	// A moving view spreads each new ray over its neighbours and keeps 12 % of it: alone, a ray that
+	// hits or misses a cloud edge would show as a dot, at another pixel every frame.
+	vec4 ray = a;
+	if (isFresh && moving > 0.0) {
+		vec4 around = b + c + texelFetch(fresh, clamp(q0 - ivec2(1, 0), ivec2(0), hi), 0) + texelFetch(fresh, clamp(q0 - ivec2(0, 1), ivec2(0), hi), 0);
+		ray = mix(a, 0.5 * a + 0.125 * around, moving);
+	}
+	vec4 lo = min(min(a, b), min(c, d));
+	vec4 hiv = max(max(a, b), max(c, d));
+	// Only a change of cover (a new frame, clouds coming or going) shortens the history of a still
+	// view, and only beyond what the four rays around disagree on: one ray grazing far clouds hits or
+	// misses them at random. While the view moves, the clamp already follows the clouds.
+	float change = smoothstep(0.1, 0.3, abs(0.25 * (a.a + b.a + c.a + d.a) - kept.a) - 0.5 * (hiv.a - lo.a)) * (1.0 - moving);
+	// A still view is held within the sixteen rays around: the four nearest alone often all miss what
+	// the history has averaged.
+	vec4 wideLo = lo;
+	vec4 wideHi = hiv;
+	if (moving < 1.0) {
+		for (int j = -1; j <= 2; j++) {
+			for (int i = -1; i <= 2; i++) {
+				vec4 n = texelFetch(fresh, clamp(q0 + ivec2(i, j), ivec2(0), hi), 0);
+				wideLo = min(wideLo, n);
+				wideHi = max(wideHi, n);
+			}
+		}
+	}
 	float box = mix(0.15, 0.05, moving);
-	vec4 lo = min(min(a, b), min(c, d)) - box;
-	vec4 hiv = max(max(a, b), max(c, d)) + box;
-	vec4 past = clamp(kept, lo, hiv);
-	gl_FragColor = isFresh ? mix(past, a, mix(mix(0.05, 0.35, moving), 0.6, change)) : past;
+	vec4 past = clamp(kept, mix(wideLo, lo, moving) - box, mix(wideHi, hiv, moving) + box);
+	// A still view averages every ray marched since it stopped, ever more finely, so its details
+	// settle and hold.
+	float still = max(1.0 / (5.0 + steadySamples), 1.0 / 128.0);
+	gl_FragColor = isFresh ? mix(past, ray, mix(mix(still, 0.12, moving), 0.6, change)) : past;
 }
 `;
 
@@ -842,13 +865,22 @@ void main() {
 	float cover = 1.0 - c.a;
 	float shown = max(cover, 1e-3);
 	vec3 rgb = shoulder(c.rgb / shown);
-	// Far relief light, after the shoulder so bright tops keep it, on the cloud seen.
+	// Far relief light, after the shoulder so bright tops keep it, on the cloud seen: at the top the
+	// field holds where the line of sight crosses the layer. The height this frame's rays saw jitters,
+	// and in a grazing view each km of it moves the lookup by tens of km.
 	if (reliefOn > 0.0 && cover > 0.02) {
 		vec4 far = rayMatrix * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
 		vec3 rd = normalize(far.xyz / far.w - eyeKm);
-		float r = 6371.0 + (seen.b > 0.1 ? seen.b : ${f(CLOUD_SHELL_KM)});
+		float r = 6371.0 + ${f(CLOUD_SHELL_KM)};
 		float b = dot(eyeKm, rd);
 		float disc = b * b - dot(eyeKm, eyeKm) + r * r;
+		if (disc > 0.0) {
+			vec4 crossed = volumeSample(volumeField, volumeLatLon(eyeKm + rd * (-b - sqrt(disc))));
+			if (crossed.a > 0.5) {
+				r = 6371.0 + crossed.g * 20.0;
+				disc = b * b - dot(eyeKm, eyeKm) + r * r;
+			}
+		}
 		if (disc > 0.0) {
 			float t = -b - sqrt(disc);
 			vec3 p = eyeKm + rd * t;

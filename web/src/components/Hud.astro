@@ -33,7 +33,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		<p class="note" data-sources-note hidden></p>
 	</section>
 
-	<p class="stale cap" role="status" data-stale hidden><span data-stale-text></span><span class="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>
+	<p class="stale cap" role="status" data-stale hidden><span data-stale-text></span></p>
 	<div class="storm" data-storm-panel>
 		<p class="replay-status" role="status" data-replay-status hidden></p>
 		<div class="tools" data-storm-tools hidden>
@@ -325,28 +325,24 @@ import StormSuggestions from './StormSuggestions.astro';
 		text-align: center;
 		transform: translateX(-50%);
 	}
-	.stale .dots {
-		display: none;
+	.stale[data-loading] {
+		top: 50%;
+		bottom: auto;
+		max-width: calc(100vw - 2 * var(--gut));
+		padding-left: 0.3em;
+		color: var(--ink);
+		font-size: clamp(15px, 3vw, 26px);
+		line-height: 1.5;
+		letter-spacing: 0.3em;
+		transform: translate(-50%, -50%);
+		animation: breathe 3.6s ease-in-out infinite;
 	}
-	.stale[data-loading] .dots {
-		display: inline;
-	}
-	.dots i {
-		font-style: normal;
-		animation: dot 1.8s ease-in-out infinite;
-	}
-	.dots i:nth-child(2) {
-		animation-delay: 0.3s;
-	}
-	.dots i:nth-child(3) {
-		animation-delay: 0.6s;
-	}
-	@keyframes dot {
+	@keyframes breathe {
 		0%,
 		100% {
-			opacity: 0.2;
+			opacity: 0.25;
 		}
-		40% {
+		50% {
 			opacity: 1;
 		}
 	}
@@ -596,7 +592,7 @@ import StormSuggestions from './StormSuggestions.astro';
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.pulse,
-		.dots i {
+		.stale[data-loading] {
 			animation: none;
 		}
 		.hud,

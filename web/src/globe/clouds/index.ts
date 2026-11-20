@@ -2,7 +2,7 @@ import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, 
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
 import { twilightUniforms } from '../twilight';
-import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
+import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT, HANDOFF_TOP_KM } from './bounds';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
 import type { CloudDetail, DetailSource } from './detail';
 import type { CloudFrame } from './frame';
@@ -133,6 +133,7 @@ export function createClouds(
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
 			flatShown: { value: 1 },
+			handoffRadius: { value: cloudShellRadius(radius, HANDOFF_TOP_KM) },
 		},
 		defines: opacity.defines,
 		side: FrontSide,
