@@ -323,6 +323,7 @@ export function createGlobeControls(
 				setSurface(surfaceFromPose(pose));
 			} else {
 				if (surface) toGlobe();
+				roll = undefined;
 				applyPose(pose);
 			}
 		},
@@ -377,6 +378,7 @@ export function createGlobeControls(
 
 		centerOn(lat, lon) {
 			if (surface) toGlobe();
+			roll = undefined;
 			placeCamera(new Vector3(...latLonToVector(lat, lon)), camera.position.length());
 		},
 

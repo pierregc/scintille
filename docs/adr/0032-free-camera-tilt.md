@@ -57,5 +57,4 @@ the floor stays close. The floor stays at 400 km; tilt while following stops Fol
 - Share links accept tilts up to 90°; older clients clamp them to 80° and lose the raised gaze.
 - Grazing views show up to 2,200 km of ground and the atmosphere limb: two bench poses, `grazing`
   (floor, 80°) and `limb` (floor, 90°), join the references and the ADR 0020 budgets apply to them.
-- An interrupted surface flight still drops the roll the flight carried, as before; with a raised
-  gaze this also tilts the view by a fraction of a degree.
+- An interrupted surface flight eases out the roll the flight carried over `ROLL_RECOVERY_MS` (#396).
