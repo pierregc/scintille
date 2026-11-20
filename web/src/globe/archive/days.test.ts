@@ -152,6 +152,28 @@ describe('flash archive feed', () => {
 		expect(span(ring)[1]).toBeGreaterThan(H18 + HOUR);
 	});
 
+	it('keeps the newest flashes up to the playhead when the display window does not fit', async () => {
+		const archive = new FakeArchive();
+		const sixths = Array.from({ length: 6 }, (_, c) => Array.from({ length: 100 }, (_, i) => (c * 10 + i * 0.1) * MIN));
+		await archive.hour(H18, sixths);
+		const { ring, feed } = setup(archive, 250);
+		await settle(feed, H18 + 45 * MIN);
+		const generation = ring.generation;
+		expect(ring.size).toBe(250);
+		expect(span(ring)[1]).toBe(H18 + 49.9 * MIN);
+		expect(feed.covers(H18 + 45 * MIN)).toBe(true);
+		await settle(feed, H18 + 45 * MIN);
+		expect(ring.generation).toBe(generation);
+		await settle(feed, H18 + 55 * MIN);
+		expect(ring.generation).toBe(generation);
+		expect(span(ring)[1]).toBe(H18 + 59.9 * MIN);
+		expect(feed.covers(H18 + 55 * MIN)).toBe(true);
+		await settle(feed, H18 + 25 * MIN);
+		expect(ring.generation).not.toBe(generation);
+		expect(span(ring)[1]).toBe(H18 + 29.9 * MIN);
+		expect(feed.covers(H18 + 25 * MIN)).toBe(true);
+	});
+
 	it('reloads the day index when a chunk was replaced', async () => {
 		const archive = new FakeArchive();
 		await archive.hour(H18, thirds(10));
