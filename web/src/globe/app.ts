@@ -6,6 +6,7 @@ import { atmosphereParameters, createAtmosphere } from './atmosphere';
 import { SceneClock } from './clock';
 import { cloudShellRadius, type Clouds, createClouds } from './clouds';
 import { ArchiveCloudFeed } from './clouds/archive';
+import { createColdTops } from './clouds/cold-tops';
 import { createCloudDetail } from './clouds/detail';
 import type { StyleBounds } from './clouds/bounds';
 import { createCloudVolume, type CloudVolume } from './clouds/volume';
@@ -270,6 +271,8 @@ export function createGlobeApp(
 	});
 	scene.add(lightning.mesh);
 	clouds.setFlashLight(lightning.light);
+	const coldTops = createColdTops({ radius: RADIUS, onError: (error) => console.warn('cold tops:', error) });
+	scene.add(coldTops.mesh);
 	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
@@ -370,6 +373,12 @@ export function createGlobeApp(
 			});
 		}
 		stars.setTime(now);
+		coldTops.update({
+			frames: clouds.coldTopFrames(),
+			wallMs: renderParams ? now : performance.now(),
+			sun: sunDirection(new Date(now)),
+			steady: Boolean(renderParams) || reducedMotion.matches,
+		});
 		data.update(now);
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
@@ -497,6 +506,7 @@ export function createGlobeApp(
 			dprQuery?.removeEventListener('change', onPixelRatioChange);
 			earth.dispose();
 			atmosphere.dispose();
+			coldTops.dispose();
 			detachDevClouds?.();
 			clouds.dispose();
 			cloudDetail?.dispose();

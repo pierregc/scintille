@@ -10,17 +10,19 @@ from datetime import UTC, date, datetime, timedelta
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from scintille_contract.cloud_archive import (
+    ARCHIVE_COLD_TOPS_PATTERN,
     ARCHIVE_DETAIL_PATTERN,
     ARCHIVE_SCHEMA_VERSION,
     ARCHIVE_TEXTURE_PATTERN,
     CLOUD_TIERS,
     MAX_ARCHIVE_FRAMES,
     MAX_CLOUD_FRAME_BYTES,
+    MAX_COLD_TOPS_BYTES,
 )
 
 from scintille_ingest.runtime.live_feed import LiveStore
 
-from . import tiles
+from . import cold_tops, tiles
 from .storm_detail import Position, StormTracks, keys_under
 from .texture import TIERS
 
@@ -39,6 +41,10 @@ TEXTURE_HEADERS = {
     "Cache-Control": "public, max-age=31536000, immutable",
 }
 MANIFEST_HEADERS = {"Content-Type": "application/json", "Cache-Control": "public, max-age=60"}
+COLD_TOPS_HEADERS = {
+    "Content-Type": "application/json",
+    "Cache-Control": "public, max-age=31536000, immutable",
+}
 PACK_HEADERS = {
     "Content-Type": "application/octet-stream",
     "Cache-Control": "public, max-age=31536000, immutable",
@@ -111,6 +117,15 @@ def storm_ref(storm: Mapping[tiles.Key, bytes] | None, heights: bool) -> CloudSt
     )
 
 
+class CloudColdTops(BaseModel):
+    """Cold cloud tops where no lightning source sees (ADR 0038)."""
+
+    path: str
+    """Relative to the manifest: a `ColdTopsFile`."""
+    count: int = Field(strict=True, ge=0)
+    size_bytes: int = Field(strict=True, ge=1, le=MAX_COLD_TOPS_BYTES)
+
+
 class CloudFrameRef(BaseModel):
     time: AwareDatetime
     """Observation time of the mosaic, for the HUD."""
@@ -121,6 +136,7 @@ class CloudFrameRef(BaseModel):
     """Surface temperature field the opacity was computed against."""
     textures: dict[str, CloudTexture]
     detail: CloudDetail | None = None
+    cold_tops: CloudColdTops | None = None
 
 
 class CloudManifest(BaseModel):
@@ -146,6 +162,8 @@ class ArchiveCloudFrame(CloudFrameRef):
                 raise ValueError("invalid archive cloud texture")
         if self.detail and not re.fullmatch(ARCHIVE_DETAIL_PATTERN, self.detail.path):
             raise ValueError("invalid archive cloud detail")
+        if self.cold_tops and not re.fullmatch(ARCHIVE_COLD_TOPS_PATTERN, self.cold_tops.path):
+            raise ValueError("invalid archive cold tops")
         return self
 
 
@@ -181,6 +199,10 @@ def archive_path(tier: str, time: datetime, name: str) -> str:
 def detail_path(time: datetime, name: str) -> str:
     """Tiles of a frame, under the archive root: written once, read by both manifests."""
     return f"detail/{time:%Y/%m/%d}/{name.removesuffix('.webp')}.tiles"
+
+
+def cold_tops_path(time: datetime, name: str) -> str:
+    return f"cold-tops/{time:%Y/%m/%d}/{name.removesuffix('.webp')}.json"
 
 
 class CloudPublisher:
@@ -221,9 +243,11 @@ class CloudPublisher:
         heights: Mapping[tiles.Key, bytes] | None = None,
         heights_reference: str = "",
         storm: Mapping[tiles.Key, bytes] | None = None,
+        tops: cold_tops.ColdTops | None = None,
     ) -> CloudFrameRef:
-        """Detail tiles, textures, then the manifest, then the archive copies. Live textures that
-        left the window are deleted on the next publish, so cached manifests still resolve."""
+        """Detail tiles and cold tops, textures, then the manifest, then the archive copies. Live
+        textures that left the window are deleted on the next publish, so cached manifests still
+        resolve."""
         time = time.astimezone(UTC)
         name = texture_name(time, product)
         detail_ref = (
@@ -231,6 +255,7 @@ class CloudPublisher:
             if detail
             else None
         )
+        tops_ref = await self._cold_tops(time, name, tops) if tops is not None else None
         refs = {}
         for tier, data in textures.items():
             path = f"{tier}/{name}"
@@ -248,6 +273,9 @@ class CloudPublisher:
             detail=detail_ref.model_copy(update={"path": f"../../archive/clouds/{detail_ref.path}"})
             if detail_ref
             else None,
+            cold_tops=tops_ref.model_copy(update={"path": f"../../archive/clouds/{tops_ref.path}"})
+            if tops_ref
+            else None,
         )
         before = self.frames
         frames = sorted([f for f in before if f.time != time] + [frame], key=lambda f: f.time)
@@ -260,7 +288,7 @@ class CloudPublisher:
         for path in self.expired - kept:
             await self._delete(path)
         self.expired = {t.path for f in before for t in f.textures.values()} - kept
-        await self._archive(frame, textures, now, detail_ref)
+        await self._archive(frame, textures, now, detail_ref, tops_ref)
         await self._expire_details(now)
         return frame
 
@@ -298,6 +326,15 @@ class CloudPublisher:
             storm=storm_ref(storm, heights is not None),
         )
 
+    async def _cold_tops(
+        self, time: datetime, name: str, tops: cold_tops.ColdTops
+    ) -> CloudColdTops:
+        """Uploads the cells; the returned path is relative to the archive root."""
+        path = cold_tops_path(time, name)
+        data = cold_tops.encode(tops, time)
+        await self.archive.put(path, data, COLD_TOPS_HEADERS)
+        return CloudColdTops(path=path, count=len(tops), size_bytes=len(data))
+
     def manifest(self, now: datetime) -> CloudManifest:
         return CloudManifest(
             generated_at=now,
@@ -312,6 +349,7 @@ class CloudPublisher:
         textures: dict[str, bytes],
         now: datetime,
         detail: CloudDetail | None = None,
+        tops: CloudColdTops | None = None,
     ) -> None:
         try:
             key = f"manifests/{frame.time:%Y-%m-%d}.json"
@@ -337,9 +375,10 @@ class CloudPublisher:
                 refs[tier] = frame.textures[tier].model_copy(update={"path": f"../{path}"})
             kept = [f for f in frames if f.time != frame.time and f.expires_at > now]
             archived = ArchiveCloudFrame(
-                **frame.model_dump(exclude={"textures", "detail"}),
+                **frame.model_dump(exclude={"textures", "detail", "cold_tops"}),
                 textures=refs,
                 detail=detail.model_copy(update={"path": f"../{detail.path}"}) if detail else None,
+                cold_tops=tops.model_copy(update={"path": f"../{tops.path}"}) if tops else None,
                 expires_at=now + ARCHIVE_RETENTION,
             )
             combined = sorted([*kept, archived], key=lambda f: f.time)

@@ -17,7 +17,7 @@ from obstore.store import ObjectStore
 
 from scintille_ingest.runtime.metrics import Metrics
 
-from . import pyramid, storm_level
+from . import cold_tops, pyramid, storm_level
 from .gfs import GfsSkin, SkinTemperature
 from .gmgsi import GmgsiProduct, Mosaic, list_products, read_mosaic
 from .profile import GfsProfile, HeightTable
@@ -231,7 +231,7 @@ class CompositeCollector:
             table = await self.profile.at(files.slot) if self.profile else None
             fallback = await asyncio.to_thread(self._fallback, files.slot)
             storms = await self._storm_positions(files.slot)
-            rendered = await asyncio.to_thread(
+            rendered, tops = await asyncio.to_thread(
                 self._render,
                 downloaded,
                 directory / "disks",
@@ -254,6 +254,7 @@ class CompositeCollector:
             rendered.heights,
             table.label if table else f"lapse from {skin.label}",
             rendered.storm,
+            tops,
         )
         self.metrics.inc("cloud_frames_total")
         self.metrics.set("cloud_frame_age_seconds", (now - files.slot).total_seconds())
@@ -271,6 +272,7 @@ class CompositeCollector:
                     "height_bytes": sum(len(b) for b in rendered.heights.values()),
                     "storm_tiles": len(rendered.storm),
                     "storm_bytes": sum(len(b) for b in rendered.storm.values()),
+                    "cold_tops": None if tops is None else len(tops),
                     "bytes": {tier: len(b) for tier, b in rendered.textures.items()},
                     "max_rss_mb": _max_rss_mb(resource.RUSAGE_SELF),
                     "worker_max_rss_mb": _max_rss_mb(resource.RUSAGE_CHILDREN),
@@ -318,7 +320,7 @@ class CompositeCollector:
         slot: datetime,
         table: HeightTable | None = None,
         storms: list[Position] | None = None,
-    ) -> pyramid.Rendered:
+    ) -> tuple[pyramid.Rendered, cold_tops.ColdTops | None]:
         directory.mkdir(parents=True, exist_ok=True)
         table = table.mapped(directory / "tops.npy") if table else None
         subsolar = subsolar_point(slot)
@@ -330,8 +332,10 @@ class CompositeCollector:
         for path in downloaded.values():
             for file in path:
                 file.unlink(missing_ok=True)
+        himawari = next((s for s in satellites if s.name == cold_tops.SATELLITE), None)
+        tops = cold_tops.detect(himawari.infrared, base.top_at) if himawari else None
         inputs = pyramid.Inputs(tuple(satellites), skin.values, subsolar, fallback, table, keys)
-        return pyramid.frame(inputs, self.workers)
+        return pyramid.frame(inputs, self.workers), tops
 
     async def run(self) -> None:
         await self.publisher.restore()

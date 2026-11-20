@@ -17,6 +17,8 @@ export interface CloudFrameRef {
 	reference: string;
 	textures: Partial<Record<CloudTier, CloudTexture>>;
 	detail?: CloudDetailRef | null;
+	/** Cold cloud tops where no lightning source sees (ADR 0038). */
+	cold_tops?: { path: string; count: number; size_bytes: number } | null;
 }
 
 export interface CloudManifest {
@@ -32,6 +34,7 @@ export interface CloudFrameSource {
 	time: number;
 	url: string;
 	detail: DetailSource | null;
+	coldTops: string | null;
 }
 
 export class CloudManifestError extends Error {}
@@ -52,6 +55,10 @@ export function parseCloudManifest(json: unknown): CloudManifest {
 	return json as unknown as CloudManifest;
 }
 
+export function coldTopsUrl(frame: Pick<CloudFrameRef, 'cold_tops'>, manifestUrl: string): string | null {
+	return typeof frame.cold_tops?.path === 'string' ? new URL(frame.cold_tops.path, manifestUrl).href : null;
+}
+
 /** The newest `count` frames that have `tier`, oldest first, with absolute texture URLs. */
 export function frameSources(
 	manifest: Pick<CloudManifest, 'frames'>,
@@ -65,6 +72,7 @@ export function frameSources(
 			time: Date.parse(f.time),
 			url: new URL(f.textures[tier]?.path ?? '', manifestUrl).href,
 			detail: detailSource(f.detail, manifestUrl),
+			coldTops: coldTopsUrl(f, manifestUrl),
 		}))
 		.sort((a, b) => a.time - b.time);
 	return sources.slice(Math.max(0, sources.length - count));

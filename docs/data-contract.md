@@ -250,6 +250,34 @@ that ignore it keep the global textures:
   with one (offset, length) pair per listed slot in the same order. Tiles have the size and border
   of the other levels. A `-storms.tiles` object keeps the level 6 tiles under its storms.
 
+### Cold cloud tops
+
+Composite frames with Himawari add an optional `cold_tops` block
+([ADR 0038](adr/0038-asia-oceania-storm-tops.md)); clients that ignore it keep the clouds:
+
+```json
+"cold_tops": {
+  "path": "../../archive/clouds/cold-tops/2026/11/20/20261120T060000Z-f41ef6e0.json",
+  "count": 1897,
+  "size_bytes": 47588
+}
+```
+
+- The object (immutable, at most `max_cold_tops_bytes`) lists cells of 16 Himawari band 13 pixels
+  (about 32 km) with at least 9 pixels under `threshold_k`, only where no lightning footprint of
+  the coverage map reaches:
+
+  ```json
+  {"time": "2026-11-20T06:00:00Z", "satellite": "himawari09", "threshold_k": 215.0, "cell_km": 32.0,
+   "tops": [[12.35, 110.0, 0.5, 205.0]]}
+  ```
+
+  Each row is `[lat, lon, cold, min_bt_k]`: the ground point under the cell's top (parallax
+  corrected), the share of its pixels under the threshold and its coldest pixel, kelvin.
+- It is written once, before the manifests, under `archive/clouds/cold-tops/`; both manifests
+  point there (`cold_tops_path_pattern` for the archive) and it goes with the rest of
+  `archive/clouds/` after 30 days.
+
 ## Historical cloud discovery
 
 `archive/clouds/manifests/YYYY-MM-DD.json` is the version 1 daily archive index

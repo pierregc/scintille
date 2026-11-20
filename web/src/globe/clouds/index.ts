@@ -67,6 +67,8 @@ export interface Clouds {
 	detailFrames(): readonly [DetailSource | null, DetailSource | null];
 	/** Cloud-top height tiles of the two frames being blended (ADR 0028). */
 	heightFrames(): readonly [DetailSource | null, DetailSource | null];
+	/** Cold top files of the two frames being blended and the share of the second, shown or not; null when no frame is near the scene time (ADR 0038). */
+	coldTopFrames(): { a: string | null; b: string | null; mix: number } | null;
 	/** Share of the flat layer drawn, 0 to 1, as the volume takes over near the ground. */
 	setFlatShown(share: number): void;
 	/** Hands the clouds over to the volume (ADR 0031) wherever its field knows their heights. */
@@ -244,6 +246,11 @@ export function createClouds(
 		heightFrames() {
 			const [a, b] = detailFrames();
 			return [a?.heights ?? null, b?.heights ?? null];
+		},
+		coldTopFrames() {
+			if (!covered()) return null;
+			const { a, b, mix } = blendPair(position, frames.length);
+			return { a: frames[a].coldTops ?? null, b: frames[b].coldTops ?? null, mix };
 		},
 		setFlatShown(share) {
 			material.uniforms.flatShown.value = share;

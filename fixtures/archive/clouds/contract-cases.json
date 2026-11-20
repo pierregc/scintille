@@ -1,5 +1,6 @@
 [
   {"name": "valid", "accept": true, "changes": []},
+  {"name": "cold tops", "accept": true, "changes": [{"path": ["frames", 0, "cold_tops"], "value": {"path": "../cold-tops/2026/07/15/20260715T180000Z-1a2b3c4d.json", "count": 2, "size_bytes": 120}}]},
   {"name": "future version", "accept": false, "changes": [{"path": ["schema_version"], "value": 2}]},
   {"name": "string version", "accept": false, "changes": [{"path": ["schema_version"], "value": "1"}]},
   {"name": "wrong observation day", "accept": false, "changes": [{"path": ["day"], "value": "2026-07-14"}]},

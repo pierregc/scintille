@@ -50,11 +50,18 @@ describe('frameSources', () => {
 	it('keeps the newest frames of one tier, oldest first, resolved against the manifest', () => {
 		const sources = frameSources(manifest([2, 0, 1, 3]), '2k', `${BASE}live/clouds/manifest.json`, 2);
 		expect(sources).toEqual([
-			{ time: T0 + 2 * HOUR, url: `${BASE}live/clouds/2k/f2.webp`, detail: null },
-			{ time: T0 + 3 * HOUR, url: `${BASE}live/clouds/2k/f3.webp`, detail: null },
+			{ time: T0 + 2 * HOUR, url: `${BASE}live/clouds/2k/f2.webp`, detail: null, coldTops: null },
+			{ time: T0 + 3 * HOUR, url: `${BASE}live/clouds/2k/f3.webp`, detail: null, coldTops: null },
 		]);
 		expect(frameSources(manifest([0, 1], ['2k']), '4k', BASE, 3)).toEqual([]);
 		expect(frameSources(manifest([0, 1]), '2k', BASE, 0)).toEqual([]);
+	});
+
+	it('resolves cold tops against the manifest', () => {
+		const withTops = manifest([0]);
+		withTops.frames[0].cold_tops = { path: '../../archive/clouds/cold-tops/2026/11/20/f0.json', count: 3, size_bytes: 90 };
+		const [source] = frameSources(withTops, '2k', `${BASE}live/clouds/manifest.json`, 1);
+		expect(source.coldTops).toBe(`${BASE}archive/clouds/cold-tops/2026/11/20/f0.json`);
 	});
 });
 
