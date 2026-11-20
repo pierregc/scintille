@@ -174,6 +174,17 @@ describe('createGlobeControls flight handoff', () => {
 		expect(camera.quaternion.angleTo(placed)).toBeLessThan(1e-6);
 	});
 
+	it.each([
+		['place', () => controls.place({ lat: -20, lon: 100, altitude: 5000 })],
+		['centerOn', () => controls.centerOn(-20, 100)],
+	])('drops the leftover roll when %s leaves a tilted view for the globe', async (_, cut) => {
+		await settle(controls.flyTo({ lat: 10, lon: 20, altitude: 900, tilt: 60, duration: 0 }));
+		cut();
+		const placed = camera.quaternion.clone();
+		step(16);
+		expect(camera.quaternion.angleTo(placed)).toBeLessThan(1e-3);
+	});
+
 	const height = () => camera.position.length() - R;
 	const tiltOf = () => {
 		const forward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
