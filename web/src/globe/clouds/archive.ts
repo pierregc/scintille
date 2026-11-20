@@ -1,7 +1,7 @@
 import type { Clouds } from './index';
 import { CLOUD_MAX_GAP_MS } from './index';
 import { type CloudFrame, loadCloudFrame } from './frame';
-import { type CloudManifest, type CloudTier, parseCloudManifest } from './manifest';
+import { type CloudManifest, type CloudTier, coldTopsUrl, parseCloudManifest } from './manifest';
 import { type DetailSource, detailSource } from './detail';
 import { boundedBody } from './response';
 import { CLOUD_ARCHIVE_RULES as RULES } from '../../contract/cloud-archive';
@@ -14,6 +14,7 @@ const CACHED_DAYS = 6;
 const PREVIEW_TIER: CloudTier = '2k';
 const TEXTURE_PATH = new RegExp(RULES.texture_path_pattern);
 const DETAIL_PATH = new RegExp(RULES.detail_path_pattern);
+const COLD_TOPS_PATH = new RegExp(RULES.cold_tops_path_pattern);
 const dayOf = (time: number) => new Date(time).toISOString().slice(0, 10);
 
 interface ArchiveManifest extends Omit<CloudManifest, 'window_seconds'> {
@@ -32,6 +33,7 @@ export function parseArchive(json: unknown, day: string): ArchiveManifest {
 		if (new Date(frame.time).toISOString().slice(0, 10) !== day ||
 			!Number.isFinite(Date.parse(frame.expires_at))) throw new Error('invalid archive cloud frame');
 		if (frame.detail && !DETAIL_PATH.test(frame.detail.path)) frame.detail = null;
+		if (frame.cold_tops && !COLD_TOPS_PATH.test(frame.cold_tops.path)) frame.cold_tops = null;
 		for (const [tier, texture] of Object.entries(frame.textures)) {
 			if (!texture || !RULES.tiers.includes(tier) ||
 				!TEXTURE_PATH.test(texture.path) ||
@@ -60,6 +62,7 @@ interface Source {
 	url: string;
 	preview: string | null;
 	detail: DetailSource | null;
+	coldTops: string | null;
 	expires: number;
 }
 
@@ -177,6 +180,7 @@ export class ArchiveCloudFeed {
 				url: new URL(texture.path, manifestUrl).href,
 				preview: preview ? new URL(preview.path, manifestUrl).href : null,
 				detail: detailSource(f.detail, manifestUrl),
+				coldTops: coldTopsUrl(f, manifestUrl),
 				expires: Date.parse(f.expires_at),
 			}];
 		});
@@ -286,7 +290,7 @@ export class ArchiveCloudFeed {
 			this.#held.delete(farthest);
 			this.#options.clouds.retainFrames(layer.filter((t) => t !== farthest));
 		}
-		this.#options.clouds.setFrame({ ...frame, detail: source.detail });
+		this.#options.clouds.setFrame({ ...frame, detail: source.detail, coldTops: source.coldTops });
 		this.#held.set(source.time, url);
 		return true;
 	}

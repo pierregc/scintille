@@ -27,6 +27,12 @@ it.each(contractCases)('shares producer/reader contract case: $name', (test) => 
 	else expect(() => parseArchive(payload, '2026-07-15')).toThrow();
 });
 
+it('drops cold tops outside the archive', () => {
+	const payload = structuredClone(fixture) as unknown as { frames: Record<string, unknown>[] };
+	payload.frames[0].cold_tops = { path: 'https://other.test/tops.json', count: 1, size_bytes: 10 };
+	expect(parseArchive(payload, '2026-07-15').frames[0].cold_tops).toBeNull();
+});
+
 function manifest(day: string, hours: number[]) {
 	return {
 		...fixture, day,

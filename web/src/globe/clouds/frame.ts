@@ -10,6 +10,8 @@ export interface CloudFrame {
 	time: number;
 	/** Finer tiles of the same observation, if published. */
 	detail?: DetailSource | null;
+	/** Cold cloud tops of the same observation (ADR 0038), if published. */
+	coldTops?: string | null;
 }
 
 export async function loadCloudFrame(url: string, time: number, loader = new TextureLoader(), signal?: AbortSignal): Promise<CloudFrame> {
