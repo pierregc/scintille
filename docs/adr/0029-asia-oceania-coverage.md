@@ -1,6 +1,6 @@
 # 0029 · Asia and Oceania coverage
 
-- Status: accepted
+- Status: replaced in part by [0038](0038-asia-oceania-storm-tops.md)
 - Date: 2026-10-29
 
 ## Context

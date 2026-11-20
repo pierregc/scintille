@@ -58,7 +58,7 @@ What becomes easier, what becomes harder, what we must watch.
 | [0026](0026-live-latency.md) | Live latency: one chunk per GLM slot, faster polling, 70 s playback delay | accepted |
 | [0027](0027-storm-search.md) | Storm search: D1 for place and time queries, static place index, coarse IP location | accepted |
 | [0028](0028-cloud-relief.md) | Clouds in relief: observed tops, a translucent volume with styled detail | accepted |
-| [0029](0029-asia-oceania-coverage.md) | Asia and Oceania coverage | accepted |
+| [0029](0029-asia-oceania-coverage.md) | Asia and Oceania coverage | replaced in part by [0038](0038-asia-oceania-storm-tops.md) |
 | [0030](0030-bounded-aesthetic-license.md) | Bounded aesthetic license: styled detail beside the observations | accepted |
 | [0031](0031-cloud-look.md) | Cloud look: observed relief, sparse styling, exact light | accepted, its lighting replaced by [0034](0034-one-cloud-relief.md) |
 | [0032](0032-free-camera-tilt.md) | Free camera tilt: orbit along the floor, then raise the gaze | accepted |
@@ -67,3 +67,4 @@ What becomes easier, what becomes harder, what we must watch.
 | [0035](0035-lightning-inside-clouds.md) | Lightning inside the clouds | accepted |
 | [0036](0036-current-adr-statuses.md) | Keep ADR statuses current | accepted |
 | [0037](0037-storm-cloud-detail.md) | 0.5 km cloud detail under strong storms | accepted |
+| [0038](0038-asia-oceania-storm-tops.md) | Storms over Asia and Oceania from cold cloud tops | accepted |
