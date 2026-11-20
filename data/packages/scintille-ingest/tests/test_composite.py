@@ -14,7 +14,17 @@ import pytest
 from obstore.store import MemoryStore
 from PIL import Image
 from scintille_contract.cloud_archive import ARCHIVE_DETAIL_PATTERN
-from scintille_ingest.clouds import abi, ahi, composite, fci, geos, pyramid, storm_level, tiles
+from scintille_ingest.clouds import (
+    abi,
+    ahi,
+    cold_tops,
+    composite,
+    fci,
+    geos,
+    pyramid,
+    storm_level,
+    tiles,
+)
 from scintille_ingest.clouds.collector import CompositeCollector, hour_slots
 from scintille_ingest.clouds.disk import Disk, Patches, Window, bilinear, mapped
 from scintille_ingest.clouds.gfs import SkinTemperature
@@ -641,7 +651,8 @@ class Rendered(CompositeCollector):
 
     def _render(self, downloaded, directory, skin, fallback, slot, table=None, storms=None):  # type: ignore[no-untyped-def]
         self.rendered.append(slot)
-        return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"})
+        tops = cold_tops.ColdTops(*(np.array([v]) for v in (12.0, 110.0, 0.5, 205.0)))
+        return pyramid.Rendered({tiles.Key(3, 0, 0): b"t"}, {"2k": b"a", "4k": b"b"}), tops
 
 
 class Skin:
@@ -674,6 +685,7 @@ def test_collector_renders_complete_slots_at_once(tmp_path: Path) -> None:
     assert not any(tmp_path.iterdir())
     manifest = json.loads(asyncio.run(c.publisher.live.get("manifest.json")) or b"{}")
     assert manifest["frames"][-1]["detail"]["levels"] == [3, 4, 5]
+    assert manifest["frames"][-1]["cold_tops"]["count"] == 1
 
 
 def test_collector_clears_work_left_by_a_restart(tmp_path: Path) -> None:
