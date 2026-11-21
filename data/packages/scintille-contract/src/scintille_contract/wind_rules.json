@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "width": 720,
+  "height": 361,
+  "grid_step_degrees": 0.5,
+  "levels": {
+    "10m": { "scale_ms": 40 },
+    "250hPa": { "scale_ms": 120 }
+  },
+  "max_frames": 24,
+  "max_manifest_bytes": 65536,
+  "max_frame_bytes": 1048576,
+  "retention_days": 30,
+  "texture_path_pattern": "^\\.\\./(10m|250hPa)/[0-9]{4}/[0-9]{2}/[0-9]{2}/[A-Za-z0-9_-]+\\.webp$",
+  "live_texture_path_pattern": "^\\.\\./\\.\\./archive/wind/(10m|250hPa)/[0-9]{4}/[0-9]{2}/[0-9]{2}/[A-Za-z0-9_-]+\\.webp$"
+}
