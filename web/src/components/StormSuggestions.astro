@@ -19,11 +19,13 @@
 		position: fixed;
 		inset: 0 auto 0 0;
 		z-index: -1;
-		width: min(36rem, 100vw);
+		width: min(40rem, 100vw);
 		pointer-events: none;
 		content: '';
-		background: linear-gradient(90deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.28) 55%, transparent);
+		background: linear-gradient(90deg, rgb(4 8 18 / 0.82), rgb(4 8 18 / 0.66) 45%, rgb(4 8 18 / 0.3) 75%, transparent);
 	}
+	.panel { text-shadow: 0 0 2px rgb(4 8 18 / 0.8), 0 0 12px rgb(4 8 18 / 0.7); }
+	.panel[data-more] { mask-image: linear-gradient(#000 calc(100% - 40px), transparent); }
 	summary, [data-catalog-retry] { color: var(--dim); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
 	summary { display: inline-flex; gap: 10px; align-items: center; min-height: 32px; color: var(--soft); font-size: 12px; letter-spacing: 0.2em; list-style: none; }
 	summary::-webkit-details-marker { display: none; }
@@ -44,9 +46,14 @@
 	:global(.hud:has([data-storm-suggestions][open]) [data-storm-panel]) { visibility: hidden; }
 	@media (max-width: 640px) {
 		.suggestions { top: calc(var(--gut) + 96px); width: min(22rem, calc(100vw - 2 * var(--gut))); }
-		.suggestions[open]::before { inset: 0; width: auto; background: linear-gradient(180deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.4) 60%, transparent); }
+		.suggestions[open]::before { inset: 0; width: auto; background: linear-gradient(180deg, rgb(4 8 18 / 0.86), rgb(4 8 18 / 0.74) 70%, rgb(4 8 18 / 0.4)); }
 		.panel { max-height: calc(100svh - 240px); }
 		:global(.hud:has([data-storm-suggestions][open]) [data-layers]) { visibility: hidden; }
+	}
+	@media (max-height: 480px) {
+		.suggestions { top: calc(var(--gut) + 44px); }
+		.suggestions[open]::before { inset: 0; width: auto; background: rgb(4 8 18 / 0.8); }
+		.panel { max-height: calc(100svh - 2 * var(--gut) - 136px); }
 	}
 	@media (prefers-reduced-motion: reduce) {
 		[data-storm-cards] :global(button) { transition: none; }
@@ -57,6 +64,7 @@
 	import type { GlobeApp } from '../globe/app';
 	import { GLOBE_GONE, GLOBE_READY } from '../globe/island';
 	import { CATALOG_LIMITS, loadSuggestions, stormDay, stormFigure } from '../globe/replay/catalog';
+	import { formatDate, formatTime } from './hud/format';
 
 	const root = document.querySelector<HTMLDetailsElement>('[data-storm-suggestions]');
 	if (root) {
@@ -80,7 +88,7 @@
 				const result = await loadSuggestions(app.replay.baseUrl, current.signal);
 				if (current.signal.aborted) return;
 				loaded = true;
-				const date = new Date(result.publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+				const date = `${formatDate(result.publishedAt)}, ${formatTime(result.publishedAt).slice(0, 5)}`;
 				const stale = Date.now() - result.publishedAt > CATALOG_LIMITS.staleMs;
 				setStatus(!result.cards.length ? 'No published storm replays are available yet.' :
 					`Catalog published ${date}.${stale ? ' Recent storms may be missing.' : ''}${result.partial ? ' Only part of the catalog could be loaded.' : ''}`);
@@ -123,6 +131,12 @@
 			if (event.key === 'Escape') { root.open = false; root.querySelector('summary')?.focus(); }
 		});
 		retry?.addEventListener('click', () => { void load(); });
+		const panel = root.querySelector<HTMLElement>('.panel');
+		const hint = () => { if (panel) panel.toggleAttribute('data-more', panel.scrollTop + panel.clientHeight < panel.scrollHeight - 4); };
+		panel?.addEventListener('scroll', hint, { passive: true });
+		window.addEventListener('resize', hint);
+		if (panel && list) new ResizeObserver(hint).observe(list);
+		root.addEventListener('toggle', hint);
 		window.addEventListener(GLOBE_READY, (event) => {
 			app = (event as CustomEvent<GlobeApp>).detail;
 			root.hidden = false;

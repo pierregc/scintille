@@ -34,7 +34,7 @@ import type { RenderParams } from './render/params';
 import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
-import { glare } from './glare';
+import { glare, groundAlong, HUD_ANCHORS } from './glare';
 import { latLonToVector, sunDirection } from './sun';
 import { SURFACE_MODES, SurfaceDetail, surfaceFromSearch } from './detail';
 import { StormReplay } from './replay';
@@ -95,6 +95,7 @@ export interface GlobeApp {
 }
 
 const RADIUS = 1;
+const hudRay = new Vector3();
 const EARTH_RADIUS_KM = 6371;
 const FOV = 35;
 const SHELLS = [
@@ -460,8 +461,11 @@ export function createGlobeApp(
 		lightning,
 		feedStatus: () =>
 			feedStatus(data.liveClient.manifest, data.liveClient.loadedAt, clock.wallTime(), data.liveClient.failures > 0),
-		glare: () =>
-			glare(camera.position.toArray(), sunDirection(new Date(clock.time())), worldToKm(camera.position.length() - RADIUS, RADIUS)),
+		glare: () => {
+			const eye = camera.position.toArray();
+			const ground = HUD_ANCHORS.map(([x, y]) => groundAlong(eye, hudRay.set(x, y, 0.5).unproject(camera).sub(camera.position).toArray(), RADIUS));
+			return glare(eye, sunDirection(new Date(clock.time())), worldToKm(camera.position.length() - RADIUS, RADIUS), ground);
+		},
 		observedTime: () => observedTime(clock.time(), playbackDelays(), focus.subject?.sources),
 		hasData: (time) => data.covers(time),
 		dataStart: () => data.coverageStart(),

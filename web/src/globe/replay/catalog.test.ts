@@ -123,7 +123,7 @@ it('words the day and the one figure that makes a storm notable', () => {
 	const storm = highlights.highlights[0].storm as StormSummary;
 	const card = (kind: 'day' | 'week' | 'area' | 'longest' | null, name: StormMetric['name'], value: number, rank = 1, area: 'europe' | null = null) =>
 		stormFigure({ storm, reason: null, kind: kind ?? undefined, area, metric: { name, value, rank } }, 'en-US');
-	expect(stormDay({ t_start: '2026-07-15T18:00:00Z' }, 'en-US')).toBe('Jul 15');
+	expect(stormDay({ t_start: '2026-07-15T18:00:00Z' }, 'UTC')).toBe('15 Jul');
 	expect(card('week', 'flashes', 205272)).toBe('205,272 flashes, the most this week');
 	expect(card('day', 'countries', 4, 2)).toBe('Crossed 4 countries, 2nd most today');
 	expect(card('area', 'distance_km', 1045.2, 1, 'europe')).toBe('Travelled 1,045 km, the farthest in Europe today');
