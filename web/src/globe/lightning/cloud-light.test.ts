@@ -6,6 +6,7 @@ import { channelHash, cloudDrift, cloudDriftGlsl, flashKind, flashTiming } from 
 import { isGround } from './kind';
 import {
 	bandCentre,
+	bandWidth,
 	CLOUD_LIGHT,
 	cloudLightDay,
 	cloudLightGlsl,
@@ -41,18 +42,25 @@ function towerGlow(deg: number, top = 16, base = 1.5, light = 0.3): number {
 }
 
 describe('flashBand', () => {
-	it('lights towers under their crown and lower cloud at the flash height', () => {
+	it('lights every column under its own top, where the channels fitted to it run', () => {
 		expect(bandCentre(14)).toBe(11);
-		expect(bandCentre(11)).toBe(CLOUD_LIGHT.fallbackHeightKm);
-		expect(bandCentre(3)).toBe(CLOUD_LIGHT.fallbackHeightKm);
+		expect(bandCentre(CLOUD_LIGHT.fullTopKm)).toBeCloseTo(CLOUD_LIGHT.fullTopKm * (1 - CLOUD_LIGHT.belowTopShare), 9);
+		expect(bandCentre(3)).toBe(3 - CLOUD_LIGHT.belowTopMinKm);
 		expect(bandCentre(-1)).toBe(CLOUD_LIGHT.fallbackHeightKm);
+		for (const top of [1.5, 3, 6, 9, 12, 16]) {
+			expect(bandCentre(top)).toBeLessThan(top);
+			expect(bandCentre(top)).toBeGreaterThan(0);
+		}
 	});
 
-	it('peaks at the band centre and falls to 1/e one half width away', () => {
+	it('peaks at the band centre and falls to 1/e one half width away, narrower under low tops', () => {
 		expect(flashBand(11, 14)).toBe(1);
 		expect(flashBand(11 + CLOUD_LIGHT.widthKm, 14)).toBeCloseTo(Math.exp(-1), 9);
-		expect(flashBand(2.5, 3)).toBeLessThan(0.06);
-		expect(flashBand(9.75, 11)).toBeGreaterThan(0.85);
+		expect(bandWidth(14)).toBe(CLOUD_LIGHT.widthKm);
+		expect(bandWidth(3)).toBe(CLOUD_LIGHT.minWidthKm);
+		expect(flashBand(2, 3)).toBe(1);
+		expect(flashBand(3, 3)).toBeGreaterThan(0.45);
+		expect(flashBand(9.75, 11)).toBeGreaterThan(0.75);
 	});
 });
 
@@ -159,7 +167,7 @@ describe('cloud light shares', () => {
 
 describe('the GLSL consumers share the cloud light numbers', () => {
 	it('splats the whole footprint on bright pulses and a patch between them, the whole footprint under reduced motion', () => {
-		expect(lightMapVertexShader).toContain(`float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse), flicker)`);
+		expect(lightMapVertexShader).toContain(`float full = mix(1.0, smoothstep(${f(CLOUD_LIGHT.fullFrom)}, ${f(CLOUD_LIGHT.fullTo)}, pulse), lively)`);
 		expect(lightMapVertexShader).toContain(`mix(${f(CLOUD_LIGHT.dimSplat)}, 1.0, full)`);
 	});
 
@@ -178,14 +186,15 @@ describe('the GLSL consumers share the cloud light numbers', () => {
 
 	it('sharpens every read of the light map, by the window', () => {
 		expect(flashLightGlsl).toContain(`pow(light, mix(${f(CLOUD_LIGHT.sharpen)}, 1.0, clamp(flashWindow.w / 1.57079633, 0.0, 1.0)))`);
-		expect(flashLightGlsl).toContain('sharpenFlashLight(texture2D(flashLight, local * 0.5 + 0.5).r)');
-		expect(flashLightGlsl).toContain('sharpenFlashLight(textureLod(flashLight, local * 0.5 + 0.5, 0.0).r)');
+		expect(flashLightGlsl).toContain('float light = textureLod(flashLight, local * 0.5 + 0.5, 0.0).r * flashEdge(local, 0.9);');
+		expect(flashLightGlsl).toContain('return sharpenFlashLight(light);');
 		expect(cloudsFragmentShader).toContain(flashLightGlsl);
 		expect(marchFragmentShader).toContain(flashLightGlsl);
 	});
 
 	it('shapes the volume glow by each column with the same band and boost', () => {
-		expect(cloudLightGlsl).toContain(`max(top - ${f(CLOUD_LIGHT.belowTopKm)}, ${f(CLOUD_LIGHT.fallbackHeightKm)})) / ${f(CLOUD_LIGHT.widthKm)}`);
+		expect(cloudLightGlsl).toContain(`top - clamp(top * ${f(CLOUD_LIGHT.belowTopShare)}, ${f(CLOUD_LIGHT.belowTopMinKm)}, ${f(CLOUD_LIGHT.belowTopKm)}) : ${f(CLOUD_LIGHT.fallbackHeightKm)}`);
+		expect(cloudLightGlsl).toContain(`max(${f(CLOUD_LIGHT.minWidthKm)}, ${f(CLOUD_LIGHT.widthKm)} * min(1.0, top / ${f(CLOUD_LIGHT.fullTopKm)}))`);
 		expect(cloudLightGlsl).toContain('min(-log(1.0 - vec2(0.25, 0.75) * a) / sigma, vec2(len))');
 		expect(marchFragmentShader).toContain(cloudLightGlsl);
 		expect(marchFragmentShader).toContain('vec2 glowAt = ta + glowDepths(max(sigma, 1e-3), len);');
@@ -204,6 +213,6 @@ describe('the GLSL consumers share the cloud light numbers', () => {
 		expect(cloudsFragmentShader).toContain('* max(1.0 - color, 0.0) * cloudLightDay(s - sunDip);');
 		expect(cloudsFragmentShader).toContain('float s = dot(n, sun) + sunDip;');
 		expect(marchFragmentShader).toContain('* alpha * cloudLightDay(s);');
-		expect(compositeFragmentShader).toContain('seen.g / shown * max(1.0 - rgb, 0.0)');
+		expect(compositeFragmentShader).toContain('glow / shown * max(1.0 - rgb, 0.0)');
 	});
 });

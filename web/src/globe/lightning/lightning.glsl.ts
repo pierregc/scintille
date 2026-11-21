@@ -1,7 +1,7 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
 import { volumeFieldGlsl } from '../clouds/field.glsl';
 import { CHANNEL, channelGlsl, cloudDriftGlsl } from './channel';
-import { densityGlsl } from './density';
+import { DENSITY, densityGlsl } from './density';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
@@ -58,7 +58,16 @@ void main() {
 	// Near the floor only the sample drawn in full keeps its sprite: the cloud light carries the rest, the newest of which stay points from afar.
 	float hero = heroWeight(heroLot(flashShape.w, flashShape.x, isGround(int(flashLook.x + 0.5))), heroShare);
 	float pointKm = 2.0 * length(cameraPosition - center) / (projectionMatrix[1][1] * viewportHeight) / kmToWorld * viewScale;
-	float keep = max(hero, pointWeight(farness(pointKm), lightMapOff) * pointBudget(flash.w));
+	float far = farness(pointKm);
+	float age = wallAge(time, flash.w);
+	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
+	// While a flash is lit, up close, the cloud light and its channel carry it: the disc is its mark from afar, and of its afterglow.
+	float disc = max(smoothstep(${f(DENSITY.pointFarness[0])}, ${f(DENSITY.pointFarness[1])}, far), max(lightMapOff, smoothstep(end, max(${f(PROFILE.life)}, end + ${f(PROFILE.tail)}), age)));
+#ifdef CLOUDS
+	// Over clear sky no cloud carries it: the disc stays.
+	if (hero > 0.0 && disc < 1.0) disc = max(disc, 1.0 - smoothstep(${f(DENSITY.clearSky[0])}, ${f(DENSITY.clearSky[1])}, cloudOpacityAt(normal)));
+#endif
+	float keep = max(hero * disc, pointWeight(far, lightMapOff) * pointBudget(flash.w));
 	if (keep <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 		return;
@@ -66,7 +75,6 @@ void main() {
 	float seed = flashShape.w;
 	int kind = int(flashLook.x + 0.5);
 	bool ground = isGround(kind);
-	float age = wallAge(time, flash.w);
 	// Flashes facing away or past the storm view's budget skip the profile.
 	float shown = smoothstep(0.0, 0.1, facing) * onScreen(flash.w);
 	float brightness = shown > 0.0 ? flashProfile(age, time - flash.w, duration, flashShape.z, seed, flicker, kind, flashLook.yz, true) * intensityBrightness(flashShape.x) * shown : 0.0;
@@ -89,7 +97,6 @@ void main() {
 
 	// The glow steps back while the channel shows, so the lit cloud does not wash it out.
 	float halo = haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
-	float end = clamp(flashShape.z / 1000.0, ${f(PROFILE.minFlicker)}, ${f(PROFILE.maxFlicker)});
 	float channel = channelReveal(flashShape.y, viewKmPerPx) * (1.0 - smoothstep(end, end + ${f(CHANNEL.fade)}, age));
 	vDip = (ground ? mix(${f(CHANNEL.glowDip)}, ${f(CHANNEL.haloGlowDip)}, halo) : ${f(CHANNEL.cloudGlowDip)}) * channel;
 	vDip *= hero;
