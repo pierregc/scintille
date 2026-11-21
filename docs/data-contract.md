@@ -333,6 +333,59 @@ dates are synthetic so the real July imagery remains available for repeatable vi
 Scrub beyond the fixture coverage to verify the unavailable state, then return to live. Production
 does not include these fixtures. Dev uses the existing fixture server at the configured data root.
 
+## Wind frames on R2
+
+```
+live/wind/manifest.json                                Cache-Control: max-age=60
+archive/wind/10m/2026/11/21/20261121T13Z-1a2b3c4d.webp     Cache-Control: public, max-age=31536000, immutable
+archive/wind/250hPa/2026/11/21/20261121T13Z-1a2b3c4d.webp
+archive/wind/manifests/2026-11-21.json                 Cache-Control: max-age=60
+```
+
+- A **frame** is the GFS forecast wind valid at one whole hour ([ADR 0039](adr/0039-wind-layer.md)),
+  published by the `clouds` service from the newest cycle that has that hour. Each level, `10m`
+  and `250hPa`, is a lossless RGB WebP of 720 × 361 grid points every 0.5°: the first row is 90° N,
+  the last 90° S, the first column 0° E (columns run east to 359.5° E). Red is u (eastward), green
+  is v (northward), blue is 0. A byte decodes as `(byte - 128) / 127 * scale_ms`: 128 is calm,
+  1 and 255 are `-scale_ms` and `+scale_ms` (40 m/s at 10 m, 120 m/s at 250 hPa).
+- Textures are written once under `archive/wind/`; a frame's name hashes its `reference`, so a newer
+  forecast for the same hour gets a new path. There are no copies under `live/wind/`.
+- The **live manifest** lists the frames from 6 hours back to the next hour, oldest first, with
+  paths relative to it. The hour after the current one is published within minutes of the current
+  hour starting, so clients can interpolate between the two frames around the scene time.
+
+```json
+{
+  "generated_at": "2026-11-21T13:05:02Z",
+  "window_seconds": 28800,
+  "attribution": "Wind: NOAA NCEP GFS model forecast",
+  "frames": [
+    {
+      "time": "2026-11-21T13:00:00Z",
+      "published_at": "2026-11-21T12:05:02Z",
+      "reference": "gfs 2026112106 f007",
+      "levels": {
+        "10m": { "path": "../../archive/wind/10m/2026/11/21/20261121T13Z-1a2b3c4d.webp", "width": 720, "height": 361, "size_bytes": 188672, "scale_ms": 40 },
+        "250hPa": { "path": "../../archive/wind/250hPa/2026/11/21/20261121T13Z-1a2b3c4d.webp", "width": 720, "height": 361, "size_bytes": 135448, "scale_ms": 120 }
+      }
+    }
+  ]
+}
+```
+
+- The **daily archive index** `archive/wind/manifests/YYYY-MM-DD.json` adds `schema_version` and
+  `day` (the UTC valid day) around the same frames, each with `expires_at` (publication plus
+  30 days) and paths relative to the index (`../10m/...`). It holds at most 24 frames, one per
+  hour; a republished hour replaces the old one and expired frames are dropped. A corrupt index is
+  rebuilt from the next frame, an index with an unknown version is left alone.
+- The R2 lifecycle deletes `archive/wind/` after 30 days. `scintille-ingest wind-backfill --first DAY
+  --last DAY` fills past days from the cycle of each hour (f000 to f005) without touching the live
+  manifest; hours already indexed are skipped, so it can be run again.
+
+The limits, scales and path rules are in `scintille_contract/wind_rules.json`, shared with the
+browser; `WindManifest` and `ArchiveWindManifest` in `scintille_ingest.clouds.wind_publish` validate
+what is published.
+
 ## Flash archive
 
 Travel in time reads flashes before the live window from `archive/flashes/`

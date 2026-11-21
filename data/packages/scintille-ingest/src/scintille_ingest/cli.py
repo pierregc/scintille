@@ -1,5 +1,5 @@
-"""Command line: `glm --once`, `mtg --once`, `live`, `lake-writer`, `live-probe`, `clouds` and
-`calibrate`."""
+"""Command line: `glm --once`, `mtg --once`, `live`, `lake-writer`, `live-probe`, `clouds`,
+`wind-backfill` and `calibrate`."""
 
 import argparse
 import asyncio
@@ -28,6 +28,8 @@ from scintille_ingest.clouds.reindex import days_between, reindex_day
 from scintille_ingest.clouds.sources import GOES_BUCKETS, HIMAWARI_BUCKET, Sources
 from scintille_ingest.clouds.storm_detail import StormTracks
 from scintille_ingest.clouds.storm_level import ActiveAreas
+from scintille_ingest.clouds.wind import WindCollector, backfill
+from scintille_ingest.clouds.wind_publish import WindPublisher
 from scintille_ingest.glm.discovery import fetch, latest_product, public_store
 from scintille_ingest.glm.ingest import IngestedFile, ingest_glm_file
 from scintille_ingest.glm.products import Satellite, satellites_from_env
@@ -114,6 +116,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     reindex.add_argument("--first", type=date.fromisoformat, required=True, help="first day")
     reindex.add_argument("--last", type=date.fromisoformat, required=True, help="last day")
     reindex.add_argument("--dry-run", action="store_true", help="log, write nothing")
+    wind = commands.add_parser(
+        "wind-backfill", help="archive the wind frames of past days from past GFS cycles"
+    )
+    wind.add_argument("--first", type=date.fromisoformat, required=True, help="first day")
+    wind.add_argument("--last", type=date.fromisoformat, required=True, help="last day")
+    wind.add_argument("--out", type=Path, help="write the bucket layout here instead of R2")
     calibrate = commands.add_parser(
         "calibrate", help="fit the intensity calibration on silver.flashes and write it"
     )
@@ -127,6 +135,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(run_cloud_heights(args.slots, args.work))
     if args.command == "clouds-reindex":
         return run_clouds_reindex(args.first, args.last, args.dry_run)
+    if args.command == "wind-backfill":
+        return asyncio.run(run_wind_backfill(args.first, args.last, args.out))
     if args.command == "live-probe":
         return asyncio.run(
             run_live_probe(args.url, args.site_url, args.max_age, args.every, args.once)
@@ -229,7 +239,7 @@ def live_feed_from_env(metrics: Metrics, outbox: Path) -> LiveFeed | None:
 
 
 async def run_clouds(port: int) -> int:
-    """Until SIGTERM or SIGINT; textures go to `SCINTILLE_LIVE_BUCKET`."""
+    """Until SIGTERM or SIGINT, with the wind frames; textures go to `SCINTILLE_LIVE_BUCKET`."""
     configure_json_logs()
     bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
     if not bucket:
@@ -247,11 +257,35 @@ async def run_clouds(port: int) -> int:
         ),
         metrics=metrics,
     )
-    server = await health.serve(port, collector.healthy, metrics.render)
-    _stop_on_signals(collector.stop)
-    async with server:
-        await collector.start()
+    wind = wind_collector(
+        ObjectLiveStore(store, prefix="live/wind/"),
+        ObjectLiveStore(store, prefix="archive/wind/"),
+        metrics,
+    )
+    await serve_with_wind(port, collector, wind, metrics)
     return 0
+
+
+def wind_collector(live: LiveStore, archive: LiveStore, metrics: Metrics) -> WindCollector:
+    return WindCollector(public_store(gfs.BUCKET), WindPublisher(live, archive), metrics=metrics)
+
+
+async def serve_with_wind(
+    port: int,
+    collector: CloudCollector | CompositeCollector,
+    wind: WindCollector,
+    metrics: Metrics,
+) -> None:
+    """`/healthz` follows the cloud frames only; a signal stops both."""
+    server = await health.serve(port, collector.healthy, metrics.render)
+
+    def stop() -> None:
+        collector.stop()
+        wind.stop()
+
+    _stop_on_signals(stop)
+    async with server:
+        await asyncio.gather(collector.start(), wind.start())
 
 
 COMPOSITE_ATTRIBUTION = (
@@ -263,14 +297,20 @@ COMPOSITE_ATTRIBUTION = (
 async def run_composite(port: int, slot: datetime | None, out: Path | None) -> int:
     """Hourly composite (ADR 0023): GOES and Himawari from AWS, MTG FCI from the EUMETSAT Data
     Store (`SCINTILLE_EUMETSAT_*`); workers `SCINTILLE_CLOUD_WORKERS`, scratch space
-    `SCINTILLE_CLOUD_WORK_DIR`."""
+    `SCINTILLE_CLOUD_WORK_DIR`. Runs with the wind frames, except for one `slot`."""
     configure_json_logs()
     live: LiveStore
     archive: LiveStore
+    wind_live: LiveStore
+    wind_archive: LiveStore
     storms = None
     areas = None
     if out is not None:
         live, archive = FileLiveStore(out, "live/clouds/"), FileLiveStore(out, "archive/clouds/")
+        wind_live, wind_archive = (
+            FileLiveStore(out, "live/wind/"),
+            FileLiveStore(out, "archive/wind/"),
+        )
     else:
         bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
         if not bucket:
@@ -279,6 +319,8 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
         store = live_store(bucket)
         live = ObjectLiveStore(store, prefix="live/clouds/")
         archive = ObjectLiveStore(store, prefix="archive/clouds/")
+        wind_live = ObjectLiveStore(store, prefix="live/wind/")
+        wind_archive = ObjectLiveStore(store, prefix="archive/wind/")
         storms = StormTracks(ObjectLiveStore(store, prefix="storms/"))
         areas = ActiveAreas(ObjectLiveStore(store, prefix="storms/"))
     key = os.environ.get("SCINTILLE_EUMETSAT_CONSUMER_KEY")
@@ -317,10 +359,9 @@ async def run_composite(port: int, slot: datetime | None, out: Path | None) -> i
             return 1
         await collector.process(files)
         return 0
-    server = await health.serve(port, collector.healthy, metrics.render)
-    _stop_on_signals(collector.stop)
-    async with server:
-        await collector.start()
+    await serve_with_wind(
+        port, collector, wind_collector(wind_live, wind_archive, metrics), metrics
+    )
     return 0
 
 
@@ -354,6 +395,31 @@ def run_clouds_reindex(first: date, last: date, dry_run: bool) -> int:
         reindex_day(store, noaa, forecasts, day, now, dry_run) for day in days_between(first, last)
     )
     print(f"{added} frames indexed{' (dry run)' if dry_run else ''}")
+    return 0
+
+
+async def run_wind_backfill(first: date, last: date, out: Path | None) -> int:
+    """Days before today only: the running `clouds` service writes today's index."""
+    configure_json_logs()
+    if last >= datetime.now(UTC).date():
+        log.error("the last day must be before today")
+        return 2
+    if out is not None:
+        publisher = WindPublisher(
+            FileLiveStore(out, "live/wind/"), FileLiveStore(out, "archive/wind/")
+        )
+    else:
+        bucket = os.environ.get("SCINTILLE_LIVE_BUCKET")
+        if not bucket:
+            log.error("SCINTILLE_LIVE_BUCKET is not set")
+            return 2
+        store = live_store(bucket)
+        publisher = WindPublisher(
+            ObjectLiveStore(store, prefix="live/wind/"),
+            ObjectLiveStore(store, prefix="archive/wind/"),
+        )
+    written = await backfill(public_store(gfs.BUCKET), publisher, days_between(first, last))
+    print(f"{written} wind frames archived")
     return 0
 
 
