@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Vec3 } from '../sun';
 import { SKELETON } from './skeleton';
 import { glslFloat } from './profile';
-import { clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, grazingShare, liftHeight, reliefLift, seenThrough, VEIL, veilGlsl, veilOverlap } from './veil';
+import { behindLight, clearAirLight, cloudCrossing, cloudTransmission, cloudVeil, FLAT_LIFT, grazingShare, liftHeight, reliefLift, scatterLight, seenThrough, slantCore, slantShare, VEIL, veilGlsl, veilOverlap } from './veil';
+import { CLOUD_SHELL_KM } from '../clouds/bounds';
 
 const R = 6371;
 const SHELL = R + 10;
@@ -94,23 +95,48 @@ describe('cloud veil', () => {
 		}
 	});
 
-	it('lifts channels under a low drawn top without moving a drop under the base', () => {
-		expect(reliefLift(14)).toEqual([SKELETON.cloudBaseKm, 1, 1]);
-		for (const top of [4, 6, 8, 8.9, 9, 10, 11, 12, 14]) {
+	it('fits channels under the drawn top, low or tall, without moving a drop under the base', () => {
+		expect(reliefLift(SKELETON.cloudTopKm + VEIL.reliefMargin)).toEqual([SKELETON.cloudBaseKm, 1, 1, SKELETON.cloudTopKm]);
+		for (const top of [4, 6, 8, 8.9, 9, 10, 11, 12, 14, 16, 19]) {
 			const lift = reliefLift(top);
 			let previous = 0;
-			for (let z = 0; z <= SKELETON.cloudTopKm + 1e-9; z += 0.25) {
+			for (let z = 0; z <= SKELETON.cloudTopKm + SKELETON.airAboveTopKm + 1e-9; z += 0.25) {
 				const drawn = liftHeight(z, lift);
 				if (lift[2] === 1 && z <= SKELETON.cloudBaseKm) expect(drawn).toBe(z);
-				expect(drawn).toBeLessThanOrEqual(z + 1e-9);
+				if (top <= SKELETON.cloudTopKm) expect(drawn).toBeLessThanOrEqual(z + 1e-9);
 				expect(drawn).toBeGreaterThanOrEqual(previous);
+				// Nothing rises over the drawn top, down to a top of 4 km, not even a branch drawn above the assumed one.
+				expect(drawn).toBeLessThanOrEqual(top - VEIL.reliefMargin + 1e-9);
 				previous = drawn;
 			}
-			// Nothing rises over the drawn top, down to a top of 4 km.
-			expect(liftHeight(SKELETON.cloudTopKm, lift)).toBeLessThanOrEqual(top - VEIL.reliefMargin + 1e-9);
 		}
 		// A top over 8.85 km keeps every drop at its height.
 		expect(reliefLift(8.9)[2]).toBe(1);
+		// Under a taller top the part in the cloud stretches up to it, by the named bound at most.
+		expect(liftHeight(SKELETON.cloudTopKm, reliefLift(14))).toBeCloseTo(14 - VEIL.reliefMargin, 9);
+		expect(reliefLift(19)[1]).toBe(VEIL.reliefStretch);
+		// Where no top is known the heights stay as drawn, under the flat layer.
+		expect(liftHeight(SKELETON.cloudTopKm, FLAT_LIFT)).toBe(SKELETON.cloudTopKm);
+		expect(liftHeight(20, FLAT_LIFT)).toBe(CLOUD_SHELL_KM - VEIL.reliefMargin);
+	});
+
+	it('dims a channel the drawn clouds hide with its depth, leaves its core to their scattered light at a slant', () => {
+		expect(behindLight(0, 30)).toBe(1);
+		expect(behindLight(1, 0)).toBeCloseTo(VEIL.behind, 9);
+		expect(behindLight(1, VEIL.behindKm)).toBeCloseTo(VEIL.behind / Math.E, 9);
+		expect(behindLight(1, 500)).toBeCloseTo(VEIL.behindMin, 9);
+		expect(behindLight(1, 500, VEIL.trace)).toBeCloseTo(VEIL.trace, 9);
+		expect(behindLight(0.5, 0)).toBeCloseTo((1 + VEIL.behind) / 2, 9);
+		expect(slantShare(1)).toBe(0);
+		expect(slantShare(Math.SQRT1_2)).toBeLessThan(0.15);
+		expect(slantShare(0.3)).toBe(1);
+		expect(slantCore(1, 1)).toBeCloseTo(VEIL.slantCore, 9);
+		expect(slantCore(0, 1)).toBe(1);
+		expect(slantCore(1, 0)).toBe(1);
+		expect(scatterLight(1, 0, 0)).toBeCloseTo(VEIL.scatterLevel[0], 9);
+		expect(scatterLight(1, 0, 1)).toBeCloseTo(VEIL.scatterLevel[1], 9);
+		expect(scatterLight(0, 0, 1)).toBe(0);
+		expect(scatterLight(1, VEIL.scatterDepthKm, 1)).toBeCloseTo(VEIL.scatterLevel[1] / Math.E, 9);
 	});
 
 	it('lets a flash show through slightly transparent clouds from above and veils it at a slant', () => {
@@ -134,7 +160,12 @@ describe('cloud veil', () => {
 		for (const x of [VEIL.trace, VEIL.traceWidth, VEIL.reliefMargin, VEIL.reliefMin, SKELETON.cloudBaseKm]) expect(veilGlsl).toContain(glslFloat(x));
 		expect(veilGlsl).toContain('float clearAirLight(float opacity, float slant)');
 		expect(veilGlsl).toContain('vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float flag)');
-		expect(veilGlsl).toContain('vec3 liftPoint(vec3 p, vec3 lift)');
+		expect(veilGlsl).toContain('vec3 liftPoint(vec3 p, vec4 lift)');
+		expect(veilGlsl).toContain(`const vec4 flatLift = vec4(${FLAT_LIFT.map(glslFloat).join(', ')});`);
+		expect(veilGlsl).toContain(`${glslFloat(VEIL.reliefMin)}, ${glslFloat(VEIL.reliefStretch)});`);
+		for (const x of [VEIL.behind, VEIL.behindKm, VEIL.slantCore, ...VEIL.slantCorePath, ...VEIL.scatterLevel, VEIL.scatterDepthKm]) expect(veilGlsl).toContain(glslFloat(x));
+		expect(veilGlsl).toContain('float behindLight(float hidden, float km, float least)');
+		expect(veilGlsl).toContain('float scatterLight(float hidden, float km, float share)');
 		expect(veilGlsl).toContain('float veilOverlap(float lengthPx, float width, float veiled)');
 		expect(veilGlsl).toContain('vec2 seenThrough(float opacity, float slant)');
 		for (const x of [VEIL.through, VEIL.maxPath, ...VEIL.slantPath]) expect(veilGlsl).toContain(glslFloat(x));

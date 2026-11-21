@@ -33,6 +33,12 @@ export const DENSITY = {
 	pointFarness: [0.7, 1],
 	/** Newest flashes the cloud light keeps in a storm view; Infinity keeps every flash (the bench needed no ceiling). */
 	lightMapCeiling: Infinity,
+	/** Flashes within their flicker past which a storm view exposes the cloud light of the flashes outside the sample down, as `fieldLoad / load`: a storm at speed lights as much cloud as at 60× [60 to 200]. */
+	fieldLoad: 40,
+	/** Applied share over which the flashes outside the sample go from a soft fade (all of them at `calm[0]`) to their real-time flicker (all of them from `calm[1]`). */
+	calm: [0.02, 0.3],
+	/** Cloud opacity over a flash from which its cloud light can carry it up close: under `clearSky[0]` it keeps its disc, from `clearSky[1]` the lit cloud and the channel replace it. */
+	clearSky: [0.05, 0.3],
 } as const;
 
 const SPEEDS = Object.keys(DENSITY.targets).map(Number).sort((a, b) => a - b);
@@ -83,6 +89,16 @@ export function heroWeight(lot: number, share: number): number {
 /** Sprite kept by a flash outside the sample, from its farness `far` and how much the cloud light is off (`off`, 0 to 1). */
 export function pointWeight(far: number, off: number): number {
 	return Math.max(smoothstep(DENSITY.pointFarness[0], DENSITY.pointFarness[1], far), off * DENSITY.weakGlow);
+}
+
+/** Level of the cloud light of the flashes outside the sample for `load` flashes within their flicker at once. */
+export function fieldLevel(load: number): number {
+	return Math.min(1, DENSITY.fieldLoad / Math.max(load, 1));
+}
+
+/** Share of the flashes outside the sample lighting the cloud in a soft fade rather than flickering, from the applied `share`. */
+export function calmShare(share: number): number {
+	return 1 - smoothstep(DENSITY.calm[0], DENSITY.calm[1], share);
 }
 
 /** The applied share after `dt` wall clock seconds, following `wanted` geometrically, or at once on a `jump`. */

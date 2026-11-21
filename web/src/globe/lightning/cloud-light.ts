@@ -27,22 +27,42 @@ export const CLOUD_LIGHT = {
 	sharpen: 1.25,
 	/** The volume's glow over the flat layer's [1.5 to 2.5]. */
 	volumeBoost: 1.8,
-	/** Where a column rises above the flash, its lit band is centred this far under its top, km [2 to 4]. */
+	/** The lit band of a column is centred this share of its top's height under that top, at most `belowTopKm` [2 to 4] and at least `belowTopMinKm`: where its channels run. */
+	belowTopShare: 0.26,
 	belowTopKm: 3,
-	/** Half width (1/e) of the lit band, km [3 to 4]. */
+	belowTopMinKm: 1,
+	/** Half width (1/e) of the lit band under a top of `fullTopKm` or more, km [3 to 4]; narrower in proportion under lower tops, never under `minWidthKm`. */
 	widthKm: 3.5,
-	/** Assumed flash height, km above sea level: the lit band of lower columns and of unknown tops [8 to 9]. */
+	fullTopKm: 11.5,
+	minWidthKm: 1.2,
+	/** Assumed flash height, km above sea level: the lit band of unknown tops [8 to 9]. */
 	fallbackHeightKm: 8.5,
+	/** Share of the fine map's half extent from which it fades into the wide one. */
+	nearEdge: 0.8,
+	/** A flash drawn in full lights the cloud along its main channel: a soft tube this wide either side of the path, km [4 to 8], at this level over the footprint's [0.8 to 1.5]. */
+	channelKm: 6,
+	channelLevel: 1.6,
+	/** Share of its footprint light it gives up there, so the path reads [0.4 to 0.8]. */
+	channelDip: 0.5,
+	/** A drop lights the cloud at this share at the ground, in full from `channelLowKm` up. */
+	channelLowLevel: 0.25,
+	channelLowKm: 7,
 } as const;
 
-/** Height of the lit band's centre, km, in a column whose top is `top` km: towers glow near their crown, lower cloud at the flash height. */
+/** Height of the lit band's centre, km, in a column whose top is `top` km: under the top, where the channels fitted to it run. */
 export function bandCentre(top: number): number {
-	return Math.max(top - CLOUD_LIGHT.belowTopKm, CLOUD_LIGHT.fallbackHeightKm);
+	if (!(top > 0)) return CLOUD_LIGHT.fallbackHeightKm;
+	return top - Math.min(CLOUD_LIGHT.belowTopKm, Math.max(CLOUD_LIGHT.belowTopMinKm, top * CLOUD_LIGHT.belowTopShare));
+}
+
+/** Half width (1/e) of the lit band, km, in a column whose top is `top` km. */
+export function bandWidth(top: number): number {
+	return Math.max(CLOUD_LIGHT.minWidthKm, CLOUD_LIGHT.widthKm * Math.min(1, top / CLOUD_LIGHT.fullTopKm));
 }
 
 /** Weight of the lit band at `h` km in a column whose top is `top` km. */
 export function flashBand(h: number, top: number): number {
-	const d = (h - bandCentre(top)) / CLOUD_LIGHT.widthKm;
+	const d = (h - bandCentre(top)) / bandWidth(top);
 	return Math.exp(-d * d);
 }
 
@@ -125,7 +145,8 @@ vec4 cloudPatch(float seed, float own, vec4 lobes) {
 /** GLSL twins of `flashBand`, `glowDepths` and `cloudLightDay`. */
 export const cloudLightGlsl = /* glsl */ `
 float flashBand(float h, float top) {
-	float d = (h - max(top - ${f(CLOUD_LIGHT.belowTopKm)}, ${f(CLOUD_LIGHT.fallbackHeightKm)})) / ${f(CLOUD_LIGHT.widthKm)};
+	float centre = top > 0.0 ? top - clamp(top * ${f(CLOUD_LIGHT.belowTopShare)}, ${f(CLOUD_LIGHT.belowTopMinKm)}, ${f(CLOUD_LIGHT.belowTopKm)}) : ${f(CLOUD_LIGHT.fallbackHeightKm)};
+	float d = (h - centre) / max(${f(CLOUD_LIGHT.minWidthKm)}, ${f(CLOUD_LIGHT.widthKm)} * min(1.0, top / ${f(CLOUD_LIGHT.fullTopKm)}));
 	return exp(-d * d);
 }
 vec2 glowDepths(float sigma, float len) {

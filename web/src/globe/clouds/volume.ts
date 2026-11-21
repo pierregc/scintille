@@ -39,6 +39,7 @@ import {
 	sunFragmentShader,
 } from './volume.glsl';
 import { CLOUD_ARCHIVE_RULES } from '../../contract/cloud-archive';
+import type { FlashLight } from '../lightning';
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { lookedAt } from '../surface';
 
@@ -259,7 +260,7 @@ export interface VolumeView {
 	width: number;
 	height: number;
 	/** Flash glow map over a window of the globe, or null. */
-	light: { map: Texture; window: Vector4 } | null;
+	light: FlashLight | null;
 }
 
 export interface CloudVolume {
@@ -267,6 +268,8 @@ export interface CloudVolume {
 	readonly mesh: Mesh;
 	/** What other materials need to read the field: share these uniforms and include `volumeFieldGlsl`. */
 	readonly uniforms: Record<string, IUniform>;
+	/** What a material drawn over the clouds needs to veil itself behind them: share these uniforms and include `cloudScreenGlsl`. */
+	readonly screen: Record<string, IUniform>;
 	/** 0 to 1: how much the volume shows instead of the flat layer. */
 	readonly fade: number;
 	detail: boolean;
@@ -406,6 +409,9 @@ export function createCloudVolume({
 		maxSamples: { value: maxSamples },
 		flashLight: { value: null },
 		flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },
+		flashLightNear: { value: null as Texture | null },
+		flashWindowNear: { value: new Vector4(0, 0, 1, 1) },
+		flashNear: { value: 0 },
 		flashColor: { value: new Color('#dfe6ff') },
 		flashGain: { value: 0 },
 	};
@@ -554,6 +560,14 @@ export function createCloudVolume({
 	const volume: CloudVolume = {
 		mesh,
 		uniforms,
+		screen: {
+			cloudResolved: composite.uniforms.resolved,
+			cloudDepth: composite.uniforms.freshDepth,
+			cloudMarchSize: marchSize,
+			cloudFreshSize: resolveUniforms.freshSize,
+			cloudPhase: phase,
+			cloudFade: fadeUniform,
+		},
 		get fade() { return fadeUniform.value; },
 		get detail() { return styleUniforms.styled.value > 0.5; },
 		set detail(on: boolean) {
@@ -667,7 +681,12 @@ export function createCloudVolume({
 			resolveUniforms.freshSize.value.set(fresh.width, fresh.height);
 			phase.value.set(...marchPhase(frame));
 			marchUniforms.flashLight.value = view.light?.map ?? null;
-			if (view.light) marchUniforms.flashWindow.value = view.light.window;
+			marchUniforms.flashLightNear.value = view.light?.fine.map ?? null;
+			marchUniforms.flashNear.value = view.light?.fine.share.value ?? 0;
+			if (view.light) {
+				marchUniforms.flashWindow.value = view.light.window;
+				marchUniforms.flashWindowNear.value = view.light.fine.window;
+			}
 			marchUniforms.flashGain.value = view.light ? CLOUD_LIGHT.gain : 0;
 			// Earth frame (km) to clip space, and its inverse for the rays.
 			toEarth.copy(view.earth.matrixWorld).scale(new Vector3(1 / kmPerUnit, 1 / kmPerUnit, 1 / kmPerUnit));

@@ -1,17 +1,19 @@
 import { cloudOpacityGlsl } from '../clouds/clouds.glsl';
-import { volumeFieldGlsl } from '../clouds/volume.glsl';
+import { cloudScreenGlsl, volumeFieldGlsl } from '../clouds/field.glsl';
 import { CHANNEL, channelGlsl } from './channel';
 import { densityGlsl } from './density';
-import { FlashKind } from './kind';
 import { intensityGlsl } from './intensity';
 import { playbackGlsl } from './playback';
 import { flashProfileGlsl, glslFloat as f, PROFILE } from './profile';
 import { overlapToneGlsl, ribbonGlsl } from './ribbon';
-import { SKELETON } from './skeleton';
+import { segmentLightGlsl } from './segment.glsl';
 import { VEIL, veilGlsl } from './veil';
 import { zoomGlsl } from './zoom';
 
-/** One channel segment per instance, from the skeletons of `ChannelPool`, drawn as a screen-space ribbon. */
+/**
+ * One channel segment per instance, from the skeletons of `ChannelPool`, drawn as a screen-space ribbon. `halo` 0
+ * draws the core, 1 the halo of a channel in clear air, 2 the light the drawn clouds scatter around a channel behind them.
+ */
 export const ribbonVertex = /* glsl */ `
 attribute vec2 corner;
 attribute vec4 segA;
@@ -38,6 +40,10 @@ varying float vLength;
 varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
+varying float vKm;
+varying float vScreen;
+varying float vLeast;
+varying float vSlant;
 
 ${playbackGlsl}
 ${channelGlsl}
@@ -53,10 +59,21 @@ ${cloudOpacityGlsl}
 ${volumeFieldGlsl}
 #endif
 ${densityGlsl}
-
+${segmentLightGlsl}
 void cull() {
 	gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 }
+
+#ifdef VOLUME
+// The lift under the drawn top over a point of the path (km east and north of the flash), or under the flash's own where unknown there.
+vec4 liftAt(vec3 p) {
+	vec3 n = normalize(flash.xyz);
+	vec3 e = abs(n.y) > 0.999 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), n));
+	float top = cloudFitTopAt(n + (e * p.x + cross(n, e) * p.y) / 6371.0);
+	if (top <= 0.0) top = cloudFitTopAt(n);
+	return top > 0.0 ? reliefLift(top) : flatLift;
+}
+#endif
 
 void main() {
 	float seed = flashShape.w;
@@ -66,7 +83,8 @@ void main() {
 	bool inCloud = segC.w > 0.5;
 	bool trace = segC.w > 1.5;
 	// Halos follow the main channel of ground flashes in clear air and the traces of in-cloud trunks; fainter paths keep a bare core.
-	if (segA.w <= 0.0 || (halo > 0.5 && !trace && (!ground || branch || inCloud))) {
+	// The clouds scatter the light of main paths only: around every branch the glow would draw a web.
+	if (segA.w <= 0.0 || (halo > 1.5 ? branch && segC.z < 3.5 : halo > 0.5 && !trace && (!ground || branch || inCloud))) {
 		cull();
 		return;
 	}
@@ -98,40 +116,7 @@ void main() {
 		cull();
 		return;
 	}
-	// The channel of a single stroke below the cloud leaves the in-cloud activity after it to the glow.
-	vec4 profile = flashProfileStroke(age, time - at, duration, flashShape.z, seed, flicker, kind, timing, kind != ${FlashKind.CgSingle} || inCloud);
-
-	bool contact = segC.z > 3.5;
-	float lit = 1.0;
-	// Branches die first: from the first stroke for ground flashes, from the leader's passage in the cloud, at once without flicker.
-	if (branch && !contact) {
-		float reachedAt = flicker < 0.5 ? 0.0 : ground ? timing.x : kind == ${FlashKind.IcCrawler} ? segC.x * timing.y : (1.0 - sqrt(1.0 - segC.x)) * timing.y;
-		lit = exp(-max(age - reachedAt, 0.0) / (ground ? ${f(CHANNEL.branchTau)} : ${f(CHANNEL.cloudBranchTau)}));
-	}
-	if (flicker > 0.5) {
-		// The least light a segment shows, whatever the glow: the dim leader, a dart down the trunk, the crawler's tip.
-		float least = 0.0;
-		// The first stroke lights the channel from the ground up; the leader holds the rest until it gets there.
-		float swept = 1.0;
-		if (ground) {
-			vec3 stroke = profile.yzw;
-			if (stroke.x < 0.0 || (stroke.x < 0.5 && stroke.y < ${f(PROFILE.strokeSweep)})) least = ${f(PROFILE.leaderLevel)};
-			if (stroke.x >= 0.0 && stroke.x < 0.5) swept = step(min(segA.z, segB.z) / ${f(SKELETON.cloudTopKm)}, stroke.y / ${f(PROFILE.strokeSweep)});
-			if (!branch && stroke.x >= 0.0 && stroke.z < ${f(PROFILE.dart)}) {
-				float tip = 1.0 - stroke.z / ${f(PROFILE.dart)};
-				least = max(least, ${f(PROFILE.dartLevel)} * step(segC.x, tip) * smoothstep(tip - ${f(PROFILE.dartTrail)}, tip, segC.y));
-			}
-			// A second ground contact lights from the stroke that takes it, or the last one if the flash ends first.
-			if (contact) {
-				float takes = pulseHash(seed, 96.0) < 0.2 ? 0.0 : 1.0 + floor(3.0 * pulseHash(seed, 97.0));
-				if (!(stroke.x >= takes || (stroke.x >= 0.0 && stroke.z > 1e5))) lit = 0.0;
-			}
-		} else if (kind == ${FlashKind.IcCrawler}) {
-			least = smoothstep(reached - ${f(PROFILE.crawlerTip)}, reached, segC.y) * (1.0 - smoothstep(0.95, 1.0, reached));
-		}
-		lit *= max(swept, least / max(profile.x, 1e-4));
-	}
-	float light = profile.x * intensityBrightness(flashShape.x) * shown * lit * segB.w;
+	float light = segmentLight(age, at, seed, kind, reached) * shown;
 	if (halo > 0.5) light *= haloStrength * (1.0 - smoothstep(${f(CHANNEL.haloFadeStartKm)}, ${f(CHANNEL.haloFadeEndKm)}, distance / kmToWorld));
 	light *= mix(1.0, ${f(CHANNEL.dayLevel)}, smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection))));
 	if (light < 0.002) {
@@ -142,17 +127,22 @@ void main() {
 	vec3 north = cross(normal, east);
 	mat3 frame = mat3(east, north, normal) * kmToWorld;
 	float width = segA.w;
-	// Channels stay under the observed top where the clouds are in relief (ADR 0028): their part in the cloud
-	// compresses toward it while a drop under the base keeps its height.
-	vec3 lift = vec3(${f(SKELETON.cloudBaseKm)}, 1.0, 1.0);
+	// Channels follow the drawn top where the clouds are in relief, at each end of each segment: their part in the
+	// cloud ends just under it while a drop under the base keeps its height.
+	vec4 liftA = flatLift;
+	vec4 liftB = flatLift;
 #ifdef VOLUME
-	float top = cloudTopAt(flash.xyz);
-	if (top > 0.0) lift = reliefLift(top);
+	liftA = liftAt(segA.xyz);
+	liftB = liftAt(segB.xyz);
 #endif
-	vec3 mid = liftPoint(0.5 * (segA.xyz + segB.xyz), lift);
+	vec3 a = liftPoint(segA.xyz, liftA);
+	vec3 whole = liftPoint(segB.xyz, liftB);
+	vec3 mid = 0.5 * (a + whole);
 	// The cloud where the line of sight leaves it veils a channel inside it and dims one below it to a trace.
 	float opacity = inCloud ? ${f(VEIL.fallback)} : 0.0;
 	float slant = 1.0;
+	// Share of the veil left to the clouds as drawn on screen, pixel by pixel: where the volume draws them.
+	float screen = 0.0;
 #ifdef CLOUDS
 	if (cloudShown > 0.5) {
 		vec3 crossing = cloudCrossing(base + frame * mid, cameraPosition);
@@ -162,30 +152,39 @@ void main() {
 		// Where the volume draws the clouds, its lighter veil dims the channel (ADR 0031).
 		float known = cloudKnownAt(crossing);
 		if (known > 0.0) opacity = mix(opacity, veilOpacity(volumeSample(volumeField, volumeLatLon(crossing)).r), known);
+		screen = known;
 #endif
 	}
 #endif
-	if (inCloud) {
+	if (halo > 1.5) {
+		if (screen <= 0.0) {
+			cull();
+			return;
+		}
+		width = clamp(${f(VEIL.scatterKm)} / kmPerPx, ${f(VEIL.scatterPx[0])}, ${f(VEIL.scatterPx[1])});
+		// Dim paths, the glow of leaders between pulses, scatter nothing to speak of.
+		light *= screen * smoothstep(0.0, ${f(VEIL.scatterFrom)}, light);
+	} else if (inCloud) {
 		// Slightly transparent from above; at a slant the cloud crossed toward the eye veils and spreads it (ADR 0035).
 		vec2 seen = seenThrough(opacity, slant);
 		vec2 veiled = cloudVeil(seen.x, 0.5 * (segA.z + segB.z), kmPerPx / seen.y, width, segC.w);
 		if (!trace) light *= veilOverlap(length(segB.xyz - segA.xyz) / kmPerPx, width, veiled.x);
+		// On screen the cloud dims it; here it only spreads it.
+		light *= mix(veiled.y, width / veiled.x, screen);
 		// A trace's halo is sized from its core width, not from the width the cloud spreads it to.
 		if (halo < 0.5 || !trace) width = veiled.x;
-		light *= veiled.y;
 	} else {
-		light *= clearAirLight(opacity * mix(${f(VEIL.through)}, 1.0, grazingShare(slant)), slant);
+		light *= mix(clearAirLight(opacity * mix(${f(VEIL.through)}, 1.0, grazingShare(slant)), slant), 1.0, screen);
 	}
 	// Hairlines draw no thinner than the pixel grid renders evenly and give up light instead, so they never break into dashes.
-	vec2 thin = hairline(width, pixelRatio * viewScale);
+	vec2 thin = halo > 1.5 ? vec2(width, 1.0) : hairline(width, pixelRatio * viewScale);
 	width = thin.x;
 	light *= thin.y;
 	if (light < 0.002) {
 		cull();
 		return;
 	}
-	vec3 a = liftPoint(segA.xyz, lift);
-	vec3 b = mix(a, liftPoint(segB.xyz, lift), grown);
+	vec3 b = mix(a, whole, grown);
 	vec4 ca = projectionMatrix * viewMatrix * vec4(base + frame * a, 1.0);
 	vec4 cb = projectionMatrix * viewMatrix * vec4(base + frame * b, 1.0);
 	vec2 sa = ca.xy / ca.w * viewport;
@@ -193,7 +192,7 @@ void main() {
 	vec2 t = sb - sa;
 	t = dot(t, t) > 1e-8 ? normalize(t) : vec2(1.0, 0.0);
 	vec4 c = corner.x > 0.5 ? cb : ca;
-	float w = width * (halo > 0.5 ? 8.0 : 1.0);
+	float w = width * (halo > 0.5 && halo < 1.5 ? 8.0 : 1.0);
 	// Halos round off their ends; cores overlap half a width at each joint and cross-fade there, so they never bead.
 	float cap = halo > 0.5 ? 1.0 : 0.5;
 	float along = corner.x > 0.5 ? cap : -cap;
@@ -202,11 +201,15 @@ void main() {
 	vLength = length(sb - sa) / w;
 	// Each segment's cross-fade adds up to its length, then gets back the light overlapping segments used to add, by its
 	// unforeshortened span: on screen and in the bloom's linear buffer.
-	vShare = lengthShare(vLength) * overlapGain(length((segB.xyz - segA.xyz) * lift) / kmPerPx / w);
+	vShare = lengthShare(vLength) * overlapGain(length((segB.xyz - segA.xyz) * liftA.xyz) / kmPerPx / w);
 	vLocal = vec2(corner.x > 0.5 ? vLength + cap : -cap, corner.y);
 	vLight = light;
 	// The light around a channel leans cool; its core stays white. Rose and warm tints are dust and distance, seen from the ground.
 	vTint = vec3(0.86, 0.9, 1.0);
+	vKm = length(cameraPosition - (base + frame * (corner.x > 0.5 ? b : a))) / kmToWorld;
+	vScreen = screen;
+	vLeast = inCloud ? ${f(VEIL.behindMin)} : ${f(VEIL.trace)};
+	vSlant = slantShare(slant);
 }
 `;
 
@@ -220,14 +223,23 @@ varying float vLength;
 varying vec2 vShare;
 varying float vLight;
 varying vec3 vTint;
+varying float vKm;
+varying float vScreen;
+varying float vLeast;
+varying float vSlant;
 ${overlapToneGlsl}
+${veilGlsl}
+#ifdef VOLUME
+${cloudScreenGlsl(f(VEIL.hideRate))}
+uniform vec2 targetSize;
+#endif
 void main() {
 	float light;
 	float fade = 1.0;
 	if (halo > 0.5) {
 		vec2 d = vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y);
 		float x2 = min(dot(d, d), 1.0);
-		light = 0.3 * exp(-x2 * 5.0) * (1.0 - x2);
+		light = (halo > 1.5 ? 1.0 : 0.3) * exp(-x2 * 5.0) * (1.0 - x2);
 	} else {
 		float y2 = min(vLocal.y * vLocal.y, 1.0);
 		light = exp(-y2 * 3.0) * (1.0 - y2);
@@ -235,8 +247,17 @@ void main() {
 		// instead of beading.
 		fade = clamp(vLocal.x + 0.5, 0.0, 1.0) * clamp(vLength + 0.5 - vLocal.x, 0.0, 1.0);
 	}
-	vec3 hue = halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
-	gl_FragColor = vec4(hue * exposure * vLight * light, 1.0);
+	// Behind the clouds as drawn, the core dims with depth, its clear air halo goes and the cloud glows around it.
+	float veil = halo > 1.5 ? 0.0 : 1.0;
+#ifdef VOLUME
+	if (vScreen > 0.0) {
+		vec2 front = cloudFront(gl_FragCoord.xy / targetSize, vKm);
+		float hidden = front.x * vScreen;
+		veil = halo > 1.5 ? scatterLight(front.x, front.y, vSlant) : halo > 0.5 ? 1.0 - hidden : behindLight(hidden, front.y, vLeast) * slantCore(hidden, vSlant);
+	}
+#endif
+	vec3 hue = halo > 1.5 ? color : halo > 0.5 ? color * vTint : mix(vec3(1.0), color, 0.5);
+	gl_FragColor = vec4(hue * exposure * vLight * light * veil, 1.0);
 	#include <tonemapping_fragment>
 	vec3 value = gl_FragColor.rgb;
 	#include <colorspace_fragment>

@@ -6,7 +6,7 @@ import { encodeChunk } from '../live/testing';
 import { NO_DELAY } from '../live/delay';
 import { DENSITY, flashLot, heroShare } from './density';
 import { CHANNEL, flashSeed } from './channel';
-import { aliveCount, aliveLoad, budgetStart, createLightning, LIGHT_WINDOW, lightWindow, sampleCount } from './index';
+import { aliveCount, aliveLoad, budgetStart, createLightning, fineShare, fineWindow, LIGHT_WINDOW, lightWindow, sampleCount } from './index';
 import { FlashPlayback } from './playback';
 import { flickerLength, PROFILE } from './profile';
 import { MAX_SEGMENTS } from './skeleton';
@@ -463,6 +463,39 @@ describe('light map window', () => {
 		const window = lightWindow({ lat: 1.4, lon: 0 }, 1000);
 		expect(window.y + window.w).toBeCloseTo(Math.PI / 2, 6);
 		expect(window.z).toBe(Math.PI);
+	});
+
+	it('frames the ground around the view finely, on its own texels', () => {
+		const size = 1024;
+		const floor = fineWindow({ lat: -0.4, lon: -1 }, 400, size);
+		expect(floor.w).toBeCloseTo((LIGHT_WINDOW.fineScale * 400) / 6371, 9);
+		// Under a kilometre per texel at the floor, square on the ground.
+		expect((2 * floor.w * 6371) / size).toBeLessThan(1);
+		expect(floor.z).toBeCloseTo(floor.w / Math.cos(floor.y), 9);
+		expect(fineWindow({ lat: 0, lon: 0 }, 100, size).w).toBeCloseTo(LIGHT_WINDOW.fineMinKm / 6371, 9);
+		const stepLat = (2 * floor.w) / size;
+		const stepLon = (2 * floor.z) / size;
+		expect(Math.abs(floor.y / stepLat - Math.round(floor.y / stepLat))).toBeLessThan(1e-6);
+		expect(Math.abs(floor.x / stepLon - Math.round(floor.x / stepLon))).toBeLessThan(1e-6);
+		// A view moving by less than a texel keeps the window where it is.
+		const moved = fineWindow({ lat: floor.y + 0.3 * stepLat, lon: floor.x + 0.3 * stepLon }, 400, size);
+		expect([moved.x, moved.y]).toEqual([floor.x, floor.y]);
+		// The storm framing keeps it finer than the wide map by an order of magnitude.
+		const wide = lightWindow({ lat: -0.4, lon: -1 }, 1100);
+		const fine = fineWindow({ lat: -0.4, lon: -1 }, 1100, size);
+		expect((2 * wide.w) / 512 / ((2 * fine.w) / size)).toBeGreaterThan(7);
+	});
+
+	it('draws footprints near the ground, widens to the wide map and hands over to it from afar', () => {
+		expect(fineShare(400)).toEqual({ widen: 0, share: 1 });
+		expect(fineShare(LIGHT_WINDOW.fineWiden[0])).toEqual({ widen: 0, share: 1 });
+		expect(fineShare(LIGHT_WINDOW.fineFade[0]).share).toBe(1);
+		expect(fineShare(LIGHT_WINDOW.fineFade[1])).toEqual({ widen: 1, share: 0 });
+		expect(fineShare(14_000)).toEqual({ widen: 1, share: 0 });
+		const mid = fineShare(5800);
+		expect(mid.share).toBeGreaterThan(0);
+		expect(mid.share).toBeLessThan(1);
+		expect(mid.widen).toBeGreaterThan(0.5);
 	});
 
 	it('ends each lit disc at the footprint near the floor, below the channels', () => {

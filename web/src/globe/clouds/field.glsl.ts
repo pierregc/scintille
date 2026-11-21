@@ -96,6 +96,13 @@ float cloudTopAt(vec3 direction) {
 	return f.a > 0.5 && f.r > 0.05 ? f.g * 20.0 : -1.0;
 }
 
+// Top (km) the lightning fits under at a direction: the drawn top, its neighbours' over clear sky; negative where unknown.
+float cloudFitTopAt(vec3 direction) {
+	if (volumeOn < 0.5) return -1.0;
+	vec4 f = volumeSample(volumeField, volumeLatLon(direction));
+	return f.a > 0.5 ? f.g * 20.0 : -1.0;
+}
+
 // Share of sunlight reaching the ground under the clouds at a direction in the Earth's frame.
 float cloudShadowAt(vec3 direction) {
 	if (volumeOn <= 0.0) return 1.0;
@@ -151,5 +158,26 @@ float reliefWeight(float cover) { return reliefOn * smoothstep(0.4, 0.8, cover);
 vec3 reliefTone(vec3 c, float f) {
 	if (f >= 1.0) return c + c * max(1.0 - c, 0.0) * (f - 1.0) * 2.0;
 	return c * f * mix(vec3(1.0), vec3(0.85, 0.95, 1.15), clamp(2.0 * (1.0 - f), 0.0, 1.0));
+}
+`;
+
+/**
+ * The clouds as drawn on screen, for what is drawn behind them: share the volume's `screen` uniforms and include
+ * this chunk. A point is hidden `hideRate` times faster than the clouds' own extinction would hide it.
+ */
+export const cloudScreenGlsl = (hideRate: string) => /* glsl */ `
+uniform sampler2D cloudResolved;
+uniform sampler2D cloudDepth;
+uniform vec2 cloudMarchSize;
+uniform vec2 cloudFreshSize;
+uniform vec2 cloudPhase;
+uniform float cloudFade;
+// Share of a point km from the eye the drawn clouds hide at a screen uv, and how far behind their near side it lies, km.
+vec2 cloudFront(vec2 uv, float km) {
+	float cover = (1.0 - textureLod(cloudResolved, uv, 0.0).a) * cloudFade;
+	vec2 q = ((uv * cloudMarchSize - cloudPhase - 0.5) / 2.0 + 0.5) / cloudFreshSize;
+	vec3 depth = textureLod(cloudDepth, q, 0.0).rgb;
+	float behind = max(km - depth.b, 0.0);
+	return vec2(cover * (1.0 - exp(-${hideRate} * behind / max(depth.r - depth.b, 0.3))), behind);
 }
 `;
