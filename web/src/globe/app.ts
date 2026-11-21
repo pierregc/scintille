@@ -46,6 +46,7 @@ import { frameStorm } from './replay/framing';
 import { createSound, type Sound } from './sound';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
+import { createWind, windLookFromSearch } from './wind';
 import { CLOUD_ARCHIVE_RULES } from '../contract/cloud-archive';
 
 function deviceHints(context: WebGL2RenderingContext) {
@@ -281,6 +282,9 @@ export function createGlobeApp(
 	clouds.setFlashLight(lightning.light);
 	const coldTops = createColdTops({ radius: RADIUS, onError: (error) => console.warn('cold tops:', error) });
 	scene.add(coldTops.mesh);
+	const windLook = windLookFromSearch(location.search);
+	const wind = windLook ? createWind(windLook, RADIUS) : undefined;
+	if (wind) scene.add(wind.mesh);
 	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
@@ -392,6 +396,7 @@ export function createGlobeApp(
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
 		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
+		wind?.update({ kmPerPx, wallMs: renderParams ? now : performance.now(), sun: sunDirection(new Date(now)), steady: reducedMotion.matches });
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
@@ -519,6 +524,7 @@ export function createGlobeApp(
 			earth.dispose();
 			atmosphere.dispose();
 			coldTops.dispose();
+			wind?.dispose();
 			detachDevClouds?.();
 			clouds.dispose();
 			cloudDetail?.dispose();
