@@ -206,7 +206,8 @@ export class DayFeed {
 		if (this.#stopped || !Number.isFinite(time)) return;
 		const days = [-DAY, 0, DAY].map((offset) => utcDay(time + offset));
 		this.#days.retain(days);
-		const known = days.map((day) => this.#days.day(day));
+		const firstDay = this.#days.index()?.firstDay;
+		const known = days.map((day) => (firstDay !== undefined && day < utcDay(firstDay) ? null : this.#days.day(day)));
 		if (known[1] === undefined) return;
 		const order = known.flatMap((refs) => refs ?? []);
 		this.#archivedHours = new Set(order.map((ref) => ref.hour));

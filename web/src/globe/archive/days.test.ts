@@ -174,6 +174,19 @@ describe('flash archive feed', () => {
 		expect(feed.covers(H18 + 25 * MIN)).toBe(true);
 	});
 
+	it('asks for no day before the first archived day', async () => {
+		const archive = new FakeArchive();
+		archive.index = { schema_version: 1, first_day: DAY, last_hour: '2026-10-15T20:00:00Z', retention_days: 21 };
+		await archive.hour(Date.parse(`${DAY}T00:00:00Z`), thirds(10));
+		const { days, feed } = setup(archive);
+		days.index();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const t = Date.parse(`${DAY}T00:10:00Z`);
+		await settle(feed, t);
+		expect(feed.covers(t)).toBe(true);
+		expect(archive.requests.some((url) => url.endsWith('manifests/2026-10-14.json'))).toBe(false);
+	});
+
 	it('reloads the day index when a chunk was replaced', async () => {
 		const archive = new FakeArchive();
 		await archive.hour(H18, thirds(10));
