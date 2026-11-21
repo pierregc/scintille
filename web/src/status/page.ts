@@ -3,7 +3,15 @@ import { formatDate, formatTime } from '../components/hud/format';
 import { backoffDelay, DEFAULT_BACKOFF } from '../globe/live/client';
 import { liveBaseUrl } from '../globe/live';
 import { indexAt, niceMax, paths, SLOTS, type Frame } from './chart';
-import { formatCount, parseMetrics, statusView, type Measure, type SourceView, type StatusView } from './metrics';
+import {
+	formatCount,
+	parseMetrics,
+	statusView,
+	type Measure,
+	type QualityCheck,
+	type SourceView,
+	type StatusView,
+} from './metrics';
 
 export const POLL_INTERVAL_MS = 60_000;
 const W = 300;
@@ -25,16 +33,29 @@ function svg(tag: string, attrs: Record<string, string | number>): SVGElement {
 
 const VERDICT_TEXT = { met: 'within target', missed: 'outside target', unknown: 'not current' } as const;
 
-function row(label: string, value: string, measure?: Measure): HTMLElement {
+function row(label: string, value: string, measure?: Measure | string): HTMLElement {
 	const r = el('div', 'row');
 	r.append(el('dt', '', label));
 	const dd = el('dd');
 	dd.append(el('span', 'value', value));
-	if (measure) {
+	if (typeof measure === 'string') {
+		if (measure) dd.append(el('span', 'verdict', measure));
+	} else if (measure) {
 		const v = el('span', `verdict ${measure.verdict}`, `${measure.target} · ${VERDICT_TEXT[measure.verdict]}`);
 		dd.append(v);
 	}
 	r.append(dd);
+	return r;
+}
+
+function checksRow(label: string, checks: QualityCheck[]): HTMLElement {
+	const r = el('div', 'row');
+	const dd = el('dd', 'checks');
+	for (const c of checks) {
+		dd.append(el('span', 'value', c.name));
+		if (c.hint) dd.append(el('span', 'verdict', c.hint));
+	}
+	r.append(el('dt', '', label), dd);
 	return r;
 }
 
@@ -94,7 +115,7 @@ function sourceBlock(s: SourceView, max: number): HTMLElement {
 		row('Latency p50', s.latencyP50),
 		row('Latency p95', s.latencyP95.text, s.latencyP95),
 		row('Completeness, 1\u00a0h', s.completeness.text, s.completeness),
-		row('Error budget, 30\u00a0d', s.errorBudget),
+		row('Error budget, 30\u00a0d', s.errorBudget.text, s.errorBudget.spent ? 'spent' : undefined),
 		row('Last file', s.lastFile),
 	);
 	dl.lastElementChild?.querySelector('.value')?.setAttribute('data-lastfile', s.source);
@@ -153,7 +174,7 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 	const quality = el('dl');
 	if (view.generatedAtMs !== null) {
 		quality.append(row('Status', view.quality.text), row('Last run', view.quality.checkedAt));
-		if (view.quality.failed.length) quality.append(row('Not passing', view.quality.failed.join(', ')));
+		if (view.quality.checks.length) quality.append(checksRow(view.quality.status === 'warn' ? 'Warnings' : 'Not passing', view.quality.checks));
 	}
 	sync(q('[data-quality]'), quality);
 
