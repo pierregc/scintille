@@ -48,6 +48,15 @@ import StormSuggestions from './StormSuggestions.astro';
 	<div class="layers" data-layers hidden>
 		<div class="group" role="group" aria-label="Layers">
 			<button class="sw" type="button" aria-pressed="true" data-clouds><span class="cap">Clouds</span><i aria-hidden="true"></i></button>
+			<div class="wind">
+				<span class="cap" id="wind-label">Wind</span>
+				<div class="choice" role="radiogroup" aria-labelledby="wind-label">
+					<button type="button" role="radio" aria-checked="true" data-wind="off">Off</button>
+					<button type="button" role="radio" aria-checked="false" tabindex="-1" data-wind="jet">Jet stream</button>
+					<button type="button" role="radio" aria-checked="false" tabindex="-1" data-wind="surface">Surface</button>
+				</div>
+			</div>
+			<p class="wind-note" data-wind-note hidden>GFS model forecast</p>
 			<button class="sw" type="button" aria-pressed="false" data-sound hidden><span class="cap">Sound</span><i aria-hidden="true"></i></button>
 			<div class="mix" data-mix hidden>
 				<label class="level"><span class="cap">Music</span><input type="range" min="0" max="100" step="1" value="60" data-level="music" /></label>
@@ -402,6 +411,38 @@ import StormSuggestions from './StormSuggestions.astro';
 		gap: 14px;
 		justify-items: end;
 	}
+	.wind {
+		display: flex;
+		gap: 14px;
+		align-items: center;
+	}
+	.choice {
+		display: flex;
+		gap: 12px;
+	}
+	.choice button {
+		min-height: 24px;
+		color: var(--dim);
+		font: 300 10px/1 var(--mono);
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
+		text-decoration: underline 1px transparent;
+		text-underline-offset: 5px;
+	}
+	.choice button:hover {
+		color: var(--soft);
+	}
+	.choice button[aria-checked='true'] {
+		color: var(--ink);
+		text-decoration-color: var(--soft);
+	}
+	.layers .wind-note {
+		margin-top: -12px;
+		color: var(--dim);
+		font: 300 9.5px/1 var(--mono);
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
 	.mix {
 		display: grid;
 		gap: 4px;
@@ -588,6 +629,18 @@ import StormSuggestions from './StormSuggestions.astro';
 		.layers {
 			top: calc(var(--gut) + 112px);
 		}
+		.choice {
+			gap: 4px;
+			margin-right: -6px;
+		}
+		.choice button {
+			min-width: 44px;
+			min-height: 44px;
+			padding: 0 6px;
+		}
+		.layers .wind-note {
+			margin-top: -20px;
+		}
 		.hud:has(.sources:not([hidden]) :global(li:not([data-state='live']))) .layers {
 			top: calc(var(--gut) + 150px);
 		}
@@ -689,6 +742,8 @@ import StormSuggestions from './StormSuggestions.astro';
 		const state = $('[data-state]');
 		const layers = $('[data-layers]');
 		const clouds = $<HTMLButtonElement>('[data-clouds]');
+		const windButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-wind]')];
+		const windNote = $('[data-wind-note]');
 		const sound = $<HTMLButtonElement>('[data-sound]');
 		const mix = $('[data-mix]');
 		const levelInputs = [...root.querySelectorAll<HTMLInputElement>('[data-level]')];
@@ -819,6 +874,16 @@ import StormSuggestions from './StormSuggestions.astro';
 			showFreshness(mode === 'live', app?.hasData(now) ? 'Replay' : 'Replay · no data');
 			if (rate && rate.hidden === rateShown()) updateRate();
 			clouds?.setAttribute('aria-pressed', String(app?.clouds.visible ?? false));
+			const look = app?.wind.look ?? 'off';
+			for (const button of windButtons) {
+				const checked = button.dataset.wind === look;
+				button.setAttribute('aria-checked', String(checked));
+				button.tabIndex = checked ? 0 : -1;
+			}
+			if (windNote) {
+				windNote.hidden = look === 'off';
+				windNote.title = app?.wind.attribution ?? '';
+			}
 			sound?.setAttribute('aria-pressed', String(app?.sound.enabled ?? false));
 			if (mix) mix.hidden = !app?.sound.enabled;
 			const stormView = app?.lightning.stormView ?? false;
@@ -901,6 +966,22 @@ import StormSuggestions from './StormSuggestions.astro';
 		clouds?.addEventListener('click', () => {
 			if (app) app.clouds.setVisible(!app.clouds.visible);
 			tick();
+		});
+		const chooseWind = (index: number) => {
+			const button = windButtons[(index + windButtons.length) % windButtons.length];
+			const look = button.dataset.wind;
+			app?.wind.setLook(look === 'jet' || look === 'surface' ? look : null);
+			tick();
+			button.focus();
+		};
+		windButtons.forEach((button, index) => {
+			button.addEventListener('click', () => chooseWind(index));
+			button.addEventListener('keydown', (event) => {
+				const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+				if (!step) return;
+				event.preventDefault();
+				chooseWind(index + step);
+			});
 		});
 		sound?.addEventListener('click', () => {
 			if (app) app.sound.setEnabled(!app.sound.enabled);

@@ -51,6 +51,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 			<li>EUMETSAT MTG Lightning Imager (LI): Europe, Africa, the Atlantic. Checked every 30 s on the EUMETSAT Data Store.</li>
 			<li>Tropical cyclones: NOAA advisories from NHC, CPHC and JTWC, every 6 h, about 3 h after their time.</li>
 			<li>Clouds: hourly composite of GOES, Himawari and MTG full disks, gaps filled by NOAA GMGSI, about 1 km, 0.5 km by day around strong storms. Cloud-top heights come from the infrared and the GFS temperature profile.</li>
+			<li>Wind, off by default: hourly NOAA GFS model forecast at 0.5°, near the ground or at the jet stream. A forecast, not an observation.</li>
 		</ul>
 		<p>Where two satellites overlap, the one with the better view draws the flash.</p>
 
@@ -127,6 +128,7 @@ import { breadcrumbs, website } from '../seo/jsonld';
 			Contains modified EUMETSAT Meteosat data 2026.<br />
 			Clouds: NOAA GOES-East and GOES-West, JMA Himawari-9 via NOAA, contains modified EUMETSAT Meteosat data 2026; gaps from NOAA NESDIS GMGSI.<br />
 			Tropical cyclones: NOAA NCEP TC vitals, from NHC, CPHC and JTWC advisories.<br />
+			Wind: NOAA NCEP GFS model forecast.<br />
 			Earth imagery: NASA Earth Observatory.<br />
 			Storm names: GeoNames (CC BY 4.0), Natural Earth.<br />
 			Sound: CC0 recordings from Freesound.

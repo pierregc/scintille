@@ -48,6 +48,8 @@ import { frameStorm } from './replay/framing';
 import { createSound, type Sound } from './sound';
 import { cappedPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
+import { WindFeed } from './wind/feed';
+import { createWindLayer } from './wind/layer';
 import { CLOUD_ARCHIVE_RULES } from '../contract/cloud-archive';
 
 function deviceHints(context: WebGL2RenderingContext) {
@@ -72,6 +74,8 @@ export interface GlobeApp {
 	readonly clouds: Clouds;
 	readonly cloudFeed: CloudFeed;
 	cloudStatus(): { settled: boolean; attribution: string | null };
+	/** Wind look the viewer picked, null when off (ADR 0039). */
+	readonly wind: Pick<WindFeed, 'look' | 'setLook' | 'attribution'>;
 	readonly sound: Sound;
 	readonly lightning: Pick<Lightning, 'displayMinutes' | 'setDisplayMinutes' | 'stormView' | 'stats'>;
 	/** Freshness of the live feed now. */
@@ -294,6 +298,9 @@ export function createGlobeApp(
 		onError: (error) => console.warn('cyclones:', error),
 	});
 	if (cyclones) scene.add(cyclones.group);
+	const wind = createWindLayer({ radius: RADIUS, cloudOpacity: clouds.opacity, bakeScale: () => PRESETS[tier].windBake });
+	scene.add(wind.object);
+	const windFeed = new WindFeed({ baseUrl: liveBaseUrl(), layer: wind, now: () => clock.wallTime(), onError: (error) => console.warn('wind:', error) });
 	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
@@ -414,6 +421,9 @@ export function createGlobeApp(
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
 		const kmPerPx = (2 * worldToKm(camera.position.length() - RADIUS, RADIUS) * Math.tan((camera.fov * Math.PI) / 360)) / renderer.getSize(viewport).y;
+		const wallMs = renderParams ? now : performance.now();
+		windFeed.setTime(now, wallMs);
+		wind.update({ renderer, kmPerPx, wallMs, sun: sunDirection(new Date(now)), steady: reducedMotion.matches, stormView });
 		lightning.stormView = stormView;
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
@@ -488,6 +498,7 @@ export function createGlobeApp(
 		clouds,
 		cloudFeed,
 		cloudStatus: () => cloudPlayback.status,
+		wind: windFeed,
 		sound,
 		lightning,
 		feedStatus: () =>
@@ -543,6 +554,8 @@ export function createGlobeApp(
 			atmosphere.dispose();
 			coldTops.dispose();
 			cyclones?.dispose();
+			windFeed.dispose();
+			wind.dispose();
 			detachDevClouds?.();
 			clouds.dispose();
 			cloudDetail?.dispose();
