@@ -46,7 +46,7 @@ from scintille_ingest.runtime.live_feed import (
     ObjectLiveStore,
     StateDelays,
 )
-from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, LiveProbe
+from scintille_ingest.runtime.live_probe import MANIFEST_URL, MAX_AGE, SITE_URL, LiveProbe
 from scintille_ingest.runtime.logs import configure as configure_json_logs
 from scintille_ingest.runtime.metrics import Metrics
 from scintille_ingest.runtime.ops import OpsPublisher, PostgresOps
@@ -86,6 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     writer.add_argument("--interval", type=float, default=300.0, help="seconds between drains")
     probe = commands.add_parser("live-probe", help="check the freshness of the public manifest")
     probe.add_argument("--url", default=os.environ.get("SCINTILLE_LIVE_MANIFEST_URL", MANIFEST_URL))
+    probe.add_argument("--site-url", default=SITE_URL, help="also checked; empty to skip")
     probe.add_argument("--max-age", type=float, default=MAX_AGE, help="seconds")
     probe.add_argument("--every", type=float, default=60.0, help="seconds between checks")
     probe.add_argument("--once", action="store_true", help="check once; exit 1 if not fresh")
@@ -127,7 +128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "clouds-reindex":
         return run_clouds_reindex(args.first, args.last, args.dry_run)
     if args.command == "live-probe":
-        return asyncio.run(run_live_probe(args.url, args.max_age, args.every, args.once))
+        return asyncio.run(
+            run_live_probe(args.url, args.site_url, args.max_age, args.every, args.once)
+        )
     if args.command == "clouds":
         if args.source == "composite":
             return asyncio.run(run_composite(args.port, args.slot, args.out))
@@ -392,7 +395,7 @@ async def run_lake_writer(spool_dir: Path, interval: float) -> int:
     return 0
 
 
-async def run_live_probe(url: str, max_age: float, every: float, once: bool) -> int:
+async def run_live_probe(url: str, site_url: str, max_age: float, every: float, once: bool) -> int:
     """Reports to `SCINTILLE_HEALTHCHECK_LIVE_URL` when set, except with `--once`."""
     configure_json_logs()
     heartbeat = (
@@ -400,7 +403,7 @@ async def run_live_probe(url: str, max_age: float, every: float, once: bool) -> 
         if once
         else heartbeat_from_env("SCINTILLE_HEALTHCHECK_LIVE_URL", "live-manifest", Metrics())
     )
-    probe = LiveProbe(url, max_age, heartbeat=heartbeat, every=every)
+    probe = LiveProbe(url, max_age, site_url=site_url or None, heartbeat=heartbeat, every=every)
     if once:
         return 0 if await probe.once() else 1
     _stop_on_signals(probe.stop)

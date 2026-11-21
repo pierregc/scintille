@@ -30,6 +30,7 @@ from scintille_ingest.runtime.ops import (
 )
 from scintille_lake.tables import NAMESPACES
 
+from .alerts import ping, pipeline_health
 from .resources import LakeResource, PostgresResource
 
 STORM_CATALOG = AssetKey(["feeds", "storm_catalog"])
@@ -134,7 +135,8 @@ def lake_due(cursor: str | None, now: datetime) -> bool:
 def ops_status(
     context: SensorEvaluationContext, postgres: PostgresResource, lake: LakeResource
 ) -> SkipReason:
-    """Every minute: check results, the latest gold build and storm counts; hourly: lake size."""
+    """Every minute: check results, the latest gold build, storm counts and the pipeline heartbeat;
+    hourly: lake size."""
     repository = context.repository_def
     assert repository is not None
     check_keys = list(repository.asset_checks_defs_by_key)
@@ -158,4 +160,9 @@ def ops_status(
                 context.log.exception("Lake size not measured; the previous one stays published")
     finally:
         ops.close()
+    jobs = [j.name for j in repository.get_all_jobs() if not j.name.startswith("__")]
+    healthy, message = pipeline_health(context.instance, jobs, built, now)
+    if not healthy:
+        context.log.warning("Pipelines unhealthy: %s", message)
+    ping(healthy, message)
     return SkipReason("status recorded")

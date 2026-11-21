@@ -1,8 +1,7 @@
 # Operations
 
 How Scintille is watched in production and what to do when an alert fires. Everything here is free:
-[Healthchecks.io](https://healthchecks.io) for heartbeats, an external uptime monitor for the site,
-alerts by email to the maintainer.
+[Healthchecks.io](https://healthchecks.io) for heartbeats, alerts by email to the maintainer.
 
 ## Signals
 
@@ -10,11 +9,11 @@ alerts by email to the maintainer.
 |---|---|---|
 | Container healthcheck (`ingest`, `GET :8080/healthz`) | A source or disk loop died | `docker compose ps` shows `unhealthy`; a deploy rolls back |
 | Heartbeat `ingest-live` | Collector stopped, crashed, VPS down, a loop stopped | Healthchecks.io, within 5 min |
-| Heartbeat `live-manifest` | Public manifest older than 3 min, unreadable or invalid | Healthchecks.io, within 1 min |
+| Heartbeat `live-manifest` | Public manifest older than 3 min, unreadable or invalid, or https://scintille.app down | Healthchecks.io, within 1 min |
 | Heartbeat `active-storms` | `storms/active.json` not rewritten for 15 min | Healthchecks.io, within 15 min |
 | Heartbeat `storm-catalog` | Catalog's last tracked hour over 3 h old (`authoritative_until`) | Healthchecks.io, at the next update |
-| Uptime of https://scintille.app | Site down or erroring | External monitor |
-| Dagster sensor `alert_on_failure` | A pipeline run failed | `SCINTILLE_ALERT_WEBHOOK` ([pipelines](pipelines.md)) |
+| Heartbeat `pipelines` | Gold not rebuilt for 45 min, a job failing, Dagster daemon down | Healthchecks.io, within 15 min |
+| Dagster sensor `alert_on_failure` | Each failed run, retried or not | `SCINTILLE_ALERT_WEBHOOK` if set ([pipelines](pipelines.md)) |
 
 ### Collector heartbeat
 
@@ -32,8 +31,11 @@ The `live-probe` service (`scintille-ingest live-probe`) reads the public manife
 (https://data.scintille.app/live/manifest.json, through Cloudflare like a visitor) every 60 s and
 checks `generated_at` against the clock. The manifest is rewritten at least every 30 s, so older than 180 s
 means the live feed is stuck even if the collector looks alive (R2 writes failing, a cache serving an
-old copy). It pings `SCINTILLE_HEALTHCHECK_LIVE_URL` when fresh and `<url>/fail` with the reason
-otherwise (`stale: generated 240 s ago`, `unreachable: HTTPError`, `invalid manifest`).
+old copy). It also reads https://scintille.app. It pings `SCINTILLE_HEALTHCHECK_LIVE_URL` when both pass and
+`<url>/fail` with the reason otherwise (`stale: generated 240 s ago`, `unreachable: URLError (timed out)`,
+`invalid manifest`, `site unreachable: HTTPError (Service Unavailable)`). About 3 % of reads from the VPS
+failed in November with a bare `URLError`, isolated, so a failed read is retried twice, 10 s apart,
+before it counts; the logs keep each retry with its reason.
 
 The probe runs on the VPS, but the alert does not depend on it: if the VPS is down, the pings stop
 and the check goes down too. A one-off check from anywhere:
@@ -42,7 +44,20 @@ and the check goes down too. A one-off check from anywhere:
 uv run scintille-ingest live-probe --once   # exit code 1 if not fresh, never pings
 ```
 
-`--url` (or `SCINTILLE_LIVE_MANIFEST_URL`) and `--max-age` override the defaults.
+`--url` (or `SCINTILLE_LIVE_MANIFEST_URL`), `--site-url` (empty to skip) and `--max-age` override the
+defaults.
+
+### Pipelines
+
+The `ops_status` sensor runs every minute in the Dagster daemon and pings
+`SCINTILLE_HEALTHCHECK_PIPELINES_URL`. It pings `<url>/fail` when gold was last built over 45 minutes
+ago (gold is rebuilt only when silver changes, so this also catches a stuck `lake-writer`) or when a
+job is failing: its latest runs failed, with none queued or running and the last one ended over
+3 minutes ago, time for run retries to start. One failed run is enough, except for
+`silver_hourly_checks` (three in a row: short source gaps fail one or two hourly checks, about
+twice a week) and `daily_gold` (two in a row: the next run usually succeeds). Manual runs (`__ASSET_JOB`) never count. When
+the daemon stops, the pings stop. Healthchecks.io emails on each change of state only, so a job
+failing for hours sends one email, and another when it recovers.
 
 ### Active storms
 
@@ -59,7 +74,7 @@ last tracked hour ended over 3 hours ago: the feed keeps working, but its ids st
 ## Setup (by hand, once)
 
 1. **Healthchecks.io.** Create an account and a project, add the maintainer's email as an
-   integration, then two checks:
+   integration, then five checks:
 
    | Check | Schedule | Grace time | Variable in `/srv/scintille/.env` |
    |---|---|---|---|
@@ -67,14 +82,13 @@ last tracked hour ended over 3 hours ago: the feed keeps working, but its ids st
    | `live-manifest` | Simple, period 1 minute | 2 minutes | `SCINTILLE_HEALTHCHECK_LIVE_URL` |
    | `active-storms` | Simple, period 5 minutes | 10 minutes | `SCINTILLE_HEALTHCHECK_ACTIVE_URL` |
    | `storm-catalog` | Simple, period 5 minutes | 10 minutes | `SCINTILLE_HEALTHCHECK_CATALOG_URL` |
+   | `pipelines` | Simple, period 5 minutes | 10 minutes | `SCINTILLE_HEALTHCHECK_PIPELINES_URL` |
 
    With a 1-minute period and 2 minutes of grace, a stopped collector is reported 3 to 4 minutes
    after its last ping. A `/fail` ping alerts at once. Ping URLs hold a secret UUID: keep them in
    `.env` only ([secrets](secrets.md)).
-2. **Uptime.** In an external uptime monitor (for example UptimeRobot, free plan), add an HTTPS
-   monitor on https://scintille.app every 5 minutes, alerting the same email.
-3. **Deploy.** Restart the services so they read the new variables:
-   `docker compose up -d ingest live-probe active-storms` in the current release.
+2. **Deploy.** Recreate the services so they read the new variables:
+   `docker compose up -d` in the current release.
 
 ## Test
 
@@ -99,8 +113,12 @@ docker compose start ingest    # both checks come back up at the next ping
   contract check, R2 write); the public object keeps its last snapshot and visitors see its age.
 - **`storm-catalog` down.** `hourly_storm_catalog` stopped tracking hours: see the runs in the
   Dagster UI and catch up as in [pipelines](pipelines.md).
-- **Site down.** Check the Cloudflare status page and the last `web` deploy ([deploy](deploy.md)).
-- **Pipeline run failed.** Open the run in the Dagster UI ([deploy](deploy.md#data-services)).
+- **`live-manifest` fails with `site unreachable`.** Check the Cloudflare status page and the last
+  `web` deploy ([deploy](deploy.md)).
+- **`pipelines` down.** The `/fail` body names the problem. `gold last built ... ago`: is
+  `lake-writer` committing (its logs), is the daemon up (`docker compose ps`)? `<job> failing`: open
+  its last run in the Dagster UI ([deploy](deploy.md#data-services)). No ping at all: the daemon
+  or the VPS is down.
 - **Runs stuck in `NOT_STARTED`.** A run whose submission failed (#271) is never launched. Run
   monitoring marks it failed after 10 minutes. Fix the cause, let the next schedule and sensor ticks
   submit fresh runs, and backfill the missed `daily_gold` partitions from the UI.
