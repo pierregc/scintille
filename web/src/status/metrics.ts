@@ -12,6 +12,9 @@ export const SLO = {
 	/** Both are measured hourly; one missed run is tolerated. */
 	lakeAgeSeconds: 2 * 3600,
 	stormsAgeSeconds: 2 * 3600,
+	cyclonesAgeSeconds: 2 * 3600,
+	/** A cycle every 6 h, out about 3 h late: one missed cycle is flagged. */
+	advisoryAgeSeconds: 12 * 3600,
 } as const;
 
 export class MetricsFormatError extends Error {}
@@ -75,6 +78,7 @@ export interface StatusView {
 	catalog: { text: string; share: string } | null;
 	lake: { size: string; tables: string; files: string; rows: string; measured: Measure } | null;
 	storms: { detected: string; published: string; highlighted: string; measured: Measure } | null;
+	cyclones: { active: string; tracked: string; advisory: Measure; measured: Measure } | null;
 }
 
 export interface QualityCheck {
@@ -168,6 +172,7 @@ export function statusView(
 			catalog: null,
 			lake: null,
 			storms: null,
+			cyclones: null,
 		};
 	}
 	const generated = Date.parse(metrics.generated_at);
@@ -178,6 +183,7 @@ export function statusView(
 	const f = metrics.freshness;
 	const lake = metrics.lake as OpsMetrics['lake'] | undefined;
 	const storms = metrics.storms as OpsMetrics['storms'] | undefined;
+	const cyclones = metrics.cyclones as OpsMetrics['cyclones'] | undefined;
 	const layer = (label: string, value: number | null, target: number, targetText: string) => ({
 		label,
 		measure: {
@@ -241,6 +247,13 @@ export function statusView(
 			published: formatCount(storms?.published ?? null),
 			highlighted: formatCount(storms?.highlighted ?? null),
 			measured: measured(storms?.measured_at, now, SLO.stormsAgeSeconds, '< 2 h', current),
+		},
+		// Absent before contract 2.11.
+		cyclones: {
+			active: formatCount(cyclones?.active ?? null),
+			tracked: formatCount(cyclones?.tracked ?? null),
+			advisory: measured(cyclones?.source_cycle, now, SLO.advisoryAgeSeconds, '< 12 h', current),
+			measured: measured(cyclones?.measured_at, now, SLO.cyclonesAgeSeconds, '< 2 h', current),
 		},
 	};
 }

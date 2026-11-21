@@ -13,7 +13,8 @@
     "quality",
     "catalog",
     "lake",
-    "storms"
+    "storms",
+    "cyclones"
   ],
   "properties": {
     "schema_version": {
@@ -44,6 +45,9 @@
     },
     "storms": {
       "$ref": "#/$defs/StormCounts"
+    },
+    "cyclones": {
+      "$ref": "#/$defs/CycloneCounts"
     }
   },
   "$defs": {
@@ -377,6 +381,65 @@
         },
         "highlighted": {
           "description": "Storms featured in the highlights; null before the first publication.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CycloneCounts": {
+      "description": "Tropical cyclones in the feed after its latest hourly check.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measured_at",
+        "source_cycle",
+        "active",
+        "tracked"
+      ],
+      "properties": {
+        "measured_at": {
+          "description": "When the advisories were last read; null before the first run.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_cycle": {
+          "description": "Latest advisory cycle read; null before the first run.",
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active": {
+          "description": "Cyclones with a fix in one of the last two cycles; null before the first run.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tracked": {
+          "description": "Cyclones kept in the feed, 60 days; null before the first run.",
           "anyOf": [
             {
               "type": "integer",

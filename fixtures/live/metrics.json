@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.10.0",
+  "schema_version": "2.11.0",
   "generated_at": "2026-07-15T19:00:00Z",
   "freshness": {
     "live_feed_age_seconds": 6.0,
@@ -245,5 +245,11 @@
     "detected": 4812,
     "published": 1164,
     "highlighted": 9
+  },
+  "cyclones": {
+    "measured_at": "2026-07-15T17:50:21Z",
+    "source_cycle": "2026-07-15T12:00:00Z",
+    "active": 2,
+    "tracked": 14
   }
 }

@@ -19,6 +19,7 @@ SCHEMA_FILES = (
     "storm.schema.json",
     "active.schema.json",
     "search.schema.json",
+    "cyclone.schema.json",
 )
 VERSION_DEF = "SchemaVersion"
 

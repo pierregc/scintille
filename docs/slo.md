@@ -49,6 +49,9 @@ history is not stored (only the current hour).
 - `storms`: storms `detected` (tracked and classified, every level), `published` (level 3 and above,
   with a public page) and `highlighted`, from the metadata of the latest `feeds/storm_catalog`
   materialization; `measured_at` is that publication. `/status` flags one older than 2 h.
+- `cyclones`: tropical cyclones `active` and `tracked` (60 days) and the latest advisory cycle
+  read (`source_cycle`), from the metadata of the latest `feeds/cyclones` materialization;
+  `measured_at` is that run. `/status` flags a run older than 2 h and a cycle older than 12 h.
 - `flashes_per_minute`: flashes per minute of `ingest_time`, so a spot check against silver is
   `count(*) GROUP BY date_trunc('minute', ingest_time), source`. The series restarts with
   `ingest-live` (`series_start`).

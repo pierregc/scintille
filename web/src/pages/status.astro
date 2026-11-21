@@ -8,7 +8,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <BaseLayout
 	title="Status · Scintille"
-	description="Live operational metrics of the Scintille lightning feed: throughput, latency, completeness, freshness, lakehouse size and storms."
+	description="Live operational metrics of the Scintille lightning feed: throughput, latency, completeness, freshness, lakehouse size, storms and tropical cyclones."
 >
 	<main class="status" data-stale="true">
 		<header class="top">
@@ -36,6 +36,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 			<section>
 				<h2>Storms</h2>
 				<div data-storms></div>
+				<h2 class="next">Tropical cyclones</h2>
+				<div data-cyclones></div>
 			</section>
 		</div>
 
@@ -43,7 +45,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 			Refreshed every minute. Flashes are counted per minute of ingestion; the last minute is still in
 			progress. The error budget allows 1 % of satellite files missing over 30 days, provider outages
 			included. Lakehouse size counts the current table snapshots, measured hourly. Storms are
-			published from level 3.
+			published from level 3. Cyclone advisories come every 6 hours, about 3 hours after their time.
 		</p>
 	</main>
 </BaseLayout>
@@ -152,6 +154,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 	.layers {
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 40px;
+	}
+	.layers .next {
+		margin-top: 40px;
 	}
 	.status[data-stale='true'] .sources,
 	.status[data-stale='true'] .layers {

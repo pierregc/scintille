@@ -13,6 +13,7 @@ from scintille_contract.models import OpsMetrics, QualityStatus
 from scintille_ingest.glm.parse import FLASH_SCHEMA
 from scintille_ingest.runtime.live_feed import LiveFeed, parse_manifest
 from scintille_ingest.runtime.ops import (
+    CYCLONES_STATUS,
     GOLD_STATUS,
     LAKE_STATUS,
     QUALITY_STATUS,
@@ -175,6 +176,13 @@ def test_lake_size_and_storm_counts_keep_their_measurement_time(tmp_path: Path) 
     assert metrics.storms.measured_at == T0 - timedelta(hours=2)
     assert (metrics.storms.detected, metrics.storms.published) == (None, 1164)
     assert metrics.storms.highlighted == 9
+    assert metrics.cyclones.measured_at is None and metrics.cyclones.active is None
+    cycle = T0.replace(hour=6, minute=0)
+    counts = {"source_cycle": cycle.isoformat(), "active": 2, "tracked": 30}
+    ops.put_status(CYCLONES_STATUS, counts, T0 - timedelta(minutes=20))
+    cyclones = publisher.snapshot().cyclones
+    assert (cyclones.source_cycle, cyclones.active, cyclones.tracked) == (cycle, 2, 30)
+    assert cyclones.measured_at == T0 - timedelta(minutes=20)
 
 
 def test_stopped_lake_writer_raises_silver_lag_but_not_live_feed_age(tmp_path: Path) -> None:

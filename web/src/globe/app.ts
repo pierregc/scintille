@@ -15,6 +15,8 @@ import { CloudFeed, LIVE_CLOUD_FRAMES } from './clouds/feed';
 import { CloudPlayback } from './clouds/playback';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { createCoverage } from './coverage';
+import { createCyclones, type CyclonesLayer } from './cyclones';
+import { cloudTime } from './cyclones/track';
 import { attachCoverageLabel, surfacePoint } from './coverage/label';
 import { stormViewAt } from './coverage/map';
 import { runDevFlights } from './dev-flight';
@@ -90,6 +92,8 @@ export interface GlobeApp {
 	archiveStart(): number | null;
 	/** Internals for tools and the HUD flash counter. */
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
+	/** Tropical cyclones shown now. */
+	readonly cyclones?: Pick<CyclonesLayer, 'shown'>;
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
 	/** Surface detail, switchable to the base textures in development and PR previews. */
@@ -114,12 +118,14 @@ export interface GlobeAppOptions {
 	render?: RenderParams;
 	/** Label shown over areas without lightning data. */
 	coverageLabel?: HTMLElement;
+	/** Holder of the cyclone name tags. */
+	cycloneLabels?: HTMLElement;
 }
 
 export function createGlobeApp(
 	canvas: HTMLCanvasElement,
 	context: WebGL2RenderingContext,
-	{ render: renderParams, coverageLabel }: GlobeAppOptions = {},
+	{ render: renderParams, coverageLabel, cycloneLabels }: GlobeAppOptions = {},
 ): GlobeApp {
 	const renderer = new WebGLRenderer({ canvas, context, ...CONTEXT_ATTRIBUTES });
 	const scene = new Scene();
@@ -285,6 +291,13 @@ export function createGlobeApp(
 	clouds.setFlashLight(lightning.light);
 	const coldTops = createColdTops({ radius: RADIUS, onError: (error) => console.warn('cold tops:', error) });
 	scene.add(coldTops.mesh);
+	const cyclones = renderParams ? undefined : createCyclones({
+		radius: RADIUS,
+		baseUrl: liveBaseUrl(),
+		labels: cycloneLabels,
+		onError: (error) => console.warn('cyclones:', error),
+	});
+	if (cyclones) scene.add(cyclones.group);
 	const wind = createWindLayer({ radius: RADIUS, cloudOpacity: clouds.opacity, bakeScale: () => PRESETS[tier].windBake });
 	scene.add(wind.object);
 	const windFeed = new WindFeed({ baseUrl: liveBaseUrl(), layer: wind, now: () => clock.wallTime(), onError: (error) => console.warn('wind:', error) });
@@ -395,6 +408,15 @@ export function createGlobeApp(
 			steady: Boolean(renderParams) || reducedMotion.matches,
 		});
 		earth.setStormView(coldTops.mesh.visible ? 1 : 0);
+		cyclones?.update({
+			time: clouds.mesh.visible ? cloudTime(now, clouds.frameTimes) : now,
+			wallMs: performance.now(),
+			camera,
+			heightPx: canvas.clientHeight || window.innerHeight,
+			sun: sunDirection(new Date(now)),
+			steady: reducedMotion.matches,
+			ready: clouds.frameTimes.length > 0,
+		});
 		data.update(now);
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.
@@ -468,6 +490,7 @@ export function createGlobeApp(
 	return {
 		flyTo: controls.flyTo,
 		clock,
+		cyclones,
 		data,
 		replay,
 		focus,
@@ -530,6 +553,7 @@ export function createGlobeApp(
 			earth.dispose();
 			atmosphere.dispose();
 			coldTops.dispose();
+			cyclones?.dispose();
 			windFeed.dispose();
 			wind.dispose();
 			detachDevClouds?.();

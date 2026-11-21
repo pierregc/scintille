@@ -17,6 +17,7 @@ from scintille_contract.models import (
     SOURCE_VALUES,
     CatalogUsage,
     CheckStatus,
+    CycloneCounts,
     LakeSize,
     LayerFreshness,
     OpsMetrics,
@@ -42,6 +43,7 @@ QUALITY_STATUS = "quality"
 GOLD_STATUS = "gold"
 LAKE_STATUS = "lake"
 STORMS_STATUS = "storms"
+CYCLONES_STATUS = "cyclones"
 
 
 def minute(t: datetime) -> datetime:
@@ -247,6 +249,18 @@ def storm_counts(status: tuple[datetime, dict[str, Any]] | None) -> StormCounts:
     )
 
 
+def cyclone_counts(status: tuple[datetime, dict[str, Any]] | None) -> CycloneCounts:
+    if status is None:
+        return CycloneCounts(measured_at=None, source_cycle=None, active=None, tracked=None)
+    at, value = status
+    return CycloneCounts(
+        measured_at=at,
+        source_cycle=value.get("source_cycle"),
+        active=value.get("active"),
+        tracked=value.get("tracked"),
+    )
+
+
 def age(now: datetime, then: datetime | None) -> float | None:
     return None if then is None else round(max(0.0, (now - then).total_seconds()), 1)
 
@@ -263,6 +277,7 @@ def build(
     catalog_operations: int,
     lake: LakeSize | None = None,
     storms: StormCounts | None = None,
+    cyclones: CycloneCounts | None = None,
 ) -> OpsMetrics:
     sources = []
     for source in SOURCE_VALUES:
@@ -296,6 +311,7 @@ def build(
         ),
         lake=lake or lake_size(None),
         storms=storms or storm_counts(None),
+        cyclones=cyclones or cyclone_counts(None),
     )
 
 
@@ -345,6 +361,7 @@ class OpsPublisher:
             catalog_operations=self.ops.catalog_operations(f"{now:%Y-%m}"),
             lake=lake_size(self.ops.status(LAKE_STATUS)),
             storms=storm_counts(self.ops.status(STORMS_STATUS)),
+            cyclones=cyclone_counts(self.ops.status(CYCLONES_STATUS)),
         )
 
     async def publish(self) -> OpsMetrics:

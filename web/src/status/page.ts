@@ -201,6 +201,17 @@ function render(root: HTMLElement, view: StatusView, full: boolean): void {
 		);
 	}
 	sync(q('[data-storms]'), storms);
+
+	const cyclones = el('dl');
+	if (view.cyclones) {
+		cyclones.append(
+			row('Active', view.cyclones.active),
+			row('Tracked, 60\u00a0d', view.cyclones.tracked),
+			row('Latest advisory', view.cyclones.advisory.text, view.cyclones.advisory),
+			row('Checked', view.cyclones.measured.text, view.cyclones.measured),
+		);
+	}
+	sync(q('[data-cyclones]'), cyclones);
 }
 
 /** Polls `live/metrics.json` and keeps the page in step; ages tick every second. */

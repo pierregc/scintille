@@ -1,4 +1,5 @@
-"""Copies checks, gold build time, storm counts and lake size to Postgres for metrics.json."""
+"""Copies checks, gold build time, storm and cyclone counts and lake size to Postgres for
+metrics.json."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from dagster._core.storage.asset_check_execution_record import (
 )
 from pyiceberg.catalog import Catalog
 from scintille_ingest.runtime.ops import (
+    CYCLONES_STATUS,
     GOLD_STATUS,
     LAKE_STATUS,
     QUALITY_STATUS,
@@ -35,6 +37,7 @@ from .resources import LakeResource, PostgresResource
 
 STORM_CATALOG = AssetKey(["feeds", "storm_catalog"])
 STORM_FIELDS = {"detected": "detected", "published": "storms", "highlighted": "highlights"}
+CYCLONES = AssetKey(["feeds", "cyclones"])
 LAKE_EVERY = timedelta(hours=1)
 SUMMARY_FIELDS = {
     "bytes": "total-files-size",
@@ -110,6 +113,18 @@ def latest_storm_counts(instance: DagsterInstance) -> tuple[datetime, dict[str, 
     return datetime.fromtimestamp(event.timestamp, UTC), counts
 
 
+def latest_cyclone_counts(instance: DagsterInstance) -> tuple[datetime, dict[str, Any]] | None:
+    """Counts recorded by the latest check of the cyclone advisories."""
+    event = instance.get_latest_materialization_event(CYCLONES)
+    materialization = event.asset_materialization if event else None
+    if event is None or materialization is None:
+        return None
+    metadata = materialization.metadata
+    counts: dict[str, Any] = {k: int(str(metadata[k].value)) for k in ("active", "tracked")}
+    counts["source_cycle"] = str(metadata["source_cycle"].value)
+    return datetime.fromtimestamp(event.timestamp, UTC), counts
+
+
 def lake_size(catalog: Catalog) -> dict[str, int]:
     """Totals of each table's current snapshot, from its summary: no manifest is read."""
     totals = dict.fromkeys(["tables", *SUMMARY_FIELDS], 0)
@@ -135,7 +150,8 @@ def lake_due(cursor: str | None, now: datetime) -> bool:
 def ops_status(
     context: SensorEvaluationContext, postgres: PostgresResource, lake: LakeResource
 ) -> SkipReason:
-    """Every minute: check results, the latest gold build, storm counts and the pipeline heartbeat;
+    """Every minute: check results, the latest gold build, storm and cyclone counts and the pipeline
+    heartbeat;
     hourly: lake size."""
     repository = context.repository_def
     assert repository is not None
@@ -151,6 +167,9 @@ def ops_status(
         storms = latest_storm_counts(context.instance)
         if storms is not None:
             ops.put_status(STORMS_STATUS, storms[1], storms[0])
+        cyclones = latest_cyclone_counts(context.instance)
+        if cyclones is not None:
+            ops.put_status(CYCLONES_STATUS, cyclones[1], cyclones[0])
         if lake_due(context.cursor, now):
             # One attempt per hour, so a failing catalog is not retried every minute.
             context.update_cursor(now.isoformat())

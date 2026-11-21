@@ -278,6 +278,25 @@ Composite frames with Himawari add an optional `cold_tops` block
   point there (`cold_tops_path_pattern` for the archive) and it goes with the rest of
   `archive/clouds/` after 30 days.
 
+## Tropical cyclones
+
+`cyclones/tracks.json` ([ADR 0040](adr/0040-tropical-cyclones.md)) holds every tropical cyclone
+with a fix in the last 60 days, from NCEP TC vitals (NHC, CPHC and JTWC advisories). It is checked
+every hour and rewritten only when it changes; `source_cycle` is the latest advisory cycle read.
+
+```json
+{"id": "20261115-04p", "number": "04P", "name": "Xavier", "basin": "P", "agency": "JTWC",
+ "active": true,
+ "track": [{"time": "2026-11-17T18:00:00Z", "lat": -9.6, "lon": -163.8, "wind_kt": 128,
+            "r34_km": 128, "heading": 225, "speed_ms": 1.6}]}
+```
+
+- Fixes are usually 6 h apart. A client places a storm between two fixes on the great circle, and
+  may carry an `active` storm past its last fix along `heading` at `speed_ms`, 12 h at most. A
+  storm that is not `active` ends at its last fix.
+- `wind_kt` is the one-minute sustained wind in every basin. `name` is the storm number until the
+  storm is named.
+
 ## Historical cloud discovery
 
 `archive/clouds/manifests/YYYY-MM-DD.json` is the version 1 daily archive index
@@ -504,7 +523,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.10.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.11.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -512,7 +531,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.10.0`.
+Value: `2.11.0`.
 
 ### UtcTimestamp
 
@@ -773,6 +792,19 @@ Storms in the catalog after its latest hourly publication.
 | `published` | integer or null | yes |  | Storms with a public page: intensity level 3 and above; null before the first publication. |
 | `highlighted` | integer or null | yes |  | Storms featured in the highlights; null before the first publication. |
 
+### CycloneCounts
+
+Defined in `data/contract/metrics.schema.json`.
+
+Tropical cyclones in the feed after its latest hourly check.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `measured_at` | [UtcTimestamp](#utctimestamp) or null | yes |  | When the advisories were last read; null before the first run. |
+| `source_cycle` | [UtcTimestamp](#utctimestamp) or null | yes |  | Latest advisory cycle read; null before the first run. |
+| `active` | integer or null | yes |  | Cyclones with a fix in one of the last two cycles; null before the first run. |
+| `tracked` | integer or null | yes |  | Cyclones kept in the feed, 60 days; null before the first run. |
+
 ### OpsMetrics
 
 Defined in `data/contract/metrics.schema.json`.
@@ -789,6 +821,7 @@ live/metrics.json: operational metrics and freshness per layer, written every mi
 | `catalog` | [CatalogUsage](#catalogusage) | yes |  |  |
 | `lake` | [LakeSize](#lakesize) | yes |  |  |
 | `storms` | [StormCounts](#stormcounts) | yes |  |  |
+| `cyclones` | [CycloneCounts](#cyclonecounts) | yes |  |  |
 
 ### CoverageKind
 
@@ -1179,6 +1212,70 @@ GET /api/storms/nearby (ADR 0027): published storms whose observed interval meet
 | `distance` | `"path-minus-radius"` | yes |  | Great-circle distance to the arcs joining the storm's hourly centroids, minus the radius of a disc with its largest hourly area, at least 0, rounded to 10 km. |
 | `total` | integer | yes | minimum `0` | Matching storms before the limit. |
 | `storms` | array of [NearbyStorm](#nearbystorm) | yes |  |  |
+
+### CycloneBasin
+
+Defined in `data/contract/cyclone.schema.json`.
+
+Basin letter of the storm number: L North Atlantic, E eastern North Pacific, C central North Pacific, W western North Pacific, A Arabian Sea, B Bay of Bengal, S South Indian Ocean, P South Pacific, Q South Atlantic.
+
+| Index | Value |
+|---|---|
+| 0 | `L` |
+| 1 | `E` |
+| 2 | `C` |
+| 3 | `W` |
+| 4 | `A` |
+| 5 | `B` |
+| 6 | `S` |
+| 7 | `P` |
+| 8 | `Q` |
+
+### CycloneFix
+
+Defined in `data/contract/cyclone.schema.json`.
+
+One advisory position of a cyclone.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `time` | [UtcTimestamp](#utctimestamp) | yes |  | Time the position is valid for. |
+| `lat` | number | yes | minimum `-90`, maximum `90` |  |
+| `lon` | number | yes | minimum `-180`, maximum `180` |  |
+| `wind_kt` | integer or null | yes |  | Maximum one-minute sustained wind, knots; null when the advisory gives none. |
+| `r34_km` | integer or null | yes |  | Mean radius of 34 kt winds over the quadrants that have one, km; null when the advisory gives none. |
+| `heading` | integer or null | yes |  | Direction the storm moves toward, degrees clockwise from north; null when the advisory gives none. |
+| `speed_ms` | number or null | yes |  | Speed of the storm's motion, m/s; null when the advisory gives none. |
+
+### Cyclone
+
+Defined in `data/contract/cyclone.schema.json`.
+
+One tropical cyclone and its track.
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `id` | string | yes | pattern `^[0-9]{8}-[0-9]{2}[a-z]$` | Day of the first fix and storm number, lower case. Never changes. |
+| `number` | string | yes | pattern `^[0-9]{2}[LECWABSPQ]$` | Storm number of the season with its basin letter, such as 04P. |
+| `name` | string | yes | minLength `1` | Name given by the regional centre, or the storm number while it has none. |
+| `basin` | [CycloneBasin](#cyclonebasin) | yes |  |  |
+| `agency` | string | yes |  | Centre that issued the latest fix: NHC (which includes CPHC) or JTWC. |
+| `active` | boolean | yes |  | Whether the storm had a fix in one of the last two advisory cycles read. Only an active storm may be shown past its last fix. |
+| `track` | array of [CycloneFix](#cyclonefix) | yes |  | Fixes, oldest first, usually 6 h apart. |
+
+### CycloneFeed
+
+Defined in `data/contract/cyclone.schema.json`.
+
+cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0040).
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `schema_version` | [SchemaVersion](#schemaversion) | yes |  |  |
+| `generated_at` | [UtcTimestamp](#utctimestamp) | yes |  | When this feed was written. It is rewritten only when its content changes. |
+| `attribution` | string | yes |  | Credit to show with the data. |
+| `source_cycle` | [UtcTimestamp](#utctimestamp) or null | yes |  | Latest advisory cycle read (00, 06, 12 or 18 UTC); null before the first one. |
+| `cyclones` | array of [Cyclone](#cyclone) | yes |  | Tropical cyclones with a fix in the last 60 days, by first fix, oldest first. |
 
 <!-- END GENERATED REFERENCE -->
 
