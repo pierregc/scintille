@@ -27,7 +27,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		<div class="state">
 			<span class="pulse" aria-hidden="true"></span>
 			<span class="cap" data-state role="status">Live</span>
-			<span class="cap rate" data-rate title="Shown: flashes played on the globe, each counted once. Received: what the satellites sent, 1 min average." hidden></span>
+			<span class="cap rate" data-rate title="Shown: flashes played on the globe, each counted once. Received: plus the copies seen by two satellites, 1 min average." hidden></span>
 			<button class="golive" type="button" data-live>Back to live</button>
 		</div>
 		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
@@ -621,7 +621,7 @@ import StormSuggestions from './StormSuggestions.astro';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge, SOURCE_REGIONS, sourcesNote } from '../globe/live/freshness';
 	import { trackObservation } from '../globe/scene-time';
-	import { flashRate, rateLabel, receivedRate } from './hud/rate';
+	import { flashRate, rateLabel, excludedRate } from './hud/rate';
 	import { endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
 	import { LEVELS_KEY, levelKey, savedLevels } from './hud/levels';
 
@@ -702,7 +702,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		const updateRate = () => {
 			if (!rate) return;
 			const text = app && rateShown()
-				? rateLabel(flashRate(app.debug.ring, app.debug.delays(), app.clock.time()), receivedRate(app.debug.client.manifest))
+				? rateLabel(flashRate(app.debug.ring, app.debug.delays(), app.clock.time()), excludedRate(app.debug.client.manifest))
 				: '';
 			if (text === rateText && rate.hidden === !text) return;
 			rateText = text;
