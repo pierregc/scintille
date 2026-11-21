@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.10.0"]
-SCHEMA_VERSION: Final = "2.10.0"
+SchemaVersion = Literal["2.11.0"]
+SCHEMA_VERSION: Final = "2.11.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -384,6 +384,27 @@ class StormCounts(BaseModel):
     )
 
 
+class CycloneCounts(BaseModel):
+    """Tropical cyclones in the feed after its latest hourly check."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    measured_at: UtcTimestamp | None = Field(
+        description="When the advisories were last read; null before the first run."
+    )
+    source_cycle: UtcTimestamp | None = Field(
+        description="Latest advisory cycle read; null before the first run."
+    )
+    active: int | None = Field(
+        description=(
+            "Cyclones with a fix in one of the last two cycles; null before the first run."
+        )
+    )
+    tracked: int | None = Field(
+        description="Cyclones kept in the feed, 60 days; null before the first run."
+    )
+
+
 class OpsMetrics(BaseModel):
     """live/metrics.json: operational metrics and freshness per layer, written every minute."""
 
@@ -397,6 +418,7 @@ class OpsMetrics(BaseModel):
     catalog: CatalogUsage
     lake: LakeSize
     storms: StormCounts
+    cyclones: CycloneCounts
 
 
 CoverageKind = Literal["footprint", "no-coverage"]
@@ -885,3 +907,103 @@ class StormsNearby(BaseModel):
     )
     total: int = Field(ge=0, description="Matching storms before the limit.")
     storms: list[NearbyStorm]
+
+
+CycloneBasin = Literal["L", "E", "C", "W", "A", "B", "S", "P", "Q"]
+CYCLONE_BASIN_VALUES: Final[tuple[CycloneBasin, ...]] = (
+    "L",
+    "E",
+    "C",
+    "W",
+    "A",
+    "B",
+    "S",
+    "P",
+    "Q",
+)
+"""Basin letter of the storm number: L North Atlantic, E eastern North Pacific, C central North
+Pacific, W western North Pacific, A Arabian Sea, B Bay of Bengal, S South Indian Ocean, P South
+Pacific, Q South Atlantic.
+"""
+
+
+class CycloneFix(BaseModel):
+    """One advisory position of a cyclone."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    time: UtcTimestamp = Field(description="Time the position is valid for.")
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    wind_kt: int | None = Field(
+        description="Maximum one-minute sustained wind, knots; null when the advisory gives none."
+    )
+    r34_km: int | None = Field(
+        description=(
+            "Mean radius of 34 kt winds over the quadrants that have one, km; null when "
+            "the advisory gives none."
+        )
+    )
+    heading: int | None = Field(
+        description=(
+            "Direction the storm moves toward, degrees clockwise from north; null when "
+            "the advisory gives none."
+        )
+    )
+    speed_ms: float | None = Field(
+        description="Speed of the storm's motion, m/s; null when the advisory gives none."
+    )
+
+
+class Cyclone(BaseModel):
+    """One tropical cyclone and its track."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(
+        pattern="^[0-9]{8}-[0-9]{2}[a-z]$",
+        description="Day of the first fix and storm number, lower case. Never changes.",
+    )
+    number: str = Field(
+        pattern="^[0-9]{2}[LECWABSPQ]$",
+        description="Storm number of the season with its basin letter, such as 04P.",
+    )
+    name: str = Field(
+        min_length=1,
+        description="Name given by the regional centre, or the storm number while it has none.",
+    )
+    basin: CycloneBasin
+    agency: str = Field(
+        description="Centre that issued the latest fix: NHC (which includes CPHC) or JTWC."
+    )
+    active: bool = Field(
+        description=(
+            "Whether the storm had a fix in one of the last two advisory cycles read. "
+            "Only an active storm may be shown past its last fix."
+        )
+    )
+    track: list[CycloneFix] = Field(description="Fixes, oldest first, usually 6 h apart.")
+
+
+class CycloneFeed(BaseModel):
+    """cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC
+    (ADR 0039).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: SchemaVersion
+    generated_at: UtcTimestamp = Field(
+        description="When this feed was written. It is rewritten only when its content changes."
+    )
+    attribution: str = Field(description="Credit to show with the data.")
+    source_cycle: UtcTimestamp | None = Field(
+        description=(
+            "Latest advisory cycle read (00, 06, 12 or 18 UTC); null before the first one."
+        )
+    )
+    cyclones: list[Cyclone] = Field(
+        description=(
+            "Tropical cyclones with a fix in the last 60 days, by first fix, oldest first."
+        )
+    )

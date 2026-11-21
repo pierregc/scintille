@@ -21,15 +21,17 @@ from dagster import (
 )
 from pyiceberg.catalog import Catalog
 from pyiceberg.catalog.sql import SqlCatalog
-from scintille_ingest.runtime.ops import LAKE_STATUS, STORMS_STATUS
+from scintille_ingest.runtime.ops import CYCLONES_STATUS, LAKE_STATUS, STORMS_STATUS
 from scintille_lake.migrate import migrate
 from scintille_pipelines import checks, definitions
 from scintille_pipelines.ops_status import (
+    CYCLONES,
     STORM_CATALOG,
     CheckResult,
     lake_due,
     lake_size,
     latest_checks,
+    latest_cyclone_counts,
     latest_gold_build,
     latest_storm_counts,
     ops_status,
@@ -145,6 +147,20 @@ def test_storm_counts_come_from_the_latest_catalog_publication() -> None:
     assert datetime.now(UTC) - at < timedelta(minutes=1)
 
 
+def test_cyclone_counts_come_from_the_latest_check_of_the_advisories() -> None:
+    @asset(key=CYCLONES)
+    def cyclones() -> MaterializeResult:  # type: ignore[type-arg]
+        cycle = "2026-11-21T06:00:00+00:00"
+        return MaterializeResult(metadata={"source_cycle": cycle, "active": 1, "tracked": 30})
+
+    instance = DagsterInstance.ephemeral()
+    assert latest_cyclone_counts(instance) is None
+    materialize([cyclones], instance=instance)
+    counts = latest_cyclone_counts(instance)
+    assert counts is not None
+    assert counts[1] == {"source_cycle": "2026-11-21T06:00:00+00:00", "active": 1, "tracked": 30}
+
+
 def test_lake_size_is_measured_once_an_hour() -> None:
     assert lake_due(None, T0)
     assert not lake_due((T0 - timedelta(minutes=59)).isoformat(), T0)
@@ -172,9 +188,14 @@ def test_sensor_records_storm_counts_and_lake_size(
     def storm_catalog() -> MaterializeResult:  # type: ignore[type-arg]
         return MaterializeResult(metadata={"detected": 3, "storms": 1, "highlights": 1})
 
+    @asset(key=CYCLONES)
+    def cyclones() -> MaterializeResult:  # type: ignore[type-arg]
+        cycle = "2026-11-21T06:00:00+00:00"
+        return MaterializeResult(metadata={"source_cycle": cycle, "active": 1, "tracked": 30})
+
     instance = DagsterInstance.ephemeral()
-    materialize([storm_catalog], instance=instance)
-    defs = Definitions(assets=[storm_catalog], sensors=[ops_status])
+    materialize([storm_catalog, cyclones], instance=instance)
+    defs = Definitions(assets=[storm_catalog, cyclones], sensors=[ops_status])
     monkeypatch.setattr("scintille_pipelines.ops_status.PostgresOps", Ops)
     context = build_sensor_context(
         instance=instance,
@@ -183,6 +204,7 @@ def test_sensor_records_storm_counts_and_lake_size(
     )
     ops_status(context)
     assert recorded[STORMS_STATUS][1] == {"detected": 3, "published": 1, "highlighted": 1}
+    assert recorded[CYCLONES_STATUS][1]["active"] == 1
     assert recorded[LAKE_STATUS][1] == lake_size(lake.catalog())
     assert context.cursor is not None
     recorded.clear()

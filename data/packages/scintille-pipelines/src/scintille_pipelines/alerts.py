@@ -20,7 +20,7 @@ from scintille_ingest.runtime.heartbeat import http_post
 PIPELINES_HEALTHCHECK = "SCINTILLE_HEALTHCHECK_PIPELINES_URL"
 GOLD_MAX_AGE = timedelta(minutes=45)
 # Before a job counts as failing; short source gaps fail one or two hourly check runs.
-FAILURES_BEFORE_ALERT = {"silver_hourly_checks": 3, "daily_gold": 2}
+FAILURES_BEFORE_ALERT = {"silver_hourly_checks": 3, "daily_gold": 2, "hourly_cyclones": 3}
 # Leaves time for run retries to start a new run.
 RETRY_GRACE = timedelta(minutes=3)
 
