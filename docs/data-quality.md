@@ -65,7 +65,7 @@ skips).
 
 - Error: something is wrong with the data or the pipeline and needs action. Error checks are
   `blocking`, so a failed result fails the run; a check that raises fails it too. Either way
-  `alert_on_failure` posts it.
+  the `pipelines` heartbeat reports it ([operations](operations.md#pipelines)).
 - Warning: unusual but possibly real (a quiet night, a huge storm); visible in the UI, no alert.
 
 Reconciliation reads each side on its own (Postgres by the day encoded in the file name, bronze by

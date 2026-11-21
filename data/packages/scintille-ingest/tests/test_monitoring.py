@@ -92,13 +92,52 @@ def test_unreachable_or_broken_manifest_is_not_fresh() -> None:
     def down(url: str, timeout: float) -> bytes:
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
 
-    assert check("u", 180, fetch=down) == (False, "unreachable: HTTPError")
+    def timeout(url: str, timeout: float) -> bytes:
+        raise urllib.error.URLError("timed out")
+
+    assert check("u", 180, fetch=down) == (False, "unreachable: HTTPError (Not Found)")
+    assert check("u", 180, fetch=timeout) == (False, "unreachable: URLError (timed out)")
     assert check("u", 180, fetch=lambda url, timeout: b"{}") == (False, "invalid manifest")
 
 
 def test_probe_reports_to_its_heartbeat(tmp_path: Path) -> None:
     pinger = FakePinger()
     stale = manifest_at(tmp_path, datetime.now(UTC) - timedelta(minutes=5))
-    probe = LiveProbe("u", 180, heartbeat=pinger, fetch=lambda url, timeout: stale)
+    probe = LiveProbe(
+        "u", 180, site_url=None, heartbeat=pinger, retry_delay=0, fetch=lambda url, timeout: stale
+    )
     assert asyncio.run(probe.once()) is False
-    assert pinger.pings[0][0] is False and pinger.pings[0][1].startswith("stale")
+    assert pinger.pings == [(False, pinger.pings[0][1])] and pinger.pings[0][1].startswith("stale")
+
+
+def test_probe_alerts_only_on_repeated_failures(tmp_path: Path) -> None:
+    fresh = manifest_at(tmp_path, datetime.now(UTC) - timedelta(seconds=20))
+    reads: list[str] = []
+
+    def flaky(url: str, timeout: float) -> bytes:
+        reads.append(url)
+        if len(reads) == 1:
+            raise urllib.error.URLError("timed out")
+        return fresh
+
+    pinger = FakePinger()
+    probe = LiveProbe("u", 180, site_url="s", heartbeat=pinger, retry_delay=0, fetch=flaky)
+    assert asyncio.run(probe.once()) is True
+    assert reads == ["u", "s", "u", "s"]
+    assert pinger.pings == [(True, "fresh: generated 20 s ago; site up")]
+
+
+def test_probe_reports_a_site_that_stays_down(tmp_path: Path) -> None:
+    fresh = manifest_at(tmp_path, datetime.now(UTC) - timedelta(seconds=20))
+
+    def site_down(url: str, timeout: float) -> bytes:
+        if url == "s":
+            raise urllib.error.HTTPError(url, 503, "Unavailable", None, None)  # type: ignore[arg-type]
+        return fresh
+
+    pinger = FakePinger()
+    probe = LiveProbe("u", 180, site_url="s", heartbeat=pinger, retry_delay=0, fetch=site_down)
+    assert asyncio.run(probe.once()) is False
+    assert pinger.pings == [
+        (False, "fresh: generated 20 s ago; site unreachable: HTTPError (Unavailable)")
+    ]
