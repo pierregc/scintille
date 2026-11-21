@@ -597,6 +597,43 @@ import StormSuggestions from './StormSuggestions.astro';
 			padding: 0;
 		}
 	}
+	/* Touch: every control catches a 44 px square around it, neighbours spaced so these do not overlap. */
+	@media (pointer: coarse), (max-width: 640px) {
+		.golive,
+		.corner .cap,
+		.sw,
+		.tools button,
+		.opts :global(button) {
+			position: relative;
+		}
+		.golive::after,
+		.corner .cap::after,
+		.sw::after,
+		.tools button::after,
+		.opts :global(button)::after {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: max(100%, 44px);
+			height: max(100%, 44px);
+			content: '';
+			transform: translate(-50%, -50%);
+		}
+		.group,
+		.mix {
+			gap: 20px;
+		}
+		.mix {
+			margin-top: 0;
+		}
+		.opts {
+			gap: 30px;
+		}
+		.level input {
+			height: 44px;
+			margin: -10px 0;
+		}
+	}
 	@media (prefers-reduced-motion: reduce) {
 		.pulse,
 		.stale[data-loading] {

@@ -196,6 +196,37 @@
 			display: none;
 		}
 	}
+	@media (pointer: coarse), (max-width: 640px) {
+		.tx,
+		.speed :global(button) {
+			position: relative;
+		}
+		.tx::after,
+		.speed :global(button)::after {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: max(100%, 44px);
+			height: max(100%, 44px);
+			content: '';
+			transform: translate(-50%, -50%);
+		}
+		.scale::before {
+			position: absolute;
+			inset: -9px 0;
+			content: '';
+		}
+		.speed {
+			gap: 28px;
+			margin-left: 19px;
+		}
+		.when input {
+			padding: 14px 0 15px;
+			margin: -14px 0 -10px;
+			background: linear-gradient(var(--hair), var(--hair)) no-repeat 0 33px / 100% 1px;
+			border-bottom: 0;
+		}
+	}
 </style>
 
 <script>
