@@ -529,8 +529,26 @@ import StormSuggestions from './StormSuggestions.astro';
 	:global(body:has([data-globe-fallback]:not([hidden]))) .hud {
 		pointer-events: auto;
 	}
-	:global(body:has([data-globe-fallback]:not([hidden]))) .frame {
+	:global(body:has([data-globe-fallback]:not([hidden]))) :is(.frame, .corner, .state) {
 		display: none;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .clock .t {
+		justify-content: flex-start;
+	}
+	:global(body .globe-fallback[data-globe-fallback]) {
+		max-width: 32rem;
+		margin: 0 clamp(18px, 2.6vw, 40px) clamp(18px, 2.6vw, 40px);
+		color: rgb(238 242 247 / 0.62);
+		font: 300 14px/1.6 'IBM Plex Sans', system-ui, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	:global(.globe-fallback figcaption) {
+		margin-top: 20px;
+	}
+	:global(.globe-fallback a) {
+		color: rgb(238 242 247 / 0.9);
+		text-underline-offset: 3px;
+		text-decoration-color: rgb(238 242 247 / 0.3);
 	}
 
 	@media (max-width: 640px) {
