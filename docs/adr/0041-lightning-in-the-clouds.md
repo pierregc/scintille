@@ -50,11 +50,12 @@ Measured on Boquerón (2026-11-19, level 5, at night), at `c781017`:
    into the fine map as a soft tube, 6 km either side, at 1.6 times the footprint's level, keeping the
    brightest; its footprint keeps half its light there.
 3. **An exposure by load.** In a storm view the flashes outside the sample light the cloud at
-   `min(1, 25 / load)`, `load` being the flashes within their flicker at once, so a storm at 3600×
+   `min(1, 12 / load)`, `load` being the flashes within their flicker at once, so a storm at 3600×
    lights as much cloud as at 60×; and a share of them, from none at an applied share of 0.3 to all at
    0.02, light it in a soft fade (60 ms up, 250 ms down) instead of their flicker. The sample keeps
-   its level and its real-time profile, and grows to the top of its bands at speed: 30 flashes at
-   600× and 12 at 3600× (20 and 8 before), so fewer flashes go without their channel. Every flash still lights the cloud at its observed time, place
+   its level and its real-time profile, and now grows with the speed: 30 flashes at 60×, 45 at 600×
+   and 60 at 3600× (50, 20 and 8 before; bands 20 to 50, 30 to 60, 40 to 80). A faster replay never
+   draws fewer flashes in full: fewer read as flashes going missing under a light with no lightning. Every flash still lights the cloud at its observed time, place
    and footprint: none is moved, added or removed.
 4. **No disc up close.** While a flash is lit, where a cloud light shows, its round glow is drawn
    only from afar (farness 0.7 to 1, about 1.3 to 3 km per px), as the points outside the sample are.
@@ -80,8 +81,8 @@ Measured on Boquerón (2026-11-19, level 5, at night), at `c781017`:
 
 ## Consequences
 
-- At 600× and 3600× the picture is a calm field, brighter where the storm is denser, under the 30 or
-  12 flashes drawn in full; nothing blinks in blocks. From above a flash is a channel in a tight glow;
+- At 600× and 3600× the picture is a calm field, brighter where the storm is denser, under the 45 or
+  60 flashes drawn in full; nothing blinks in blocks. From above a flash is a channel in a tight glow;
   at the steepest tilt it is a soft light inside the layer, and nothing stands above the clouds.
   Before and after on Boquerón, the same instants: [captures](../immersive/lightning-in-clouds/0041-before-after.jpg).
 - The globe from afar and the afterglow are unchanged: captures at 14,000 km with 0, 1 and 30 minutes

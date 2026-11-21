@@ -122,7 +122,7 @@ its observed time, place and footprint, at every replay speed (where it cannot s
 below). What a storm view draws in full, with its channel, its real-time profile, its halo and its
 crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
 lightning look rework, #398). Since [ADR 0041](adr/0041-lightning-in-the-clouds.md) the flashes outside
-the sample light the cloud at `min(1, 25 / load)` of their level (`fieldLevel`), so a storm at 3600×
+the sample light the cloud at `min(1, 12 / load)` of their level (`fieldLevel`), so a storm at 3600×
 lights as much cloud as at 60×, and a share of them, from none at an applied share of 0.3 to all at
 0.02 (`calmShare`), light it in the soft fade of reduced motion instead of their flicker: at speed the
 field is calm and the sample alone flickers.
@@ -136,8 +136,8 @@ field is calm and the sample alone flickers.
   the sample is then cloud-to-ground; every flash keeps its cloud light either way. A flash is
   drawn while its lot is under the applied share, fading out over the next 10 % of the share rather
   than popping at its edge.
-- The share aims at a target number of flashes within their flicker at once: **50 at 60×, 30 at
-  600×, 12 at 3600×** (20 and 8 until ADR 0041), every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
+- The share aims at a target number of flashes within their flicker at once: **30 at 60×, 45 at
+  600×, 60 at 3600×** (50, 20 and 8 until ADR 0041, which makes the sample grow with the speed), every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
   between the speeds the target follows a power law). `share = target / (2.175 × load)`, `load`
   being the flashes within their flicker or fade at once, estimated from those played in the last
   0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (2.175 is the

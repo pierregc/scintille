@@ -12,9 +12,9 @@ const GROUND_WEIGHT = 0.4;
  */
 export const DENSITY = {
 	/** Flashes within their flicker at once, by replay speed; between the keys the target follows a power law of the speed. */
-	targets: { 1: Infinity, 60: 50, 600: 30, 3600: 12 } as Record<number, number>,
+	targets: { 1: Infinity, 60: 30, 600: 45, 3600: 60 } as Record<number, number>,
 	/** Bands the targets were tuned in, for the same speeds. */
-	band: { 60: [30, 100], 600: [12, 30], 3600: [5, 12] } as Record<number, readonly [number, number]>,
+	band: { 60: [20, 50], 600: [30, 60], 3600: [40, 80] } as Record<number, readonly [number, number]>,
 	/** Wall clock seconds of flashes counted as alive when sizing the sample: about a flicker and its fade. */
 	aliveWindow: 0.4,
 	/** Lot weight of the strongest flash, against 1 for the weakest: stronger flashes are up to 2.5× likelier. */
@@ -34,7 +34,7 @@ export const DENSITY = {
 	/** Newest flashes the cloud light keeps in a storm view; Infinity keeps every flash (the bench needed no ceiling). */
 	lightMapCeiling: Infinity,
 	/** Flashes within their flicker past which a storm view exposes the cloud light of the flashes outside the sample down, as `fieldLoad / load`: a storm at speed lights as much cloud as at 60× [60 to 200]. */
-	fieldLoad: 25,
+	fieldLoad: 12,
 	/** Applied share over which the flashes outside the sample go from a soft fade (all of them at `calm[0]`) to their real-time flicker (all of them from `calm[1]`). */
 	calm: [0.02, 0.3],
 	/** Cloud opacity over a flash from which its cloud light can carry it up close: under `clearSky[0]` it keeps its disc, from `clearSky[1]` the lit cloud and the channel replace it. */

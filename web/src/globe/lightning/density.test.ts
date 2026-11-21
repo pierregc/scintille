@@ -54,7 +54,10 @@ describe('heroLot', () => {
 
 describe('heroTarget', () => {
 	it('hits the targets at the replay speeds and every flash at 1×', () => {
-		expect(heroTarget(60)).toBe(50);
+		expect(heroTarget(60)).toBe(DENSITY.targets[60]);
+		// More flashes are drawn in full as the speed rises, never fewer.
+		expect(DENSITY.targets[600]).toBeGreaterThan(DENSITY.targets[60]);
+		expect(DENSITY.targets[3600]).toBeGreaterThan(DENSITY.targets[600]);
 		expect(heroTarget(600)).toBe(DENSITY.targets[600]);
 		expect(heroTarget(3600)).toBe(DENSITY.targets[3600]);
 		expect(heroTarget(1)).toBe(Infinity);
@@ -62,8 +65,8 @@ describe('heroTarget', () => {
 
 	it('interpolates between the keys and clamps outside them', () => {
 		const mid = heroTarget(200);
-		expect(mid).toBeGreaterThan(20);
-		expect(mid).toBeLessThan(50);
+		expect(mid).toBeGreaterThan(DENSITY.targets[60]);
+		expect(mid).toBeLessThan(DENSITY.targets[600]);
 		expect(heroTarget(10_000)).toBe(DENSITY.targets[3600]);
 		expect(heroTarget(0.5)).toBe(Infinity);
 	});

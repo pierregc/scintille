@@ -296,8 +296,9 @@ describe('storm view sample', () => {
 		expect(all).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, 1).alive);
 		expect(drawn).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, lightning.heroShare).drawn);
 		expect(drawn).toBeGreaterThan(5);
-		expect(drawn).toBeLessThan(60);
-		lightning.setTime(340_000, undefined, 600);
+		expect(drawn).toBeLessThan(2 * DENSITY.targets[600]);
+		// The pool builds 24 channels a frame: a few frames fill it.
+		for (let frame = 0; frame < 4; frame++) lightning.setTime(340_000, undefined, 600);
 		expect(lightning.stats.channels).toBe(sampleCount(ring, 340_000, playbackAt(340_000, 600), NO_DELAY, lightning.heroShare * DENSITY.edge).drawn);
 		expect(lightning.stats.channels).toBeLessThanOrEqual(drawn * 1.2);
 		lightning.dispose();
