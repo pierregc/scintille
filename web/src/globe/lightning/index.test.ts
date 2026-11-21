@@ -283,11 +283,11 @@ describe('storm view sample', () => {
 		lightning.stormView = true;
 		lightning.setTime(340_000, undefined, 600);
 		const alive = aliveLoad(ring, 340_000, 240_000, DENSITY.aliveWindow);
-		const wanted = heroShare(20, alive);
+		const wanted = heroShare(DENSITY.targets[600], alive);
 		expect(alive).toBeCloseTo((2000 * (flickerLength(ring.durationMs[ring.slot(0)]) + CHANNEL.fade)) / DENSITY.aliveWindow, 6);
 		expect(alive).toBeGreaterThan(500);
 		expect(lightning.stats.load).toBeCloseTo(alive, 9);
-		expect(lightning.stats.target).toBe(20);
+		expect(lightning.stats.target).toBe(DENSITY.targets[600]);
 		expect(lightning.heroShare).toBeCloseTo(wanted, 9);
 		expect(material.uniforms.heroShare.value).toBe(lightning.heroShare);
 		expect(material.uniforms.budgetFrom.value).toBe(-1e6);
@@ -402,7 +402,7 @@ describe('storm view sample', () => {
 		let scene = 1_000_000;
 		lightning.setTime(scene, undefined, 600);
 		const sparse = lightning.heroShare;
-		const wanted = 20 / (DENSITY.meanWeight * 2000 * 0.4 * (600 / 600));
+		const wanted = DENSITY.targets[600] / (DENSITY.meanWeight * 2000 * 0.4 * (600 / 600));
 		expect(sparse).toBeGreaterThan(wanted * 10);
 		let settled = Number.NaN;
 		for (let frame = 1; frame <= 6 * 60; frame++) {

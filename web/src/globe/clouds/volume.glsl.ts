@@ -612,13 +612,17 @@ void main() {
 	float depthSum = 0.0;
 	float depthWeight = 0.0;
 	float entry = -1.0;
+	// The flashes' light crosses the clouds more easily than sight does: it is followed past the point where they turn opaque.
+	float glowT = 1.0;
+	int unlit = 0;
 	// Each pixel shifts its steps by a low-discrepancy offset that turns every frame, so step
 	// boundaries never line up into contours; the first step starts at the slab top, never past it.
 	float jitter = fract(dot(floor(gl_FragCoord.xy), vec2(0.7548776662, 0.5698402910)) + frameJitter);
 	float t = t0;
 	int crossings = 0;
 	for (int i = 0; i < 160; i++) {
-		if (crossings >= maxSamples || t >= t1 || T < 0.02) break;
+		bool opaque = T < 0.02;
+		if (crossings >= maxSamples || t >= t1 || (opaque && (flashGain <= 0.0 || glowT < 0.03 || unlit >= ${CLOUD_LIGHT.deepCrossings}))) break;
 		vec3 pm = ro + rd * t;
 		vec3 up = normalize(pm);
 		float rise = dot(rd, up);
@@ -634,6 +638,18 @@ void main() {
 		vec4 f = volumeSample(volumeField, volumeLatLon(pm + rd * (0.5 * ds)));
 		vec3 col = volumeColumn(f);
 		float next = t + ds;
+		// Under a lit cloud the air glows too, down the body of the storm: rain and haze, never observed (styled).
+		if (flashGain > 0.0 && glowT > 0.03 && f.a > 0.3 && f.r > ${f(CLOUD_LIGHT.bodyCover)}) {
+			float under = overlap(h0, h1, ${f(CLOUD_LIGHT.bodyFloorKm)}, col.x, ds);
+			if (under > 0.0) {
+				vec3 pb = ro + rd * (t + 0.5 * ds);
+				vec2 lb = volumeLatLon(pb);
+				float body = flashLightAtLod(vec2(lb.y / 6.283185307 + 0.5, lb.x / 3.141592654 + 0.5)) * flashBand(length(pb) - R, col.y);
+				float bodyAlpha = 1.0 - exp(-${f(CLOUD_LIGHT.bodySigma)} * under);
+				glowLight += glowT * (1.0 - exp(-flashGain * body)) * ${f(CLOUD_LIGHT.volumeBoost)} * bodyAlpha * cloudLightDay(dot(normalize(pb), sunDir));
+				glowT *= 1.0 - bodyAlpha * step(1e-4, body);
+			}
+		}
 		if (f.a > 0.3 && f.r > 0.003 && overlap(h0, h1, col.x, col.y, ds) > 0.0) {
 			// The ray's whole crossing of this column, cut sideways: a column is integrated in one
 			// piece wherever the steps fall, so near-vertical views stay clean.
@@ -675,7 +691,7 @@ void main() {
 				float day = smoothstep(-0.03, 0.06, s);
 				vec3 lit = vec3(0.0);
 				float open = 1.0;
-				if (day > 0.0) {
+				if (day > 0.0 && !opaque) {
 					float d0 = max(col.y - (length(ro + rd * ta) - R), 0.0);
 					// A wall facing the sun, with lower cloud or clear air on its sunward side, takes the sun
 					// directly at its own incidence: grey under a high sun, as bright as the tops under a low one.
@@ -717,7 +733,7 @@ void main() {
 				}
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
 				vec3 sky = mix(${vec3(MOON_CLOUD_COLOR)}, vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
-				L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
+				if (!opaque) L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
 				// Flashes light the cloud from inside, in a band under each column's own top, read at two depths that
 				// share the crossing's light however the steps cut it: the lit area takes the cloud's shape, as a trace
 				// by day. Kept apart from the history, so each flash rises and fades in real time.
@@ -725,11 +741,16 @@ void main() {
 				vec2 glowAt = ta + glowDepths(max(sigma, 1e-3), len);
 				float inBand = 0.5 * (flashBand(length(ro + rd * glowAt.x) - R, col.y) + flashBand(length(ro + rd * glowAt.y) - R, col.y));
 				float glow = flashLightAtLod(geo) * inBand;
-				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * cloudLightDay(s);
-				depthSum += T * alpha * tv;
-				depthWeight += T * alpha;
-				if (entry < 0.0 && alpha > 0.01) entry = ta;
-				T *= 1.0 - alpha;
+				float glowAlpha = (1.0 - exp(-sigma * ${f(CLOUD_LIGHT.deepShare)} * len)) * known;
+				glowLight += glowT * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * cloudLightDay(s);
+				glowT *= 1.0 - glowAlpha;
+				if (opaque) unlit = glow > 0.0 ? 0 : unlit + 1;
+				if (!opaque) {
+					depthSum += T * alpha * tv;
+					depthWeight += T * alpha;
+					if (entry < 0.0 && alpha > 0.01) entry = ta;
+					T *= 1.0 - alpha;
+				}
 			}
 		}
 		t = next;

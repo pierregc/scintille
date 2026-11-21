@@ -121,8 +121,8 @@ brighter.
 its observed time, place and footprint, at every replay speed (where it cannot show, see the limits
 below). What a storm view draws in full, with its channel, its real-time profile, its halo and its
 crackle, is a **sample** sized for the speed (`density.ts`; the policy is recorded in ADR 0033 of the
-lightning look rework, #398). Since [ADR 0040](adr/0040-lightning-in-the-clouds.md) the flashes outside
-the sample light the cloud at `min(1, 40 / load)` of their level (`fieldLevel`), so a storm at 3600×
+lightning look rework, #398). Since [ADR 0041](adr/0041-lightning-in-the-clouds.md) the flashes outside
+the sample light the cloud at `min(1, 25 / load)` of their level (`fieldLevel`), so a storm at 3600×
 lights as much cloud as at 60×, and a share of them, from none at an applied share of 0.3 to all at
 0.02 (`calmShare`), light it in the soft fade of reduced motion instead of their flicker: at speed the
 field is calm and the sample alone flickers.
@@ -136,8 +136,8 @@ field is calm and the sample alone flickers.
   the sample is then cloud-to-ground; every flash keeps its cloud light either way. A flash is
   drawn while its lot is under the applied share, fading out over the next 10 % of the share rather
   than popping at its edge.
-- The share aims at a target number of flashes within their flicker at once: **50 at 60×, 20 at
-  600×, 8 at 3600×**, every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
+- The share aims at a target number of flashes within their flicker at once: **50 at 60×, 30 at
+  600×, 12 at 3600×** (20 and 8 until ADR 0041), every flash at 1× (bands tuned on captures: 30 to 100, 12 to 30, 5 to 12;
   between the speeds the target follows a power law). `share = target / (2.175 × load)`, `load`
   being the flashes within their flicker or fade at once, estimated from those played in the last
   0.4 s of wall clock time, each counting for its flicker and fade over those 0.4 s (2.175 is the
@@ -320,7 +320,7 @@ scaled by the channel opacity. A ground flash steps back only as much as the clo
 channel through (at least its 30 % trace), so a flash dimmed under a storm keeps most of its glow.
 Near the floor the round glow is drawn at 15 % (styled), as the lit cloud and the channel carry the
 flash; where the cloud light does not show (the `low` tier, clouds hidden or not loaded yet), it keeps
-40 %. Since [ADR 0040](adr/0040-lightning-in-the-clouds.md), where a cloud light shows, a lit flash has
+40 %. Since [ADR 0041](adr/0041-lightning-in-the-clouds.md), where a cloud light shows, a lit flash has
 no round glow below about 1.3 km per px and its full one from 3 km per px (farness 0.7 to 1, as the
 points outside the sample): a disc tangent to the ground read as a storey over the clouds in tilted
 views. The afterglow keeps its glow at every zoom. Over sunlit clouds it keeps 35 % of that (styled: from orbit, nothing of a flash shows by day).
@@ -351,7 +351,7 @@ the ground. It fades with camera distance from 1,500 to 6,000 km. Above 256 chan
 ## Cloud light
 
 Flashes also light the clouds from inside, through two light maps
-([ADR 0040](adr/0040-lightning-in-the-clouds.md)). A fine one covers a square of ground of 0.8 camera
+([ADR 0041](adr/0041-lightning-in-the-clouds.md)). A fine one covers a square of ground of 0.8 camera
 heights of half extent (at least 250 km) around the ground seen at screen height -0.3, 1024² texels
 (512² on phones) snapped to its own grid: 0.6 km per texel at the 400 km floor, 1.7 km at a storm
 framing. It draws each flash at its footprint (1.3 `r`, at least 1.5 texels), widens to the wide map's
@@ -376,7 +376,7 @@ whole patch lights during the flash's pulses (its profile from 0.35, whole from 
 energy, which sets the level), 0.65 of it between them, where its light has drifted; at least 2
 texels, and `150 w²` km from afar, as on the globe. It is drawn at `0.35 + 0.65 w` of its level
 (43 % at the floor), so channels read over it; the maps add the flashes up, in a storm view under the
-exposure by load above (the brightest flash at each point until ADR 0040). The cloud reads the map sharpened, `pow(light, 1.25 - 0.25 w)` (1.22 at
+exposure by load above (the brightest flash at each point until ADR 0041). The cloud reads the map sharpened, `pow(light, 1.25 - 0.25 w)` (1.22 at
 the floor, none over the whole globe), adds `1 - exp(-5 × light)` of the flash colour into its
 headroom only, in the flat layer and in the volume alike, and keeps 35 % of it over sunlit cloud (from
 a local sun 3° below the horizon to 14.5° above it), a styled trace like the channel's (physics:
@@ -384,7 +384,7 @@ nothing of a flash shows by day). Where the clouds are in relief, the volume lig
 band centred a quarter of its top's height under that top, at least 1 km and at most 3 km (11 km under
 a 14 km top, 2 km under a 3 km one), of 3.5 km half width (1/e) under tops of 11.5 km or more and
 narrower in proportion under lower ones (at least 1.2 km): where the channels fitted to that top run
-(`bandCentre`, `bandWidth`; until ADR 0040, 3 km under tops above 11.5 km and at 8.5 km otherwise). It
+(`bandCentre`, `bandWidth`; until ADR 0041, 3 km under tops above 11.5 km and at 8.5 km otherwise). It
 is read at the two depths that split the
 light each crossing sends back into quarters (so a column looks the same whether the march takes it
 in one piece or in many), at 1.8 times the flat layer's level: towers glow near their crown, thin

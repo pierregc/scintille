@@ -27,6 +27,16 @@ export const CLOUD_LIGHT = {
 	sharpen: 1.25,
 	/** The volume's glow over the flat layer's [1.5 to 2.5]. */
 	volumeBoost: 1.8,
+	/** Share of the clouds' extinction their flashes' light meets: it shows from deep inside, so a lit cloud reads thick (styled) [0.2 to 0.5]. */
+	deepShare: 0.3,
+	/** Crossings without flash light after which a ray past the opaque clouds stops looking for some. */
+	deepCrossings: 4,
+	/** Half width (1/e) of the lit band under its centre, km: down the body of the cloud, around the channels [6 to 12]. */
+	belowWidthKm: 9,
+	/** Under a cloud of at least `bodyCover` the air between `bodyFloorKm` and its base glows with its flashes, at this extinction per km [0.03 to 0.1]. */
+	bodyCover: 0.2,
+	bodyFloorKm: 0.5,
+	bodySigma: 0.06,
 	/** The lit band of a column is centred this share of its top's height under that top, at most `belowTopKm` [2 to 4] and at least `belowTopMinKm`: where its channels run. */
 	belowTopShare: 0.26,
 	belowTopKm: 3,
@@ -62,7 +72,8 @@ export function bandWidth(top: number): number {
 
 /** Weight of the lit band at `h` km in a column whose top is `top` km. */
 export function flashBand(h: number, top: number): number {
-	const d = (h - bandCentre(top)) / bandWidth(top);
+	const below = h < bandCentre(top);
+	const d = (h - bandCentre(top)) / (below ? Math.max(bandWidth(top), CLOUD_LIGHT.belowWidthKm) : bandWidth(top));
 	return Math.exp(-d * d);
 }
 
@@ -146,7 +157,8 @@ vec4 cloudPatch(float seed, float own, vec4 lobes) {
 export const cloudLightGlsl = /* glsl */ `
 float flashBand(float h, float top) {
 	float centre = top > 0.0 ? top - clamp(top * ${f(CLOUD_LIGHT.belowTopShare)}, ${f(CLOUD_LIGHT.belowTopMinKm)}, ${f(CLOUD_LIGHT.belowTopKm)}) : ${f(CLOUD_LIGHT.fallbackHeightKm)};
-	float d = (h - centre) / max(${f(CLOUD_LIGHT.minWidthKm)}, ${f(CLOUD_LIGHT.widthKm)} * min(1.0, top / ${f(CLOUD_LIGHT.fullTopKm)}));
+	float width = max(${f(CLOUD_LIGHT.minWidthKm)}, ${f(CLOUD_LIGHT.widthKm)} * min(1.0, top / ${f(CLOUD_LIGHT.fullTopKm)}));
+	float d = (h - centre) / (h < centre ? max(width, ${f(CLOUD_LIGHT.belowWidthKm)}) : width);
 	return exp(-d * d);
 }
 vec2 glowDepths(float sigma, float len) {

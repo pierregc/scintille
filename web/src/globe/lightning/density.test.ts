@@ -55,8 +55,8 @@ describe('heroLot', () => {
 describe('heroTarget', () => {
 	it('hits the targets at the replay speeds and every flash at 1×', () => {
 		expect(heroTarget(60)).toBe(50);
-		expect(heroTarget(600)).toBe(20);
-		expect(heroTarget(3600)).toBe(8);
+		expect(heroTarget(600)).toBe(DENSITY.targets[600]);
+		expect(heroTarget(3600)).toBe(DENSITY.targets[3600]);
 		expect(heroTarget(1)).toBe(Infinity);
 	});
 
@@ -64,7 +64,7 @@ describe('heroTarget', () => {
 		const mid = heroTarget(200);
 		expect(mid).toBeGreaterThan(20);
 		expect(mid).toBeLessThan(50);
-		expect(heroTarget(10_000)).toBe(8);
+		expect(heroTarget(10_000)).toBe(DENSITY.targets[3600]);
 		expect(heroTarget(0.5)).toBe(Infinity);
 	});
 });

@@ -161,7 +161,7 @@ void main() {
 			cull();
 			return;
 		}
-		width = clamp(${f(VEIL.scatterKm)} / kmPerPx, ${f(VEIL.scatterPx[0])}, ${f(VEIL.scatterPx[1])});
+		width = clamp(mix(${f(VEIL.scatterKm[0])}, ${f(VEIL.scatterKm[1])}, slantShare(slant)) / kmPerPx, ${f(VEIL.scatterPx[0])}, ${f(VEIL.scatterPx[1])});
 		// Dim paths, the glow of leaders between pulses, scatter nothing to speak of.
 		light *= screen * smoothstep(0.0, ${f(VEIL.scatterFrom)}, light);
 	} else if (inCloud) {

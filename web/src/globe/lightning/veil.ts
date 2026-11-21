@@ -34,15 +34,15 @@ export const VEIL = {
 	behind: 0.75,
 	behindKm: 20,
 	behindMin: 0.12,
-	/** Such clouds scatter the light of a main channel they hide around it: a soft tube this wide either side, km, between these widths on screen, at these shares of the channel's light seen from above and at a slant, falling by 1/e every `scatterDepthKm`. */
-	scatterKm: 4,
+	/** Such clouds scatter the light of a main channel they hide around it: a soft tube this wide either side, km, from above and at a slant, between these widths on screen, at these shares of the channel's light seen from above and at a slant, falling by 1/e every `scatterDepthKm`. */
+	scatterKm: [4, 9],
 	scatterPx: [5, 40],
-	scatterLevel: [0.2, 0.6],
+	scatterLevel: [0.2, 0.9],
 	scatterDepthKm: 30,
 	/** Channel light from which a path scatters in full; dimmer ones fade out. */
 	scatterFrom: 0.25,
 	/** Share of its core a channel they hide keeps at a slant, where they carry it as scattered light, over these slant paths (1 / cosine of the view to the vertical). */
-	slantCore: 0.35,
+	slantCore: 0.2,
 	slantCorePath: [1.2, 2.5],
 } as const;
 

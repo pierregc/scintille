@@ -94,7 +94,7 @@ describe('channels behind the clouds drawn in relief', () => {
 
 	it('scatters the light of main paths only, wide and soft', () => {
 		expect(ribbonVertex).toContain('halo > 1.5 ? branch && segC.z < 3.5 :');
-		expect(ribbonVertex).toContain(`width = clamp(${f(VEIL.scatterKm)} / kmPerPx, ${f(VEIL.scatterPx[0])}, ${f(VEIL.scatterPx[1])});`);
+		expect(ribbonVertex).toContain(`width = clamp(mix(${f(VEIL.scatterKm[0])}, ${f(VEIL.scatterKm[1])}, slantShare(slant)) / kmPerPx, ${f(VEIL.scatterPx[0])}, ${f(VEIL.scatterPx[1])});`);
 		expect(ribbonVertex).toContain(`smoothstep(0.0, ${f(VEIL.scatterFrom)}, light)`);
 		expect(ribbonFragment).toContain('scatterLight(front.x, front.y, vSlant)');
 	});

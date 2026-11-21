@@ -1,4 +1,4 @@
-# 0040 · Lightning in the clouds: a fine cloud light, an exposure by load, a veil from the clouds as drawn
+# 0041 · Lightning in the clouds: a fine cloud light, an exposure by load, a veil from the clouds as drawn
 
 - Status: accepted
 - Date: 2026-11-21
@@ -50,10 +50,11 @@ Measured on Boquerón (2026-11-19, level 5, at night), at `c781017`:
    into the fine map as a soft tube, 6 km either side, at 1.6 times the footprint's level, keeping the
    brightest; its footprint keeps half its light there.
 3. **An exposure by load.** In a storm view the flashes outside the sample light the cloud at
-   `min(1, 40 / load)`, `load` being the flashes within their flicker at once, so a storm at 3600×
+   `min(1, 25 / load)`, `load` being the flashes within their flicker at once, so a storm at 3600×
    lights as much cloud as at 60×; and a share of them, from none at an applied share of 0.3 to all at
    0.02, light it in a soft fade (60 ms up, 250 ms down) instead of their flicker. The sample keeps
-   its level and its real-time profile. Every flash still lights the cloud at its observed time, place
+   its level and its real-time profile, and grows to the top of its bands at speed: 30 flashes at
+   600× and 12 at 3600× (20 and 8 before), so fewer flashes go without their channel. Every flash still lights the cloud at its observed time, place
    and footprint: none is moved, added or removed.
 4. **No disc up close.** While a flash is lit, where a cloud light shows, its round glow is drawn
    only from afar (farness 0.7 to 1, about 1.3 to 3 km per px), as the points outside the sample are.
@@ -67,18 +68,22 @@ Measured on Boquerón (2026-11-19, level 5, at night), at `c781017`:
    reads their cover and the depths at which its ray enters them and meets them on average. A point
    `d` km behind their near side is hidden by `cover × (1 - exp(-3 d / (mean - entry)))`; hidden, a
    core keeps `0.75 exp(-d / 20)` of its light (at least 0.12, and the 0.3 trace of ADR 0033 under the
-   base), 0.35 of that at a slant (paths 1.2 to 2.5), its clear air halo goes, and the cloud scatters
-   the light of main paths around them: a soft tube 4 km either side at 0.2 (from above) to 0.6 (at a
-   slant) of the channel's light. The flat layer keeps the estimate of ADR 0035.
-7. **Seen from above.** The dimming of #479 stays on the disc; the cloud light, reduced here, is no
+   base), 0.2 of that at a slant (paths 1.2 to 2.5), its clear air halo goes, and the cloud scatters
+   the light of main paths around them: a soft tube 4 km (from above) to 9 km (at a slant) either
+   side, at 0.2 to 0.9 of the channel's light. The flat layer keeps the estimate of ADR 0035.
+7. **A lit cloud reads thick.** In the volume the flashes' light meets 0.3 of the clouds' extinction,
+   so it shows from deep inside, past the point where the clouds turn opaque; the lit band reaches
+   down the body of the cloud (9 km of half width under its centre), and the air under a lit cloud
+   glows with it down to 0.5 km, as rain and haze would (extinction 0.06 per km, styled).
+8. **Seen from above.** The dimming of #479 stays on the disc; the cloud light, reduced here, is no
    longer dimmed with it.
 
 ## Consequences
 
-- At 600× and 3600× the picture is a calm field, brighter where the storm is denser, under the 20 or
-  8 flashes drawn in full; nothing blinks in blocks. From above a flash is a channel in a tight glow;
+- At 600× and 3600× the picture is a calm field, brighter where the storm is denser, under the 30 or
+  12 flashes drawn in full; nothing blinks in blocks. From above a flash is a channel in a tight glow;
   at the steepest tilt it is a soft light inside the layer, and nothing stands above the clouds.
-  Before and after on Boquerón, the same instants: [captures](../immersive/lightning-in-clouds/0040-before-after.jpg).
+  Before and after on Boquerón, the same instants: [captures](../immersive/lightning-in-clouds/0041-before-after.jpg).
 - The globe from afar and the afterglow are unchanged: captures at 14,000 km with 0, 1 and 30 minutes
   of afterglow differ by the HUD only, and at 9,000 km by 168 pixels of at most 4 levels out of 255.
 - ADR 0033's "every flash lights the cloud with its real-time profile at full level, at every replay
