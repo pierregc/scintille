@@ -64,6 +64,8 @@ terminator, and night clouds lit from inside by lightning. Observations from the
   come from the renderer (#62), using BT as a cloud-top height proxy, which GFS cover cannot give.
 - On the night side every option behaves the same: clouds stay dark and dim city lights, which is
   the canvas #64 needs.
+  Since then a faint cool moonlight (`MOONLIGHT` in `twilight.ts`) keeps land and clouds readable
+  at night, well under the flashes.
 
 Documentation and measurement disagree for GMGSI: the product page states about 3 km, 60° N to
 60° S and a two to three hour latency, while the files are 0.072° from 72.7° S to 72.7° N and land

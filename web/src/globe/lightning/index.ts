@@ -42,7 +42,7 @@ import { lightMapFragmentShader, lightMapVertexShader } from './light-map.glsl';
 import { lightningFragmentShader, lightningVertexShader } from './lightning.glsl';
 import { FlashPlayback } from './playback';
 import { flickerLength, MAX_LIFE, PROFILE } from './profile';
-import { maxBlendShare, PHONE, viewScale, ZOOM } from './zoom';
+import { faceOnShare, maxBlendShare, PHONE, viewScale, ZOOM } from './zoom';
 
 export { DISPLAY_MINUTES } from './display';
 export { FlashInstances } from './instances';
@@ -284,7 +284,7 @@ export function createLightning(
 	haloMesh.onBeforeRender = channelMesh.onBeforeRender;
 
 	const lightMap = lightMapWidth > 0
-		? createLightMap(geometry, material, lightBudgetFrom, lightMapWidth, radius, LIGHT_WINDOW.nearLevel * (phone ? PHONE.nearLevel : 1))
+		? createLightMap(geometry, material, lightBudgetFrom, lightMapWidth, radius, LIGHT_WINDOW.nearLevel * (phone ? PHONE.nearLevel : 1), (facing) => faceOnShare(facing, viewKmPerPx * scale.value))
 		: null;
 
 	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
@@ -529,7 +529,7 @@ export function lightWindow(target: { lat: number; lon: number }, heightKm: numb
 
 
 /** Renders the flashes into an equirectangular glow map around what the camera looks at, wrapped at the antimeridian. */
-function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, budgetFrom: NumberUniform, width: number, radius: number, nearLevel: number) {
+function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderMaterial, budgetFrom: NumberUniform, width: number, radius: number, nearLevel: number, faceOn: (facing: number) => number) {
 	const target = new WebGLRenderTarget(width, width / 2, { type: HalfFloatType, format: RedFormat, depthBuffer: false });
 	const geometry = new InstancedBufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(new Float32Array(3), 3));
@@ -597,7 +597,7 @@ function createLightMap(flashGeometry: InstancedBufferGeometry, flashes: ShaderM
 			lightWindow(aim, (height / radius) * EARTH_RADIUS_KM, bounds);
 			const whole = bounds.w / (Math.PI / 2);
 			splat.value = LIGHT_WINDOW.nearSplat + (LIGHT_WINDOW.farSplat - LIGHT_WINDOW.nearSplat) * whole;
-			level.value = nearLevel + (1 - nearLevel) * whole;
+			level.value = (nearLevel + (1 - nearLevel) * whole) * faceOn(-forward.dot(point));
 			spread.value = LIGHT_WINDOW.farSpreadKm * whole * whole;
 			minSplat.value = (4 * bounds.w * EARTH_RADIUS_KM) / (width / 2);
 			const previous = renderer.getRenderTarget();

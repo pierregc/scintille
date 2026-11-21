@@ -63,14 +63,12 @@ export function formatDate(ms: number, timeZone?: string): string {
 	return `${pad(w.day)} ${MONTHS[w.month - 1]} ${w.year}`;
 }
 
-/** City of the zone (`Paris`), or its offset at `ms` (`UTC+2`) when it has none. */
+/** Offset of the zone at `ms` (`UTC+1`, `UTC−5`, `UTC+5:30`), never a city. */
 export function zoneLabel(timeZone = localZone(), ms = Date.now()): string {
-	const [area, ...rest] = timeZone.split('/');
-	if (rest.length > 0 && area !== 'Etc') return rest[rest.length - 1].replaceAll('_', ' ');
 	const offset = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
 		.formatToParts(ms)
 		.find((p) => p.type === 'timeZoneName')?.value;
-	return (offset ?? 'GMT').replace('GMT', 'UTC');
+	return (offset ?? 'GMT').replace('GMT', 'UTC').replace('-', '\u2212');
 }
 
 /** ` · 40 min earlier` or ` · 20 min later` than the scene; empty when close to it. */

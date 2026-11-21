@@ -27,6 +27,7 @@ uniform vec4 twilightWeights;
 uniform float twilightSoftness;
 uniform float twilightFloor;
 uniform float nightLights;
+uniform vec3 moonlight;
 uniform float specular;
 uniform float seaRoughness;
 uniform float glintCap;
@@ -167,6 +168,7 @@ void main() {
 	float edge = exp(-s * s / 0.006);
 	color *= mix(vec3(1.0), vec3(1.6, 0.9, 0.5), terminatorTint * edge);
 
+	color += mix(day, vec3(dot(day, vec3(0.2126, 0.7152, 0.0722))), 0.4) * moonlight * (1.0 - level);
 	color += night * nightLights * (1.0 - level);
 
 	vec3 view = normalize(cameraPosition - vWorldPosition);

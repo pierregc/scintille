@@ -82,7 +82,7 @@ void main() {
 	float viewKmPerPx = kmPerPx * viewScale;
 	brightness *= keep;
 	float size = glowRadiusKm(flashShape.y, flashShape.x, kmPerPx, viewScale) * kmToWorld;
-	brightness *= glowShare(viewKmPerPx, nearGlowLevel, glowLevel);
+	brightness *= glowShare(viewKmPerPx, nearGlowLevel, glowLevel) * faceOnShare(facing, viewKmPerPx);
 	// Over sunlit cloud the glow keeps a styled trace near the floor; from afar the points keep their day marks.
 	float day = smoothstep(-0.05, 0.25, dot(normal, normalize(sunDirection)));
 	brightness *= mix(1.0, ${f(CHANNEL.glowDayLevel)}, day * nearFloor(viewKmPerPx));

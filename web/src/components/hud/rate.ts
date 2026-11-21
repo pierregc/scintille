@@ -28,10 +28,10 @@ export function flashRate(ring: FlashRing, delays: SourceDelays, now: number, wi
 }
 
 /**
- * Flashes per second received from the satellites, before the copies seen by two of them are left out,
- * averaged over the chunks of the last `windowMs` of the manifest. Null when a chunk has no count.
+ * Flashes per second left out because another satellite owns their point, averaged over the chunks of
+ * the last `windowMs` of the manifest. Null when a chunk has no received count.
  */
-export function receivedRate(manifest: LiveManifest | null, windowMs = 60_000): number | null {
+export function excludedRate(manifest: LiveManifest | null, windowMs = 60_000): number | null {
 	const chunks = manifest?.chunks ?? [];
 	if (!chunks.length) return null;
 	const from = Date.parse(chunks[chunks.length - 1].end) - windowMs;
@@ -40,7 +40,7 @@ export function receivedRate(manifest: LiveManifest | null, windowMs = 60_000): 
 	for (let i = chunks.length - 1; i >= 0 && Date.parse(chunks[i].start) >= from; i--) {
 		const received = chunks[i].received_count;
 		if (received == null) return null;
-		count += received;
+		count += Math.max(received - chunks[i].flash_count, 0);
 		ms += Date.parse(chunks[i].end) - Date.parse(chunks[i].start);
 	}
 	return ms > 0 ? (count * 1000) / ms : null;
@@ -48,8 +48,8 @@ export function receivedRate(manifest: LiveManifest | null, windowMs = 60_000): 
 
 const format = (perSecond: number) => (perSecond >= 10 ? String(Math.round(perSecond)) : perSecond.toFixed(1));
 
-/** `47 flashes/s shown · 61 received`, one decimal under 10; the second part only with a received rate. */
-export function rateLabel(shown: number, received: number | null = null): string {
+/** `47 flashes/s shown · 61 received`, one decimal under 10; received is shown plus `excluded`, when known. */
+export function rateLabel(shown: number, excluded: number | null = null): string {
 	const text = `${format(shown)} flashes/s shown`;
-	return received === null ? text : `${text} · ${format(received)} received`;
+	return excluded === null ? text : `${text} · ${format(shown + excluded)} received`;
 }

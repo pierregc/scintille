@@ -2,6 +2,7 @@ import { CLOUD_LIGHT, cloudLightGlsl } from '../lightning/cloud-light';
 import { flashLightGlsl } from '../lightning/light-map.glsl';
 import { glslFloat as f } from '../lightning/profile';
 import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT } from './bounds';
+import { MOON_CLOUD_COLOR } from '../twilight';
 import { cloudOpacityGlsl } from './clouds.glsl';
 import { reliefFieldGlsl, volumeFieldGlsl } from './field.glsl';
 
@@ -714,7 +715,7 @@ void main() {
 					lit = sunColor * (phaseSun * direct + phaseSoft * soft + 0.25 * deep) * mix(0.6, 1.0, powder) * scatterGain * exposure * surface;
 				}
 				float hn = clamp((h - col.x) / max(col.y - col.x, 0.3), 0.0, 1.0);
-				vec3 sky = mix(vec3(0.0012, 0.0015, 0.0025), vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
+				vec3 sky = mix(${vec3(MOON_CLOUD_COLOR)}, vec3(0.085, 0.1, 0.13) * mix(0.35, 1.0, smoothstep(0.0, 0.4, s)), smoothstep(-0.12, 0.1, s));
 				L += T * (lit * known + sky * mix(0.45, 1.0, hn) * open * alpha);
 				// Flashes light the cloud from inside, in a band under each column's own top, read at two depths that
 				// share the crossing's light however the steps cut it: the lit area takes the cloud's shape, as a trace

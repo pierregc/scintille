@@ -25,6 +25,9 @@ export const ZOOM = {
 	glowLevel: 0.4,
 	/** Glow level at the floor, where the lit cloud and the channels carry the flash. */
 	nearGlowLevel: 0.15,
+	/** Glow level seen straight down from close, where the sprite shows face on: from `faceOn[1]` facing to `faceOn[0]`, tilted views keep theirs. */
+	faceOnLevel: 0.5,
+	faceOn: [0.82, 0.95],
 } as const;
 
 /** Phones draw lightning as a view of `viewHeight` CSS px would, shrunk to their screen, and dim the glows near the floor. */
@@ -74,6 +77,12 @@ export function glowShare(kmPerPx: number, nearLevel: number = ZOOM.nearGlowLeve
 	return far * (1 - w) + nearLevel * w;
 }
 
+/** Share of the glow kept as the view looks straight down at it (`facing`, cosine of the view angle), from close only. */
+export function faceOnShare(facing: number, kmPerPx: number): number {
+	const w = smoothstep(ZOOM.faceOn[0], ZOOM.faceOn[1], facing) * (1 - farness(kmPerPx));
+	return 1 + (ZOOM.faceOnLevel - 1) * w;
+}
+
 /** Glow radius in km of a flash of observed radius `radiusKm`; the point floor stays in CSS px whatever the `viewScale`. */
 export function glowRadiusKm(radiusKm: number, intensity: number, kmPerPx: number, scale = 1): number {
 	const i = clamp01(intensity);
@@ -104,6 +113,9 @@ float nearFloor(float kmPerPx) {
 }
 float glowShare(float kmPerPx, float nearLevel, float rampLevel) {
 	return mix(mix(rampLevel, 1.0, farness(kmPerPx)), nearLevel, nearFloor(kmPerPx));
+}
+float faceOnShare(float facing, float kmPerPx) {
+	return mix(1.0, ${f(ZOOM.faceOnLevel)}, smoothstep(${f(ZOOM.faceOn[0])}, ${f(ZOOM.faceOn[1])}, facing) * (1.0 - farness(kmPerPx)));
 }
 float channelReveal(float radiusKm, float kmPerPx) {
 	return smoothstep(${f(ZOOM.revealPx[0])}, ${f(ZOOM.revealPx[1])}, radiusKm * ${f(CHANNEL.lengthScale)} / kmPerPx);

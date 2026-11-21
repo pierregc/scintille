@@ -223,6 +223,22 @@ def test_mtg_source_lists_and_fetches_chunks(data: bytes) -> None:
     assert source.parse(products[0], data, RECEIVED).log.row_count == 4
 
 
+def test_mtg_source_catches_up_late_products_every_full_listing(data: bytes) -> None:
+    store = FakeStore(data)
+    windows: list[timedelta] = []
+
+    def search(start: datetime, end: datetime) -> list[Listed]:
+        windows.append(end - start)
+        return store.listed
+
+    store.search = search  # type: ignore[method-assign]
+    source = MtgSource(store)
+    for minutes in (0, 1, 9, 10, 11):
+        asyncio.run(source.list_recent(RECEIVED + timedelta(minutes=minutes)))
+    full, short = source.catchup, source.lookback
+    assert windows == [full, short, short, full, short]
+
+
 def test_mtg_once_prints_the_latest_chunk_and_latencies(
     data: bytes, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
 ) -> None:
