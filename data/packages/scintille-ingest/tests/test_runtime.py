@@ -155,6 +155,24 @@ def test_publishes_each_file_once_unless_the_crash_came_before_its_state(tmp_pat
     assert len(publisher.flash_ids) == len(set(publisher.flash_ids)) == 12
 
 
+def test_a_file_older_than_the_live_window_goes_to_the_lake_only(tmp_path: Path) -> None:
+    state, spool, source = MemoryState(), Spool(tmp_path), FakeSource("mtg-li", files=2)
+    source.products[0] = Product("mtg-li/late.nc", NOW - timedelta(hours=3))
+    publisher = CountingPublisher()
+    live = service(state, spool, source, publisher=publisher)
+    asyncio.run(live.poll(source))
+    assert len(publisher.flash_ids) == 4
+    assert len(spool.pending()) == 2
+    assert {r.state for r in state.records.values()} == {"spooled"}
+
+    source.products = [source.products[0]]
+    state, publisher = MemoryState(), CountingPublisher()
+    late_only = service(state, Spool(tmp_path / "late"), source, publisher=publisher)
+    asyncio.run(late_only.poll(source))
+    assert publisher.flash_ids == []
+    assert late_only._live_sources() == set()
+
+
 def test_spool_rows_carry_versions_and_source_file(tmp_path: Path) -> None:
     state, spool, source = MemoryState(), Spool(tmp_path), FakeSource("glm-east", files=1)
     settings = Settings(parser_version="glm-1", calibration_version="cal-0")

@@ -90,17 +90,27 @@ def _hour_end(at: datetime) -> datetime:
 
 
 class MtgSource:
-    """MTG-I1 Lightning Imager, from the EUMETSAT Data Store."""
+    """MTG-I1 Lightning Imager, from the EUMETSAT Data Store.
+
+    Lists the products sensed in the last `lookback`, and in the last `catchup` every `full_every`:
+    the Data Store can publish products hours after they were sensed."""
 
     name = "mtg-li"
     cadence = 30.0
     lookback = timedelta(minutes=30)
+    catchup = timedelta(hours=24)
+    full_every = timedelta(minutes=10)
 
     def __init__(self, store: DataStore) -> None:
         self._store = store
+        self._full_at: datetime | None = None
 
     async def list_recent(self, now: datetime) -> list[Product]:
-        listed = await asyncio.to_thread(self._store.search, now - self.lookback, now)
+        full = self._full_at is None or now - self._full_at >= self.full_every
+        since = now - (self.catchup if full else self.lookback)
+        listed = await asyncio.to_thread(self._store.search, since, now)
+        if full:
+            self._full_at = now
         return [Product(c.key, c.start) for c in chunks(listed)]
 
     async def fetch(self, product: Product) -> bytes:

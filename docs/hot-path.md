@@ -7,8 +7,9 @@ lakehouse can never slow down or stop the live feed.
 
 One asyncio task per source (GLM East, GLM West; MTG LI with #32). Each lists its bucket on its own
 cadence (GLM every 2 s, only the files of the last 3 minutes, with the whole hour once a minute;
-MTG LI every 30 s) and takes every file not spooled yet (a known key listed with a new ETag counts
-as not spooled) through:
+MTG LI every 30 s, the products of the last 30 minutes, with the last 24 hours every 10 minutes
+because the Data Store can publish products hours late) and takes every file not spooled yet (a
+known key listed with a new ETag counts as not spooled) through:
 
 1. **download**: file identity = object key + SHA-256 (a revised product is a new file); the
    original is not copied, NOAA and EUMETSAT keep it; state `downloaded`;
@@ -19,8 +20,9 @@ as not spooled) through:
    manifest, and still spooled. While the owner has spooled no file
    for 5 minutes (`owner_stale_after`; 15 for MTG LI, which delivers every 10, in
    `owner_stale_after_by_source`), they stay in the live feed so its zone does not go dark. A
-   file with nothing left to publish still refreshes the source's `last_ingest_time`; state
-   `published_live`;
+   file with nothing left to publish still refreshes the source's `last_ingest_time`. A file
+   sensed more than an hour ago (`live_window`) skips the live feed, does not count as a file from
+   its source, and goes to the spool only; state `published_live`;
 3. **spool**: per batch, its flashes and its `bronze.ingest_log` rows as Parquet, each written to a
    temporary name, fsynced, then renamed (flashes last, so they mark a complete batch); `batch_id` =
    hash of the batch's file identities (one file per batch today), so a re-run writes the same batch
