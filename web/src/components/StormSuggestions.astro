@@ -29,6 +29,10 @@
 	summary, [data-catalog-retry] { color: var(--dim); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; }
 	summary { display: inline-flex; gap: 10px; align-items: center; min-height: 32px; color: var(--soft); font-size: 12px; letter-spacing: 0.2em; list-style: none; }
 	summary::-webkit-details-marker { display: none; }
+	@media (pointer: coarse), (max-width: 640px) {
+		summary, [data-catalog-retry] { position: relative; }
+		summary::after, [data-catalog-retry]::after { position: absolute; top: 50%; left: 50%; width: max(100%, 44px); height: max(100%, 44px); content: ''; transform: translate(-50%, -50%); }
+	}
 	summary:hover, .suggestions[open] > summary { color: var(--ink); }
 	.panel { margin-top: 10px; max-height: calc(100svh - 300px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-color: var(--hair) transparent; scrollbar-width: thin; }
 	p { margin: 0 0 16px; color: var(--dim); font: 300 11px/1.6 var(--sans); }
