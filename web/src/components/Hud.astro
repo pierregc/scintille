@@ -71,11 +71,9 @@ import StormSuggestions from './StormSuggestions.astro';
 		display: flex;
 		flex-direction: column;
 		max-width: min(24rem, calc(100vw - 2 * var(--gut)));
-		pointer-events: none;
 	}
 	.replay-status { color: var(--soft); font: 300 12px/1.6 var(--sans); white-space: pre-line; }
 	.tools { display: flex; flex-wrap: wrap; column-gap: 16px; }
-	.tools > * { pointer-events: auto; }
 	.hud button { -webkit-tap-highlight-color: transparent; }
 	.tools button[aria-pressed='true'] { color: var(--ink); }
 	.tools button { min-height: 44px; color: var(--soft); font: 300 10px/1.5 var(--mono); letter-spacing: 0.15em; text-transform: uppercase; }
@@ -103,6 +101,11 @@ import StormSuggestions from './StormSuggestions.astro';
 		-webkit-font-smoothing: antialiased;
 		text-shadow: 0 0 2px rgb(4 8 18 / calc(0.45 * var(--glare))), 0 0 14px var(--shade);
 		transition: --glare 1.5s ease;
+		pointer-events: none;
+	}
+	/* Gestures over text reach the globe; only controls catch them. */
+	.hud :global(:is(a, button, input, summary, label, [tabindex])) {
+		pointer-events: auto;
 	}
 	/* Over sunlit ground the sky darkens behind the HUD, as with a graduated filter. */
 	.hud::before {
@@ -522,6 +525,9 @@ import StormSuggestions from './StormSuggestions.astro';
 	:global(body:has([data-globe-fallback]:not([hidden]))) .corner {
 		display: grid;
 		justify-items: start;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .hud {
+		pointer-events: auto;
 	}
 	:global(body:has([data-globe-fallback]:not([hidden]))) .frame {
 		display: none;

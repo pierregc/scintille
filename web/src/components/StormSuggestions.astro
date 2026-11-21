@@ -28,7 +28,7 @@
 	summary { display: inline-flex; gap: 10px; align-items: center; min-height: 32px; color: var(--soft); font-size: 12px; letter-spacing: 0.2em; list-style: none; }
 	summary::-webkit-details-marker { display: none; }
 	summary:hover, .suggestions[open] > summary { color: var(--ink); }
-	.panel { margin-top: 10px; max-height: calc(100svh - 300px); overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--hair) transparent; scrollbar-width: thin; }
+	.panel { margin-top: 10px; max-height: calc(100svh - 300px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-color: var(--hair) transparent; scrollbar-width: thin; }
 	p { margin: 0 0 16px; color: var(--dim); font: 300 11px/1.6 var(--sans); }
 	ul { display: grid; gap: 10px; padding: 0; margin: 0 0 16px; list-style: none; }
 	[data-storm-cards] :global(button) { display: grid; gap: 5px; width: 100%; min-height: 44px; padding: 10px 0 10px 16px; color: var(--soft); text-align: left; cursor: pointer; background: none; border: 0; border-left: 1px solid var(--hair); transition: color 0.4s ease, border-color 0.4s ease; }
