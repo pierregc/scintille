@@ -7,6 +7,12 @@ export const TWILIGHT_WEIGHTS = [0.5, 0.25, 0.15, 0.1] as const;
 /** Half-width (degrees) of the smooth transition around each band edge. */
 export const TWILIGHT_SOFTNESS_DEG = 2;
 
+/** Soft cool light over the night side, so land and clouds stay readable without dimming the flashes. */
+export const MOONLIGHT = { tint: [0.55, 0.68, 1.0], ground: 0.1, clouds: 0.028 } as const;
+
+/** Night light on the cloud tops, linear RGB, shared by the flat layer and the volume. */
+export const MOON_CLOUD_COLOR = MOONLIGHT.tint.map((c) => c * MOONLIGHT.clouds);
+
 const DEG = Math.PI / 180;
 
 export type Vec4 = [number, number, number, number];
