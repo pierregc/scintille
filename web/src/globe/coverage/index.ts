@@ -1,11 +1,11 @@
-import { CanvasTexture, LinearFilter, NoColorSpace } from 'three';
+import { CanvasTexture, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping } from 'three';
 import type { CoverageMap } from '../../contract/types';
 import { drawGaps, gapAt, markStormView, parseCoverage } from './map';
 
 export interface CoverageOptions {
 	/** Live feed root; the map is at `<baseUrl>/live/coverage.geojson`. Must be absolute. */
 	baseUrl: string;
-	/** Mask width in pixels; the height is half. */
+	/** Mask width in pixels, a power of two for its mipmaps; the height is half. */
 	width?: number;
 	fetch?: typeof fetch;
 	onError?: (error: unknown) => void;
@@ -41,8 +41,8 @@ export function createCoverage({
 	const ctx = canvas.getContext('2d');
 	const texture = new CanvasTexture(canvas);
 	texture.colorSpace = NoColorSpace;
-	texture.minFilter = LinearFilter;
-	texture.generateMipmaps = false;
+	texture.minFilter = LinearMipmapLinearFilter;
+	texture.wrapS = RepeatWrapping;
 
 	let map: CoverageMap | null = null;
 	let loading: Promise<void> | undefined;
