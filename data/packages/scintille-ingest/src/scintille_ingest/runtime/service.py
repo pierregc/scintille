@@ -60,6 +60,8 @@ class Settings:
     heartbeat_every: float = 60.0
     fetch_timeout: float = 300.0
     """Seconds before a hung listing or download is abandoned and retried."""
+    live_window: float = 3600.0
+    """Files sensed longer ago than this go to the lake only, without the live feed."""
 
 
 class Crash(Exception):
@@ -134,7 +136,8 @@ class IngestLive:
                     "fields": {"source": source.name, "key": product.key, "error": parsed.log.error}
                 },
             )
-        if record is None or ORDER[record.state] < ORDER["published_live"]:
+        live_file = (received_at - product.start).total_seconds() <= self.settings.live_window
+        if live_file and (record is None or ORDER[record.state] < ORDER["published_live"]):
             live = drop_owned_by(flashes, self._live_sources())
             excluded = flashes.height - live.height
             await self.publisher.publish(source.name, live, excluded)
@@ -161,7 +164,8 @@ class IngestLive:
         self.state.advance(identity, source.name, "spooled", batch, etag=product.etag)
         self._after_step("spooled", identity)
 
-        self._last_file[source.name] = self._clock()
+        if live_file:
+            self._last_file[source.name] = self._clock()
         lag = (self._clock() - product.start).total_seconds()
         self.metrics.inc("ingest_files_total", source=source.name)
         self.metrics.inc("ingest_flashes_total", flashes.height, source=source.name)
