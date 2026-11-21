@@ -39,6 +39,8 @@ CHUNK_HEADERS = {
 }
 HIGHLIGHTS_PATH = "storms/highlights.json"
 PURGE_PATH = "_pipeline/storms/purge.json"
+# A day of hourly batches: closed storm pages leave the edge cache after a day anyway (ADR 0005).
+PURGE_MAX_TAGS = 2400
 PUBLISHED_PATH = "_pipeline/storms/published.json"
 INDEX_STATE_PATH = "_pipeline/storms/index-pages.json"
 LATEST_INDEX_PATH = "storms/index/latest.json"
@@ -216,7 +218,7 @@ def publish_catalog(
     chunks: dict[str, bytes],
     all_storms: Sequence[StormSummary],
     now: datetime,
-    purge: Callable[[list[str]], bool],
+    purge: Callable[[list[str]], bool] | None,
     region_codes: Sequence[str] = (),
     highlights: Callable[[Sequence[StormSummary]], StormHighlights | None] | None = None,
     search: Callable[[Sequence[StormSummary]], dict[str, int]] | None = None,
@@ -264,7 +266,10 @@ def publish_catalog(
                 raise ValueError(
                     f"missing storm detail: {path.removeprefix('storms/').removesuffix('.json')}"
                 )
-        pending = set(json.loads(store.get(PURGE_PATH) or b"[]"))
+        # Oldest first; without a purge configured nothing is queued.
+        pending: dict[str, None] = (
+            dict.fromkeys(json.loads(store.get(PURGE_PATH) or b"[]")) if purge else {}
+        )
         referenced = {ref.path for detail in details for ref in detail.replay.chunks}
         # Chunks are content addressed: those of a stored detail are already published.
         published_chunks = {
@@ -287,15 +292,20 @@ def publish_catalog(
                 old = read_detail(previous)
                 if content(old) == content(detail):
                     continue
-                if old.storm.closed:
-                    pending.update([f"storm:{detail.storm.slug}", "storms-index"])
-                    for code in (old.storm.country_code, detail.storm.country_code):
-                        if code:
-                            pending.add(f"region:{code}")
+                if old.storm.closed and purge:
+                    codes = (old.storm.country_code, detail.storm.country_code)
+                    for tag in (
+                        f"storm:{detail.storm.slug}",
+                        *(f"region:{code}" for code in codes if code),
+                        "storms-index",
+                    ):
+                        pending.pop(tag, None)
+                        pending[tag] = None
             changed.append(path)
+        pending = dict.fromkeys(list(pending)[-PURGE_MAX_TAGS:])
         # Save invalidation intent before writing the changed documents.
-        if changed:
-            store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
+        if changed and pending:
+            store.put(PURGE_PATH, json.dumps(list(pending)).encode(), JSON_HEADERS)
         list(pool.map(lambda path: store.put(path, bodies[path], JSON_HEADERS), changed))
     published.update(storm.slug for storm in all_storms)
     store.put(PUBLISHED_PATH, json.dumps(sorted(published)).encode(), JSON_HEADERS)
@@ -317,16 +327,16 @@ def publish_catalog(
     available_regions = [code for code in region_codes if store.exists(f"regions/{code}.json")]
     for path, body in sitemaps(all_storms, now, available_regions).items():
         store.put(path, body, {"Content-Type": "application/xml", "Cache-Control": "max-age=60"})
-    tags = sorted(pending)
     # One batch per run; hourly retries stay within the Free request limit.
-    batch = tags[:100]
-    if batch:
+    batch = list(pending)[:100]
+    if purge and batch:
         try:
             if purge(batch):
-                pending.difference_update(batch)
+                for tag in batch:
+                    del pending[tag]
         except OSError:
             log.exception("Cache purge transport failed; pending tags retry on the next run")
-    store.put(PURGE_PATH, json.dumps(sorted(pending)).encode(), JSON_HEADERS)
+    store.put(PURGE_PATH, json.dumps(list(pending)).encode(), JSON_HEADERS)
     # Last: search only names storms whose detail and index entry are published.
     searched = search(all_storms) if search is not None else {}
     return searched | {

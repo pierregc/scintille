@@ -29,13 +29,22 @@ resource "cloudflare_ruleset" "waf" {
   kind    = "zone"
   phase   = "http_request_firewall_custom"
 
-  rules = [{
-    # Query strings would bypass the cache and bill an R2 read each time.
-    ref         = "data_read_only"
-    description = "Data: GET, HEAD and OPTIONS without query string only"
-    expression  = "(http.host eq \"${local.data_host}\" and (http.request.uri.query ne \"\" or not http.request.method in {\"GET\" \"HEAD\" \"OPTIONS\"}))"
-    action      = "block"
-  }]
+  rules = [
+    {
+      # Query strings would bypass the cache and bill an R2 read each time.
+      ref         = "data_read_only"
+      description = "Data: GET, HEAD and OPTIONS without query string only"
+      expression  = "(http.host eq \"${local.data_host}\" and (http.request.uri.query ne \"\" or not http.request.method in {\"GET\" \"HEAD\" \"OPTIONS\"}))"
+      action      = "block"
+    },
+    {
+      # Pipeline state shares the public bucket; the pipelines reach it through the S3 API.
+      ref         = "data_no_pipeline_state"
+      description = "Data: internal pipeline state is not served"
+      expression  = "(http.host eq \"${local.data_host}\" and starts_with(http.request.uri.path, \"/_pipeline/\"))"
+      action      = "block"
+    },
+  ]
 }
 
 # Free plan: one rule, path field only, per IP and colo, 10 s windows.
