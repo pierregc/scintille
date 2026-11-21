@@ -188,7 +188,7 @@ export function createGlobeApp(
 		: undefined;
 	if (volume) {
 		scene.add(volume.mesh);
-		Object.assign(clouds.opacity.uniforms, volume.uniforms);
+		Object.assign(clouds.opacity.uniforms, volume.uniforms, volume.screen);
 		clouds.opacity.defines.VOLUME = '';
 		clouds.useVolume(volume.uniforms);
 		Object.assign(earth.material.uniforms, volume.uniforms);

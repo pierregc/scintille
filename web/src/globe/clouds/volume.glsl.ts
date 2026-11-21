@@ -611,6 +611,7 @@ void main() {
 	float glowLight = 0.0;
 	float depthSum = 0.0;
 	float depthWeight = 0.0;
+	float entry = -1.0;
 	// Each pixel shifts its steps by a low-discrepancy offset that turns every frame, so step
 	// boundaries never line up into contours; the first step starts at the slab top, never past it.
 	float jitter = fract(dot(floor(gl_FragCoord.xy), vec2(0.7548776662, 0.5698402910)) + frameJitter);
@@ -727,14 +728,15 @@ void main() {
 				glowLight += T * (1.0 - exp(-flashGain * glow)) * ${f(CLOUD_LIGHT.volumeBoost)} * alpha * cloudLightDay(s);
 				depthSum += T * alpha * tv;
 				depthWeight += T * alpha;
+				if (entry < 0.0 && alpha > 0.01) entry = ta;
 				T *= 1.0 - alpha;
 			}
 		}
 		t = next;
 	}
 	gl_FragColor = vec4(L, T);
-	// Depth for the reprojection and glow of the flashes.
-	marchDepth = vec4(depthWeight > 0.0 ? depthSum / depthWeight : t1, glowLight, 0.0, 1.0);
+	// Mean depth for the reprojection, glow of the flashes, and where the ray enters the clouds, for what is drawn behind them.
+	marchDepth = vec4(depthWeight > 0.0 ? depthSum / depthWeight : t1, glowLight, entry < 0.0 ? t1 : entry, 1.0);
 }
 `;
 
@@ -849,6 +851,24 @@ uniform float reliefPixelAngle;
 ${volumeFieldGlsl}
 ${reliefFieldGlsl}
 
+// The glow of this frame's quarter at q, through a cubic B-spline of four bilinear taps.
+float smoothGlow(vec2 q) {
+	vec2 st = q * freshSize - 0.5;
+	vec2 i = floor(st);
+	vec2 f = st - i;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 g0 = w0 + w1;
+	vec2 g1 = 1.0 - g0;
+	vec2 h0 = (i - 0.5 + w1 / g0) / freshSize;
+	vec2 h1 = (i + 1.5 + w3 / g1) / freshSize;
+	return g0.y * (g0.x * texture2D(freshDepth, vec2(h0.x, h0.y)).g + g1.x * texture2D(freshDepth, vec2(h1.x, h0.y)).g)
+		+ g1.y * (g0.x * texture2D(freshDepth, vec2(h0.x, h1.y)).g + g1.x * texture2D(freshDepth, vec2(h1.x, h1.y)).g);
+}
+
 // Bright whites ease toward 1 instead of clipping, so sunlit tops keep their shading; the
 // brightest channel sets the curve, so peach and ivory keep their hue.
 vec3 shoulder(vec3 x) {
@@ -860,9 +880,10 @@ vec3 shoulder(vec3 x) {
 
 void main() {
 	vec4 c = texture2D(resolved, vUv);
-	// The flashes' glow comes straight from this frame's quarter, never from the history.
+	// The flashes' glow comes straight from this frame's quarter, never from the history, through a cubic
+	// filter: fine glows would show the quarter's grid.
 	vec2 q = ((vUv * marchSize - phase - 0.5) / 2.0 + 0.5) / freshSize;
-	vec4 seen = texture2D(freshDepth, q);
+	float glow = smoothGlow(q);
 	float cover = 1.0 - c.a;
 	float shown = max(cover, 1e-3);
 	vec3 rgb = shoulder(c.rgb / shown);
@@ -895,7 +916,7 @@ void main() {
 		}
 	}
 	// The flashes light the cloud into its headroom only, as the flat layer does: barely visible on sunlit tops.
-	gl_FragColor = vec4(rgb + flashColor * seen.g / shown * max(1.0 - rgb, 0.0), cover * fade);
+	gl_FragColor = vec4(rgb + flashColor * glow / shown * max(1.0 - rgb, 0.0), cover * fade);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 }

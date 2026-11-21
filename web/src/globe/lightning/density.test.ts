@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { channelHash, flashKind, flashSeed } from './channel';
-import { DENSITY, densityGlsl, flashLot, followShare, heroLot, heroShare, heroTarget, heroWeight, pointWeight } from './density';
+import { calmShare, DENSITY, densityGlsl, fieldLevel, flashLot, followShare, heroLot, heroShare, heroTarget, heroWeight, pointWeight } from './density';
 import { isGround } from './kind';
 
 const SEEDS = 200_000;
@@ -125,6 +125,29 @@ describe('followShare', () => {
 		expect(share).toBeGreaterThan(0.0009);
 		for (let frame = 0; frame < 600; frame++) share = followShare(share, 0.0004, 1 / 60);
 		expect(share).toBe(0.0004);
+	});
+});
+
+describe('the cloud light of the flashes outside the sample', () => {
+	it('is exposed down with the load, so a storm at speed lights as much cloud as a calm one', () => {
+		expect(fieldLevel(0)).toBe(1);
+		expect(fieldLevel(DENSITY.fieldLoad)).toBe(1);
+		for (const load of [200, 2_000, 11_000]) expect(fieldLevel(load) * load).toBeCloseTo(DENSITY.fieldLoad, 9);
+	});
+
+	it('flickers while most flashes are drawn in full and calms to soft fades as the sample thins', () => {
+		expect(calmShare(1)).toBe(0);
+		expect(calmShare(DENSITY.calm[1])).toBe(0);
+		expect(calmShare(DENSITY.calm[0])).toBe(1);
+		// 60× on an exceptional storm, then 600× and 3600×.
+		expect(calmShare(0.115)).toBeGreaterThan(0.5);
+		expect(calmShare(0.0045)).toBe(1);
+		expect(calmShare(0.0003)).toBe(1);
+		let last = 1;
+		for (const share of [0.01, 0.05, 0.1, 0.2, 0.3, 0.6]) {
+			expect(calmShare(share)).toBeLessThanOrEqual(last);
+			last = calmShare(share);
+		}
 	});
 });
 

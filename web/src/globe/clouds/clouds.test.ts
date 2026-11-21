@@ -77,9 +77,13 @@ describe('createClouds', () => {
 		expect(uniforms.flashGain.value).toBe(0);
 		const map = new Texture();
 		const window = new Vector4(1, 0.5, 0.4, 0.2);
-		clouds.setFlashLight({ map, window });
+		const fine = { map: new Texture(), window: new Vector4(1, 0.5, 0.04, 0.04), share: { value: 1 } };
+		clouds.setFlashLight({ map, window, fine });
 		expect(uniforms.flashLight.value).toBe(map);
 		expect(uniforms.flashWindow.value).toBe(window);
+		expect(uniforms.flashLightNear.value).toBe(fine.map);
+		expect(uniforms.flashWindowNear.value).toBe(fine.window);
+		expect(uniforms.flashNear).toBe(fine.share);
 		expect(uniforms.flashGain.value).toBe(CLOUD_LIGHT.gain);
 		clouds.setFlashLight(null);
 		expect(uniforms.flashGain.value).toBe(0);

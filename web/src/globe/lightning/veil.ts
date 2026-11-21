@@ -1,3 +1,4 @@
+import { CLOUD_SHELL_KM } from '../clouds/bounds';
 import type { Vec3 } from '../sun';
 import { glslFloat as f } from './profile';
 import { SKELETON } from './skeleton';
@@ -18,14 +19,31 @@ export const VEIL = {
 	/** Least light a channel keeps below any cloud, and a trace in the cloud; a trace spreads at most this many core widths (styled: from orbit a channel shows only in clear air). */
 	trace: 0.3,
 	traceWidth: 2,
-	/** Under a cloud drawn in relief, channels stay this far under its top, km, their part in the cloud compressed at most to this share. */
+	/** Under a cloud drawn in relief, channels stay this far under its top, km, their part in the cloud compressed at most to this share, or stretched at most this much toward a taller top (styled). */
 	reliefMargin: 0.5,
 	reliefMin: 0.3,
+	reliefStretch: 1.7,
 	/** Seen from above, a flash meets this share of the cloud's opacity: clouds slightly transparent over lightning (styled, ADR 0035). */
 	through: 0.55,
 	/** Over these slant paths (1 / cosine of the view to the vertical, at most maxPath) the cloud crossed toward the eye veils a flash fully, spread that much farther: at a slant it reads inside the cloud. */
 	slantPath: [1.5, 4],
 	maxPath: 5,
+	/** Clouds drawn in relief hide what is in them this many times faster than they hide the ground (styled). */
+	hideRate: 3,
+	/** Hidden by such clouds a channel keeps this share of its light at their near side, falling by 1/e every `behindKm` further along the line of sight, never under `behindMin`, or under `trace` below the cloud base (styled: clouds stay translucent to their lightning). */
+	behind: 0.75,
+	behindKm: 20,
+	behindMin: 0.12,
+	/** Such clouds scatter the light of a main channel they hide around it: a soft tube this wide either side, km, between these widths on screen, at these shares of the channel's light seen from above and at a slant, falling by 1/e every `scatterDepthKm`. */
+	scatterKm: 4,
+	scatterPx: [5, 40],
+	scatterLevel: [0.2, 0.6],
+	scatterDepthKm: 30,
+	/** Channel light from which a path scatters in full; dimmer ones fade out. */
+	scatterFrom: 0.25,
+	/** Share of its core a channel they hide keeps at a slant, where they carry it as scattered light, over these slant paths (1 / cosine of the view to the vertical). */
+	slantCore: 0.35,
+	slantCorePath: [1.2, 2.5],
 } as const;
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -95,17 +113,47 @@ export function veilOverlap(lengthPx: number, width: number, veiled: number): nu
 	return Math.min(1, Math.max(lengthPx, width) / veiled);
 }
 
-/** Relief lift under a cloud drawn with its top at `topKm`: the base heights are kept, the share the part in the cloud is compressed to, and a scale lowering everything when even that would rise over the top. */
-export function reliefLift(topKm: number): [number, number, number] {
-	const base = SKELETON.cloudBaseKm;
-	const ceiling = topKm - VEIL.reliefMargin;
-	const share = Math.min(1, Math.max(VEIL.reliefMin, (ceiling - base) / (SKELETON.cloudTopKm - base)));
-	return [base, share, Math.min(1, Math.max(VEIL.reliefMin, ceiling / (base + (SKELETON.cloudTopKm - base) * share)))];
+/** Share of its light a channel keeps `km` behind the near side of drawn clouds hiding `hidden` of it, at least `least`. */
+export function behindLight(hidden: number, km: number, least: number = VEIL.behindMin): number {
+	return mix(1, Math.max(VEIL.behind * Math.exp(-Math.max(km, 0) / VEIL.behindKm), least), clamp01(hidden));
 }
 
-/** Height `z` km drawn under a `reliefLift`: a drop keeps its height under the base, the part in the cloud compresses toward the top. */
-export function liftHeight(z: number, lift: [number, number, number]): number {
-	return (z <= lift[0] ? z : lift[0] + (z - lift[0]) * lift[1]) * lift[2];
+/** How much a view at `slant` (cosine to the vertical) counts as one at a slant for the channels the drawn clouds hide, 0 to 1. */
+export function slantShare(slant: number): number {
+	const t = clamp01((1 / Math.max(slant, 0.05) - VEIL.slantCorePath[0]) / (VEIL.slantCorePath[1] - VEIL.slantCorePath[0]));
+	return t * t * (3 - 2 * t);
+}
+
+/** Share of its core such a channel keeps at that share of slant. */
+export function slantCore(hidden: number, share: number): number {
+	return mix(1, VEIL.slantCore, clamp01(hidden) * share);
+}
+
+/** Level of the light such clouds scatter around that channel, out of the channel's own. */
+export function scatterLight(hidden: number, km: number, share: number): number {
+	return mix(VEIL.scatterLevel[0], VEIL.scatterLevel[1], share) * clamp01(hidden) * Math.exp(-Math.max(km, 0) / VEIL.scatterDepthKm);
+}
+
+export type Lift = [base: number, share: number, scale: number, ceiling: number];
+
+/** The lift under the flat layer, where no top is known: heights as drawn, kept under the shell. */
+export const FLAT_LIFT: Lift = [SKELETON.cloudBaseKm, 1, 1, CLOUD_SHELL_KM - VEIL.reliefMargin];
+
+/**
+ * Relief lift under a cloud drawn with its top at `topKm`: the base heights are kept, the share the part in the cloud
+ * is compressed or stretched to so it ends under the top, a scale lowering everything when even that would rise over
+ * it, and the ceiling nothing passes.
+ */
+export function reliefLift(topKm: number): Lift {
+	const base = SKELETON.cloudBaseKm;
+	const ceiling = topKm - VEIL.reliefMargin;
+	const share = Math.min(VEIL.reliefStretch, Math.max(VEIL.reliefMin, (ceiling - base) / (SKELETON.cloudTopKm - base)));
+	return [base, share, Math.min(1, Math.max(VEIL.reliefMin, ceiling / (base + (SKELETON.cloudTopKm - base) * share))), Math.max(ceiling, 0)];
+}
+
+/** Height `z` km drawn under a lift: a drop keeps its height under the base, the part in the cloud follows the top, nothing passes the ceiling. */
+export function liftHeight(z: number, lift: Lift): number {
+	return Math.min((z <= lift[0] ? z : lift[0] + (z - lift[0]) * lift[1]) * lift[2], lift[3]);
 }
 
 /** GLSL twins of `cloudCrossing`, `cloudTransmission`, `clearAirLight`, `grazingShare`, `seenThrough`, `cloudVeil`, `veilOverlap`, `reliefLift` and `liftHeight` (on a point), with the shell radius as a uniform. */
@@ -147,12 +195,25 @@ vec2 cloudVeil(float opacity, float heightKm, float kmPerPx, float width, float 
 float veilOverlap(float lengthPx, float width, float veiled) {
 	return min(1.0, max(lengthPx, width) / veiled);
 }
-vec3 reliefLift(float topKm) {
+const vec4 flatLift = vec4(${FLAT_LIFT.map(f).join(', ')});
+vec4 reliefLift(float topKm) {
 	float ceiling = topKm - ${f(VEIL.reliefMargin)};
-	float share = clamp((ceiling - ${f(SKELETON.cloudBaseKm)}) / ${f(SKELETON.cloudTopKm - SKELETON.cloudBaseKm)}, ${f(VEIL.reliefMin)}, 1.0);
-	return vec3(${f(SKELETON.cloudBaseKm)}, share, clamp(ceiling / (${f(SKELETON.cloudBaseKm)} + ${f(SKELETON.cloudTopKm - SKELETON.cloudBaseKm)} * share), ${f(VEIL.reliefMin)}, 1.0));
+	float share = clamp((ceiling - ${f(SKELETON.cloudBaseKm)}) / ${f(SKELETON.cloudTopKm - SKELETON.cloudBaseKm)}, ${f(VEIL.reliefMin)}, ${f(VEIL.reliefStretch)});
+	return vec4(${f(SKELETON.cloudBaseKm)}, share, clamp(ceiling / (${f(SKELETON.cloudBaseKm)} + ${f(SKELETON.cloudTopKm - SKELETON.cloudBaseKm)} * share), ${f(VEIL.reliefMin)}, 1.0), max(ceiling, 0.0));
 }
-vec3 liftPoint(vec3 p, vec3 lift) {
-	return vec3(p.xy, (p.z <= lift.x ? p.z : lift.x + (p.z - lift.x) * lift.y) * lift.z);
+float behindLight(float hidden, float km, float least) {
+	return mix(1.0, max(${f(VEIL.behind)} * exp(-max(km, 0.0) / ${f(VEIL.behindKm)}), least), clamp(hidden, 0.0, 1.0));
+}
+float slantShare(float slant) {
+	return smoothstep(${f(VEIL.slantCorePath[0])}, ${f(VEIL.slantCorePath[1])}, 1.0 / max(slant, 0.05));
+}
+float slantCore(float hidden, float share) {
+	return mix(1.0, ${f(VEIL.slantCore)}, clamp(hidden, 0.0, 1.0) * share);
+}
+float scatterLight(float hidden, float km, float share) {
+	return mix(${f(VEIL.scatterLevel[0])}, ${f(VEIL.scatterLevel[1])}, share) * clamp(hidden, 0.0, 1.0) * exp(-max(km, 0.0) / ${f(VEIL.scatterDepthKm)});
+}
+vec3 liftPoint(vec3 p, vec4 lift) {
+	return vec3(p.xy, min((p.z <= lift.x ? p.z : lift.x + (p.z - lift.x) * lift.y) * lift.z, lift.w));
 }
 `;

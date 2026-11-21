@@ -1,4 +1,5 @@
 import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, type Texture, Vector2, Vector3, Vector4 } from 'three';
+import type { FlashLight } from '../lightning';
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
 import { MOON_CLOUD_COLOR, twilightUniforms } from '../twilight';
@@ -61,8 +62,8 @@ export interface Clouds {
 	setVisible(visible: boolean): void;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
-	/** Flash glow map over a window of the globe that lights the clouds from inside; null turns it off. */
-	setFlashLight(light: { map: Texture; window: Vector4 } | null): void;
+	/** Flash glow maps over windows of the globe that light the clouds from inside; null turns them off. */
+	setFlashLight(light: FlashLight | null): void;
 	/** Detail tiles of the two frames being blended, while the layer shows. */
 	detailFrames(): readonly [DetailSource | null, DetailSource | null];
 	/** Cloud-top height tiles of the two frames being blended (ADR 0028). */
@@ -132,6 +133,9 @@ export function createClouds(
 			limbThickening: { value: 0.6 },
 			flashLight: { value: null },
 			flashWindow: { value: new Vector4(0, 0, Math.PI, Math.PI / 2) },
+			flashLightNear: { value: null },
+			flashWindowNear: { value: new Vector4(0, 0, 1, 1) },
+			flashNear: { value: 0 },
 			flashColor: { value: new Color('#dfe6ff') },
 			flashGain: { value: 0 },
 			flatShown: { value: 1 },
@@ -262,7 +266,12 @@ export function createClouds(
 		},
 		setFlashLight(light) {
 			material.uniforms.flashLight.value = light?.map ?? null;
-			if (light) material.uniforms.flashWindow.value = light.window;
+			material.uniforms.flashLightNear.value = light?.fine.map ?? null;
+			if (light) {
+				material.uniforms.flashWindow.value = light.window;
+				material.uniforms.flashWindowNear.value = light.fine.window;
+				material.uniforms.flashNear = light.fine.share;
+			}
 			material.uniforms.flashGain.value = light ? CLOUD_LIGHT.gain : 0;
 		},
 		dispose() {

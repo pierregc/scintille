@@ -437,8 +437,8 @@ describe('GLSL twins', () => {
 			P.stutterBin, P.stutterShare, ...P.stutterLevel, ...P.crawlerGlow, P.cloudFade, ...P.icSwell,
 		];
 		for (const x of profile) expect(flashProfileGlsl).toContain(glslFloat(x));
-		// The ribbon's own uses, not the profile it includes.
-		const main = ribbonVertex.slice(ribbonVertex.indexOf('void main()'));
+		// The segment's own uses, not the profile the ribbon includes.
+		const main = ribbonVertex.slice(ribbonVertex.indexOf('float segmentLight('));
 		for (const expression of [
 			`least = ${f(P.leaderLevel)}`,
 			`stroke.y / ${f(P.strokeSweep)}`,
