@@ -125,3 +125,23 @@ docker compose start ingest    # both checks come back up at the next ping
 - **Run killed by a deploy.** A deploy restarts the daemon and its run workers. Run monitoring fails
   the run within about two minutes and run retries relaunch it ([ADR 0024](adr/0024-deploys-during-runs.md));
   nothing to do by hand. A run still `STARTED` long after a deploy points to a broken health check.
+
+## Reboots
+
+Unattended upgrades install Debian security updates every day. When one needs a reboot (kernel,
+core libraries), the host reboots by itself at the next 04:20 UTC, after the nightly jobs and
+before the hourly catalog run at :35 ([`bootstrap.sh`](../infra/vps/bootstrap.sh)). Docker starts at
+boot and every service has `restart: unless-stopped`, so the stack comes back without a deploy:
+
+- Compose `depends_on` is not applied at boot: `ingest`, `lake-writer` and Dagster may restart a
+  few times until Postgres is ready.
+- `ingest` continues the published manifest; flashes still in its outbox go into the next chunk
+  ([hot path](hot-path.md)). `clouds` continues its manifest too.
+- A Dagster run cut by the reboot is failed by run monitoring and retried, as after a deploy.
+- `lake-writer` and `live-probe` have no health check (#194): only the `pipelines` heartbeat (gold
+  not rebuilt for 45 min) shows a `lake-writer` that did not come back.
+- The minute or two offline can raise a short `ingest-live` or `live-manifest` alert.
+
+After a reboot, as `deploy`: `uptime`, no `/var/run/reboot-required`, and `docker compose ps` in
+`/srv/scintille` shows every service running, `healthy` where it has a health check; the
+Healthchecks.io checks are up. To reboot outside the window, `sudo reboot` as `debian`, then the same checks.
