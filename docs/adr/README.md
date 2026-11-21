@@ -69,3 +69,4 @@ What becomes easier, what becomes harder, what we must watch.
 | [0037](0037-storm-cloud-detail.md) | 0.5 km cloud detail under strong storms | accepted |
 | [0038](0038-asia-oceania-storm-tops.md) | Storms over Asia and Oceania from cold cloud tops | accepted |
 | [0039](0039-wind-layer.md) | Wind from the clouds service, two looks | accepted |
+| [0040](0040-lightning-in-the-clouds.md) | Lightning in the clouds: a fine cloud light, an exposure by load, a veil from the clouds as drawn | accepted |
