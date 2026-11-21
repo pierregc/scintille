@@ -11,6 +11,7 @@ export default defineConfig({
 	site: 'https://scintille.app',
 	adapter: cloudflare({ imageService: 'passthrough' }),
 	session: false,
+	build: { inlineStylesheets: 'never' },
 	vite: { define: { __SCINTILLE_BUILD__: JSON.stringify(buildInfo()) } },
 	integrations: [replayFixtures(), places(), sitemap({ filter: (page) => !page.endsWith('/render/') })],
 });

@@ -671,8 +671,18 @@ import StormSuggestions from './StormSuggestions.astro';
 						.join(' · '),
 				}));
 				sources.hidden = lines.length === 0;
-				const html = lines.map((l) => `<li data-state="${l.state}">${l.text}</li>`).join('');
-				if (sources.innerHTML !== html) sources.innerHTML = html;
+				const key = lines.map((l) => `${l.state}:${l.text}`).join('|');
+				if (sources.dataset.key !== key) {
+					sources.dataset.key = key;
+					sources.replaceChildren(
+						...lines.map((l) => {
+							const li = document.createElement('li');
+							li.dataset.state = l.state;
+							li.textContent = l.text;
+							return li;
+						}),
+					);
+				}
 			}
 			if (sourcesNoteLine) {
 				const note = sourcesNote(status?.sources ?? []);

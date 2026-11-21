@@ -20,6 +20,11 @@ For the map of every workflow, check and switch, start with [CI/CD](ci-cd.md).
 | `r2_buckets` | binding `LIVE` → `scintille-live` | Production data. |
 | `previews.r2_buckets` | binding `LIVE` → `scintille-live-preview` | Previews never see production data. |
 
+`web/public/_headers` sets the security headers on every asset: a Content Security Policy limited to
+the site, `data.scintille.app` and the Cloudflare analytics beacon, no framing, `Referrer-Policy` and
+`Permissions-Policy`. Stylesheets are never inlined (`build.inlineStylesheets: 'never'`) so `style-src`
+stays `'self'`. A new origin the page loads from must be added to the policy.
+
 Server code reads the bucket with `import { env } from 'cloudflare:workers'` and `env.LIVE`.
 
 The build (`pnpm -C web build`) writes the assets to `web/dist/client/` and a generated Wrangler
