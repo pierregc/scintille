@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { intensityScale } from './intensity';
-import { bloomRadius, bloomStrength, channelReveal, farness, glowRadiusKm, glowShare, maxBlendShare, nearFloor, PHONE, viewScale, ZOOM } from './zoom';
+import { bloomRadius, bloomStrength, channelReveal, faceOnShare, farness, glowRadiusKm, glowShare, maxBlendShare, nearFloor, PHONE, viewScale, ZOOM } from './zoom';
 
 const POSES = { globe: 11.7, mid: 1.2, regional: 0.51, window: 0.3, iss: 0.23 };
 
@@ -112,5 +112,14 @@ describe('flash size with zoom', () => {
 		for (const kmPerPx of [ZOOM.floorKmPerPx, POSES.mid, 2, ZOOM.farKmPerPx]) {
 			expect(glowShare(kmPerPx, near, ramp)).toBeCloseTo(0.24 + 0.76 * farness(kmPerPx), 9);
 		}
+	});
+
+	it('dims the glow seen straight down from close, and only there', () => {
+		const straight = faceOnShare(1, POSES.window);
+		expect(straight).toBeCloseTo(ZOOM.faceOnLevel, 9);
+		expect(faceOnShare(1, POSES.regional)).toBeGreaterThan(straight);
+		expect(faceOnShare(1, POSES.regional)).toBeLessThan(0.6);
+		expect(faceOnShare(Math.cos((50 * Math.PI) / 180), POSES.window)).toBe(1);
+		expect(faceOnShare(1, POSES.globe)).toBe(1);
 	});
 });
