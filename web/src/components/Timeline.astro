@@ -262,8 +262,20 @@
 			if (key === layout) return;
 			layout = key;
 			const marks = scaleMarks(w);
-			if (ticks) ticks.innerHTML = marks.ticks.map((at) => `<i style="left:${pct(at)}"></i>`).join('');
-			if (labels) labels.innerHTML = marks.labels.map(({ at, text }) => `<span class="lbl${at === 1 ? ' end' : ''}" style="left:${pct(at)}">${text}</span>`).join('');
+			const mark = (tag: string, at: number, text = '') => {
+				const el = document.createElement(tag);
+				el.style.left = pct(at);
+				el.textContent = text;
+				return el;
+			};
+			ticks?.replaceChildren(...marks.ticks.map((at) => mark('i', at)));
+			labels?.replaceChildren(
+				...marks.labels.map(({ at, text }) => {
+					const el = mark('span', at, text);
+					el.className = at === 1 ? 'lbl end' : 'lbl';
+					return el;
+				}),
+			);
 		}
 
 		function tick() {
