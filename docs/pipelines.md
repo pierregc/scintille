@@ -39,6 +39,8 @@ default for `postgresql://`, every event write fails on `NOTIFY` and runs never 
 | Asset check | `valid_levels` | Blocking: one level per storm, within the rule, from positive counts |
 | Asset | `gold/storm_names` | Place name and slug of each new storm, from embedded open data ([below](#storm-names)) |
 | Asset check | `unique_slugs` | Blocking: one name per storm, no slug used twice |
+| Asset | `feeds/cyclones` | Publishes `cyclones/tracks.json` to R2: tropical cyclone tracks from NCEP TC vitals, 60 days ([ADR 0040](adr/0040-tropical-cyclones.md)) |
+| Schedule | `hourly_cyclones_schedule` | Minute 50 UTC: reads the last four advisory cycles, rewrites the feed only when it changed |
 | Schedule | `daily_gold_schedule` | Yesterday's partition at 01:30 UTC |
 | Schedule | `silver_retention_schedule` | 03:40 UTC: drops silver days older than 21 days; gold and the catalog stay |
 | Asset check | `lake_file_sizes` | Daily, warn: closed day partitions of the last 7 days (ended at least 24 h ago) are one file or average 64 to 512 MB per file; reports file count and average size per table |

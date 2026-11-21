@@ -582,7 +582,7 @@ export interface Cyclone {
   track: CycloneFix[];
 }
 
-/** cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0039). */
+/** cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0040). */
 export interface CycloneFeed {
   schema_version: SchemaVersion;
   /** When this feed was written. It is rewritten only when its content changes. */

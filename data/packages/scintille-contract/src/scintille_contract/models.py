@@ -987,7 +987,7 @@ class Cyclone(BaseModel):
 
 class CycloneFeed(BaseModel):
     """cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC
-    (ADR 0039).
+    (ADR 0040).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)

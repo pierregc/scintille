@@ -88,7 +88,7 @@ export interface GlobeApp {
 	archiveStart(): number | null;
 	/** Internals for tools and the HUD flash counter. */
 	readonly debug: { ring: FlashRing; client: LiveClient; delays(): SourceDelays; late: LateFlashes; quality(): string };
-	/** Tropical cyclones shown now (spike). */
+	/** Tropical cyclones shown now. */
 	readonly cyclones?: Pick<CyclonesLayer, 'shown'>;
 	/** Set in render mode only. */
 	readonly render?: RenderHandle;
@@ -291,7 +291,6 @@ export function createGlobeApp(
 		radius: RADIUS,
 		baseUrl: liveBaseUrl(),
 		labels: cycloneLabels,
-		look: new URLSearchParams(location.search).get('cyclones') === 'ring' ? 'ring' : 'spiral',
 		onError: (error) => console.warn('cyclones:', error),
 	});
 	if (cyclones) scene.add(cyclones.group);
@@ -409,6 +408,7 @@ export function createGlobeApp(
 			heightPx: canvas.clientHeight || window.innerHeight,
 			sun: sunDirection(new Date(now)),
 			steady: reducedMotion.matches,
+			ready: clouds.frameTimes.length > 0,
 		});
 		data.update(now);
 		const delays = playbackDelays();

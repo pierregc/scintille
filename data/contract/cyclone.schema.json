@@ -42,7 +42,7 @@
       }
     }
   },
-  "description": "cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0039).",
+  "description": "cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0040).",
   "$defs": {
     "CycloneBasin": {
       "description": "Basin letter of the storm number: L North Atlantic, E eastern North Pacific, C central North Pacific, W western North Pacific, A Arabian Sea, B Bay of Bengal, S South Indian Ocean, P South Pacific, Q South Atlantic.",

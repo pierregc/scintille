@@ -1,4 +1,4 @@
-"""`cyclones/tracks.json`: tropical cyclone tracks from NCEP TC vitals (ADR 0039)."""
+"""`cyclones/tracks.json`: tropical cyclone tracks from NCEP TC vitals (ADR 0040)."""
 
 import argparse
 import csv

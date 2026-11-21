@@ -68,3 +68,4 @@ What becomes easier, what becomes harder, what we must watch.
 | [0036](0036-current-adr-statuses.md) | Keep ADR statuses current | accepted |
 | [0037](0037-storm-cloud-detail.md) | 0.5 km cloud detail under strong storms | accepted |
 | [0038](0038-asia-oceania-storm-tops.md) | Storms over Asia and Oceania from cold cloud tops | accepted |
+| [0040](0040-tropical-cyclones.md) | Tropical cyclones from NCEP TC vitals | accepted |

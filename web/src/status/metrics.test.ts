@@ -73,6 +73,18 @@ describe('statusView', () => {
 			highlighted: '9',
 			measured: { text: '35 min ago', verdict: 'met', target: '< 2 h' },
 		});
+		expect(view.cyclones).toEqual({
+			active: '2',
+			tracked: '14',
+			advisory: { text: '7 h ago', verdict: 'met', target: '< 12 h' },
+			measured: { text: '1 h ago', verdict: 'met', target: '< 2 h' },
+		});
+	});
+
+	it('flags an advisory cycle that did not come', () => {
+		const m = fixture();
+		m.cyclones.source_cycle = '2026-07-15T06:00:00Z';
+		expect(statusView(m, T, T).cyclones?.advisory).toMatchObject({ text: '13 h ago', verdict: 'missed' });
 	});
 
 	it('flags old or missing lake and storm measurements', () => {
@@ -88,9 +100,11 @@ describe('statusView', () => {
 		const older: Partial<OpsMetrics> = fixture();
 		delete older.lake;
 		delete older.storms;
+		delete older.cyclones;
 		const view = statusView(parseMetrics(older), T, T);
 		expect(view.lake?.measured.text).toBe('never');
 		expect(view.storms?.published).toBe('—');
+		expect(view.cyclones).toMatchObject({ active: '—', advisory: { text: 'never' } });
 	});
 
 	it('checks each layer against its target and advances ages', () => {

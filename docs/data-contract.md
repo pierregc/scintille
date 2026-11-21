@@ -278,6 +278,25 @@ Composite frames with Himawari add an optional `cold_tops` block
   point there (`cold_tops_path_pattern` for the archive) and it goes with the rest of
   `archive/clouds/` after 30 days.
 
+## Tropical cyclones
+
+`cyclones/tracks.json` ([ADR 0040](adr/0040-tropical-cyclones.md)) holds every tropical cyclone
+with a fix in the last 60 days, from NCEP TC vitals (NHC, CPHC and JTWC advisories). It is checked
+every hour and rewritten only when it changes; `source_cycle` is the latest advisory cycle read.
+
+```json
+{"id": "20261115-04p", "number": "04P", "name": "Xavier", "basin": "P", "agency": "JTWC",
+ "active": true,
+ "track": [{"time": "2026-11-17T18:00:00Z", "lat": -9.6, "lon": -163.8, "wind_kt": 128,
+            "r34_km": 128, "heading": 225, "speed_ms": 1.6}]}
+```
+
+- Fixes are usually 6 h apart. A client places a storm between two fixes on the great circle, and
+  may carry an `active` storm past its last fix along `heading` at `speed_ms`, 12 h at most. A
+  storm that is not `active` ends at its last fix.
+- `wind_kt` is the one-minute sustained wind in every basin. `name` is the storm number until the
+  storm is named.
+
 ## Historical cloud discovery
 
 `archive/clouds/manifests/YYYY-MM-DD.json` is the version 1 daily archive index
@@ -1195,7 +1214,7 @@ One tropical cyclone and its track.
 
 Defined in `data/contract/cyclone.schema.json`.
 
-cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0039).
+cyclones/tracks.json: tracks of tropical cyclones from the advisories of NHC, CPHC and JTWC (ADR 0040).
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|

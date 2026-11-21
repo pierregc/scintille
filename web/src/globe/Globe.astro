@@ -56,19 +56,25 @@
 		top: 0;
 		left: 0;
 		margin: 0;
-		color: rgb(238 242 247 / calc(0.72 + 0.2 * var(--day, 0)));
+		color: rgb(238 242 247 / calc(0.74 + 0.22 * var(--day, 0)));
 		font: 300 11px/1.35 'IBM Plex Sans', system-ui, sans-serif;
 		white-space: nowrap;
-		text-shadow: 0 0 1px rgb(4 8 18 / var(--day, 0)), 0 0 3px rgb(4 8 18 / calc(0.6 + 0.4 * var(--day, 0))), 0 0 7px rgb(4 8 18 / var(--day, 0)), 0 0 16px rgb(4 8 18 / calc(0.5 + 0.4 * var(--day, 0)));
+		/* On sunlit clouds pale text needs a dark outline of its own; at night it stays bare. */
+		-webkit-text-stroke: 2.4px rgb(4 8 18 / calc(0.8 * var(--day, 0)));
+		paint-order: stroke fill;
+		text-shadow:
+			0 0 3px rgb(4 8 18 / calc(0.6 + 0.4 * var(--day, 0))),
+			0 0 14px rgb(4 8 18 / calc(0.5 + 0.4 * var(--day, 0)));
 	}
 	.cyclone-labels :global(.cyclone[hidden]) {
 		display: none;
 	}
 	.cyclone-labels :global(.cyclone b) {
 		display: block;
-		color: rgb(238 242 247 / 0.95);
-		font: 300 10px/1.5 'IBM Plex Mono', ui-monospace, monospace;
-		letter-spacing: 0.15em;
+		color: rgb(238 242 247 / 0.98);
+		font-weight: 300;
+		font-size: 12px;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
 	}
 	.globe-fallback {
