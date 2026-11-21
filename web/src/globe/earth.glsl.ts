@@ -33,6 +33,7 @@ uniform float glintCap;
 uniform float terminatorTint;
 uniform sampler2D coverageMap;
 uniform float coverageShade;
+uniform float coverageStorms;
 #ifdef CLOUD_SHADOW
 ${volumeFieldGlsl}
 #endif
@@ -171,8 +172,9 @@ void main() {
 	vec3 view = normalize(cameraPosition - vWorldPosition);
 	color += vec3(0.92, 0.95, 1.0) * specular * water * glint(n, sun, view) * smoothstep(0.0, 0.2, s);
 
-	// No lightning data here: desaturated, dimmed and finely hatched, visible by day and by night.
-	float gap = textureGrad(coverageMap, uv, gx, gy).r * coverageShade;
+	// No lightning data here: desaturated, dimmed and finely hatched, visible by day and by night; lighter where storms show from cold cloud tops.
+	vec2 coverage = textureGrad(coverageMap, uv, gx, gy).rg;
+	float gap = coverage.r * coverageShade * (1.0 - 0.65 * coverageStorms * coverage.g);
 	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
 	color = mix(color, vec3(luma) * 0.55, 0.8 * gap);
 	float hatch = smoothstep(2.3, 3.5, abs(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0) - 3.5));

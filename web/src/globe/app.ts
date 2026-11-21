@@ -16,6 +16,7 @@ import { CloudPlayback } from './clouds/playback';
 import { createGlobeControls, type GlobeControls } from './controls';
 import { createCoverage } from './coverage';
 import { attachCoverageLabel, surfacePoint } from './coverage/label';
+import { stormViewAt } from './coverage/map';
 import { runDevFlights } from './dev-flight';
 import { applyDevReplay } from './dev-replay';
 import { isReplayFixture } from './dev-storm';
@@ -227,7 +228,13 @@ export function createGlobeApp(
 	const coverage = createCoverage({ baseUrl: liveBaseUrl(), onError: (error) => console.warn('coverage:', error) });
 	earth.setCoverage(coverage.texture);
 	const detachCoverageLabel = coverageLabel
-		? attachCoverageLabel({ canvas, label: coverageLabel, camera, radius: RADIUS, at: coverage.at })
+		? attachCoverageLabel({
+				canvas,
+				label: coverageLabel,
+				camera,
+				radius: RADIUS,
+				at: (lat, lon) => (!coverage.at(lat, lon) ? null : coldTops.mesh.visible && stormViewAt(lat, lon) ? 'storms' : 'gap'),
+			})
 		: undefined;
 
 	const late = new LateFlashes(LIVE_DELAYS, clock.wallTime());
@@ -380,6 +387,7 @@ export function createGlobeApp(
 			sun: sunDirection(new Date(now)),
 			steady: Boolean(renderParams) || reducedMotion.matches,
 		});
+		earth.setStormView(coldTops.mesh.visible ? 1 : 0);
 		data.update(now);
 		const delays = playbackDelays();
 		// Sizes, channels and bloom follow the camera height only, so a view never pumps with its own flashes.

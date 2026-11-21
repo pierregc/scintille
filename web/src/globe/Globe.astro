@@ -1,5 +1,5 @@
 <canvas class="globe-canvas" data-globe-canvas aria-hidden="true"></canvas>
-<div class="coverage-label" role="tooltip" data-coverage-label hidden>No satellite lightning coverage<span>Glows: storm tops seen by Himawari</span></div>
+<div class="coverage-label" role="tooltip" data-coverage-label data-kind="gap" hidden><span class="gap">No satellite lightning coverage</span><span class="storms">Storms seen by Himawari<small>Cold cloud tops, hourly. No lightning feed here.</small></span></div>
 <figure class="globe-fallback" data-globe-fallback hidden>
 	<img src="/globe-fallback.svg" alt="Illustration of the Earth" width="240" height="240" loading="lazy" decoding="async" />
 	<figcaption>The 3D globe needs WebGL 2, which is not available in this browser.</figcaption>
@@ -19,8 +19,13 @@
 	.coverage-label[hidden] {
 		display: none;
 	}
-	.coverage-label span {
+	.coverage-label[data-kind='gap'] .storms,
+	.coverage-label[data-kind='storms'] .gap {
+		display: none;
+	}
+	.coverage-label small {
 		display: block;
+		font-size: 12px;
 		color: rgb(238 242 247 / 0.6);
 	}
 	.coverage-label {

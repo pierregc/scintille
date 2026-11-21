@@ -35,7 +35,8 @@ class FakeCanvas {
 	width = 0;
 	height = 0;
 	getContext() {
-		return { fillStyle: '', beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, clearRect() {}, fill() {} };
+		const pixels = () => ({ data: new Uint8ClampedArray(this.width * this.height * 4) });
+		return { fillStyle: '', beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, clearRect() {}, fill() {}, getImageData: pixels, putImageData() {} };
 	}
 }
 
