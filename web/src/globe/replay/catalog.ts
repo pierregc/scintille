@@ -1,5 +1,6 @@
 import type { StormHighlight, StormHighlights, StormIndexPage, StormMetric, StormSummary } from '../../contract/types';
 import { boundedBody } from '../clouds/response';
+import { formatDate } from '../../components/hud/format';
 import { CONTRACT_MAJOR } from '../live/decode';
 
 export const CATALOG_LIMITS = { pages: 3, pageBytes: 128 * 1024, cards: 4, highlights: 12, highlightBytes: 64 * 1024, staleMs: 24 * 3_600_000, timeoutMs: 15_000 };
@@ -64,8 +65,8 @@ export function reason(highlight: Pick<StormHighlight, 'kind' | 'area'>): string
 }
 
 /** Start day without year, e.g. "Jul 15". */
-export function stormDay(storm: Pick<StormSummary, 't_start'>, locale?: string): string {
-	return new Date(storm.t_start).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+export function stormDay(storm: Pick<StormSummary, 't_start'>, timeZone?: string): string {
+	return formatDate(Date.parse(storm.t_start), timeZone).slice(0, -5);
 }
 
 const span = (minutes: number) => minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${String(minutes % 60).padStart(2, '0')}` : ''}`;
@@ -73,7 +74,7 @@ const SUPERLATIVES: Record<StormMetric['name'], string> = { flashes: 'most', cou
 const ORDINALS = ['the', '2nd', '3rd'];
 
 /** The one figure that makes a storm notable, and how it ranks when the title compared storms. */
-export function stormFigure(card: StormCard, locale?: string): string {
+export function stormFigure(card: StormCard, locale = 'en-US'): string {
 	const metric = card.metric ?? { name: 'flashes', value: card.storm.flashes, rank: 0 };
 	const n = (value: number) => Math.round(value).toLocaleString(locale);
 	const figure = {
