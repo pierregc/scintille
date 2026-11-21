@@ -25,9 +25,11 @@ describe('HUD formatting', () => {
 		expect(formatTime(Date.UTC(2026, 9, 25, 2, 30), PARIS)).toBe('03:30:00');
 	});
 
-	it('names the zone by its city, or by its offset', () => {
-		expect(zoneLabel(PARIS)).toBe('Paris');
-		expect(zoneLabel('America/Argentina/Buenos_Aires')).toBe('Buenos Aires');
+	it('names the zone by its offset, never a city', () => {
+		expect(zoneLabel(PARIS, Date.UTC(2026, 0, 15))).toBe('UTC+1');
+		expect(zoneLabel(PARIS, Date.UTC(2026, 6, 15))).toBe('UTC+2');
+		expect(zoneLabel('America/New_York', Date.UTC(2026, 0, 15))).toBe('UTC\u22125');
+		expect(zoneLabel('Asia/Kolkata')).toBe('UTC+5:30');
 		expect(zoneLabel('Etc/GMT-2')).toBe('UTC+2');
 		expect(zoneLabel('UTC')).toMatch(/^UTC(\+0)?$/);
 	});
