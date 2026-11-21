@@ -8,6 +8,14 @@ export const DEFAULT_POLL_INTERVAL_MS = 5_000;
 /** Chunks ending this close to the newest one load first: they hold what live mode plays now. */
 export const DEFAULT_RECENT_MS = LIVE_DELAYS.max + 60_000;
 
+/** The zone allows 300 requests per 10 s per address: older chunks wait while the page is above this. */
+export const DEFAULT_OLDER_BUDGET = 120;
+export const DEFAULT_OLDER_SPACING_MS = 50;
+/** Older chunks reach the ring in batches, newest first, so coverage grows back without a gap. */
+export const OLDER_BATCH = 30;
+const OLDER_CONCURRENCY = 6;
+const PRESSURE_WAIT_MS = 250;
+
 export interface Backoff {
 	initialMs: number;
 	maxMs: number;
@@ -46,6 +54,11 @@ export interface LiveClientOptions {
 	/** Chunks downloaded in parallel. */
 	concurrency?: number;
 	recentMs?: number;
+	/** Requests the page started in the last 10 s; older chunks start only below `olderBudget`. */
+	pressure?: () => number;
+	olderBudget?: number;
+	/** Minimum gap between two older chunk requests. */
+	olderSpacingMs?: number;
 	fetch?: typeof fetch;
 	visibility?: Visibility;
 	random?: () => number;
@@ -65,6 +78,9 @@ export class LiveClient {
 	readonly #backoff: Backoff;
 	readonly #concurrency: number;
 	readonly #recentMs: number;
+	readonly #pressure: () => number;
+	readonly #olderBudget: number;
+	readonly #olderSpacingMs: number;
 	readonly #fetch: typeof fetch;
 	readonly #visibility: Visibility;
 	readonly #random: () => number;
@@ -81,6 +97,10 @@ export class LiveClient {
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#polling = false;
 	#inFlight: Promise<void> | undefined;
+	/** Older chunks still loading in the background, by path; polls go on meanwhile. */
+	readonly #backfilling = new Set<string>();
+	#backfill: Promise<void> | undefined;
+	#nextOlderAt = 0;
 	#running = false;
 	#abort: AbortController | undefined;
 	#unsubscribe: (() => void) | undefined;
@@ -93,6 +113,9 @@ export class LiveClient {
 		this.#backoff = options.backoff ?? DEFAULT_BACKOFF;
 		this.#concurrency = options.concurrency ?? 48;
 		this.#recentMs = options.recentMs ?? DEFAULT_RECENT_MS;
+		this.#pressure = options.pressure ?? (() => 0);
+		this.#olderBudget = options.olderBudget ?? DEFAULT_OLDER_BUDGET;
+		this.#olderSpacingMs = options.olderSpacingMs ?? DEFAULT_OLDER_SPACING_MS;
 		this.#fetch = options.fetch ?? ((input, init) => fetch(input, init));
 		this.#visibility = options.visibility ?? documentVisibility;
 		this.#random = options.random ?? Math.random;
@@ -146,9 +169,10 @@ export class LiveClient {
 		this.#timer = undefined;
 	}
 
-	/** Resolves once the current poll, if any, has finished. */
-	idle(): Promise<void> {
-		return this.#inFlight ?? Promise.resolve();
+	/** Resolves once the current poll and its older chunks, if any, have finished. */
+	async idle(): Promise<void> {
+		await this.#inFlight;
+		await this.#backfill;
 	}
 
 	/** Fetches the manifest and every missing chunk. Concurrent calls are ignored. */
@@ -212,8 +236,8 @@ export class LiveClient {
 	}
 
 	/**
-	 * Loads the recent chunks first, calls `onRecent`, then the older ones in a single ring push.
-	 * An older chunk that fails is retried on the next poll without failing this one: the oldest
+	 * Loads the recent chunks, calls `onRecent`, then leaves the older ones to a paced background
+	 * load. An older chunk that fails is retried on a later poll without failing this one: the oldest
 	 * listed chunk can already be deleted.
 	 */
 	async #fetchMissing(manifest: LiveManifest, signal: AbortSignal | undefined, onRecent: () => void): Promise<void> {
@@ -222,54 +246,80 @@ export class LiveClient {
 		for (const path of this.#loaded.keys()) if (!listed.has(path)) this.#loaded.delete(path);
 
 		const missing = manifest.chunks
-			.filter((ref) => !this.#seen.has(ref.path))
-			.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+			.filter((ref) => !this.#seen.has(ref.path) && !this.#backfilling.has(ref.path))
+			.sort((a, b) => Date.parse(b.start) - Date.parse(a.start));
 		const newest = Math.max(...manifest.chunks.map((ref) => Date.parse(ref.end)));
 		const isRecent = (ref: ChunkRef) => Date.parse(ref.end) > newest - this.#recentMs;
-		const recent = missing.filter(isRecent);
+		const recent = missing.filter(isRecent).reverse();
 		const older = missing.filter((ref) => !isRecent(ref));
 
 		let failure: unknown;
-		const recentChunks = await this.#download(recent, signal);
+		const recentChunks = await this.#download(recent, this.#concurrency, signal);
 		if (!this.#running) return;
 		for (const [ref, result] of recentChunks) {
 			if ('error' in result) failure ??= this.#reject(ref, result.error);
 			else this.#accept([ref], result.chunk, [result.chunk]);
 		}
 		if (failure === undefined) onRecent();
-
-		const olderChunks = await this.#download(older, signal);
-		if (!this.#running) return;
-		const refs: ChunkRef[] = [];
-		const chunks: DecodedChunk[] = [];
-		for (const [ref, result] of olderChunks) {
-			if ('error' in result) {
-				const error = this.#reject(ref, result.error);
-				if (error !== undefined) this.#onError(error);
-			} else {
-				refs.push(ref);
-				chunks.push(result.chunk);
-			}
+		if (older.length > 0 && this.#backfill === undefined) {
+			for (const ref of older) this.#backfilling.add(ref.path);
+			this.#backfill = this.#loadOlder(older, signal).finally(() => {
+				this.#backfilling.clear();
+				this.#backfill = undefined;
+			});
 		}
-		if (chunks.length > 0) this.#accept(refs, mergeChunks(chunks), chunks);
 		if (failure !== undefined) throw failure;
 	}
 
+	async #loadOlder(older: ChunkRef[], signal: AbortSignal | undefined): Promise<void> {
+		for (let at = 0; at < older.length && this.#running; at += OLDER_BATCH) {
+			const results = await this.#download(older.slice(at, at + OLDER_BATCH), OLDER_CONCURRENCY, signal, true);
+			if (!this.#running) return;
+			const refs: ChunkRef[] = [];
+			const chunks: DecodedChunk[] = [];
+			for (const [ref, result] of results) {
+				if ('error' in result) {
+					const error = this.#reject(ref, result.error);
+					if (error !== undefined) this.#onError(error);
+				} else {
+					refs.push(ref);
+					chunks.push(result.chunk);
+				}
+			}
+			if (chunks.length > 0) this.#accept(refs, mergeChunks(chunks), chunks);
+		}
+	}
+
+	/** Waits until an older chunk request fits the page's request budget and spacing. */
+	async #admit(inFlight: () => number, signal: AbortSignal | undefined): Promise<void> {
+		while (this.#running && this.#pressure() + inFlight() >= this.#olderBudget) await pause(PRESSURE_WAIT_MS, signal);
+		if (this.#olderSpacingMs <= 0) return;
+		const wait = this.#nextOlderAt - performance.now();
+		this.#nextOlderAt = Math.max(performance.now(), this.#nextOlderAt) + this.#olderSpacingMs;
+		if (wait > 0) await pause(wait, signal);
+	}
+
 	/** Downloads `refs` with at most `concurrency` requests in flight, results in `refs` order. */
-	async #download(refs: ChunkRef[], signal?: AbortSignal): Promise<[ChunkRef, Download][]> {
-		const results: Download[] = new Array(refs.length);
+	async #download(refs: ChunkRef[], concurrency: number, signal?: AbortSignal, paced = false): Promise<[ChunkRef, Download][]> {
+		const results: Download[] = refs.map(() => ({ error: new Error('download stopped') }));
 		let next = 0;
+		let inFlight = 0;
 		const worker = async () => {
 			while (next < refs.length && this.#running) {
+				if (paced) await this.#admit(() => inFlight, signal);
+				if (next >= refs.length || !this.#running) return;
 				const i = next++;
+				inFlight++;
 				try {
 					results[i] = { chunk: await fetchChunk(new URL(refs[i].path, this.manifestUrl).href, this.#fetch, signal) };
 				} catch (error) {
 					results[i] = { error };
+				} finally {
+					inFlight--;
 				}
 			}
 		};
-		await Promise.all(Array.from({ length: Math.min(this.#concurrency, refs.length) }, worker));
+		await Promise.all(Array.from({ length: Math.min(concurrency, refs.length) }, worker));
 		return refs.map((ref, i) => [ref, results[i]]);
 	}
 
@@ -289,6 +339,18 @@ export class LiveClient {
 		this.#ring.push(merged);
 		chunks.forEach((chunk, i) => this.#onChunk?.(chunk, refs[i]));
 	}
+}
+
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const done = () => {
+			clearTimeout(timer);
+			signal?.removeEventListener('abort', done);
+			resolve();
+		};
+		const timer = setTimeout(done, ms);
+		signal?.addEventListener('abort', done, { once: true });
+	});
 }
 
 /** One chunk holding the flashes of `chunks`, with offsets from the earliest start. */

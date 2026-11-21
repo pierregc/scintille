@@ -39,7 +39,8 @@ resource "cloudflare_ruleset" "waf" {
 }
 
 # Free plan: one rule, path field only, per IP and colo, 10 s windows.
-# A first visit loads about 160 files (assets, textures, 120 live chunks).
+# A first visit peaks near 130 requests in 10 s, about 210 with a zoom right after: older live
+# chunks wait while the page is above 120 (web/src/globe/live/client.ts).
 resource "cloudflare_ruleset" "rate_limit" {
   zone_id = var.zone_id
   name    = "Rate limiting"

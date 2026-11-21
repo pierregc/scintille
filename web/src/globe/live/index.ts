@@ -1,4 +1,5 @@
 import { LiveClient, type LiveClientOptions } from './client';
+import { pagePressure } from './pressure';
 import { FlashRing } from './ring';
 
 export { FlashRing, type RingWatcher } from './ring';
@@ -18,12 +19,16 @@ export interface LiveFeed {
 	stop(): void;
 }
 
+let shared: (() => number) | undefined;
+const pressure = () => (shared ??= pagePressure());
+
 /** Starts polling the live feed into a new ring buffer. */
 export function startLiveFeed(options: Partial<LiveClientOptions> = {}): LiveFeed {
 	const ring = options.ring ?? new FlashRing();
 	const client = new LiveClient({
 		baseUrl: liveBaseUrl(),
 		onError: (error) => console.warn('live feed:', error),
+		pressure: pressure(),
 		...options,
 		ring,
 	});
