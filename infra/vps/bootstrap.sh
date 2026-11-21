@@ -60,6 +60,12 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 CONF
 
+# Reboot when an update needs it, in the quiet window of docs/operations.md#reboots.
+cat > /etc/apt/apt.conf.d/52scintille-reboot <<CONF
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:20";
+CONF
+
 # Docker Engine and Compose plugin from Docker's repository.
 install -m 0755 -d /etc/apt/keyrings
 if [ ! -f /etc/apt/keyrings/docker.asc ]; then
