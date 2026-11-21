@@ -23,6 +23,8 @@ export interface Earth {
 	setTime(utcMs: number): void;
 	/** Equirectangular mask of the areas without lightning data (red channel), shaded on the surface. */
 	setCoverage(mask: Texture): void;
+	/** How much of the gap's shade lifts where storms from cold cloud tops show, 0 to 1. */
+	setStormView(share: number): void;
 	dispose(): void;
 }
 
@@ -68,6 +70,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 			terminatorTint: { value: 0.5 },
 			coverageMap: { value: noGaps },
 			coverageShade: { value: 1 },
+			coverageStorms: { value: 0 },
 		},
 	});
 	const mesh = new Mesh(geometry, material);
@@ -106,6 +109,9 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 		},
 		setCoverage(mask) {
 			material.uniforms.coverageMap.value = mask;
+		},
+		setStormView(share) {
+			material.uniforms.coverageStorms.value = share;
 		},
 		dispose() {
 			disposed = true;

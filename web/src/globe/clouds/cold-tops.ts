@@ -11,12 +11,12 @@ export const COLD_TOPS = {
 	/** Glow radius of a fully cold cell, km: twice the spacing of the cells, so their lattice melts into one glow [60 to 100]. */
 	radiusKm: 80,
 	/** Opacity of one cell at night; neighbours overlap about four deep [0.08 to 0.16]. */
-	opacity: 0.12,
+	opacity: 0.22,
 	/** Share kept on the day side [0.3 to 0.6]. */
 	dayLevel: 0.45,
 	/** One slow breath, seconds; reduced motion holds it steady [5 to 9]. */
 	periodS: 7,
-	color: '#c9cdff',
+	color: '#d4d2ff',
 	/** Files kept in memory: the two frames shown and their neighbours. */
 	cached: 4,
 } as const;

@@ -19,21 +19,23 @@ export interface CoverageLabelOptions {
 	label: HTMLElement;
 	camera: Camera;
 	radius: number;
-	at(lat: number, lon: number): boolean;
+	/** What the label says at a point: the gap, storms from cold cloud tops, or nothing. */
+	at(lat: number, lon: number): 'gap' | 'storms' | null;
 }
 
 /** Shows the coverage label on hover (mouse) or tap (touch) over a gap; returns the detach function. */
 export function attachCoverageLabel({ canvas, label, camera, radius, at }: CoverageLabelOptions): () => void {
 	let down: { x: number; y: number } | undefined;
 
-	const gapUnder = (x: number, y: number) => {
+	const kindUnder = (x: number, y: number) => {
 		const rect = canvas.getBoundingClientRect();
 		const ndc = new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
 		const point = surfacePoint(ndc, camera, radius);
-		return point ? at(point.lat, point.lon) : false;
+		return point ? at(point.lat, point.lon) : null;
 	};
 
-	const show = (x: number, y: number) => {
+	const show = (x: number, y: number, kind: 'gap' | 'storms') => {
+		label.dataset.kind = kind;
 		label.hidden = false;
 		const width = label.offsetWidth;
 		const height = label.offsetHeight;
@@ -44,7 +46,8 @@ export function attachCoverageLabel({ canvas, label, camera, radius, at }: Cover
 
 	const onMove = (event: PointerEvent) => {
 		if (event.pointerType === 'touch' || event.buttons !== 0) return;
-		if (gapUnder(event.clientX, event.clientY)) show(event.clientX, event.clientY);
+		const kind = kindUnder(event.clientX, event.clientY);
+		if (kind) show(event.clientX, event.clientY, kind);
 		else label.hidden = true;
 	};
 	const onDown = (event: PointerEvent) => {
@@ -56,7 +59,8 @@ export function attachCoverageLabel({ canvas, label, camera, radius, at }: Cover
 		down = undefined;
 		if (event.pointerType !== 'touch' || !start) return;
 		if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP_PX) return;
-		if (gapUnder(event.clientX, event.clientY)) show(event.clientX, event.clientY);
+		const kind = kindUnder(event.clientX, event.clientY);
+		if (kind) show(event.clientX, event.clientY, kind);
 	};
 	// A touch pointer leaves right after every tap.
 	const onLeave = (event: PointerEvent) => {

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { CoverageMap } from '../../contract/types';
-import { drawGaps, gapAt, type MaskContext, parseCoverage } from './map';
+import { drawGaps, gapAt, markStormView, type MaskContext, parseCoverage, stormViewAt } from './map';
 
 const FIXTURES = new URL('../../../../fixtures/live/', import.meta.url);
 let map: CoverageMap;
@@ -75,5 +75,28 @@ describe('drawGaps', () => {
 		const gaps = map.features.filter((f) => f.properties.kind === 'no-coverage').flatMap((f) => f.geometry.coordinates);
 		expect(ctx.fills).toHaveLength(gaps.length);
 		expect(ctx.fills.every((points) => points > 0)).toBe(true);
+	});
+});
+
+describe('storm view', () => {
+	it('covers the gap Himawari sees, not the poles or India', () => {
+		expect(stormViewAt(5, 115)).toBe(true);
+		expect(stormViewAt(-25, 135)).toBe(true);
+		expect(stormViewAt(35, 139)).toBe(true);
+		expect(stormViewAt(85, 140)).toBe(false);
+		expect(stormViewAt(20, 70)).toBe(false);
+	});
+
+	it('marks green only inside the gap', () => {
+		const width = 360;
+		const height = 180;
+		const pixels = new Uint8ClampedArray(width * height * 4);
+		const at = (lat: number, lon: number) => (Math.floor(90 - lat) * width + Math.floor(lon + 180)) * 4;
+		pixels[at(5.5, 115.5)] = 255;
+		pixels[at(85.5, 140.5)] = 255;
+		markStormView(pixels, width, height);
+		expect(pixels[at(5.5, 115.5) + 1]).toBe(255);
+		expect(pixels[at(85.5, 140.5) + 1]).toBe(0);
+		expect(pixels[at(-5.5, 120.5) + 1]).toBe(0);
 	});
 });

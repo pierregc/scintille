@@ -1,6 +1,6 @@
 import { CanvasTexture, LinearFilter, NoColorSpace } from 'three';
 import type { CoverageMap } from '../../contract/types';
-import { drawGaps, gapAt, parseCoverage } from './map';
+import { drawGaps, gapAt, markStormView, parseCoverage } from './map';
 
 export interface CoverageOptions {
 	/** Live feed root; the map is at `<baseUrl>/live/coverage.geojson`. Must be absolute. */
@@ -15,7 +15,7 @@ export interface CoverageOptions {
 
 /** The area no satellite sees. */
 export interface Coverage {
-	/** Equirectangular mask, red 1 in a gap; empty until the map is loaded. */
+	/** Equirectangular mask, red 1 in a gap, green 1 where Himawari sees in it; empty until the map is loaded. */
 	readonly texture: CanvasTexture;
 	/** Loads the map again if the last attempt failed. */
 	retry(): void;
@@ -52,6 +52,9 @@ export function createCoverage({
 	const redraw = () => {
 		if (!map || !ctx || disposed) return;
 		drawGaps(ctx, map, canvas.width, canvas.height);
+		const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+		markStormView(pixels.data, canvas.width, canvas.height);
+		ctx.putImageData(pixels, 0, 0);
 		texture.needsUpdate = true;
 	};
 
