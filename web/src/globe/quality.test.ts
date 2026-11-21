@@ -40,6 +40,12 @@ describe('cloud tiers', () => {
 	});
 });
 
+describe('wind tiers', () => {
+	it('bakes the wind fibres at half the resolution on low', () => {
+		expect([PRESETS.low.windBake, PRESETS.medium.windBake, PRESETS.high.windBake]).toEqual([0.5, 0.75, 1]);
+	});
+});
+
 describe('FpsMonitor', () => {
 	const run = (monitor: FpsMonitor, fps: number, ms: number, from = 0) => {
 		const results: boolean[] = [];

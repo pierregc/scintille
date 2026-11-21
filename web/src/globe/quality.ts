@@ -26,13 +26,15 @@ export interface QualityPreset {
 	cloudVolume: number;
 	/** Most cloud crossings a ray integrates (ADR 0031). */
 	cloudSamples: number;
+	/** Wind fibre bake resolution as a share of the CSS size (ADR 0039). */
+	windBake: number;
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0 },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40 },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48 },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5 },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75 },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1 },
 };
 
 export interface DeviceHints {

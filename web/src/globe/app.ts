@@ -281,6 +281,11 @@ export function createGlobeApp(
 	clouds.setFlashLight(lightning.light);
 	const coldTops = createColdTops({ radius: RADIUS, onError: (error) => console.warn('cold tops:', error) });
 	scene.add(coldTops.mesh);
+	if (import.meta.env.DEV) void import('./wind/dev').then(({ attachDevWind }) => attachDevWind({
+		search: location.search, scene, renderer, baseUrl: liveBaseUrl(), radius: RADIUS, cloudOpacity: clouds.opacity,
+		bakeScale: () => PRESETS[tier].windBake, time: () => clock.time(), steady: () => reducedMotion.matches,
+		stormView: () => focus.selected || (clock.mode === 'replay' && Boolean(replay.state.selected || replay.state.loading)),
+	}));
 	const sound = createSound(live.ring, camera, RADIUS);
 	let post: PostProcessing | undefined = preset.postProcessing
 		? createPostProcessing(renderer, scene, camera, [lightning.mesh])
