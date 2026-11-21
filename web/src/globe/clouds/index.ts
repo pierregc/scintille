@@ -1,7 +1,7 @@
 import { Color, FrontSide, type IUniform, Mesh, ShaderMaterial, SphereGeometry, type Texture, Vector2, Vector3, Vector4 } from 'three';
 import { CLOUD_LIGHT } from '../lightning/cloud-light';
 import { sunDirection } from '../sun';
-import { twilightUniforms } from '../twilight';
+import { MOON_CLOUD_COLOR, twilightUniforms } from '../twilight';
 import { CLOUD_DAY_COLOR, CLOUD_SHELL_KM, CLOUD_TERMINATOR_TINT, CLOUD_WARM_TINT, HANDOFF_TOP_KM } from './bounds';
 import { cloudsFragmentShader, cloudsVertexShader } from './clouds.glsl';
 import type { CloudDetail, DetailSource } from './detail';
@@ -126,7 +126,7 @@ export function createClouds(
 			sunDip: { value: Math.sin(Math.acos(1 / (1 + altitudeKm / EARTH_RADIUS_KM))) },
 			dayColor: { value: new Color(...CLOUD_DAY_COLOR) },
 			twilightColor: { value: new Color(0.03, 0.036, 0.05) },
-			nightColor: { value: new Color(0.006, 0.007, 0.01) },
+			nightColor: { value: new Color(...MOON_CLOUD_COLOR) },
 			warmTint: { value: new Color(...CLOUD_WARM_TINT) },
 			terminatorTint: { value: CLOUD_TERMINATOR_TINT },
 			limbThickening: { value: 0.6 },

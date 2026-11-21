@@ -14,7 +14,7 @@ import {
 } from 'three';
 import { earthFragmentShader, earthVertexShader } from './earth.glsl';
 import { sunDirection } from './sun';
-import { twilightUniforms } from './twilight';
+import { MOONLIGHT, twilightUniforms } from './twilight';
 
 export interface Earth {
 	mesh: Mesh;
@@ -62,6 +62,7 @@ export function createEarth(renderer: WebGLRenderer, radius = 1, tier: TextureTi
 			twilightSoftness: { value: twilight.softness },
 			twilightFloor: { value: 0.12 },
 			nightLights: { value: 1.2 },
+			moonlight: { value: new Vector3(...MOONLIGHT.tint).multiplyScalar(MOONLIGHT.ground) },
 			specular: { value: 1 },
 			seaRoughness: { value: 0.02 },
 			glintCap: { value: 0.3 },
