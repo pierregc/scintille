@@ -89,6 +89,10 @@ def flash_windows(
     return groups
 
 
+def purge_configured() -> bool:
+    return bool(os.environ.get("SCINTILLE_PURGE_TOKEN") and os.environ.get("SCINTILLE_CF_ZONE_ID"))
+
+
 def purge_tags(tags: list[str]) -> bool:
     token, zone = os.environ.get("SCINTILLE_PURGE_TOKEN"), os.environ.get("SCINTILLE_CF_ZONE_ID")
     if not token or not zone:
@@ -269,8 +273,9 @@ def storm_catalog(
             context.log.exception("Search sync failed; it resumes on the next run")
             return {"search_failed": 1}
 
+    purge = purge_tags if purge_configured() else None
     metrics = publish_catalog(
-        store, details, objects, visible, now, purge_tags, regions, highlights=pick, search=index
+        store, details, objects, visible, now, purge, regions, highlights=pick, search=index
     )
     metrics["detected"] = len(classified)
     metrics["invalid_exports"] = len(rejected)
@@ -278,7 +283,7 @@ def storm_catalog(
     metrics["bootstrap_remaining"] = sum(
         storm.slug not in published and storm.storm_id not in ids for storm in summary
     )
-    context.log.info("Storm catalog published; pending purge tags retry on the next run")
+    context.log.info("Storm catalog published")
     return MaterializeResult(metadata=metrics)
 
 

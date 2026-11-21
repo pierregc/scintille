@@ -35,6 +35,7 @@ from scintille_pipelines.storm_catalog import (
     HIGHLIGHTS_PATH,
     LATEST_INDEX_PATH,
     PUBLISHED_PATH,
+    PURGE_MAX_TAGS,
     PURGE_PATH,
     XMLNS,
     index_pages,
@@ -52,6 +53,7 @@ from scintille_pipelines.storm_publication import (
     export_candidates,
     flash_windows,
     publishable,
+    purge_configured,
     storm_catalog,
     storm_catalog_schedule,
 )
@@ -133,9 +135,52 @@ def test_idempotent_details_and_retryable_purge() -> None:
 
     result = publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, failed)
     assert result["pending_purge_tags"] == 3
-    assert calls == [["region:US", f"storm:{document.storm.slug}", "storms-index"]]
+    assert calls == [[f"storm:{document.storm.slug}", "region:US", "storms-index"]]
     publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, lambda _: True)
     assert json.loads(store.get(PURGE_PATH) or b"[]") == []
+
+
+def test_purge_backlog_keeps_the_newest_tags_up_to_the_cap() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, lambda _: True)
+    old = [f"storm:old-{i}" for i in range(PURGE_MAX_TAGS)]
+    store.files[PURGE_PATH] = json.dumps(old).encode()
+    changed = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"flashes": 4})}
+    )
+    calls: list[list[str]] = []
+
+    def failed(tags: list[str]) -> bool:
+        calls.append(tags)
+        return False
+
+    result = publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, failed)
+    pending = json.loads(store.files[PURGE_PATH])
+    assert result["pending_purge_tags"] == len(pending) == PURGE_MAX_TAGS
+    assert pending[:2] == ["storm:old-3", "storm:old-4"]
+    assert pending[-3:] == [f"storm:{document.storm.slug}", "region:US", "storms-index"]
+    assert calls == [pending[:100]]
+
+
+def test_backlog_is_dropped_without_a_purge() -> None:
+    store, document = Store(), detail()
+    publish_catalog(store, [document], chunks(document), [document.storm], NOW, None)
+    store.files[PURGE_PATH] = json.dumps(["storm:old"]).encode()
+    changed = document.model_copy(
+        update={"storm": document.storm.model_copy(update={"flashes": 4})}
+    )
+    result = publish_catalog(store, [changed], chunks(document), [changed.storm], NOW, None)
+    assert result["changed"] == 1
+    assert result["pending_purge_tags"] == 0
+    assert json.loads(store.files[PURGE_PATH]) == []
+
+
+def test_purge_needs_a_token_and_a_zone(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SCINTILLE_PURGE_TOKEN", raising=False)
+    monkeypatch.setenv("SCINTILLE_CF_ZONE_ID", "zone")
+    assert not purge_configured()
+    monkeypatch.setenv("SCINTILLE_PURGE_TOKEN", "token")
+    assert purge_configured()
 
 
 def test_highlights_follow_the_effective_snapshot_and_keep_the_previous_file() -> None:
