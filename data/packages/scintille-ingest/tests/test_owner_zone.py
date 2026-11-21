@@ -134,6 +134,7 @@ def test_a_flash_seen_by_two_sources_is_live_once_and_twice_in_silver(
     chunks = [decode(gzip.decompress(store.objects[c.path])) for c in manifest.chunks]
     live_sources = [SOURCE_VALUES[i] for c in chunks for i in c.columns["source"].tolist()]
     assert live_sources == [owner]
+    assert [(c.flash_count, c.received_count) for c in manifest.chunks] == [(1, 2)]
 
     silver = to_silver(pl.concat(spool.read(b) for b in spool.pending()))
     flags = dict(zip(silver["source"], silver["quality"].to_list(), strict=True))
@@ -188,8 +189,9 @@ def test_a_source_with_only_excluded_flashes_still_looks_alive(tmp_path: Path) -
 
 
 def test_flagged_flashes_stay_live_while_the_owner_is_down(tmp_path: Path) -> None:
-    _, live_sources, metrics = run_both(tmp_path, timedelta(minutes=6))
+    manifest, live_sources, metrics = run_both(tmp_path, timedelta(minutes=6))
     assert live_sources == ["glm-east", "glm-west"]
+    assert all(c.received_count == c.flash_count for c in manifest.chunks)
     assert "ingest_live_excluded_total" not in metrics.render()
 
 

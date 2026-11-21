@@ -95,7 +95,7 @@ class CountingPublisher:
     def __init__(self) -> None:
         self.flash_ids: list[str] = []
 
-    async def publish(self, source: str, flashes: pl.DataFrame) -> None:
+    async def publish(self, source: str, flashes: pl.DataFrame, excluded: int = 0) -> None:
         self.flash_ids += flashes["flash_id"].to_list()
 
 

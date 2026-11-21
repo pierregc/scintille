@@ -451,7 +451,7 @@ server can fetch `http://localhost:8787/live/manifest.json`. To regenerate:
 
 <!-- BEGIN GENERATED REFERENCE -->
 
-Contract version **2.9.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
+Contract version **2.10.0**. This section is generated from the schemas; edit the schemas, then run `uv run scintille-contract generate`.
 
 ### SchemaVersion
 
@@ -459,7 +459,7 @@ Defined in `data/contract/common.schema.json`.
 
 Contract version (SemVer). Any change that breaks existing readers needs a major bump.
 
-Value: `2.9.0`.
+Value: `2.10.0`.
 
 ### UtcTimestamp
 
@@ -555,6 +555,7 @@ One immutable chunk: the flashes ingested during [start, end).
 | `size_bytes` | integer | yes | minimum `0` | Size of the chunk file as stored (gzip), bytes. |
 | `event_min` | [UtcTimestamp](#utctimestamp) or null | yes |  | Earliest event_time in the chunk; null when empty. |
 | `event_max` | [UtcTimestamp](#utctimestamp) or null | yes |  | Latest event_time in the chunk; null when empty. |
+| `received_count` | integer | no | minimum `0` | Flashes received from the satellites for this chunk: flash_count plus those left out because another satellite owns their point. Absent before 2.10. |
 
 ### SourceStatus
 

@@ -1,4 +1,4 @@
-import { QUALITY_FLAG_VALUES } from '../../contract/types';
+import { type LiveManifest, QUALITY_FLAG_VALUES } from '../../contract/types';
 import type { SourceDelays } from '../../globe/live/delay';
 import type { FlashRing } from '../../globe/live/ring';
 
@@ -27,8 +27,29 @@ export function flashRate(ring: FlashRing, delays: SourceDelays, now: number, wi
 	return (count * 1000) / windowMs;
 }
 
-/** `47 flashes/s`, one decimal under 10. */
-export function rateLabel(perSecond: number): string {
-	const value = perSecond >= 10 ? String(Math.round(perSecond)) : perSecond.toFixed(1);
-	return `${value} flashes/s`;
+/**
+ * Flashes per second received from the satellites, before the copies seen by two of them are left out,
+ * averaged over the chunks of the last `windowMs` of the manifest. Null when a chunk has no count.
+ */
+export function receivedRate(manifest: LiveManifest | null, windowMs = 60_000): number | null {
+	const chunks = manifest?.chunks ?? [];
+	if (!chunks.length) return null;
+	const from = Date.parse(chunks[chunks.length - 1].end) - windowMs;
+	let count = 0;
+	let ms = 0;
+	for (let i = chunks.length - 1; i >= 0 && Date.parse(chunks[i].start) >= from; i--) {
+		const received = chunks[i].received_count;
+		if (received == null) return null;
+		count += received;
+		ms += Date.parse(chunks[i].end) - Date.parse(chunks[i].start);
+	}
+	return ms > 0 ? (count * 1000) / ms : null;
+}
+
+const format = (perSecond: number) => (perSecond >= 10 ? String(Math.round(perSecond)) : perSecond.toFixed(1));
+
+/** `47 flashes/s shown · 61 received`, one decimal under 10; the second part only with a received rate. */
+export function rateLabel(shown: number, received: number | null = null): string {
+	const text = `${format(shown)} flashes/s shown`;
+	return received === null ? text : `${text} · ${format(received)} received`;
 }
