@@ -30,11 +30,11 @@ log = logging.getLogger("scintille_ingest.live")
 class Publisher(Protocol):
     """Live feed. Idempotent by `flash_id`: after a crash a file can be published twice."""
 
-    async def publish(self, source: str, flashes: pl.DataFrame) -> None: ...
+    async def publish(self, source: str, flashes: pl.DataFrame, excluded: int = 0) -> None: ...
 
 
 class NullPublisher:
-    async def publish(self, source: str, flashes: pl.DataFrame) -> None:
+    async def publish(self, source: str, flashes: pl.DataFrame, excluded: int = 0) -> None:
         pass
 
 
@@ -136,8 +136,9 @@ class IngestLive:
             )
         if record is None or ORDER[record.state] < ORDER["published_live"]:
             live = drop_owned_by(flashes, self._live_sources())
-            await self.publisher.publish(source.name, live)
-            if excluded := flashes.height - live.height:
+            excluded = flashes.height - live.height
+            await self.publisher.publish(source.name, live, excluded)
+            if excluded:
                 self.metrics.inc("ingest_live_excluded_total", excluded, source=source.name)
         self.state.advance(identity, source.name, "published_live", etag=product.etag)
         self._after_step("published_live", identity)

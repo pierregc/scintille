@@ -13,8 +13,8 @@ class BinaryColumn(NamedTuple):
     scale: float
 
 
-SchemaVersion = Literal["2.9.0"]
-SCHEMA_VERSION: Final = "2.9.0"
+SchemaVersion = Literal["2.10.0"]
+SCHEMA_VERSION: Final = "2.10.0"
 """Contract version (SemVer). Any change that breaks existing readers needs a major bump."""
 
 
@@ -132,6 +132,14 @@ class ChunkRef(BaseModel):
     )
     event_max: UtcTimestamp | None = Field(
         description="Latest event_time in the chunk; null when empty."
+    )
+    received_count: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Flashes received from the satellites for this chunk: flash_count plus those "
+            "left out because another satellite owns their point. Absent before 2.10."
+        ),
     )
 
 

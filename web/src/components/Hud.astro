@@ -27,7 +27,7 @@ import StormSuggestions from './StormSuggestions.astro';
 		<div class="state">
 			<span class="pulse" aria-hidden="true"></span>
 			<span class="cap" data-state role="status">Live</span>
-			<span class="cap rate" data-rate hidden></span>
+			<span class="cap rate" data-rate title="Shown: flashes played on the globe, each counted once. Received: what the satellites sent, 1 min average." hidden></span>
 			<button class="golive" type="button" data-live>Back to live</button>
 		</div>
 		<ul class="sources" aria-label="Sources" data-sources hidden></ul>
@@ -621,7 +621,7 @@ import StormSuggestions from './StormSuggestions.astro';
 	import { trackCaption } from '../globe/replay/track';
 	import { feedLabel, formatAge, SOURCE_REGIONS, sourcesNote } from '../globe/live/freshness';
 	import { trackObservation } from '../globe/scene-time';
-	import { flashRate, rateLabel } from './hud/rate';
+	import { flashRate, rateLabel, receivedRate } from './hud/rate';
 	import { endedCaption, formatDate, formatTime, liveCaption, positionCaption, zoneLabel } from './hud/format';
 	import { LEVELS_KEY, levelKey, savedLevels } from './hud/levels';
 
@@ -701,7 +701,9 @@ import StormSuggestions from './StormSuggestions.astro';
 		let rateText = '';
 		const updateRate = () => {
 			if (!rate) return;
-			const text = app && rateShown() ? rateLabel(flashRate(app.debug.ring, app.debug.delays(), app.clock.time())) : '';
+			const text = app && rateShown()
+				? rateLabel(flashRate(app.debug.ring, app.debug.delays(), app.clock.time()), receivedRate(app.debug.client.manifest))
+				: '';
 			if (text === rateText && rate.hidden === !text) return;
 			rateText = text;
 			if (!text) {
@@ -715,13 +717,9 @@ import StormSuggestions from './StormSuggestions.astro';
 				requestAnimationFrame(() => requestAnimationFrame(() => delete rate.dataset.fade));
 				return;
 			}
-			rate.dataset.fade = '';
-			setTimeout(() => {
-				rate.textContent = rateText;
-				delete rate.dataset.fade;
-			}, 350);
+			rate.textContent = text;
 		};
-		setInterval(updateRate, 5000);
+		setInterval(updateRate, 2000);
 
 		const tick = () => {
 			const replay = app?.replay.state;

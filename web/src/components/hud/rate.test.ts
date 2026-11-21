@@ -4,7 +4,8 @@ import { decodeChunk } from '../../globe/live/decode';
 import { NO_DELAY, SourceDelays } from '../../globe/live/delay';
 import { FlashRing } from '../../globe/live/ring';
 import { encodeChunk, type FakeFlash } from '../../globe/live/testing';
-import { flashRate, rateLabel } from './rate';
+import type { ChunkRef, LiveManifest } from '../../contract/types';
+import { flashRate, rateLabel, receivedRate } from './rate';
 
 const START = 1_800_000_000;
 const T0 = START * 1000;
@@ -47,10 +48,35 @@ describe('flashRate', () => {
 	});
 });
 
+describe('receivedRate', () => {
+	const manifest = (counts: (number | undefined)[]) =>
+		({
+			chunks: counts.map((received_count, i) => ({
+				start: new Date(T0 + i * 20_000).toISOString(),
+				end: new Date(T0 + (i + 1) * 20_000).toISOString(),
+				received_count,
+			})) as ChunkRef[],
+		}) as LiveManifest;
+
+	it('averages the last minute of chunks', () => {
+		expect(receivedRate(manifest([9000, 300, 600, 900]))).toBeCloseTo(30);
+	});
+
+	it('is unknown without counts', () => {
+		expect(receivedRate(manifest([300, undefined, 900]))).toBeNull();
+		expect(receivedRate(manifest([]))).toBeNull();
+		expect(receivedRate(null)).toBeNull();
+	});
+});
+
 describe('rateLabel', () => {
 	it('rounds large rates and keeps a decimal for small ones', () => {
-		expect(rateLabel(47.4)).toBe('47 flashes/s');
-		expect(rateLabel(3.26)).toBe('3.3 flashes/s');
-		expect(rateLabel(0)).toBe('0.0 flashes/s');
+		expect(rateLabel(47.4)).toBe('47 flashes/s shown');
+		expect(rateLabel(3.26)).toBe('3.3 flashes/s shown');
+		expect(rateLabel(0)).toBe('0.0 flashes/s shown');
+	});
+
+	it('adds the received rate when known', () => {
+		expect(rateLabel(47.4, 61.2)).toBe('47 flashes/s shown · 61 received');
 	});
 });

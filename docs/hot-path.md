@@ -15,7 +15,8 @@ as not spooled) through:
 2. **live feed**: parsed flashes go to the publisher (#36), which must be idempotent by `flash_id`,
    except those flagged `outside-owner-zone`: another satellite has the better view of their point
    and publishes the same flash ([overlap](data-quality.md#overlap-between-satellites)); they are
-   counted in `ingest_live_excluded_total` and still spooled. While the owner has spooled no file
+   counted in `ingest_live_excluded_total`, added to the `received_count` of the next chunk in the
+   manifest, and still spooled. While the owner has spooled no file
    for 5 minutes (`owner_stale_after`; 15 for MTG LI, which delivers every 10, in
    `owner_stale_after_by_source`), they stay in the live feed so its zone does not go dark. A
    file with nothing left to publish still refreshes the source's `last_ingest_time`; state

@@ -274,6 +274,7 @@ class LiveFeed:
         self._stop = asyncio.Event()
         self._delivered: set[str] = set()
         self._first_pending: datetime | None = None
+        self._excluded = 0
         self._previous_flush: datetime | None = None
         self._arrival = asyncio.Event()
 
@@ -306,9 +307,13 @@ class LiveFeed:
         if manifest:
             self._previous_flush = manifest.generated_at
 
-    async def publish(self, source: str, flashes: pl.DataFrame) -> None:
-        """Idempotent by `flash_id` over the live window; an empty frame still counts as ingest."""
+    async def publish(self, source: str, flashes: pl.DataFrame, excluded: int = 0) -> None:
+        """Idempotent by `flash_id` over the live window; an empty frame still counts as ingest.
+
+        `excluded` is how many flashes of the same file were left out of `flashes`.
+        """
         now = self._clock()
+        self._excluded += excluded
         self._delivered.add(source)
         self._arrival.set()
         fresh = flashes.filter(~pl.col("flash_id").is_in(list(self._recent_ids)))
@@ -347,6 +352,7 @@ class LiveFeed:
         batch, self._pending = self._pending, []
         delivered, self._delivered = self._delivered, set()
         first_pending, self._first_pending = self._first_pending, None
+        excluded, self._excluded = self._excluded, 0
         try:
             frames = [frame for _, frame in batch]
             flashes = pl.concat(frames, how="vertical_relaxed") if frames else None
@@ -358,14 +364,17 @@ class LiveFeed:
             self._pending = batch + self._pending
             self._delivered |= delivered
             self._first_pending = first_pending or self._first_pending
+            self._excluded += excluded
             raise
         self._unlisted.append(path)
         event_min, event_max = event_span(flashes)
+        count = flashes.height if flashes is not None else 0
         ref = ChunkRef(
             start=start,
             end=end,
             path=path,
-            flash_count=flashes.height if flashes is not None else 0,
+            flash_count=count,
+            received_count=count + excluded,
             size_bytes=len(body),
             event_min=event_min,
             event_max=event_max,
