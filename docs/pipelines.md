@@ -260,9 +260,11 @@ pipeline; a web request only reads the requested page.
 
 `SCINTILLE_PURGE_TOKEN` and `SCINTILLE_CF_ZONE_ID` enable batched cache tag purges. Changed closed
 storms queue `storm:<slug>`, affected `region:<CC>` tags and `storms-index` before detail writes.
-Pending tags are stored in `_pipeline/storms/purge.json` in the feed bucket. Failure or missing
-credentials leaves the queue intact and does not fail publication. One batch of at most 100 tags
-is attempted per hourly run; the remainder retries next run, below the Free request limit.
+Pending tags are stored oldest first in `_pipeline/storms/purge.json` in the feed bucket, which the
+edge refuses to serve. A failed purge leaves the queue intact and does not fail publication. One
+batch of at most 100 tags is attempted per hourly run; the remainder retries next run, below the
+Free request limit. The queue keeps the newest 2,400 tags, a day of batches, since closed storm
+pages leave the edge cache after a day. Without credentials nothing is queued and the file is emptied.
 
 Only storms of level 3 (Strong) and above are published: about a quarter of the storms and nine
 tenths of the flashes. Smaller storms are still detected and tracked, since large storms start small.

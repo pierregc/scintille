@@ -174,12 +174,15 @@ void main() {
 	vec3 view = normalize(cameraPosition - vWorldPosition);
 	color += vec3(0.92, 0.95, 1.0) * specular * water * glint(n, sun, view) * smoothstep(0.0, 0.2, s);
 
-	// No lightning data here: desaturated, dimmed and finely hatched, visible by day and by night; lighter where storms show from cold cloud tops.
-	vec2 coverage = textureGrad(coverageMap, uv, gx, gy).rg;
-	float gap = coverage.r * coverageShade * (1.0 - 0.65 * coverageStorms * coverage.g);
-	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	color = mix(color, vec3(luma) * 0.55, 0.8 * gap);
-	float hatch = smoothstep(2.3, 3.5, abs(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0) - 3.5));
+	// No lightning data here: greyed, dimmed and finely hatched; lighter where storms show from cold cloud tops.
+	// A coarse mip level feathers the edge inside the gap; the grey keeps the moonlight's hue by night, and the hatching fades in close views.
+	vec2 coverage = textureLod(coverageMap, uv, 4.0).rg;
+	float gap = smoothstep(0.5, 1.0, coverage.r) * coverageShade * (1.0 - 0.65 * coverageStorms * coverage.g);
+	vec3 luma = vec3(0.2126, 0.7152, 0.0722);
+	vec3 grey = dot(color, luma) * mix(vec3(1.0), moonlight / dot(moonlight, luma), 1.0 - level);
+	color = mix(color, grey * 0.55, 0.8 * gap);
+	float kmPerPixel = 6371.0 * length(fwidth(geo));
+	float hatch = smoothstep(2.3, 3.5, abs(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0) - 3.5)) * smoothstep(3.0, 7.0, kmPerPixel);
 	color += vec3(0.58, 0.64, 0.74) * 0.07 * hatch * gap;
 
 	gl_FragColor = vec4(color, 1.0);

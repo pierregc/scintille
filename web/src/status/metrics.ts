@@ -60,7 +60,8 @@ export interface SourceView {
 	latencyP50: string;
 	latencyP95: Measure;
 	completeness: Measure;
-	errorBudget: string;
+	/** Floored at 0 %: an overspent budget reads as spent. */
+	errorBudget: { text: string; spent: boolean };
 	lastFile: string;
 }
 
@@ -73,11 +74,17 @@ export interface StatusView {
 	generatedAtMs: number | null;
 	freshness: { label: string; measure: Measure }[];
 	sources: SourceView[];
-	quality: { status: CheckStatus; text: string; failed: string[]; checkedAt: string };
+	quality: { status: CheckStatus; text: string; failed: string[]; checks: QualityCheck[]; checkedAt: string };
 	catalog: { text: string; share: string } | null;
 	lake: { size: string; tables: string; files: string; rows: string; measured: Measure } | null;
 	storms: { detected: string; published: string; highlighted: string; measured: Measure } | null;
 	cyclones: { active: string; tracked: string; advisory: Measure; measured: Measure } | null;
+}
+
+export interface QualityCheck {
+	/** Breaks after underscores, not mid word. */
+	name: string;
+	hint: string;
 }
 
 const dash = '—';
@@ -123,10 +130,25 @@ function since(iso: string | null, now: number): string {
 
 const QUALITY_TEXT: Record<CheckStatus, string> = {
 	pass: 'All checks pass',
-	warn: 'Warnings',
+	warn: 'No errors',
 	fail: 'Failing',
 	unknown: 'Not checked yet',
 };
+
+const CHECK_HINTS: Record<string, string> = {
+	lake_file_sizes: 'compaction pending',
+	lake_orphan_inventory: 'old files kept for now',
+	silver_volume: 'unusual flash count',
+};
+
+function qualityCheck(name: string): QualityCheck {
+	return { name: name.replaceAll('_', '_\u200b'), hint: CHECK_HINTS[name] ?? '' };
+}
+
+function errorBudget(remaining: number | null): SourceView['errorBudget'] {
+	const spent = remaining !== null && remaining <= 0;
+	return { text: formatPercent(remaining === null ? null : Math.max(remaining, 0), 0), spent };
+}
 
 /**
  * What the page shows at `now` for the latest metrics, loaded at `loadedAt`. Layer ages are advanced
@@ -146,7 +168,7 @@ export function statusView(
 			generatedAtMs: null,
 			freshness: [],
 			sources: [],
-			quality: { status: 'unknown', text: dash, failed: [], checkedAt: dash },
+			quality: { status: 'unknown', text: dash, failed: [], checks: [], checkedAt: dash },
 			catalog: null,
 			lake: null,
 			storms: null,
@@ -198,13 +220,14 @@ export function statusView(
 				verdict: verdict(s.completeness, (v) => v >= SLO.completeness, current),
 				target: '≥ 99 %',
 			},
-			errorBudget: formatPercent(s.error_budget_remaining, 0),
+			errorBudget: errorBudget(s.error_budget_remaining),
 			lastFile: since(s.last_file_time, now),
 		})),
 		quality: {
 			status: metrics.quality.status,
 			text: QUALITY_TEXT[metrics.quality.status] ?? metrics.quality.status,
 			failed: metrics.quality.failed,
+			checks: metrics.quality.failed.map(qualityCheck),
 			checkedAt: since(metrics.quality.checked_at, now),
 		},
 		catalog: {

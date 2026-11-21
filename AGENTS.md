@@ -79,6 +79,7 @@ Before opening a PR, every command of the area you touched must pass.
 - TypeScript: strict mode, no `any` without a comment explaining why.
 - Python: typed (mypy strict), formatted and linted by ruff, tests with pytest. Prefer vectorized Polars/Arrow over row-by-row loops for data.
 - Tests come with the code they test. Pure logic (sun position, parsing, normalization) is unit-tested.
+- A new or changed data source updates the Methodology page (`web/src/pages/methodology.astro`, sources and credits) and `web/public/llms.txt`.
 - Never commit secrets, `.env` files, or large data files (`*.nc`, `*.parquet`); small test fixtures go under a `fixtures/` folder.
 
 ## Parallel work

@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Not found · Scintille" description="This page does not exist on Scintille." noindex>
+	<main>
+		<p><a href="/">← Scintille</a></p>
+		<h1>Nothing here</h1>
+		<p>This page does not exist. The storms are on <a href="/">the globe</a>.</p>
+	</main>
+</BaseLayout>
+
+<style>
+	main {
+		max-width: 42rem;
+		margin: 0 auto;
+		padding: 3rem 1rem 4rem;
+		font-family: system-ui, sans-serif;
+		line-height: 1.6;
+	}
+	a {
+		color: #9fc3ff;
+	}
+</style>

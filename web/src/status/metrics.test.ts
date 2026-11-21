@@ -54,7 +54,7 @@ describe('statusView', () => {
 		expect(west.lastMinute).toBe(raw.flashes_per_minute.at(-2));
 		expect(west.latencyP95.text).toBe(`${Math.round(raw.latency_p95_seconds ?? NaN)} s`);
 		expect(west.completeness).toEqual({ text: '93.3 %', verdict: 'missed', target: '≥ 99 %' });
-		expect(west.errorBudget).toBe('61 %');
+		expect(west.errorBudget).toEqual({ text: '61 %', spent: false });
 		expect(west.lastFile).toBe('4 min ago');
 		expect(nth(view.sources, 0).completeness.verdict).toBe('met');
 		expect(nth(view.sources, 0).latencyP95.verdict).toBe('met');
@@ -85,6 +85,21 @@ describe('statusView', () => {
 		const m = fixture();
 		m.cyclones.source_cycle = '2026-07-15T06:00:00Z';
 		expect(statusView(m, T, T).cyclones?.advisory).toMatchObject({ text: '13 h ago', verdict: 'missed' });
+	});
+
+	it('floors an overspent error budget at 0 % and calls it spent', () => {
+		const m = fixture();
+		nth(m.sources, 2).error_budget_remaining = -5.8519;
+		expect(nth(statusView(m, T, T).sources, 2).errorBudget).toEqual({ text: '0 %', spent: true });
+	});
+
+	it('breaks check names after underscores and explains known warnings', () => {
+		const m = fixture();
+		m.quality.failed = ['lake_orphan_inventory', 'new_check'];
+		expect(statusView(m, T, T).quality.checks).toEqual([
+			{ name: 'lake_\u200borphan_\u200binventory', hint: 'old files kept for now' },
+			{ name: 'new_\u200bcheck', hint: '' },
+		]);
 	});
 
 	it('flags old or missing lake and storm measurements', () => {

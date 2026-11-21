@@ -113,6 +113,15 @@ resource "cloudflare_r2_bucket_lifecycle" "live" {
       }
     },
     {
+      # Wind frames (ADR 0039), kept 30 days like the clouds.
+      id         = "archive-wind-30-days"
+      enabled    = true
+      conditions = { prefix = "archive/wind/" }
+      delete_objects_transition = {
+        condition = { type = "Age", max_age = 30 * 86400 }
+      }
+    },
+    {
       # Storm replays; the web reports older ones as expired (REPLAY_RETENTION_DAYS).
       id         = "storms-chunks-60-days"
       enabled    = true

@@ -43,7 +43,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 		<p class="note">
 			Refreshed every minute. Flashes are counted per minute of ingestion; the last minute is still in
-			progress. Lakehouse size counts the current table snapshots, measured hourly. Storms are
+			progress. The error budget allows 1 % of satellite files missing over 30 days, provider outages
+			included. Lakehouse size counts the current table snapshots, measured hourly. Storms are
 			published from level 3. Cyclone advisories come every 6 hours, about 3 hours after their time.
 		</p>
 	</main>
@@ -256,6 +257,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 	}
 	.status :global(.verdict) {
 		letter-spacing: 0.12em;
+	}
+	.status :global(.checks .verdict + .value) {
+		margin-top: 6px;
 	}
 	.status :global(.verdict.missed) {
 		color: var(--ink);

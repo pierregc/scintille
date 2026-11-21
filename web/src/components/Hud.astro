@@ -16,8 +16,8 @@ import StormSuggestions from './StormSuggestions.astro';
 	</header>
 
 	<div class="corner">
-		<a class="cap" href="/status">Status</a>
-		<a class="cap" href="/methodology">Methodology</a>
+		<a class="cap" href="/status/">Status</a>
+		<a class="cap" href="/methodology/">Methodology</a>
 	</div>
 
 	<StormSuggestions />
@@ -529,8 +529,26 @@ import StormSuggestions from './StormSuggestions.astro';
 	:global(body:has([data-globe-fallback]:not([hidden]))) .hud {
 		pointer-events: auto;
 	}
-	:global(body:has([data-globe-fallback]:not([hidden]))) .frame {
+	:global(body:has([data-globe-fallback]:not([hidden]))) :is(.frame, .corner, .state) {
 		display: none;
+	}
+	:global(body:has([data-globe-fallback]:not([hidden]))) .clock .t {
+		justify-content: flex-start;
+	}
+	:global(body .globe-fallback[data-globe-fallback]) {
+		max-width: 32rem;
+		margin: 0 clamp(18px, 2.6vw, 40px) clamp(18px, 2.6vw, 40px);
+		color: rgb(238 242 247 / 0.62);
+		font: 300 14px/1.6 'IBM Plex Sans', system-ui, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	:global(.globe-fallback figcaption) {
+		margin-top: 20px;
+	}
+	:global(.globe-fallback a) {
+		color: rgb(238 242 247 / 0.9);
+		text-underline-offset: 3px;
+		text-decoration-color: rgb(238 242 247 / 0.3);
 	}
 
 	@media (max-width: 640px) {
@@ -595,6 +613,43 @@ import StormSuggestions from './StormSuggestions.astro';
 			display: flex;
 			gap: 8px;
 			padding: 0;
+		}
+	}
+	/* Touch: every control catches a 44 px square around it, neighbours spaced so these do not overlap. */
+	@media (pointer: coarse), (max-width: 640px) {
+		.golive,
+		.corner .cap,
+		.sw,
+		.tools button,
+		.opts :global(button) {
+			position: relative;
+		}
+		.golive::after,
+		.corner .cap::after,
+		.sw::after,
+		.tools button::after,
+		.opts :global(button)::after {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: max(100%, 44px);
+			height: max(100%, 44px);
+			content: '';
+			transform: translate(-50%, -50%);
+		}
+		.group,
+		.mix {
+			gap: 20px;
+		}
+		.mix {
+			margin-top: 0;
+		}
+		.opts {
+			gap: 30px;
+		}
+		.level input {
+			height: 44px;
+			margin: -10px 0;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
