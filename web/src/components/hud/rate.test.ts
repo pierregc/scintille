@@ -5,7 +5,7 @@ import { NO_DELAY, SourceDelays } from '../../globe/live/delay';
 import { FlashRing } from '../../globe/live/ring';
 import { encodeChunk, type FakeFlash } from '../../globe/live/testing';
 import type { ChunkRef, LiveManifest } from '../../contract/types';
-import { flashRate, rateLabel, receivedRate } from './rate';
+import { flashRate, rateLabel, excludedRate } from './rate';
 
 const START = 1_800_000_000;
 const T0 = START * 1000;
@@ -48,24 +48,26 @@ describe('flashRate', () => {
 	});
 });
 
-describe('receivedRate', () => {
-	const manifest = (counts: (number | undefined)[]) =>
+describe('excludedRate', () => {
+	const manifest = (counts: (number | null | undefined)[]) =>
 		({
 			chunks: counts.map((received_count, i) => ({
 				start: new Date(T0 + i * 20_000).toISOString(),
 				end: new Date(T0 + (i + 1) * 20_000).toISOString(),
+				flash_count: 200,
 				received_count,
 			})) as ChunkRef[],
 		}) as LiveManifest;
 
 	it('averages the last minute of chunks', () => {
-		expect(receivedRate(manifest([9000, 300, 600, 900]))).toBeCloseTo(30);
+		expect(excludedRate(manifest([9000, 300, 600, 900]))).toBeCloseTo(20);
 	});
 
 	it('is unknown without counts', () => {
-		expect(receivedRate(manifest([300, undefined, 900]))).toBeNull();
-		expect(receivedRate(manifest([]))).toBeNull();
-		expect(receivedRate(null)).toBeNull();
+		expect(excludedRate(manifest([300, undefined, 900]))).toBeNull();
+		expect(excludedRate(manifest([300, null, 900]))).toBeNull();
+		expect(excludedRate(manifest([]))).toBeNull();
+		expect(excludedRate(null)).toBeNull();
 	});
 });
 
@@ -76,7 +78,7 @@ describe('rateLabel', () => {
 		expect(rateLabel(0)).toBe('0.0 flashes/s shown');
 	});
 
-	it('adds the received rate when known', () => {
-		expect(rateLabel(47.4, 61.2)).toBe('47 flashes/s shown · 61 received');
+	it('adds what was left out to get the received rate', () => {
+		expect(rateLabel(47.4, 13.8)).toBe('47 flashes/s shown · 61 received');
 	});
 });
