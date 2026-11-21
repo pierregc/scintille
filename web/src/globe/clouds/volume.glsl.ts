@@ -645,7 +645,7 @@ void main() {
 				vec3 pb = ro + rd * (t + 0.5 * ds);
 				vec2 lb = volumeLatLon(pb);
 				float body = flashLightAtLod(vec2(lb.y / 6.283185307 + 0.5, lb.x / 3.141592654 + 0.5)) * flashBand(length(pb) - R, col.y);
-				float bodyAlpha = 1.0 - exp(-${f(CLOUD_LIGHT.bodySigma)} * under);
+				float bodyAlpha = (1.0 - exp(-${f(CLOUD_LIGHT.bodySigma)} * under)) * smoothstep(0.3, 0.7, f.a) * smoothstep(${f(CLOUD_LIGHT.bodyCover)}, ${f(2 * CLOUD_LIGHT.bodyCover)}, f.r);
 				glowLight += glowT * (1.0 - exp(-flashGain * body)) * ${f(CLOUD_LIGHT.volumeBoost)} * bodyAlpha * cloudLightDay(dot(normalize(pb), sunDir));
 				glowT *= 1.0 - bodyAlpha * step(1e-4, body);
 			}
