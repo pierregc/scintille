@@ -23,6 +23,7 @@ function client(options: Partial<LiveClientOptions> = {}): LiveClient {
 		random: () => 0.5,
 		onError: (error) => errors.push(error),
 		pollIntervalMs: POLL,
+		olderSpacingMs: 0,
 		...options,
 	});
 	return current;
@@ -91,7 +92,7 @@ describe('LiveClient', () => {
 		live.stop();
 	});
 
-	it('loads the chunks live mode plays first, then the older ones in a single ring push', async () => {
+	it('loads the chunks live mode plays first, then the older ones in one ring push per batch', async () => {
 		const refs = [];
 		for (let i = 0; i < 40; i++) refs.push(await feed.publish(T0 + i * 30, 30, 3));
 		const push = vi.spyOn(ring, 'push');
@@ -104,6 +105,48 @@ describe('LiveClient', () => {
 		expect(ring.size).toBe(120);
 		for (let i = 1; i < ring.size; i++) expect(ring.time[ring.slot(i)]).toBeGreaterThanOrEqual(ring.time[ring.slot(i - 1)]);
 		expect(live.coverageStart()).toBe(T0 * 1000);
+		live.stop();
+	});
+
+	it('holds the older chunks while the page is near the rate limit, and keeps polling', async () => {
+		for (let i = 0; i < 40; i++) await feed.publish(T0 + i * 30, 30, 1);
+		let pressure = 200;
+		const live = client({ recentMs: 300_000, pressure: () => pressure });
+		live.start();
+		await flush();
+		expect(feed.chunkRequests()).toHaveLength(10);
+		expect(live.manifest).not.toBeNull();
+
+		await feed.publish(T0 + 40 * 30, 30, 1);
+		await vi.advanceTimersByTimeAsync(POLL);
+		await flush();
+		expect(feed.manifestRequests()).toBe(2);
+		expect(feed.chunkRequests()).toHaveLength(11);
+
+		pressure = 0;
+		await tick(250);
+		expect(feed.chunkRequests()).toHaveLength(41);
+		expect(duplicates(feed.chunkRequests())).toEqual([]);
+		expect(ring.size).toBe(41);
+		expect(live.coverageStart()).toBe(T0 * 1000);
+		live.stop();
+	});
+
+	it('loads the older chunks newest first, so coverage grows back without a gap', async () => {
+		const refs = [];
+		for (let i = 0; i < 80; i++) refs.push(await feed.publish(T0 + i * 30, 30, 1));
+		const starts: (number | null)[] = [];
+		const live = client({ recentMs: 300_000, concurrency: 1 });
+		const push = vi.spyOn(ring, 'push').mockImplementation(function (this: FlashRing, chunk) {
+			FlashRing.prototype.push.call(this, chunk);
+			starts.push(live.coverageStart());
+		});
+		live.start();
+		await settle();
+		const older = feed.chunkRequests().slice(10);
+		expect(older).toEqual(refs.slice(0, 70).reverse().map((ref) => `https://data.example/live/${ref.path}`));
+		expect(push).toHaveBeenCalledTimes(13);
+		expect(starts.slice(10)).toEqual([T0 + 40 * 30, T0 + 10 * 30, T0].map((t) => t * 1000));
 		live.stop();
 	});
 
