@@ -6,6 +6,8 @@ export interface QualityPreset {
 	textures: '2k' | '4k' | '8k';
 	/** Device pixel ratio cap. */
 	maxPixelRatio: number;
+	/** Drawing buffer budget, millions of pixels, whatever the screen. */
+	maxMegapixels: number;
 	/** Flashes kept on the GPU; null keeps the whole live window. */
 	maxFlashes: number | null;
 	/** Clouds lit from inside by flashes. */
@@ -34,9 +36,9 @@ export interface QualityPreset {
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5, atmosphereSteps: [8, 4] },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75, atmosphereSteps: [16, 6] },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1, atmosphereSteps: [16, 6] },
+	low: { textures: '2k', maxPixelRatio: 1, maxMegapixels: 1.5, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5, atmosphereSteps: [8, 4] },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxMegapixels: 3.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75, atmosphereSteps: [16, 6] },
+	high: { textures: '4k', maxPixelRatio: 2, maxMegapixels: 9, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1, atmosphereSteps: [16, 6] },
 };
 
 export interface DeviceHints {
@@ -47,9 +49,15 @@ export interface DeviceHints {
 	coarsePointer: boolean;
 	/** `navigator.deviceMemory`, GB, when available. */
 	memoryGb?: number;
+	/** `navigator.hardwareConcurrency`, when available. */
+	cores?: number;
 }
 
-const WEAK_GPU = /mali|adreno \(tm\) [1-5]\d\d|powervr|intel\(r\) (hd|uhd) graphics|swiftshader|llvmpipe/i;
+const WEAK_GPU = /mali|adreno \(tm\) [1-5]\d\d|powervr|intel\(r\) (hd|uhd) graphics|intel.*iris(?!.*xe)|swiftshader|llvmpipe/i;
+/** Discrete laptop GPUs of 2015 to 2018 that the strong pattern would otherwise catch. */
+const MID_GPU = /radeon pro \d{3}x?\b|geforce (gt |mx|(gtx )?\d{3}m\b)/i;
+/** Safari names every Mac GPU this way, Intel ones included. */
+const MASKED_APPLE_GPU = /^apple gpu$/i;
 const STRONG_GPU = /apple m\d|nvidia|geforce|rtx|radeon (rx|pro)|apple gpu/i;
 
 /** Phones have 256 MB for the whole scene instead of 384 (ADR 0020); the globe takes about 205. */
@@ -64,9 +72,12 @@ export function surfaceBudgetMb(tier: QualityTier, phone: boolean): number {
 }
 
 /** Initial tier from cheap hints: phones and weak GPUs start low, known strong GPUs high. */
-export function guessTier({ gpu = '', screenMin, coarsePointer, memoryGb }: DeviceHints): QualityTier {
+export function guessTier({ gpu = '', screenMin, coarsePointer, memoryGb, cores }: DeviceHints): QualityTier {
 	if (WEAK_GPU.test(gpu) || (memoryGb !== undefined && memoryGb <= 2)) return 'low';
 	if (isPhone({ screenMin, coarsePointer })) return STRONG_GPU.test(gpu) ? 'medium' : 'low';
+	if (MID_GPU.test(gpu)) return 'medium';
+	// Apple silicon has 8 cores or more; Intel Macs of that age mostly 4.
+	if (MASKED_APPLE_GPU.test(gpu.trim())) return cores !== undefined && cores >= 8 ? 'high' : 'medium';
 	if (STRONG_GPU.test(gpu)) return 'high';
 	return 'medium';
 }
@@ -93,7 +104,7 @@ export class FpsMonitor {
 	#frames = 0;
 	#lastDowngrade = Number.NEGATIVE_INFINITY;
 
-	constructor({ minFps = 45, windowMs = 5000, cooldownMs = 10_000 } = {}) {
+	constructor({ minFps = 45, windowMs = 3000, cooldownMs = 3000 } = {}) {
 		this.#minFps = minFps;
 		this.#windowMs = windowMs;
 		this.#cooldownMs = cooldownMs;

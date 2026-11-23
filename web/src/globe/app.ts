@@ -47,7 +47,7 @@ import { ReplayNavigation } from './replay/navigation';
 import { readFrameCheckpoint, type FrameCheckpoint } from './replay/checkpoint';
 import { frameStorm } from './replay/framing';
 import { createSound, type Sound } from './sound';
-import { cappedPixelRatio } from './viewport';
+import { budgetPixelRatio } from './viewport';
 import { CONTEXT_ATTRIBUTES } from './webgl';
 import { WindFeed } from './wind/feed';
 import { createWindLayer } from './wind/layer';
@@ -61,6 +61,7 @@ function deviceHints(context: WebGL2RenderingContext) {
 		screenMin: Math.min(screen.width, screen.height),
 		coarsePointer: matchMedia('(pointer: coarse)').matches,
 		memoryGb: memory,
+		cores: navigator.hardwareConcurrency,
 	};
 }
 
@@ -336,7 +337,7 @@ export function createGlobeApp(
 		const width = renderParams?.width ?? window.innerWidth;
 		const height = renderParams?.height ?? window.innerHeight;
 		renderer.setPixelRatio(
-			renderParams ? 1 : cappedPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio),
+			renderParams ? 1 : budgetPixelRatio(window.devicePixelRatio, PRESETS[tier].maxPixelRatio, width, height, PRESETS[tier].maxMegapixels),
 		);
 		renderer.setSize(width, height, false);
 		post?.setSize(width, height, renderer.getPixelRatio());
