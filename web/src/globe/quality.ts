@@ -37,7 +37,7 @@ export interface QualityPreset {
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
 	low: { textures: '2k', maxPixelRatio: 1, maxMegapixels: 1.5, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5, atmosphereSteps: [8, 4] },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxMegapixels: 3.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75, atmosphereSteps: [16, 6] },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxMegapixels: 3.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0, cloudSamples: 0, windBake: 0.75, atmosphereSteps: [16, 6] },
 	high: { textures: '4k', maxPixelRatio: 2, maxMegapixels: 9, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1, atmosphereSteps: [16, 6] },
 };
 

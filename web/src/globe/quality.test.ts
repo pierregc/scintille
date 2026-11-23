@@ -57,6 +57,13 @@ describe('wind tiers', () => {
 	});
 });
 
+describe('cloud relief', () => {
+	it('marches the clouds on high only', () => {
+		expect([PRESETS.low.cloudVolume, PRESETS.medium.cloudVolume]).toEqual([0, 0]);
+		expect(PRESETS.high.cloudVolume).toBeGreaterThan(0);
+	});
+});
+
 describe('FpsMonitor', () => {
 	const run = (monitor: FpsMonitor, fps: number, ms: number, from = 0) => {
 		const results: boolean[] = [];
