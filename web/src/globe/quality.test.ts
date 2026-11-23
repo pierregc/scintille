@@ -7,6 +7,17 @@ describe('guessTier', () => {
 		expect(guessTier({ gpu: 'Intel(R) UHD Graphics 620', screenMin: 900, coarsePointer: false })).toBe('low');
 		expect(guessTier({ screenMin: 390, coarsePointer: true })).toBe('low');
 		expect(guessTier({ screenMin: 1080, coarsePointer: false, memoryGb: 2 })).toBe('low');
+		expect(guessTier({ gpu: 'ANGLE (Intel Inc., Intel(R) Iris(TM) Plus Graphics 655, OpenGL 4.1)', screenMin: 900, coarsePointer: false })).toBe('low');
+		expect(guessTier({ gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', screenMin: 1080, coarsePointer: false })).toBe('medium');
+	});
+
+	it('starts 2015 to 2018 laptop GPUs and masked Intel Macs medium', () => {
+		expect(guessTier({ gpu: 'ANGLE (ATI Technologies Inc., AMD Radeon Pro 555X OpenGL Engine, OpenGL 4.1)', screenMin: 900, coarsePointer: false })).toBe('medium');
+		expect(guessTier({ gpu: 'ANGLE (NVIDIA, NVIDIA GeForce MX150 Direct3D11 vs_5_0 ps_5_0, D3D11)', screenMin: 1080, coarsePointer: false })).toBe('medium');
+		expect(guessTier({ gpu: 'NVIDIA GeForce GTX 950M', screenMin: 1080, coarsePointer: false })).toBe('medium');
+		expect(guessTier({ gpu: 'AMD Radeon Pro 5500M', screenMin: 1080, coarsePointer: false })).toBe('high');
+		expect(guessTier({ gpu: 'Apple GPU', screenMin: 900, coarsePointer: false, cores: 4 })).toBe('medium');
+		expect(guessTier({ gpu: 'Apple GPU', screenMin: 900, coarsePointer: false, cores: 10 })).toBe('high');
 	});
 
 	it('starts known strong GPUs high, unknown ones medium', () => {
@@ -46,6 +57,13 @@ describe('wind tiers', () => {
 	});
 });
 
+describe('cloud relief', () => {
+	it('marches the clouds on high only', () => {
+		expect([PRESETS.low.cloudVolume, PRESETS.medium.cloudVolume]).toEqual([0, 0]);
+		expect(PRESETS.high.cloudVolume).toBeGreaterThan(0);
+	});
+});
+
 describe('FpsMonitor', () => {
 	const run = (monitor: FpsMonitor, fps: number, ms: number, from = 0) => {
 		const results: boolean[] = [];
@@ -53,16 +71,16 @@ describe('FpsMonitor', () => {
 		return results.filter(Boolean).length;
 	};
 
-	it('downgrades under sustained low frame rate, with a cooldown', () => {
-		const monitor = new FpsMonitor();
-		expect(run(monitor, 60, 20_000)).toBe(0);
-		expect(run(monitor, 20, 12_000, 20_000)).toBe(1);
-		expect(run(monitor, 20, 6_000, 32_000)).toBe(1);
+	it('downgrades a tier every 3 s of sustained low frame rate, with a cooldown', () => {
+		expect(run(new FpsMonitor(), 60, 20_000)).toBe(0);
+		expect(run(new FpsMonitor(), 20, 3_500)).toBe(1);
+		expect(run(new FpsMonitor(), 20, 6_500)).toBe(2);
+		expect(run(new FpsMonitor({ cooldownMs: 10_000 }), 20, 9_500)).toBe(1);
 	});
 
 	it('downgrades a screen held under 45 fps, not one at 60', () => {
 		expect(run(new FpsMonitor(), 58, 6000)).toBe(0);
-		expect(run(new FpsMonitor(), 40, 6000)).toBe(1);
+		expect(run(new FpsMonitor(), 40, 3500)).toBe(1);
 	});
 
 	it('starts over after a reset', () => {

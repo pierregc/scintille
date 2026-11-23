@@ -137,7 +137,7 @@ beyond the region the volume covers, fading into each other:
 4. **Composite** over the ground before the atmosphere and lightning, as today. The Earth shader
    darkens sunlight by the baked transmittance at the ground: cloud shadows.
 
-**Tiers.** `high` and `medium` draw the volume; `low` keeps the flat layer. On phones the volume is
+**Tiers.** `high` draws the volume; `medium` and `low` keep the flat layer (since 2026-11-23, so machines of unknown power stay smooth). On phones the volume is
 enabled only once a real phone holds the 33 ms frame interval with it; until then phones keep the
 flat layer. The volume never pushes a pose over the ADR 0020 budgets.
 
