@@ -28,13 +28,15 @@ export interface QualityPreset {
 	cloudSamples: number;
 	/** Wind fibre bake resolution as a share of the CSS size (ADR 0039). */
 	windBake: number;
+	/** Atmosphere samples along the view ray and toward the sun. */
+	atmosphereSteps: [number, number];
 }
 
 /** What each tier turns on; later visual features add their own line here. */
 export const PRESETS: Record<QualityTier, QualityPreset> = {
-	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5 },
-	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75 },
-	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1 },
+	low: { textures: '2k', maxPixelRatio: 1, maxFlashes: 1 << 16, clouds: '2k', cloudLight: false, lightMapWidth: 0, cloudBicubic: false, cloudDetail: false, postProcessing: false, surfaceMb: 0, cloudVolume: 0, cloudSamples: 0, windBake: 0.5, atmosphereSteps: [8, 4] },
+	medium: { textures: '4k', maxPixelRatio: 1.5, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: false, surfaceMb: 96, cloudVolume: 0.4, cloudSamples: 40, windBake: 0.75, atmosphereSteps: [16, 6] },
+	high: { textures: '4k', maxPixelRatio: 2, maxFlashes: null, clouds: '4k', cloudLight: true, lightMapWidth: 1024, cloudBicubic: true, cloudDetail: true, postProcessing: true, surfaceMb: 96, cloudVolume: 0.5, cloudSamples: 48, windBake: 1, atmosphereSteps: [16, 6] },
 };
 
 export interface DeviceHints {
@@ -91,10 +93,15 @@ export class FpsMonitor {
 	#frames = 0;
 	#lastDowngrade = Number.NEGATIVE_INFINITY;
 
-	constructor({ minFps = 30, windowMs = 5000, cooldownMs = 10_000 } = {}) {
+	constructor({ minFps = 45, windowMs = 5000, cooldownMs = 10_000 } = {}) {
 		this.#minFps = minFps;
 		this.#windowMs = windowMs;
 		this.#cooldownMs = cooldownMs;
+	}
+
+	/** Starts a new window, for when the frame rate is held down on purpose. */
+	reset(): void {
+		this.#start = Number.NaN;
 	}
 
 	/** Call once per frame with a monotonic time (ms); returns true when a downgrade is due. */

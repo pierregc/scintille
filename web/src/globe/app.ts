@@ -34,6 +34,7 @@ import { clipPlanes } from './orbit';
 import { BLOOM, createPostProcessing, type PostProcessing } from './post';
 import { createRenderHandle, type RenderHandle } from './render/mode';
 import type { RenderParams } from './render/params';
+import { FramePacer, BLURRED_FPS, FOCUSED_FPS } from './pace';
 import { FpsMonitor, guessTier, isPhone, lowerTier, PRESETS, surfaceBudgetMb, tierFromSearch } from './quality';
 import { observedTime } from './scene-time';
 import { createStarfield } from './starfield';
@@ -138,6 +139,13 @@ export function createGlobeApp(
 	const preset = PRESETS[tier];
 	canvas.dataset.quality = tier;
 	const fps = new FpsMonitor();
+	const pacer = new FramePacer(document.hasFocus() ? FOCUSED_FPS : BLURRED_FPS);
+	const onFocus = () => {
+		pacer.fps = document.hasFocus() ? FOCUSED_FPS : BLURRED_FPS;
+		fps.reset();
+	};
+	window.addEventListener('focus', onFocus);
+	window.addEventListener('blur', onFocus);
 
 	const clock = new SceneClock();
 	if (import.meta.env.DEV) applyDevReplay(clock, location.search);
@@ -164,7 +172,7 @@ export function createGlobeApp(
 		console.info('surface:', surface.mode);
 	};
 	window.addEventListener('keydown', cycleSurface);
-	const atmosphere = createAtmosphere(RADIUS);
+	const atmosphere = createAtmosphere(RADIUS, preset.atmosphereSteps);
 	earth.mesh.add(atmosphere.mesh);
 	const cloudDetail = preset.cloudDetail && !renderParams ? createCloudDetail(renderer) : undefined;
 	const clouds = createClouds(renderer.capabilities.getMaxAnisotropy(), {
@@ -315,6 +323,7 @@ export function createGlobeApp(
 		canvas.dataset.quality = tier;
 		if (!PRESETS[tier].cloudLight) clouds.setFlashLight(null);
 		if (surface) surface.tiles.maxBytes = surfaceBudgetMb(tier, phone) * 1e6;
+		atmosphere.setSteps(PRESETS[tier].atmosphereSteps);
 		if (PRESETS[tier].cloudVolume > 0) volume?.setQuality({ scale: PRESETS[tier].cloudVolume, maxSamples: PRESETS[tier].cloudSamples });
 		if (!PRESETS[tier].postProcessing) {
 			post?.dispose();
@@ -428,7 +437,7 @@ export function createGlobeApp(
 		lightning.viewKmPerPx = kmPerPx;
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		sound.update(now, delays, lightning.heroShare);
-		if (!renderParams && fps.frame(time)) downgrade();
+		if (!renderParams && pacer.fps === FOCUSED_FPS && fps.frame(time)) downgrade();
 		lightning.cloudLit = clouds.mesh.visible && PRESETS[tier].cloudLight;
 		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {
@@ -452,7 +461,7 @@ export function createGlobeApp(
 			post.render();
 		} else renderer.render(scene, camera);
 	};
-	if (!renderParams) renderer.setAnimationLoop(draw);
+	if (!renderParams) renderer.setAnimationLoop((time) => { if (pacer.due(time)) draw(time); });
 	const render = renderParams
 		? createRenderHandle(renderParams, {
 				clock,
@@ -532,6 +541,8 @@ export function createGlobeApp(
 		dispose() {
 			window.removeEventListener('keydown', cycleSurface);
 			window.removeEventListener('keydown', cycleClouds);
+			window.removeEventListener('focus', onFocus);
+			window.removeEventListener('blur', onFocus);
 			volume?.dispose();
 			heightDetail?.dispose();
 			surface?.dispose();

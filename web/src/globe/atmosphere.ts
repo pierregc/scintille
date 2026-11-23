@@ -16,6 +16,8 @@ export interface Atmosphere {
 	mesh: Mesh;
 	/** Points the sun at its position for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
+	/** Samples along the view ray and toward the sun. */
+	setSteps(steps: readonly [number, number]): void;
 	dispose(): void;
 }
 
@@ -57,7 +59,7 @@ export function atmosphereParameters(radius: number, heightScale = HEIGHT_SCALE)
 }
 
 /** Scattering shell around the globe; add it as a child of the Earth mesh. */
-export function createAtmosphere(radius = 1): Atmosphere {
+export function createAtmosphere(radius = 1, steps: readonly [number, number] = [16, 6]): Atmosphere {
 	const parameters = atmosphereParameters(radius);
 	const geometry = new SphereGeometry(parameters.atmosphereRadius, 96, 48);
 	const uniforms = Object.fromEntries(Object.entries(parameters).map(([key, value]) => [key, { value }]));
@@ -74,6 +76,11 @@ export function createAtmosphere(radius = 1): Atmosphere {
 		blendSrcAlpha: ZeroFactor,
 		blendDstAlpha: OneFactor,
 	});
+	const setSteps = ([primary, light]: readonly [number, number]) => {
+		material.defines = { PRIMARY_STEPS: primary, LIGHT_STEPS: light };
+		material.needsUpdate = true;
+	};
+	setSteps(steps);
 	const mesh = new Mesh(geometry, material);
 
 	return {
@@ -81,6 +88,7 @@ export function createAtmosphere(radius = 1): Atmosphere {
 		setTime(utcMs) {
 			material.uniforms.sunDirection.value.set(...sunDirection(new Date(utcMs)));
 		},
+		setSteps,
 		dispose() {
 			geometry.dispose();
 			material.dispose();
