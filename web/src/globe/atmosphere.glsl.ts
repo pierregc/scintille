@@ -16,8 +16,12 @@ void main() {
 
 // Single scattering through a spherical shell (Rayleigh, Mie, ozone absorption), in units of the planet radius.
 export const atmosphereFragmentShader = /* glsl */ `
+#ifndef PRIMARY_STEPS
 #define PRIMARY_STEPS 16
+#endif
+#ifndef LIGHT_STEPS
 #define LIGHT_STEPS 6
+#endif
 // Partial view extinction stands in for multiple scattering, which keeps the day limb white instead of orange.
 #define VIEW_EXTINCTION 0.35
 #define PI 3.14159265

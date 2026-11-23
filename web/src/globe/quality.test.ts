@@ -60,6 +60,18 @@ describe('FpsMonitor', () => {
 		expect(run(monitor, 20, 6_000, 32_000)).toBe(1);
 	});
 
+	it('downgrades a screen held under 45 fps, not one at 60', () => {
+		expect(run(new FpsMonitor(), 58, 6000)).toBe(0);
+		expect(run(new FpsMonitor(), 40, 6000)).toBe(1);
+	});
+
+	it('starts over after a reset', () => {
+		const monitor = new FpsMonitor();
+		run(monitor, 20, 4000);
+		monitor.reset();
+		expect(run(monitor, 60, 4000, 4000)).toBe(0);
+	});
+
 	it('ignores the gap of a hidden tab', () => {
 		const monitor = new FpsMonitor();
 		monitor.frame(0);
