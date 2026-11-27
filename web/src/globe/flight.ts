@@ -34,6 +34,8 @@ export const FLIGHT = {
 	maxTiltDeg: 80,
 	/** How far the gaze rises above the target at the largest tilt (ADR 0032). */
 	maxGazeDeg: 10,
+	/** Lowest camera height, km; the map prototype goes lower (#507). */
+	floorKm: CAMERA_FLOOR_KM,
 };
 
 /** Where the camera is and what it looks at. */
@@ -134,7 +136,7 @@ export class Flight {
 	readonly #toGaze: number;
 
 	constructor(from: CameraPose, to: CameraPose, radius: number, duration?: number) {
-		this.#floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
+		this.#floor = radius + kmToWorld(FLIGHT.floorKm, radius);
 		this.#from = from;
 		this.#to = to;
 		this.#fromGaze = from.gaze ?? 0;

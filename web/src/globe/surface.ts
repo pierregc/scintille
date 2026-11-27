@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { CAMERA_FLOOR_KM, type CameraPose, FLIGHT, kmToWorld, lookRotation, raiseGaze } from './flight';
+import { type CameraPose, FLIGHT, kmToWorld, lookRotation, raiseGaze } from './flight';
 
 /** A camera orbiting a point on the ground. */
 export interface SurfaceView {
@@ -48,7 +48,7 @@ export function surfaceFromPose({ position, quaternion, target, gaze = 0 }: Came
 
 /** Shortest range that keeps the camera above the floor at `tilt` radians. */
 export function floorRange(tilt: number, radius: number): number {
-	const floor = radius + kmToWorld(CAMERA_FLOOR_KM, radius);
+	const floor = radius + kmToWorld(FLIGHT.floorKm, radius);
 	const c = radius * Math.cos(tilt);
 	return -c + Math.sqrt(c * c + floor * floor - radius * radius);
 }

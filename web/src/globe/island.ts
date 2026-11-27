@@ -11,6 +11,7 @@ interface IslandElements {
 	fallback: HTMLElement;
 	coverageLabel?: HTMLElement;
 	cycloneLabels?: HTMLElement;
+	mapHolder?: HTMLElement;
 }
 
 /** Resolves once the page has loaded and the main thread is idle. */
@@ -25,7 +26,7 @@ export async function afterLoadIdle(): Promise<void> {
 }
 
 /** Mounts the globe after load/idle, or shows the fallback when WebGL2 is unavailable. */
-export function mountGlobeIsland({ canvas, fallback, coverageLabel, cycloneLabels }: IslandElements): void {
+export function mountGlobeIsland({ canvas, fallback, coverageLabel, cycloneLabels, mapHolder }: IslandElements): void {
 	let app: GlobeApp | undefined;
 	let generation = 0;
 
@@ -44,7 +45,7 @@ export function mountGlobeIsland({ canvas, fallback, coverageLabel, cycloneLabel
 		try {
 			const { createGlobeApp } = await import('./app');
 			if (current !== generation) return;
-			app = createGlobeApp(canvas, context, { coverageLabel, cycloneLabels });
+			app = createGlobeApp(canvas, context, { coverageLabel, cycloneLabels, mapHolder });
 			window.dispatchEvent(new CustomEvent(GLOBE_READY, { detail: app }));
 		} catch {
 			showFallback();

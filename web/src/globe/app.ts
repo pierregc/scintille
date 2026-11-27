@@ -25,7 +25,8 @@ import { isReplayFixture } from './dev-storm';
 import { createEarth, surfaceRoot } from './earth';
 import { StormFocus } from './focus';
 import { ActiveFeed, pickCell } from './focus/active';
-import { kmToWorld, worldToKm } from './flight';
+import { CAMERA_FLOOR_KM, FLIGHT, kmToWorld, worldToKm } from './flight';
+import type { MapLayer } from './map/layer';
 import { CLOUD_TOP_KM, createLightning, type Lightning } from './lightning';
 import { bloomRadius, bloomStrength } from './lightning/zoom';
 import { type FlashRing, LateFlashes, type LiveClient, type LiveClientOptions, LIVE_DELAYS, liveBaseUrl, NO_DELAY, type SourceDelays, startLiveFeed } from './live';
@@ -100,6 +101,8 @@ export interface GlobeApp {
 	readonly render?: RenderHandle;
 	/** Surface detail, switchable to the base textures in development and PR previews. */
 	readonly surface?: SurfaceDetail;
+	/** Map mode prototype (#507), in development and PR previews only. */
+	readonly map?: { mismatch(): number | null; shown(): boolean; view: GlobeControls['view']; place: GlobeControls['place'] };
 	/** Clouds in relief (ADR 0028), in development and PR previews only. */
 	readonly cloudVolume?: { detail: boolean; coverage(): { width: number; height: number; values: Float32Array }; styleCheck(): StyleBounds };
 	dispose(): void;
@@ -108,6 +111,7 @@ export interface GlobeApp {
 const RADIUS = 1;
 const hudRay = new Vector3();
 const EARTH_RADIUS_KM = 6371;
+const MAP_FLOOR_KM = 30;
 const FOV = 35;
 const SHELLS = [
 	cloudShellRadius(RADIUS),
@@ -122,17 +126,37 @@ export interface GlobeAppOptions {
 	coverageLabel?: HTMLElement;
 	/** Holder of the cyclone name tags. */
 	cycloneLabels?: HTMLElement;
+	/** Holder of the map drawn under the canvas (#507 prototype). */
+	mapHolder?: HTMLElement;
 }
 
 export function createGlobeApp(
 	canvas: HTMLCanvasElement,
 	context: WebGL2RenderingContext,
-	{ render: renderParams, coverageLabel, cycloneLabels }: GlobeAppOptions = {},
+	{ render: renderParams, coverageLabel, cycloneLabels, mapHolder }: GlobeAppOptions = {},
 ): GlobeApp {
 	const renderer = new WebGLRenderer({ canvas, context, ...CONTEXT_ATTRIBUTES });
 	const scene = new Scene();
 	const camera = new PerspectiveCamera(FOV, 1, 0.1, 100);
+	// Map mode prototype (#507): `?map=1` on the tile host, `?map=grid` offline; Shift+M switches back to the globe.
+	const mapParam = !renderParams && mapHolder && (import.meta.env.DEV || BUILD.pr !== null)
+		? new URLSearchParams(location.search).get('map') : null;
+	if (mapParam) FLIGHT.floorKm = MAP_FLOOR_KM;
 	const controls = createGlobeControls(camera, canvas, RADIUS);
+	let mapLayer: MapLayer | undefined;
+	let mapWanted = true;
+	let mapShown = false;
+	let disposed = false;
+	if (mapParam && mapHolder) {
+		void import('./map/layer').then(({ createMapLayer }) => {
+			if (disposed) return;
+			mapLayer = createMapLayer({ container: mapHolder, radius: RADIUS, grid: mapParam === 'grid', onError: (error) => console.warn('map:', error) });
+		});
+	}
+	const toggleMap = (event: KeyboardEvent) => {
+		if (mapParam && event.key === 'M' && event.shiftKey) mapWanted = !mapWanted;
+	};
+	window.addEventListener('keydown', toggleMap);
 
 	const hints = deviceHints(context);
 	const phone = isPhone(hints);
@@ -187,7 +211,7 @@ export function createGlobeApp(
 	// Clouds in relief near the ground (ADR 0028); phones keep the flat layer until a real phone is measured.
 	const compareClouds = import.meta.env.DEV || BUILD.pr !== null;
 	const cloudMode = compareClouds ? new URLSearchParams(location.search).get('clouds') : null;
-	const volumeScale = renderParams || phone || cloudMode === 'flat' ? 0 : preset.cloudVolume;
+	const volumeScale = renderParams || phone || mapParam || cloudMode === 'flat' ? 0 : preset.cloudVolume;
 	const heightDetail = volumeScale > 0 && cloudDetail
 		? createCloudDetail(renderer, { levels: CLOUD_ARCHIVE_RULES.detail_height_levels, prefix: 'height', slots: 80, finerFallback: true, coarsest: true })
 		: undefined;
@@ -380,6 +404,19 @@ export function createGlobeApp(
 		renderer.getSize(focus.footprint.viewport);
 		focus.update(performance.now());
 		fitClipPlanes();
+		mapShown = mapWanted && Boolean(mapLayer?.sync(camera, canvas.clientHeight || window.innerHeight));
+		if (mapLayer && !mapShown) mapLayer.map.getContainer().hidden = true;
+		if (mapParam) {
+			earth.material.colorWrite = !mapShown;
+			atmosphere.mesh.visible = !mapShown;
+			clouds.setFlatShown(mapShown ? 0 : 1);
+			// Over the map the scene only adds light: an opaque black canvas, screened onto the map by the browser.
+			renderer.setClearAlpha(mapShown ? 1 : 0);
+			canvas.style.mixBlendMode = mapShown ? 'screen' : '';
+			// The stars sit at the far plane: under a see-through globe they need the depth test to stay behind it.
+			stars.points.material.depthTest = mapShown;
+			stars.points.renderOrder = mapShown ? 1 : -1;
+		}
 		if (clock.playing && clock.atPresent()) void replay.live();
 		const now = clock.time();
 		earth.setTime(now);
@@ -417,6 +454,7 @@ export function createGlobeApp(
 			sun: sunDirection(new Date(now)),
 			steady: Boolean(renderParams) || reducedMotion.matches,
 		});
+		if (mapShown) coldTops.mesh.visible = false;
 		earth.setStormView(coldTops.mesh.visible ? 1 : 0);
 		cyclones?.update({
 			time: clouds.mesh.visible ? cloudTime(now, clouds.frameTimes) : now,
@@ -439,8 +477,8 @@ export function createGlobeApp(
 		lightning.setTime(now, delays, clock.mode === 'replay' ? clock.speed : 1);
 		sound.update(now, delays, lightning.heroShare);
 		if (!renderParams && pacer.fps === FOCUSED_FPS && fps.frame(time)) downgrade();
-		lightning.cloudLit = clouds.mesh.visible && PRESETS[tier].cloudLight;
-		if (clouds.mesh.visible && PRESETS[tier].cloudLight) lightning.renderLightMap(renderer, camera);
+		lightning.cloudLit = !mapShown && clouds.mesh.visible && PRESETS[tier].cloudLight;
+		if (lightning.cloudLit) lightning.renderLightMap(renderer, camera);
 		if (volume && PRESETS[tier].cloudVolume > 0) {
 			volume.render(renderer, {
 				camera,
@@ -477,7 +515,7 @@ export function createGlobeApp(
 
 	const detachPicking = renderParams ? undefined : attachStormPicking(canvas, camera, focus, () => clock.mode === 'live');
 
-	if (import.meta.env.DEV) void runDevFlights(controls.flyTo, location.search);
+	if (import.meta.env.DEV || mapParam) void runDevFlights(controls.flyTo, location.search);
 	const reload = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
 	const initialFrame: unknown = reload ? history.state?.scintilleReplayFrame : undefined;
 	const navigation = renderParams ? undefined : new ReplayNavigation(replay, clock, controls, {
@@ -531,6 +569,7 @@ export function createGlobeApp(
 		},
 		render,
 		surface,
+		map: mapParam ? { mismatch: () => mapLayer?.mismatch(camera, RADIUS) ?? null, shown: () => mapShown, view: controls.view, place: controls.place } : undefined,
 		cloudVolume: volume && compareClouds
 			? {
 					get detail() { return volume.detail; },
@@ -540,6 +579,10 @@ export function createGlobeApp(
 				}
 			: undefined,
 		dispose() {
+			disposed = true;
+			FLIGHT.floorKm = CAMERA_FLOOR_KM;
+			mapLayer?.dispose();
+			window.removeEventListener('keydown', toggleMap);
 			window.removeEventListener('keydown', cycleSurface);
 			window.removeEventListener('keydown', cycleClouds);
 			window.removeEventListener('focus', onFocus);

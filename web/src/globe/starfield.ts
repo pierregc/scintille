@@ -8,7 +8,7 @@ import {
 } from 'three';
 
 export interface Starfield {
-	points: Points;
+	points: Points<BufferGeometry, ShaderMaterial>;
 	/** Turns the sky with the Earth's rotation for a UTC instant in milliseconds. */
 	setTime(utcMs: number): void;
 	dispose(): void;
