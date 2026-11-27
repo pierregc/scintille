@@ -153,11 +153,6 @@ export function createGlobeApp(
 			mapLayer = createMapLayer({ container: mapHolder, radius: RADIUS, grid: mapParam === 'grid', onError: (error) => console.warn('map:', error) });
 		});
 	}
-	if (mapParam) {
-		// Over the map the scene only adds light: with the canvas alpha left at zero, glows cannot darken what lies under them.
-		const colorMask = context.colorMask.bind(context);
-		context.colorMask = (red, green, blue, alpha) => colorMask(red, green, blue, alpha && !mapShown);
-	}
 	const toggleMap = (event: KeyboardEvent) => {
 		if (mapParam && event.key === 'M' && event.shiftKey) mapWanted = !mapWanted;
 	};
@@ -415,6 +410,9 @@ export function createGlobeApp(
 			earth.material.colorWrite = !mapShown;
 			atmosphere.mesh.visible = !mapShown;
 			clouds.setFlatShown(mapShown ? 0 : 1);
+			// Over the map the scene only adds light: an opaque black canvas, screened onto the map by the browser.
+			renderer.setClearAlpha(mapShown ? 1 : 0);
+			canvas.style.mixBlendMode = mapShown ? 'screen' : '';
 			// The stars sit at the far plane: under a see-through globe they need the depth test to stay behind it.
 			stars.points.material.depthTest = mapShown;
 			stars.points.renderOrder = mapShown ? 1 : -1;
